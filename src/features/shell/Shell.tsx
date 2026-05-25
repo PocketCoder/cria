@@ -24,6 +24,7 @@ import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
 
 export function Shell() {
+  console.log('APP version constant:', __APP_VERSION__);
   const signOut = useAuth((s) => s.signOut);
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
