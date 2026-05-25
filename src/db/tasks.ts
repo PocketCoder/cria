@@ -259,7 +259,10 @@ export async function createTask(input: TaskInput): Promise<Task> {
   const localId = nanoid();
   const now = new Date().toISOString();
 
-  const task = await withTx(async (db) => {
+  // withTx now batches writes — they execute together after the
+  // callback resolves. The post-write SELECT must therefore live
+  // *outside* the callback.
+  await withTx(async (db) => {
     await db.execute(
       `INSERT INTO tasks (
          local_id, server_id, project_local_id, title, description, done,
@@ -287,17 +290,16 @@ export async function createTask(input: TaskInput): Promise<Task> {
        VALUES ('task', ?, 'create', ?, ?)`,
       [localId, JSON.stringify(input), now]
     );
-
-    const created = await getTaskByLocalId(localId);
-    if (!created) {
-      throw new Error(`Failed to retrieve newly created task ${localId}`);
-    }
-    return created;
   });
 
   notify('tasks');
   notify('outbox');
-  return task;
+
+  const created = await getTaskByLocalId(localId);
+  if (!created) {
+    throw new Error(`Failed to retrieve newly created task ${localId}`);
+  }
+  return created;
 }
 
 export async function updateTask(
@@ -306,12 +308,15 @@ export async function updateTask(
 ): Promise<Task> {
   const now = new Date().toISOString();
 
-  const task = await withTx(async (db) => {
-    const current = await getTaskByLocalId(localId);
-    if (!current) {
-      throw new Error(`Task not found: ${localId}`);
-    }
+  // Pre-write read is safe outside withTx because the serial queue
+  // ensures no other write interleaves between this select and the
+  // batched writes below.
+  const current = await getTaskByLocalId(localId);
+  if (!current) {
+    throw new Error(`Task not found: ${localId}`);
+  }
 
+  await withTx(async (db) => {
     const sets: string[] = [];
     const params: any[] = [];
 
@@ -372,17 +377,16 @@ export async function updateTask(
         [localId, JSON.stringify(input), now]
       );
     }
-
-    const updated = await getTaskByLocalId(localId);
-    if (!updated) {
-      throw new Error(`Failed to retrieve updated task ${localId}`);
-    }
-    return updated;
   });
 
   notify('tasks');
   notify('outbox');
-  return task;
+
+  const updated = await getTaskByLocalId(localId);
+  if (!updated) {
+    throw new Error(`Failed to retrieve updated task ${localId}`);
+  }
+  return updated;
 }
 
 export async function deleteTask(localId: string): Promise<void> {

@@ -10,6 +10,14 @@
     "core:window:allow-hide",
     "core:window:allow-set-focus",
     "core:window:allow-unminimize",
+    "core:tray:default",
+    "core:tray:allow-new",
+    "core:tray:allow-get-by-id",
+    "core:tray:allow-set-icon",
+    "core:tray:allow-set-tooltip",
+    "core:tray:allow-set-icon-as-template",
+    "core:path:default",
+    "core:resources:default",
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
@@ -17,6 +25,13 @@
     "sql:allow-close",
     "stronghold:default",
     "deep-link:default",
-    "notification:default"
+    "notification:default",
+    "global-shortcut:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

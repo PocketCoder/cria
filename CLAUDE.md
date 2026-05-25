@@ -72,36 +72,39 @@ The plugin is still registered in [lib.rs](src-tauri/src/lib.rs) for future
 non-hot-path uses. Threat model documented inline in `storage.ts`. M4 upgrade
 path: OS keychain via `keyring-rs`.
 
-### `withTx` is NOT a real transaction — never add BEGIN/COMMIT
+### `withTx` is a *batched* transaction — don't read collected writes inside
 
-This is the deepest M2 footgun and cost most of a session to diagnose.
 `@tauri-apps/plugin-sql` v2.x wraps `sqlx::Pool<Sqlite>` with the default
 **10-connection pool** (see `tauri-plugin-sql-<ver>/src/wrapper.rs::execute`).
-Every `db.execute()` call from JS acquires a fresh connection, runs the
-statement, releases. There is no way from JS to pin one connection across
-multiple calls.
+Every `db.execute()` call from JS acquires a fresh connection, so
+JS-issued `BEGIN`/`COMMIT` lands on different connections and breaks.
 
-So JS-issued `BEGIN` / `COMMIT` / `ROLLBACK` land on *different* connections
-and break disastrously: BEGIN starts a transaction on conn A (released with
-a dangling tx that holds the file lock), body statements run on B/C/D,
-COMMIT lands on E → *"cannot commit - no transaction is active"*.
-Meanwhile conn A's dangling tx blocks every other write → *"database is
-locked"* cascade.
+The fix lives in [src-tauri/src/tx.rs](src-tauri/src/tx.rs): a custom Tauri
+command `execute_tx` that pins one connection from the pool, runs all
+supplied statements inside `sqlx::Transaction`, commits (or rolls back
+on error). [src/db/index.ts](src/db/index.ts)'s `withTx` collects the
+callback's `db.execute()` calls into a batch, then invokes `execute_tx`
+once when the callback resolves.
 
-**Rule:** never write `db.execute('BEGIN')` (or COMMIT/ROLLBACK) from JS.
-[src/db/index.ts](src/db/index.ts) provides:
-- `serial(fn)` — queue an async function behind all in-flight writes
-- `withTx(fn)` — alias of `serial` that takes a `db` argument; **no
-  rollback, no atomicity across statements.** Use it for single-statement
-  writes that need to be ordered.
-- `exec(sql, params)` — single-statement write queued via `serial`.
+**Consequences for callers:**
+- Inside the callback, `db.execute(sql, params)` does **not run
+  immediately** — it just appends to the pending batch. The returned
+  `ExecuteResult` is a placeholder (`rowsAffected: 0`, `lastInsertId: 0`).
+- `db.select(sql, params)` does run immediately (pass-through), but it
+  reads **pre-batch** state. Any SELECT meant to see a value written
+  earlier in the same `withTx` callback will miss it.
+- **Pattern:** SELECT-then-write is fine; write-then-SELECT-of-the-same-row
+  must move the SELECT outside the callback (after `withTx` resolves).
+  See [`createTask` / `updateTask`](src/db/tasks.ts) for the layout.
 
-The cost is loss of multi-statement rollback. If statement 2 of a multi-
-step write throws, statement 1 is already committed. Cria's offline-first
-design means dirty-row repair on next launch can heal orphan state; the
-spec assumed working transactions but the plugin doesn't deliver them.
-Long-term fix: a Rust-side command that explicitly holds one connection
-across a `sqlx::Transaction`.
+Other primitives in `db/index.ts`:
+- `serial(fn)` — queue an async function behind all in-flight writes.
+- `exec(sql, params)` — single-statement write queued via `serial`. Faster
+  than `withTx` for one-statement writes; doesn't need a real tx.
+
+**Never write `db.execute('BEGIN')` (or COMMIT/ROLLBACK) directly from JS.**
+Those statements would still land on whichever pool connection sqlx hands
+out; the dangling-tx cascade from before would return.
 
 Globals also matter here:
 - `globalThis.__cria_writeChain__` — the serial queue's tail. Pinned so

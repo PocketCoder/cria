@@ -1,8 +1,25 @@
-// Stub for Tauri globalShortcut API – no‑op implementations for development
-export async function register(_shortcut: string, _handler: () => void): Promise<void> {
-  // In production this registers a native shortcut. Here we do nothing.
+/**
+ * Thin wrapper around @tauri-apps/plugin-global-shortcut.
+ *
+ * The plugin's handler fires with a `ShortcutEvent` carrying the
+ * shortcut string and a state (`Pressed` | `Released`). We forward only
+ * `Pressed` so the handler doesn't double-fire on key-release.
+ */
+
+import {
+  register as _register,
+  unregister as _unregister,
+} from '@tauri-apps/plugin-global-shortcut';
+
+export async function register(
+  shortcut: string,
+  handler: () => void,
+): Promise<void> {
+  await _register(shortcut, (event) => {
+    if (event.state === 'Pressed') handler();
+  });
 }
 
-export async function unregister(_shortcut: string): Promise<void> {
-  // No‑op for stub.
+export async function unregister(shortcut: string): Promise<void> {
+  await _unregister(shortcut);
 }

@@ -127,28 +127,61 @@ export function serial<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Run a function with exclusive access to the DB — i.e. its statements are
- * guaranteed not to interleave with other writes.
+ * Run a function with multi-statement transactional atomicity.
  *
- * **No real BEGIN/COMMIT.** The Tauri SQL plugin (v2.4) uses a
- * `Pool<Sqlite>` with sqlx's default 10-connection pool, so each
- * `db.execute()` call acquires a fresh connection. JS-issued
- * `BEGIN` / `COMMIT` / `ROLLBACK` land on different connections and break
- * disastrously: BEGIN starts a transaction on conn A, COMMIT on conn E sees
- * "no transaction is active", and conn A's dangling transaction holds the
- * file lock forever ("database is locked" cascades). See the cargo source
- * at tauri-plugin-sql-2.4.0/src/wrapper.rs::execute.
+ * The callback receives a `db`-shaped object whose `execute(sql, params)`
+ * calls *do not run immediately* — they collect into a batch. Once the
+ * callback resolves, the batch is sent to a Rust-side custom command
+ * (`plugin:cria|execute_tx`) which acquires one pinned sqlx connection,
+ * runs everything inside a real `sqlx::Transaction`, and commits.
  *
- * Our serial() chain still guarantees that the `fn` body runs without other
- * queued writes interleaving its statements. SQLite serialises individual
- * writes at the file level too. The cost is loss of multi-statement
- * rollback: if statement 2 throws, statement 1 is already committed. For
- * Cria that means a `dirty=1` task might exist without an outbox row (or
- * vice versa) on crash. Worth accepting until we ship a Rust-side
- * transaction command (see SPEC §5.2 — the spec assumed working tx).
+ * Why this contortion: `@tauri-apps/plugin-sql` v2.4 wraps `Pool<Sqlite>`
+ * (10 conns by default), so each JS-issued `db.execute()` acquires a
+ * fresh connection — making JS-side `BEGIN`/`COMMIT` useless (BEGIN on
+ * conn A → released holding a tx → COMMIT on conn E sees "no transaction
+ * is active"). See src-tauri/src/tx.rs for the Rust side.
+ *
+ * Constraints on the callback:
+ * - `db.execute()` returns a placeholder ExecuteResult (rowsAffected: 0,
+ *   lastInsertId: 0). Use SELECT to read state *before* opening withTx,
+ *   not between collected writes inside.
+ * - `db.select()` still goes straight to plugin-sql (reads don't need the
+ *   pinned connection). Under serial() no concurrent write interleaves.
  */
 export function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
-  return serial(async () => fn(await getDb()));
+  return serial(async () => {
+    const real = await getDb();
+    const stmts: Array<{ sql: string; params: unknown[] }> = [];
+    const scope: Database = {
+      async execute(sql, params) {
+        stmts.push({ sql, params: params ?? [] });
+        return { rowsAffected: 0, lastInsertId: 0 };
+      },
+      async select<R>(sql: string, params?: unknown[]) {
+        return real.select<R>(sql, params);
+      },
+    };
+    const result = await fn(scope);
+    if (stmts.length > 0) await runTx(stmts);
+    return result;
+  });
+}
+
+async function runTx(
+  stmts: Array<{ sql: string; params: unknown[] }>,
+): Promise<void> {
+  // Node test path: better-sqlite3 honours transactions on its single
+  // synchronous connection, so just run them sequentially via the plain
+  // pool. No Tauri invoke is available outside the renderer.
+  if (typeof window === 'undefined') {
+    const db = await getDb();
+    for (const s of stmts) await db.execute(s.sql, s.params);
+    return;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  // Command lives directly on the app via invoke_handler! in lib.rs —
+  // not behind a `plugin:cria|…` prefix.
+  await invoke('execute_tx', { db: DB_URI, stmts });
 }
 
 /**

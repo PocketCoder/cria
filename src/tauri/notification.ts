@@ -1,18 +1,27 @@
-// Stub for Tauri notification API. M4 will swap in
-// @tauri-apps/plugin-notification calls; for now this is a no-op so the
-// rest of the code can wire to it without exploding.
+/**
+ * Thin wrapper around @tauri-apps/plugin-notification. Lives in
+ * src/tauri/ so feature code imports a stable shape regardless of the
+ * underlying plugin's API churn.
+ */
+
+import {
+  isPermissionGranted as _isPermissionGranted,
+  requestPermission as _requestPermission,
+  sendNotification as _sendNotification,
+} from '@tauri-apps/plugin-notification';
 
 export async function isPermissionGranted(): Promise<boolean> {
-  return true;
+  return _isPermissionGranted();
 }
 
 export async function requestPermission(): Promise<'granted' | 'denied'> {
-  return 'granted';
+  const result = await _requestPermission();
+  return result === 'granted' ? 'granted' : 'denied';
 }
 
-export async function sendNotification(_: {
+export async function sendNotification(args: {
   title: string;
   body: string;
 }): Promise<void> {
-  // TODO(M4): wire to @tauri-apps/plugin-notification
+  _sendNotification({ title: args.title, body: args.body });
 }

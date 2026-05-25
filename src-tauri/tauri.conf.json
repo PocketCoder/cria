@@ -38,6 +38,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "icons/icon_idle.png",
+      "icons/icon_sync.png",
+      "icons/icon_conflict.png"
+    ],
     "category": "Productivity",
     "shortDescription": "Native Vikunja client",
     "longDescription": "Offline-capable cross-platform desktop client for Vikunja."
