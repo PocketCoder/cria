@@ -2,22 +2,26 @@
 // Uses the real DB layer with an in‑memory SQLite file via the existing DB_URI.
 // The schema is initialised from the migration script before each test.
 
-import { describe, it, beforeEach, expect } from 'vitest';
+import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { getDb, withTx } from '@/db';
 import { createTask, updateTask, deleteTask } from '@/db/tasks';
 import { drainOutbox } from '@/sync/push';
 import type { ApiClient } from '@/api/client';
 // import { ApiError } from '@/api/errors';
 
-// Helper to run the initial schema SQL
+// Helper to run the schema SQL
 async function initSchema() {
   const db = await getDb();
-  const sql = await (await import('fs')).promises.readFile(
+  const sql1 = await import('fs').then(m => m.promises.readFile(
     require('path').join(__dirname, '../../src/db/migrations/001_initial.sql'),
     'utf8',
-  );
-  // Split on double newlines to execute statements sequentially (sqlite plugin accepts whole script)
-  await db.execute(sql);
+  ));
+  const sql2 = await import('fs').then(m => m.promises.readFile(
+    require('path').join(__dirname, '../../src/db/migrations/002_task_fields.sql'),
+    'utf8',
+  ));
+  await db.execute(sql1);
+  await db.execute(sql2);
 }
 
 // Helper to clear all data tables between tests
@@ -58,8 +62,11 @@ function mockApiClient(): ApiClient {
 }
 
 describe('M2 task mutations and outbox', () => {
-  beforeEach(async () => {
+  beforeAll(async () => {
     await initSchema();
+  });
+
+  beforeEach(async () => {
     await clearTables();
   });
 

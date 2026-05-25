@@ -3,14 +3,23 @@ mod tx;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 const INITIAL_MIGRATION_SQL: &str = include_str!("../../src/db/migrations/001_initial.sql");
+const MIGRATION_2_SQL: &str = include_str!("../../src/db/migrations/002_task_fields.sql");
 
 fn migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "initial schema",
-        sql: INITIAL_MIGRATION_SQL,
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "initial schema",
+            sql: INITIAL_MIGRATION_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "task favorites and subscription",
+            sql: MIGRATION_2_SQL,
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
-import { getDb, exec } from './index';
+import { getDb, exec, withTx } from './index';
+import { notify } from './bus';
 import type { Label, LabelResponse } from '@/domain/label';
 
 interface LabelRow {
@@ -151,4 +152,74 @@ export async function replaceTaskLabelsFromServer(
       [taskLocalId, labelLocalId, now, now],
     );
   }
+}
+
+/**
+ * Toggle a label on/off for a task. User-mutation path — sets dirty=1 and
+ * notifies. Creates an outbox entry so the push layer can sync the change.
+ */
+export async function toggleTaskLabel(
+  taskLocalId: string,
+  labelLocalId: string,
+): Promise<boolean> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  const existing = await db.select<{ deleted: number }[]>(
+    `SELECT deleted FROM task_labels WHERE task_local_id = ? AND label_local_id = ? LIMIT 1`,
+    [taskLocalId, labelLocalId],
+  );
+
+  if (existing.length === 0) {
+    await withTx(async (tx) => {
+      await tx.execute(
+        `INSERT INTO task_labels (task_local_id, label_local_id, updated_at, dirty, deleted)
+         VALUES (?, ?, ?, 1, 0)`,
+        [taskLocalId, labelLocalId, now],
+      );
+      await tx.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('task_label', ?, 'add', ?, ?)`,
+        [taskLocalId, JSON.stringify({ labelLocalId }), now],
+      );
+    });
+    notify('task_labels');
+    notify('outbox');
+    return true;
+  }
+
+  const existingRow = existing[0];
+  if (!existingRow) return false;
+  const wasDeleted = existingRow.deleted === 1;
+  if (wasDeleted) {
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE task_labels SET deleted = 0, dirty = 1, updated_at = ? WHERE task_local_id = ? AND label_local_id = ?`,
+        [now, taskLocalId, labelLocalId],
+      );
+      await tx.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('task_label', ?, 'add', ?, ?)`,
+        [taskLocalId, JSON.stringify({ labelLocalId }), now],
+      );
+    });
+    notify('task_labels');
+    notify('outbox');
+    return true;
+  }
+
+  await withTx(async (tx) => {
+    await tx.execute(
+      `UPDATE task_labels SET deleted = 1, dirty = 1, updated_at = ? WHERE task_local_id = ? AND label_local_id = ?`,
+      [now, taskLocalId, labelLocalId],
+    );
+    await tx.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('task_label', ?, 'remove', ?, ?)`,
+      [taskLocalId, JSON.stringify({ labelLocalId }), now],
+    );
+  });
+  notify('task_labels');
+  notify('outbox');
+  return false;
 }

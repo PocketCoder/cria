@@ -15,6 +15,10 @@ export interface Task {
   percentDone: number;
   hexColor: string | null;
   position: number | null;
+  isFavorite: boolean;
+  isSubscribed: boolean;
+  repeatAfter: number;
+  repeatMode: number;
   updatedAt: string;
 }
 
@@ -35,10 +39,15 @@ export const taskResponseSchema = z
     position: z.number().nullable().optional(),
     updated: z.string().nullable().optional(),
     created: z.string().nullable().optional(),
+    is_favorite: z.boolean().nullable().optional(),
+    repeat_after: z.number().nullable().optional(),
+    repeat_mode: z.number().nullable().optional(),
     // Vikunja's GET /tasks embeds the task's labels inline. We don't
     // validate the inner shape here — labelResponseSchema will do that
     // when the sync layer routes each label through upsertLabelFromServer.
     labels: z.array(z.unknown()).nullable().optional(),
+    // assignees are embedded in the task response; parsed separately
+    assignees: z.array(z.unknown()).nullable().optional(),
   })
   .passthrough();
 
@@ -63,8 +72,19 @@ export interface TaskInput {
   priority?: number;
   percentDone?: number;
   hexColor?: string | null;
+  isFavorite?: boolean;
+  repeatAfter?: number;
+  repeatMode?: number;
+}
+
+export interface TaskAssigneeData {
+  userServerId: number;
+  username?: string;
+  name?: string;
+  email?: string;
 }
 
 export type TaskUpdate = Partial<Omit<TaskInput, 'projectLocalId'>> & {
   done?: boolean;
+  isSubscribed?: boolean;
 };

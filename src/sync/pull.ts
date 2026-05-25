@@ -5,9 +5,11 @@ import {
   replaceTaskLabelsFromServer,
   upsertLabelFromServer,
 } from '@/db/labels';
+import { upsertTaskAssigneesFromServer } from '@/db/task-assignees';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import { taskResponseSchema, type TaskResponse } from '@/domain/task';
 import { labelResponseSchema, type LabelResponse } from '@/domain/label';
+import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
 import { exec } from '@/db';
 import { notify } from '@/db/bus';
 
@@ -155,6 +157,14 @@ export async function pullTasksForProject(
         if (parsed.success) validLabels.push(parsed.data);
       }
       await replaceTaskLabelsFromServer(taskLocalId, validLabels);
+    }
+    if (taskLocalId && Array.isArray(t.assignees)) {
+      const validAssignees: AssigneeResponse[] = [];
+      for (const raw of t.assignees) {
+        const parsed = assigneeResponseSchema.safeParse(raw);
+        if (parsed.success) validAssignees.push(parsed.data);
+      }
+      await upsertTaskAssigneesFromServer(taskLocalId, validAssignees);
     }
   }
 

@@ -1,6 +1,12 @@
 import { nanoid } from 'nanoid';
 import { getDb, withTx, exec } from './index';
-import { normaliseDate, type Task, type TaskResponse, type TaskInput, type TaskUpdate } from '@/domain/task';
+import {
+  normaliseDate,
+  type Task,
+  type TaskResponse,
+  type TaskInput,
+  type TaskUpdate,
+} from '@/domain/task';
 import { notify } from './bus';
 
 interface TaskRow {
@@ -18,6 +24,10 @@ interface TaskRow {
   percent_done: number;
   hex_color: string | null;
   position: number | null;
+  is_favorite: number;
+  is_subscribed: number;
+  repeat_after: number;
+  repeat_mode: number;
   updated_at: string;
 }
 
@@ -37,6 +47,10 @@ function rowToTask(row: TaskRow): Task {
     percentDone: row.percent_done,
     hexColor: row.hex_color,
     position: row.position,
+    isFavorite: row.is_favorite === 1,
+    isSubscribed: row.is_subscribed === 1,
+    repeatAfter: row.repeat_after,
+    repeatMode: row.repeat_mode,
     updatedAt: row.updated_at,
   };
 }
@@ -44,7 +58,7 @@ function rowToTask(row: TaskRow): Task {
 const SELECT_TASK_COLS = `
   local_id, server_id, project_local_id, title, description, done, done_at,
   due_date, start_date, end_date, priority, percent_done, hex_color,
-  position, updated_at`;
+  position, is_favorite, is_subscribed, repeat_after, repeat_mode, updated_at`;
 
 export async function listTasksForProject(
   projectLocalId: string,
@@ -146,6 +160,10 @@ export async function upsertTaskFromServer(
     payload.percent_done ?? 0,
     payload.hex_color ?? null,
     payload.position ?? null,
+    payload.is_favorite === true ? 1 : 0,
+    (payload as any).subscription != null ? 1 : 0,
+    payload.repeat_after ?? 0,
+    payload.repeat_mode ?? 0,
     updatedAt,
     now,
     JSON.stringify(payload),
@@ -205,6 +223,10 @@ export async function upsertTaskFromServer(
              percent_done     = ?,
              hex_color        = ?,
              position         = ?,
+             is_favorite      = ?,
+             is_subscribed    = ?,
+             repeat_after     = ?,
+             repeat_mode      = ?,
              updated_at       = ?,
              synced_at        = ?,
              last_synced      = ?,
@@ -230,6 +252,10 @@ export async function upsertTaskFromServer(
            percent_done     = ?,
            hex_color        = ?,
            position         = ?,
+           is_favorite      = ?,
+           is_subscribed    = ?,
+           repeat_after     = ?,
+           repeat_mode      = ?,
            updated_at       = ?,
            synced_at        = ?,
            last_synced      = ?,
@@ -244,9 +270,9 @@ export async function upsertTaskFromServer(
       `INSERT INTO tasks (
          local_id, server_id, project_local_id, title, description, done,
          done_at, due_date, start_date, end_date, priority, percent_done,
-         hex_color, position, updated_at, synced_at, last_synced,
-         dirty, deleted
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+         hex_color, position, is_favorite, is_subscribed, repeat_after,
+         repeat_mode, updated_at, synced_at, last_synced, dirty, deleted
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       [localId, serverId, ...params],
     );
   }
@@ -267,8 +293,9 @@ export async function createTask(input: TaskInput): Promise<Task> {
       `INSERT INTO tasks (
          local_id, server_id, project_local_id, title, description, done,
          done_at, due_date, start_date, end_date, priority, percent_done,
-         hex_color, position, updated_at, dirty, deleted
-       ) VALUES (?, NULL, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+         hex_color, position, is_favorite, is_subscribed, repeat_after,
+         repeat_mode, updated_at, dirty, deleted
+       ) VALUES (?, NULL, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 1, 0)`,
       [
         localId,
         input.projectLocalId,
@@ -281,6 +308,9 @@ export async function createTask(input: TaskInput): Promise<Task> {
         input.percentDone ?? 0,
         input.hexColor ?? null,
         null,
+        input.isFavorite === true ? 1 : 0,
+        input.repeatAfter ?? 0,
+        input.repeatMode ?? 0,
         now,
       ]
     );
@@ -358,6 +388,22 @@ export async function updateTask(
       sets.push('hex_color = ?');
       params.push(input.hexColor);
     }
+    if (input.isFavorite !== undefined) {
+      sets.push('is_favorite = ?');
+      params.push(input.isFavorite ? 1 : 0);
+    }
+    if (input.isSubscribed !== undefined) {
+      sets.push('is_subscribed = ?');
+      params.push(input.isSubscribed ? 1 : 0);
+    }
+    if (input.repeatAfter !== undefined) {
+      sets.push('repeat_after = ?');
+      params.push(input.repeatAfter);
+    }
+    if (input.repeatMode !== undefined) {
+      sets.push('repeat_mode = ?');
+      params.push(input.repeatMode);
+    }
 
     if (sets.length > 0) {
       sets.push('updated_at = ?');
@@ -385,6 +431,51 @@ export async function updateTask(
   const updated = await getTaskByLocalId(localId);
   if (!updated) {
     throw new Error(`Failed to retrieve updated task ${localId}`);
+  }
+  return updated;
+}
+
+export async function duplicateTask(localId: string): Promise<Task | null> {
+  const original = await getTaskByLocalId(localId);
+  if (!original) return null;
+  return createTask({
+    title: original.title,
+    projectLocalId: original.projectLocalId,
+    description: original.description,
+    dueDate: original.dueDate,
+    startDate: original.startDate,
+    endDate: original.endDate,
+    priority: original.priority,
+    percentDone: original.percentDone,
+    hexColor: original.hexColor,
+  });
+}
+
+export async function moveTask(
+  localId: string,
+  newProjectLocalId: string,
+): Promise<Task> {
+  const now = new Date().toISOString();
+
+  await withTx(async (db) => {
+    await db.execute(
+      `UPDATE tasks SET project_local_id = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+      [newProjectLocalId, now, localId],
+    );
+
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('task', ?, 'update', ?, ?)`,
+      [localId, JSON.stringify({ projectLocalId: newProjectLocalId }), now],
+    );
+  });
+
+  notify('tasks');
+  notify('outbox');
+
+  const updated = await getTaskByLocalId(localId);
+  if (!updated) {
+    throw new Error(`Failed to retrieve moved task ${localId}`);
   }
   return updated;
 }

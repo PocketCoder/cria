@@ -176,7 +176,7 @@ export function Shell() {
                     {selected.title}
                   </h1>
                 </header>
-                <div className="flex flex-1 min-w-0">
+                <div className="flex flex-1 min-h-0 min-w-0">
                   <TaskList project={selected} />
                   <TaskDetail />
                 </div>

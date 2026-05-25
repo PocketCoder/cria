@@ -3,6 +3,47 @@ import { getDb, withTx, exec, type Database } from '@/db';
 import { notify, subscribe } from '@/db/bus';
 import { ApiError, NetworkError } from '@/api/errors';
 
+/**
+ * Subscribe the current user to a task by calling the Vikunja API,
+ * then stamp is_subscribed locally without going through the outbox.
+ */
+export async function subscribeToTask(
+  taskServerId: number,
+  taskLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<void> {
+  await callApi(
+    client.PUT('/subscriptions/{entity}/{entityID}', {
+      params: { path: { entity: 'task', entityID: String(taskServerId) } },
+    }),
+  );
+  await exec(
+    `UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`,
+    [new Date().toISOString(), taskLocalId],
+  );
+  notify('tasks');
+}
+
+/**
+ * Unsubscribe the current user from a task.
+ */
+export async function unsubscribeFromTask(
+  taskServerId: number,
+  taskLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<void> {
+  await callApi(
+    client.DELETE('/subscriptions/{entity}/{entityID}', {
+      params: { path: { entity: 'task', entityID: String(taskServerId) } },
+    }),
+  );
+  await exec(
+    `UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`,
+    [new Date().toISOString(), taskLocalId],
+  );
+  notify('tasks');
+}
+
 interface OutboxRow {
   id: number;
   entity_type: string;
@@ -33,6 +74,9 @@ interface TaskRow {
   priority: number;
   percent_done: number;
   hex_color: string | null;
+  is_favorite: number;
+  repeat_after: number;
+  repeat_mode: number;
   deleted: number;
 }
 
@@ -131,21 +175,86 @@ async function drainLoop(client: ApiClient): Promise<void> {
   }
 }
 
+interface LabelLookup {
+  server_id: number | null;
+}
+
 async function executeOp(
   client: ApiClient,
   db: Database,
   op: OutboxRow,
 ): Promise<void> {
+  if (op.entity_type === 'task_label') {
+    const payload = JSON.parse(op.payload);
+    const labelLocalId: string = payload.labelLocalId;
+
+    const [taskRow] = await db.select<TaskRow[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+      [op.entity_local_id],
+    );
+    const [labelRow] = await db.select<LabelLookup[]>(
+      `SELECT server_id FROM labels WHERE local_id = ? LIMIT 1`,
+      [labelLocalId],
+    );
+    const taskServerId = taskRow?.server_id;
+    const labelServerId = labelRow?.server_id;
+    if (!taskServerId || !labelServerId) return;
+
+    if (op.op === 'add') {
+      await callApi(
+        client.PUT('/tasks/{task}/labels', {
+          params: { path: { task: taskServerId } },
+          body: { label_id: labelServerId },
+        }),
+      );
+    } else if (op.op === 'remove') {
+      await callApi(
+        client.DELETE('/tasks/{task}/labels/{label}', {
+          params: { path: { task: taskServerId, label: labelServerId } },
+        }),
+      );
+    }
+    return;
+  }
+
+  if (op.entity_type === 'task_assignee') {
+    const payload = JSON.parse(op.payload);
+    const userServerId: number = payload.userServerId;
+
+    const [taskRow] = await db.select<TaskRow[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+      [op.entity_local_id],
+    );
+    const taskServerId = taskRow?.server_id;
+    if (!taskServerId) return;
+
+    if (op.op === 'add') {
+      await callApi(
+        client.PUT('/tasks/{taskID}/assignees', {
+          params: { path: { taskID: taskServerId } },
+          body: { user_id: userServerId },
+        }),
+      );
+    } else if (op.op === 'remove') {
+      await callApi(
+        client.DELETE('/tasks/{taskID}/assignees/{userID}', {
+          params: { path: { taskID: taskServerId, userID: userServerId } },
+        }),
+      );
+    }
+    return;
+  }
+
   if (op.entity_type !== 'task') return;
 
   const localId = op.entity_local_id;
-  const taskRows = await db.select<TaskRow[]>(
-    `SELECT local_id, server_id, project_local_id, title, description, done,
-            done_at, due_date, start_date, end_date, priority, percent_done,
-            hex_color, deleted
-       FROM tasks WHERE local_id = ? LIMIT 1`,
-    [localId],
-  );
+    const taskRows = await db.select<TaskRow[]>(
+      `SELECT local_id, server_id, project_local_id, title, description, done,
+              done_at, due_date, start_date, end_date, priority, percent_done,
+              hex_color, is_favorite, repeat_after, repeat_mode, deleted
+         FROM tasks WHERE local_id = ? LIMIT 1`,
+      [localId],
+    );
   const task = taskRows[0];
   if (!task) return; // permanently gone; nothing to do
 
@@ -254,6 +363,9 @@ function taskToBody(task: TaskRow) {
     priority: task.priority,
     percent_done: task.percent_done,
     hex_color: task.hex_color ?? undefined,
+    is_favorite: task.is_favorite === 1 ? true : undefined,
+    repeat_after: task.repeat_after !== 0 ? task.repeat_after : undefined,
+    repeat_mode: task.repeat_mode !== 0 ? (task.repeat_mode as 0 | 1 | 2) : undefined,
   };
 }
 
