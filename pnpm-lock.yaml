@@ -29,9 +29,6 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.10.9
         version: 3.13.25(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tauri-apps/api':
-        specifier: ^2.11.0
-        version: 2.11.0
       '@tauri-apps/plugin-autostart':
         specifier: ^2.5.0
         version: 2.5.1
@@ -120,6 +117,9 @@ importers:
       '@tanstack/router-devtools':
         specifier: ^1.167.0
         version: 1.167.0(@tanstack/react-router@1.170.8(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tanstack/router-core@1.171.6)(csstype@3.2.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tauri-apps/api':
+        specifier: ^2.11.0
+        version: 2.11.0
       '@tauri-apps/cli':
         specifier: ^2.11.0
         version: 2.11.2

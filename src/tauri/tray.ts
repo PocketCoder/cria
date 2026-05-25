@@ -8,6 +8,7 @@
  */
 
 import { TrayIcon as CoreTrayIcon } from '@tauri-apps/api/tray';
+import { Image } from '@tauri-apps/api/image';
 import { resolveResource } from '@tauri-apps/api/path';
 
 const TRAY_ID = 'cria';
@@ -19,9 +20,10 @@ export class Tray {
     const existing = await CoreTrayIcon.getById(TRAY_ID);
     if (existing) return new Tray(existing);
     const iconPath = await resolveResource('icons/icon_idle.png');
+    const icon = await Image.fromPath(iconPath);
     const created = await CoreTrayIcon.new({
       id: TRAY_ID,
-      icon: iconPath,
+      icon,
       tooltip: 'Cria',
     });
     return new Tray(created);
