@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 
-import { register, unregister } from '@tauri-apps/api/globalShortcut';
+import { register, unregister } from '@/tauri/globalShortcut';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { Button } from '@/components/ui/button';
 import { useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { autostart } from '@tauri-apps/api/autostart';
+import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
 import { TrayIcon } from '@/components/TrayIcon';
+import { TrayStatus } from '@/components/TrayStatus';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useUi } from '@/stores/ui';
@@ -35,9 +36,10 @@ export function Shell() {
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
-const [isOnline, setIsOnline] = useState(
+  const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
+  const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
 
   // Track previous counts to fire notifications only on transition
   const prevOutbox = useRef<number>(outboxCount);
@@ -63,7 +65,7 @@ const [isOnline, setIsOnline] = useState(
         const matches = url.match(/vikunja:\/\/(task|project)\/(\d+)/);
         if (!matches) return;
         const [, type, serverIdStr] = matches;
-        const serverId = parseInt(serverIdStr, 10);
+        const serverId = parseInt(serverIdStr!, 10);
         const db = await getDb();
         const row = await db.select<any[]>(
           `SELECT local_id FROM ${type}s WHERE server_id = ? LIMIT 1`,
@@ -111,6 +113,18 @@ const [isOnline, setIsOnline] = useState(
     return () => {
       unregister(shortcut).catch((e) => console.error('Failed to unregister shortcut', e));
     };
+  }, []);
+
+  // Load initial autostart status
+  useEffect(() => {
+    (async () => {
+      try {
+        const enabled = await isEnabled();
+        setAutostartEnabled(enabled);
+      } catch (e) {
+        console.error('Failed to read autostart status', e);
+      }
+    })();
   }, []);
 
 
@@ -173,42 +187,49 @@ const [isOnline, setIsOnline] = useState(
               !isOnline ? 'bg-red-500 animate-pulse' : outboxCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
             )}
           />
-          <span>
-            {!isOnline
-              ? 'Offline'
-              : outboxCount > 0
-              ? (
-                  <button
-                    className="underline"
-                    onClick={() => setShowOutbox(true)}
-                  >
-                    Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
-                  </button>
-                )
-              : conflictCount > 0
-              ? (
-                  <button
-                    className="underline"
-                    onClick={() => setShowConflicts(true)}
-                  >
-                    {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
-                  </button>
-                )
-              : 'Synced with server'}
-          </span>
+           <span>
+             {!isOnline
+               ? 'Offline'
+               : outboxCount > 0
+               ? (
+                   <button
+                     className="underline"
+                     onClick={() => setShowOutbox(true)}
+                   >
+                     Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
+                   </button>
+                 )
+               : conflictCount > 0
+               ? (
+                   <button
+                     className="underline"
+                     onClick={() => setShowConflicts(true)}
+                   >
+                     {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
+                   </button>
+                 )
+               : 'Synced with server'}
+           </span>
+           <TrayStatus />
           {/* Autostart toggle */}
           <button
             onClick={async () => {
               try {
-                const enabled = await autostart.isEnabled();
-                if (enabled) await autostart.disable(); else await autostart.enable();
+                const enabled = await isEnabled();
+                if (enabled) {
+                  await disable();
+                } else {
+                  await enable();
+                }
+                // Refresh status after toggling
+                setAutostartEnabled(!(await isEnabled()));
               } catch (e) {
                 console.error('Autostart toggle failed', e);
               }
             }}
             className="text-xs text-[var(--color-muted-foreground)] underline"
           >
-            Autostart
+            Autostart: {autostartEnabled ? 'On' : 'Off'}
           </button>
         </div>
         <div>
