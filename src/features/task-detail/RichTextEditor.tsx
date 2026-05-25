@@ -159,7 +159,7 @@ function ReadView({
 
   if (!value) {
     return (
-      <div className="space-y-2">
+      <div className="min-w-0 max-w-full space-y-2">
         <button
           type="button"
           onClick={onEdit}
@@ -172,7 +172,7 @@ function ReadView({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 max-w-full space-y-2">
       <div
         className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
@@ -400,11 +400,13 @@ function EditView({
   const popupTop = isLowerHalf ? slashUI.coords.top - 248 : slashUI.coords.top + 8;
 
   return (
-    <div className="relative space-y-2 overflow-x-hidden">
+    <div className="relative space-y-2">
       <Toolbar editor={editor} />
-      <EditorContent editor={editor} />
+      <div className="min-w-0 max-w-full">
+        <EditorContent editor={editor} />
+      </div>
       <div className="flex items-center justify-end gap-2 text-[10px] text-[var(--color-muted-foreground)]">
-        <span className="mr-auto whitespace-nowrap">⌘+Enter · Esc · /commands</span>
+        <span className="mr-auto">⌘+Enter · Esc · /commands</span>
         <button
           type="button"
           onClick={onCancel}
@@ -516,7 +518,7 @@ function Toolbar({ editor }: { editor: Editor }) {
   return (
     <div
       role="toolbar"
-      className="flex flex-wrap items-center gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-1"
+      className="max-w-full flex flex-wrap items-center gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-1"
     >
       {btn(
         'Bold',
