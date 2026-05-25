@@ -22,6 +22,7 @@ import { QuickAddModal } from '@/components/QuickAddModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
+import pkg from '../../../package.json';
 
 export function Shell() {
   console.log('APP version constant:', __APP_VERSION__);
@@ -270,7 +271,7 @@ export function Shell() {
           </button>
         </div>
         <div>
-          <span>Cria Desktop {__APP_VERSION__}</span>
+          <span>Cria Desktop {pkg.version}</span>
         </div>
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
