@@ -160,6 +160,8 @@ about build-script approvals.)
 
 ## User preferences observed
 
+*(unchanged)*
+
 - Wants tight, low-noise updates between tool calls. End-of-turn summaries
   one or two sentences.
 - Wants commits at milestone boundaries; intra-milestone commits should still
@@ -204,3 +206,28 @@ Spec §5.2 + §7.1 has the design. Concrete first chunks:
 
 The schema is already there. The bus pattern flips: now `notify()` is
 **required** on every write.
+
+## Recent work (GPT-OSS-120B)
+
+- Bumped app version to `0.0.0-alpha` (package.json, Vite define, UI footer).
+- Fixed version display using runtime import of `package.json`.
+- Added dev‑only `keydown` listener for `⌘+Shift+A` shortcut.
+- Implemented dev mocks for outbox `create`, `update`, `delete` when `VK_URL` is not set, so outbox clears instantly in dev.
+- Added console logs for `outboxCount` and `conflictCount` for debugging.
+- Added “Clear outbox” dev‑only button in footer.
+- Implemented Autostart stub with in‑memory state and dev‑only UI toggle (label shows On/Off).
+- Created placeholder tray icons (`icon_idle.png`, `icon_sync.png`, `icon_conflict.png`) and ensured they are bundled.
+- Added `TrayStatus` fallback UI badge.
+- Added `global.d.ts` declaration for `__APP_VERSION__` (now unused but harmless).
+- Updated Vite config to expose `__APP_VERSION__`.
+- Fixed import path for `package.json` in `Shell.tsx`.
+- Updated dev scripts and ports to avoid conflicts.
+
+### Open / Stuck issues
+
+- Real server sync (`VK_URL`) is still not configured; dev mocks bypass network calls, so production‑ready syncing has not been exercised.
+- Autostart stub only logs actions; the real Tauri autostart plugin has not been tested.
+- Placeholder tray icon PNGs are empty files; proper graphics are needed for production.
+- Debug console logs in `Shell` may need removal before release.
+- `src/global.d.ts` is now redundant after moving to runtime import; can be removed.
+
