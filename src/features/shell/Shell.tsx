@@ -36,6 +36,7 @@ export function Shell() {
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
   const { data: outboxCount = 0 } = useOutboxCount();
+  console.log('UI outboxCount:', outboxCount);
   const { data: conflictCount = 0 } = useConflictsCount();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
