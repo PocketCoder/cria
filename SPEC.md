@@ -924,74 +924,92 @@ A checklist file (`docs/smoke-test.md`) for each release: launch, login, create,
 
 ## 14. Implementation Milestones
 
-Milestones are defined by what's working, not by calendar time. Ship each one when its exit criteria are met. Earlier milestones unblock later ones, but within a milestone the order of work is flexible.
+Cria is targeting a **Todoist-feeling** client over Vikunja. The first four milestones deliver the offline-first / outbox foundation; the rest is the UX climb to match the polish bar a daily-driver task app demands.
 
-### M0 — Skeleton
+Milestones are defined by what's working, not by calendar time. Ship each one when its exit criteria are met.
 
-- Tauri + Vite + React + Tailwind boilerplate
-- SQLite plugin wired up with initial migration
-- Login screen accepting server URL + API token
-- Hit `/api/v1/user`, store result, render "logged in as X"
+### Shipped foundation (M0–M4)
 
-**Exit criteria:** app launches, authenticates against a Vikunja instance, persists the token securely, and survives a relaunch still logged in.
+| | What | Status |
+|---|---|---|
+| **M0** | Skeleton — Tauri + Vite + React + SQLite + sign-in | ✅ |
+| **M1** | Read-only sync — projects + tasks + labels render, 60s background refresh | ✅ |
+| **M2** | Local writes + outbox — create / edit / delete tasks round-trip to server | ✅ |
+| **M3** | Conflicts + deletion reconcile — code present, smoke test owed | 🟡 |
+| **M4** | Native polish — Tauri plugins (notification, autostart, global shortcut, tray) and a Rust-side `execute_tx` for real atomic transactions | ✅ |
 
-### M1 — Read-only sync
+### M5 — Input parity with Todoist
 
-- Generated API types
-- Repositories for projects, tasks, labels (read paths only)
-- Pull loop: full initial sync, then delta polling
-- Three-pane UI shell, project sidebar, task list view
-- Detail pane (read-only)
+The point at which the app stops feeling like a wrapper. This is the headline milestone for "Todoist clone."
 
-**Exit criteria:** all of the user's projects and tasks appear in the UI, kept reasonably fresh by background polling. App is usable as a read-only viewer offline after first sync.
+- **Natural-language quick-add** in the inline "Add a task…" field and the global Cmd+Shift+A modal:
+  - `Buy milk tomorrow at 5pm #shopping !2 @alice`
+  - Parser handles dates (via chrono-node), `#label`, `!priority`, `@assignee`, project hops
+  - Token-coloured live preview as the user types
+- **WYSIWYG description editor** (TipTap) replacing the HTML textarea
+  - Bold / italic / underline / strike, headings, lists, blockquote, inline + block code, links
+  - Slash-command menu (`/heading`, `/bullet`, `/code`, …)
+  - Smart paste (auto-link URLs, strip foreign HTML)
+  - Renders identically to Vikunja's own web client (both use TipTap)
+- **Inline metadata pickers** in the detail pane:
+  - Due / start / end date popover with calendar
+  - Priority pill (0–5) with keyboard
+  - Project chooser combobox
+  - Label multi-select with create-as-you-type
+- **Label mutations** (apply / remove / create) routed through the outbox alongside task mutations
+- **External-link handling** — `<a>` clicks in descriptions / notes / comments open via Tauri `shell.open` in the OS default browser, not the webview itself
 
-### M2 — Local writes + outbox
+**Exit criteria:** a Todoist user could sit down and create or edit a complete task — title, description, due date, priority, labels — without touching the mouse beyond the initial focus. Descriptions look the same in Cria and in Vikunja's web UI.
 
-- Outbox table + push loop
-- Create/edit/delete tasks locally
-- ID mapping
-- Optimistic UI throughout
-- Offline indicator
+### M6 — Smart views & search
 
-**Exit criteria:** a task created or edited offline shows up on the server after reconnect, with no user-visible spinner during the local interaction.
+- **Today** — tasks due today across every project, single grouped list
+- **Upcoming** — next 7 days, grouped by day
+- **Inbox** — convert from project to a real smart view (tasks with no project, or in the user's default)
+- **Saved filters** — render Vikunja's filter DSL, edit via a small expression builder; persist locally
+- **Full-text search** across the local SQLite using FTS5, results inline as you type
+- Search and smart views share the same task-list rendering as projects do
 
-### M3 — Conflict resolution + deletion sweep
+**Exit criteria:** the user opens Cria in the morning and Today tells them what to do. Search is sub-100ms on a 10k-task local database.
 
-- `_lastSynced` snapshot column
-- Conflict detection + resolution UI
-- Periodic deletion reconciliation
+### M7 — Keyboard-first navigation
 
-**Exit criteria:** simultaneous edits on two clients converge to a state the user can reason about; server-side deletions stop appearing locally within one reconciliation cycle.
+- **Command palette** (Cmd+K): open project, jump to task, run any action by name
+- **Per-row shortcuts**: j/k or arrows to move, Enter to open detail, Space to check, `e` edit title, `d` set date, `l` labels, `p` priority, `#` move to project
+- All shortcuts **rebindable** in settings
+- Global Cmd+Shift+A (already wired) opens the natural-language quick-add modal anywhere
 
-### M4 — Polish & native integration
+**Exit criteria:** every common action is reachable without the trackpad.
 
-- Quick add with parser
-- Global shortcuts
-- Notifications (due reminders)
-- Tray icon
-- Autostart
-- Deep links
-- Auto-updater
+### M8 — Hierarchy, recurrence, reminders
 
-**Exit criteria:** the app feels like a native desktop tool, not a wrapped webpage. Updates ship to users without a manual reinstall.
+- **Sub-tasks**: render Vikunja's task relations as an indented, collapsible tree under each parent
+- **Recurring tasks**: surface `repeat_after` / `repeat_mode` in the detail pane with a human-readable editor ("Every weekday", "Monthly on the 1st"). Mark-done auto-rolls the dates per Vikunja's semantics
+- **Reminders**: render `reminders`, schedule local notifications via plugin-notification when due, deliver even when the app is in the tray
 
-### M5 — Views beyond list
+**Exit criteria:** the weekly "Take out the bins" task fires its reminder on time and reappears the day after it's completed, with no web-UI intervention.
 
-- Kanban
-- Table view
-- Saved filters
-- Search (FTS5)
+### M9 — Reorder, drag-and-drop, Kanban
 
-**Exit criteria:** users with kanban-organised projects or large task databases can do their primary workflows here instead of in the web app.
+- Drag-and-drop **task reordering** within a list (dnd-kit), persisting per-view positions through the outbox
+- **Kanban view** per project: column per bucket, drag tasks between
+- **Table view**: dense, sortable, multi-column
 
-### M6 — Stretch
+**Exit criteria:** users who organise their day in Kanban can run it from Cria.
 
-- Attachments (download, cache, upload)
-- Comments + @mentions
-- Gantt
-- Time tracking (if Vikunja adds it server-side)
+### M10 — Stretch
 
-No exit criteria — these are individually shippable enhancements pulled in by demand.
+Individually shippable; pulled in by demand:
+- **Attachments** (download, local cache with LRU eviction, upload)
+- **Comments + @mentions** with notification on next pull
+- **Gantt** view
+- **Per-project notes** — a markdown notebook docked to the sidebar
+
+### Daily-driver and polish bars
+
+- **Daily-driver** target: M0–M5. A user who lives in Todoist could switch.
+- **Polish** bar: M0–M7. A user who reviews productivity apps for fun wouldn't downgrade their experience.
+- **Power-user** bar: M0–M9. The app stops needing the web UI for anything routine.
 
 **Daily-driver target:** M0 through M3 is the minimum for the app to be the user's primary client. M4 is the minimum for it to feel polished. M5+ broadens the audience.
 
