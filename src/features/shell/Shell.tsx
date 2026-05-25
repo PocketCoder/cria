@@ -234,41 +234,41 @@ export function Shell() {
            </span>
            <TrayStatus />
           {/* Autostart toggle */}
-          <button
-            onClick={async () => {
-              try {
-                const enabled = await isEnabled();
-                if (enabled) {
-                  await disable();
-                } else {
-                  await enable();
-                }
-                // Refresh status after toggling
-                setAutostartEnabled(!(await isEnabled()));
-              } catch (e) {
-                console.error('Autostart toggle failed', e);
-              }
-            }}
-            className="text-xs text-[var(--color-muted-foreground)] underline"
-          >
-            Autostart: {autostartEnabled ? 'On' : 'Off'}
-            {import.meta.env.MODE === 'development' && (
-            <button
-              onClick={async () => {
-                try {
-                  const db = await getDb();
-                  await db.execute('DELETE FROM outbox');
-                  console.log('Outbox cleared (dev)');
-                } catch (e) {
-                  console.error('Failed to clear outbox', e);
-                }
-              }}
-              className="text-xs text-[var(--color-muted-foreground)] underline ml-2"
-            >
-              Clear outbox
-            </button>
-          )}
-          </button>
+<button
+             onClick={async () => {
+               try {
+                 const enabled = await isEnabled();
+                 if (enabled) {
+                   await disable();
+                 } else {
+                   await enable();
+                 }
+                 // Refresh status after toggling
+                 setAutostartEnabled(!(await isEnabled()));
+               } catch (e) {
+                 console.error('Autostart toggle failed', e);
+               }
+             }}
+             className="text-xs text-[var(--color-muted-foreground)] underline"
+           >
+             Autostart: {autostartEnabled ? 'On' : 'Off'}
+           </button>
+           {import.meta.env.MODE === 'development' && (
+             <button
+               onClick={async () => {
+                 try {
+                   const db = await getDb();
+                   await db.execute('DELETE FROM outbox');
+                   console.log('Outbox cleared (dev)');
+                 } catch (e) {
+                   console.error('Failed to clear outbox', e);
+                 }
+               }}
+               className="text-xs text-[var(--color-muted-foreground)] underline ml-2"
+             >
+               Clear outbox
+             </button>
+           )}
         </div>
         <div>
           <span>Cria Desktop {pkg.version}</span>
