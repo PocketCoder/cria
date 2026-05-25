@@ -1,5 +1,5 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { open as shellOpen } from '@tauri-apps/plugin-shell';
+import { open } from '@tauri-apps/api/shell';
 
 /**
  * Intercept clicks on `<a href>` inside an element and route external
@@ -25,7 +25,7 @@ export function onLinkClickOpenExternal(
   // Prefer shell.open; fall back to opener or window.open
   try {
     // shellOpen returns a Promise
-    shellOpen(href).then(() => {
+    open(href).then(() => {
       console.info('[openExternal] opened via shell', href);
     });
   } catch {
