@@ -45,10 +45,29 @@ const MAX_ATTEMPTS = 10;
  * FIFO per entity. We process one op at a time and stop on first failure
  * (per SPEC §7.1) so subsequent ops referencing the same entity don't run
  * against a not-yet-existing server row.
+ *
+ * **Re-entrancy guard.** Concurrent drain calls — common in practice because
+ * the bus subscription, the periodic tick, and the manual UI button can all
+ * fire at once — would race each other's withTx() calls and trip SQLite's
+ * "cannot start a transaction within a transaction". A single in-flight
+ * drain is enough; subsequent callers no-op and rely on the running drain
+ * to finish their work.
  */
+let isDraining = false;
+
 export async function drainOutbox(
   client: ApiClient = createApiClient(),
 ): Promise<void> {
+  if (isDraining) return;
+  isDraining = true;
+  try {
+    await drainLoop(client);
+  } finally {
+    isDraining = false;
+  }
+}
+
+async function drainLoop(client: ApiClient): Promise<void> {
   const db = await getDb();
 
   while (true) {

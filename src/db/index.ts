@@ -90,20 +90,35 @@ interface NodeSqlite {
  * Run a function inside a SQLite transaction. Rolls back on any thrown error
  * and rethrows. The Tauri SQL plugin doesn't expose transaction objects, so
  * we issue BEGIN / COMMIT / ROLLBACK manually.
+ *
+ * **Serialised globally.** SQLite only permits one transaction per connection
+ * at a time; the Tauri SQL plugin shares one connection. Two `withTx` calls
+ * that overlap will collide on `BEGIN` ("cannot start a transaction within a
+ * transaction") or block ("database is locked"). We queue every call onto a
+ * single promise chain so each transaction starts only after the previous
+ * one has fully committed or rolled back.
  */
-export async function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
-  const db = await getDb();
-  await db.execute('BEGIN');
-  try {
-    const result = await fn(db);
-    await db.execute('COMMIT');
-    return result;
-  } catch (err) {
+let writeChain: Promise<unknown> = Promise.resolve();
+
+export function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
+  const next = writeChain.then(async () => {
+    const db = await getDb();
+    await db.execute('BEGIN');
     try {
-      await db.execute('ROLLBACK');
-    } catch {
-      // ignore — failure to roll back means the transaction is already dead
+      const result = await fn(db);
+      await db.execute('COMMIT');
+      return result;
+    } catch (err) {
+      try {
+        await db.execute('ROLLBACK');
+      } catch {
+        // ignore — failure to roll back means the transaction is already dead
+      }
+      throw err;
     }
-    throw err;
-  }
+  });
+  // Keep the chain alive across rejections so one failed transaction
+  // doesn't poison every subsequent one.
+  writeChain = next.catch(() => undefined);
+  return next as Promise<T>;
 }
