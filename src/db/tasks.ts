@@ -1,6 +1,5 @@
 import { nanoid } from 'nanoid';
 import { getDb } from './index';
-import { notify } from './bus';
 import { normaliseDate, type Task, type TaskResponse } from '@/domain/task';
 
 interface TaskRow {
@@ -187,6 +186,6 @@ export async function upsertTaskFromServer(
     );
   }
 
-  notify('tasks');
+  // Intentionally no notify() — see the matching note in src/db/projects.ts.
   return localId;
 }

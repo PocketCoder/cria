@@ -1,6 +1,5 @@
 import { nanoid } from 'nanoid';
 import { getDb } from './index';
-import { notify } from './bus';
 import type { Project, ProjectResponse } from '@/domain/project';
 
 interface ProjectRow {
@@ -156,6 +155,11 @@ export async function upsertProjectFromServer(
     );
   }
 
-  notify('projects');
+  // Intentionally no notify() here: sync-path upserts are driven from a
+  // queryFn that re-reads after the pull completes. If we notified, the
+  // bus subscription on useProjects would invalidate the query whose pull
+  // is currently in flight and trigger an infinite refetch loop. M2+ user
+  // mutations (createProject, updateProject, ...) live in separate
+  // functions and *will* notify.
   return localId;
 }
