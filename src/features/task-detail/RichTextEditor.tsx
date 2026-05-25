@@ -400,11 +400,11 @@ function EditView({
   const popupTop = isLowerHalf ? slashUI.coords.top - 248 : slashUI.coords.top + 8;
 
   return (
-    <div className="relative space-y-2">
+    <div className="relative space-y-2 overflow-x-hidden">
       <Toolbar editor={editor} />
       <EditorContent editor={editor} />
       <div className="flex items-center justify-end gap-2 text-[10px] text-[var(--color-muted-foreground)]">
-        <span className="mr-auto">⌘+Enter to save · Esc to cancel · Type / for commands</span>
+        <span className="mr-auto whitespace-nowrap">⌘+Enter · Esc · /commands</span>
         <button
           type="button"
           onClick={onCancel}
