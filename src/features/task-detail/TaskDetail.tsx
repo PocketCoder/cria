@@ -2,15 +2,15 @@ import { useUi } from '@/stores/ui';
 import { useQuery } from '@tanstack/react-query';
 import { getDb } from '@/db';
 import { format } from 'date-fns';
-import { cn } from '@/lib/cn';
+
 
 /** Read‑only detail view for the currently selected task */
 export function TaskDetail() {
   const selectedId = useUi((s) => s.selectedTaskLocalId);
 
-  const { data: task, isLoading, isError } = useQuery(
-    ['task', selectedId],
-    async () => {
+  const { data: task, isLoading, isError } = useQuery({
+    queryKey: ['task', selectedId],
+    queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<any[]>(
         `SELECT * FROM tasks WHERE local_id = ?`,
@@ -18,8 +18,8 @@ export function TaskDetail() {
       );
       return rows[0] ?? null;
     },
-    { enabled: !!selectedId }
-  );
+    enabled: !!selectedId,
+  });
 
   if (!selectedId) {
     return (
