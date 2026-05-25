@@ -127,28 +127,28 @@ export function serial<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Run a function inside a SQLite transaction. Rolls back on any thrown
- * error and rethrows. The Tauri SQL plugin doesn't expose transaction
- * objects, so we issue BEGIN / COMMIT / ROLLBACK manually. Serialised via
- * `serial` so concurrent callers don't trip BEGIN-in-BEGIN.
+ * Run a function with exclusive access to the DB — i.e. its statements are
+ * guaranteed not to interleave with other writes.
+ *
+ * **No real BEGIN/COMMIT.** The Tauri SQL plugin (v2.4) uses a
+ * `Pool<Sqlite>` with sqlx's default 10-connection pool, so each
+ * `db.execute()` call acquires a fresh connection. JS-issued
+ * `BEGIN` / `COMMIT` / `ROLLBACK` land on different connections and break
+ * disastrously: BEGIN starts a transaction on conn A, COMMIT on conn E sees
+ * "no transaction is active", and conn A's dangling transaction holds the
+ * file lock forever ("database is locked" cascades). See the cargo source
+ * at tauri-plugin-sql-2.4.0/src/wrapper.rs::execute.
+ *
+ * Our serial() chain still guarantees that the `fn` body runs without other
+ * queued writes interleaving its statements. SQLite serialises individual
+ * writes at the file level too. The cost is loss of multi-statement
+ * rollback: if statement 2 throws, statement 1 is already committed. For
+ * Cria that means a `dirty=1` task might exist without an outbox row (or
+ * vice versa) on crash. Worth accepting until we ship a Rust-side
+ * transaction command (see SPEC §5.2 — the spec assumed working tx).
  */
 export function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
-  return serial(async () => {
-    const db = await getDb();
-    await db.execute('BEGIN');
-    try {
-      const result = await fn(db);
-      await db.execute('COMMIT');
-      return result;
-    } catch (err) {
-      try {
-        await db.execute('ROLLBACK');
-      } catch {
-        // ignore — failure to roll back means the transaction is already dead
-      }
-      throw err;
-    }
-  });
+  return serial(async () => fn(await getDb()));
 }
 
 /**
