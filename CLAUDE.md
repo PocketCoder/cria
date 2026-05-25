@@ -165,6 +165,12 @@ to `~/.zshrc`).
 
 ## Conventions
 
+### Branching
+
+All development happens on the `dev` branch. Feature work uses `feature/<name>`
+branches, bug fixes use `fix/<name>` branches. PRs target `dev`; `main` is
+released only. Always branch off `dev`, never off `main`.
+
 ### File layout
 
 Already matches SPEC §11. Feature folders under `src/features/`, repositories
