@@ -146,24 +146,19 @@ function ReadView({
   value: string | null;
   onEdit: () => void;
 }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
-        >
-          Edit
-        </button>
-      </div>
-      {value ? (
-        <div
-          className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
-          onClick={onLinkClickOpenExternal}
-        />
-      ) : (
+  const editBtn = (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
+    >
+      Edit
+    </button>
+  );
+
+  if (!value) {
+    return (
+      <div className="space-y-2">
         <button
           type="button"
           onClick={onEdit}
@@ -171,7 +166,20 @@ function ReadView({
         >
           Add a description…
         </button>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div
+        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline"
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
+        onClick={onLinkClickOpenExternal}
+      />
+      <div className="flex items-center justify-end">
+        {editBtn}
+      </div>
     </div>
   );
 }
