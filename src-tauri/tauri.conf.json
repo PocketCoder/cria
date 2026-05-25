@@ -39,9 +39,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "icons/icon_idle.png",
-      "icons/icon_sync.png",
-      "icons/icon_conflict.png"
+      "icons/icon_idle.png"
     ],
     "category": "Productivity",
     "shortDescription": "Native Vikunja client",

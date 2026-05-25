@@ -1,13 +1,10 @@
 /**
- * Tray icon wrapper. Uses Tauri 2's core `@tauri-apps/api/tray` API
- * (the `tray-icon` feature on the `tauri` crate enables it — see
- * src-tauri/Cargo.toml).
+ * Tray icon — single static instance. Uses Tauri 2's core
+ * `@tauri-apps/api/tray` (the `tray-icon` feature on the `tauri` crate
+ * enables it; see src-tauri/Cargo.toml).
  *
- * Single tray icon keyed by id "cria". TrayIcon.getById() returns it if
- * we've already created one this session; otherwise we create it.
- *
- * Icon paths (e.g. "icons/icon_idle.png") are resolved against the app's
- * bundled resource dir via @tauri-apps/api/path::resolveResource.
+ * If we ever want state-reactive icons back, expose setIcon/setTooltip
+ * on this wrapper and have TrayIcon.tsx watch the relevant queries.
  */
 
 import { TrayIcon as CoreTrayIcon } from '@tauri-apps/api/tray';
@@ -16,7 +13,7 @@ import { resolveResource } from '@tauri-apps/api/path';
 const TRAY_ID = 'cria';
 
 export class Tray {
-  private constructor(private inner: CoreTrayIcon) {}
+  private constructor(_inner: CoreTrayIcon) {}
 
   static async getCurrent(): Promise<Tray> {
     const existing = await CoreTrayIcon.getById(TRAY_ID);
@@ -28,14 +25,5 @@ export class Tray {
       tooltip: 'Cria',
     });
     return new Tray(created);
-  }
-
-  async setIcon(filename: string): Promise<void> {
-    const path = await resolveResource(`icons/${filename}`);
-    await this.inner.setIcon(path);
-  }
-
-  async setTooltip(tooltip: string): Promise<void> {
-    await this.inner.setTooltip(tooltip);
   }
 }
