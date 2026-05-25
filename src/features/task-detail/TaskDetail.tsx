@@ -10,9 +10,7 @@ import { RichTextEditor } from './RichTextEditor';
 import type { Task } from '@/domain/task';
 
 /**
- * Read mostly, edit-on-click. Loads via the typed task repo
- * (was reading raw snake_case rows via getDb before — half the
- * camelCase field accesses were silently undefined).
+ * Read‑only task detail pane with editable description and expanded metadata.
  */
 export function TaskDetail() {
   const selectedId = useUi((s) => s.selectedTaskLocalId);
@@ -81,9 +79,51 @@ export function TaskDetail() {
           value={task.description}
           onSave={handleDescriptionSave}
         />
-      </section>
+        </section>
+        <details className="mb-5 border-t border-[var(--color-border)] pt-3">
+          <summary className="text-xs font-semibold text-[var(--color-muted-foreground)]">Edit metadata</summary>
+          <div className="pt-2 flex flex-col gap-2">
+            <label className="text-xs text-[var(--color-muted-foreground)]">Due date</label>
+            <input type="date" value={task.dueDate?.slice(0,10) ?? ''} onChange={e => updateTask(task.localId, { dueDate: e.target.value || null })} className="max-w-xs" />
+            <label className="text-xs text-[var(--color-muted-foreground)]">Priority</label>
+            <select value={task.priority} onChange={e => updateTask(task.localId, { priority: Number(e.target.value) })} className="max-w-xs">
+              {[0,1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+        </details>
+
 
       <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1.5 text-xs">
+        {task.localId ? (
+          <>
+            <dt className="text-[var(--color-muted-foreground)]">ID</dt>
+            <dd>{task.localId}</dd>
+          </>
+        ) : null}
+        {task.serverId != null ? (
+          <>
+            <dt className="text-[var(--color-muted-foreground)]">Server ID</dt>
+            <dd>{task.serverId}</dd>
+          </>
+        ) : null}
+        {task.done !== undefined ? (
+          <>
+            <dt className="text-[var(--color-muted-foreground)]">Done</dt>
+            <dd>{task.done ? 'Yes' : 'No'}</dd>
+          </>
+        ) : null}
+        {task.doneAt ? (
+          <>
+            <dt className="text-[var(--color-muted-foreground)]">Done At</dt>
+            <dd>{safeFormat(task.doneAt)}</dd>
+          </>
+        ) : null}
+        {task.updatedAt ? (
+          <>
+            <dt className="text-[var(--color-muted-foreground)]">Updated</dt>
+            <dd>{safeFormat(task.updatedAt)}</dd>
+          </>
+        ) : null}
         {task.dueDate ? (
           <>
             <dt className="text-[var(--color-muted-foreground)]">Due</dt>

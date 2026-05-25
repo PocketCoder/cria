@@ -9,6 +9,7 @@ import { createTask, updateTask, deleteTask } from '@/db/tasks';
 import { Trash2, Plus, Loader2 } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { LabelChips } from './LabelChips';
+import type { TaskInput } from '@/domain/task';
 
 interface TaskListProps {
   project: Project;
@@ -19,6 +20,7 @@ export function TaskList({ project }: TaskListProps) {
     useProjectTasks(project);
 
   const [newTitle, setNewTitle] = useState('');
+  const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,8 +33,10 @@ export function TaskList({ project }: TaskListProps) {
       await createTask({
         title: newTitle.trim(),
         projectLocalId: project.localId,
+        ...metadata,
       });
       setNewTitle('');
+       setMetadata({});
     } catch (err) {
       console.error('Failed to create task:', err);
     } finally {
@@ -66,13 +70,22 @@ export function TaskList({ project }: TaskListProps) {
           )}
         </span>
         <input
-          type="text"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          placeholder="Add a task…"
-          disabled={isSubmitting}
-          className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
+           type="text"
+           value={newTitle}
+           onChange={(e) => setNewTitle(e.target.value)}
+           placeholder="Add a task…"
+           disabled={isSubmitting}
+           className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
         />
+        <input type="date" onChange={(e)=>setMetadata({...metadata,dueDate:e.target.value})} className="text-xs" />
+        <select onChange={(e)=>setMetadata({...metadata,priority:Number(e.target.value)})} className="text-xs">
+          <option value="0">Priority 0</option>
+          <option value="1">Priority 1</option>
+          <option value="2">Priority 2</option>
+          <option value="3">Priority 3</option>
+          <option value="4">Priority 4</option>
+          <option value="5">Priority 5</option>
+        </select>
       </form>
 
       <ul className="flex-1 overflow-y-auto">

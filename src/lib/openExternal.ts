@@ -15,6 +15,7 @@ export function onLinkClickOpenExternal(
   const anchor = target.closest<HTMLAnchorElement>('a[href]');
   if (!anchor) return;
   const href = anchor.getAttribute('href');
+    console.info('[openExternal] href', href);
   if (!href) return;
 
   // Pure in-app fragment links — let the browser handle.
@@ -23,7 +24,15 @@ export function onLinkClickOpenExternal(
   // mailto: and external URLs both go through the OS handler.
   e.preventDefault();
   e.stopPropagation();
-  void openUrl(href).catch((err) => {
-    console.warn('[openExternal] failed to open', href, err);
-  });
+    void openUrl(href).then(() => {
+      console.info('[openExternal] opened via OS opener', href);
+    }).catch((err) => {
+      console.warn('[openExternal] failed to open', href, err);
+      try {
+        window.open(href, '_blank');
+        console.info('[openExternal] fallback opened', href);
+      } catch (fallback) {
+        console.warn('[openExternal] fallback failed', fallback);
+      }
+    });
 }
