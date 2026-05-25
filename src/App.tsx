@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
 import { LoginScreen } from '@/features/login/LoginScreen';
 import { Shell } from '@/features/shell/Shell';
+import { usePeriodicSync } from '@/sync/usePeriodicSync';
 
 export function App() {
   const status = useAuth((s) => s.status);
@@ -12,6 +13,8 @@ export function App() {
       hydrate();
     }
   }, [status.kind, hydrate]);
+
+  usePeriodicSync();
 
   if (status.kind === 'unknown') {
     return (
