@@ -7,10 +7,18 @@ fresh session needs.
 ## Current state
 
 - **M0 done** (commit `b6dd56b`). Sign-in works, creds persist, relaunch lands on the shell.
-- **M1 done** (HEAD `cdbae21`). Projects + tasks sync from server, render in a
+- **M1 done** (commit `cdbae21`). Projects + tasks sync from server, render in a
   three-pane shell, refresh every 60s and on window focus. Usable as a
   read-only viewer offline after the first sync.
-- **M2 next** — local writes + outbox.
+- **M2 done** (commit `eb84f71`). Create/update/delete tasks locally; outbox
+  drains to the server (PUT/POST/DELETE) and the UI updates live. Verified
+  end-to-end against a self-hosted instance.
+- **M3 partial** (already in tree). Conflict modal + deletion reconciliation
+  landed; M3 exit-criteria not formally re-verified after the M2 concurrency
+  fix — worth a smoke test before declaring it done.
+- **M4 partial** (already in tree). Tray icon (real artwork now), TaskDetail,
+  QuickAddModal, deep-link, autostart/notification stubs. Tauri-side wiring
+  still TODO(M4) — see src/tauri/{tray,autostart,notification}.ts.
 
 **Deferred from M1** (exit criteria already met without them):
 - Read-only detail pane (third column showing the selected task)
@@ -63,6 +71,47 @@ We use `localStorage` instead ([src/auth/storage.ts](src/auth/storage.ts)).
 The plugin is still registered in [lib.rs](src-tauri/src/lib.rs) for future
 non-hot-path uses. Threat model documented inline in `storage.ts`. M4 upgrade
 path: OS keychain via `keyring-rs`.
+
+### `withTx` is NOT a real transaction — never add BEGIN/COMMIT
+
+This is the deepest M2 footgun and cost most of a session to diagnose.
+`@tauri-apps/plugin-sql` v2.x wraps `sqlx::Pool<Sqlite>` with the default
+**10-connection pool** (see `tauri-plugin-sql-<ver>/src/wrapper.rs::execute`).
+Every `db.execute()` call from JS acquires a fresh connection, runs the
+statement, releases. There is no way from JS to pin one connection across
+multiple calls.
+
+So JS-issued `BEGIN` / `COMMIT` / `ROLLBACK` land on *different* connections
+and break disastrously: BEGIN starts a transaction on conn A (released with
+a dangling tx that holds the file lock), body statements run on B/C/D,
+COMMIT lands on E → *"cannot commit - no transaction is active"*.
+Meanwhile conn A's dangling tx blocks every other write → *"database is
+locked"* cascade.
+
+**Rule:** never write `db.execute('BEGIN')` (or COMMIT/ROLLBACK) from JS.
+[src/db/index.ts](src/db/index.ts) provides:
+- `serial(fn)` — queue an async function behind all in-flight writes
+- `withTx(fn)` — alias of `serial` that takes a `db` argument; **no
+  rollback, no atomicity across statements.** Use it for single-statement
+  writes that need to be ordered.
+- `exec(sql, params)` — single-statement write queued via `serial`.
+
+The cost is loss of multi-statement rollback. If statement 2 of a multi-
+step write throws, statement 1 is already committed. Cria's offline-first
+design means dirty-row repair on next launch can heal orphan state; the
+spec assumed working transactions but the plugin doesn't deliver them.
+Long-term fix: a Rust-side command that explicitly holds one connection
+across a `sqlx::Transaction`.
+
+Globals also matter here:
+- `globalThis.__cria_writeChain__` — the serial queue's tail. Pinned so
+  Vite HMR can't reset it while transactions are in flight.
+- `globalThis.__cria_busListeners__` — change-bus listeners map. Same
+  reason: HMR re-loads `bus.ts` and would otherwise orphan subscribers.
+- `globalThis.__cria_isDraining__` — outbox drain re-entry guard.
+
+If you re-introduce a module-local `let foo = …` for any of these, the
+HMR-orphan bug returns.
 
 ### Sync-path upserts MUST NOT call `notify()`
 
@@ -121,13 +170,19 @@ under `src/db/`, sync engine under `src/sync/`, domain types/zod under
 
 ### Sync vs user mutations
 
-| Concern | Sync path | User path (M2+) |
+| Concern | Sync path | User path |
 |---|---|---|
 | Function name | `upsertXFromServer` | `createX`, `updateX`, `deleteX` |
 | Caller | pull loop / queryFn | UI mutation handler |
 | `dirty` column | always `0` | set to `1` |
 | Outbox entry | no | yes |
 | `notify(...)` | **never** (infinite loop) | **always** |
+
+Sync upserts must also **respect a pending local delete** (`dirty=1 &&
+deleted=1`) and skip overwriting the row — otherwise the pull resets
+`deleted=0` and the task flickers back into the UI until the outbox push
+catches up. See the guard in
+[`src/db/tasks.ts` upsertTaskFromServer](src/db/tasks.ts).
 
 ### Local UUIDs, optional server IDs
 
