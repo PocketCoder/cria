@@ -156,6 +156,14 @@ export async function upsertTaskFromServer(
     // Conflict detection: if local row is dirty, compare snapshots
     const localRows = await db.select<any[]>(`SELECT * FROM tasks WHERE local_id = ?`, [localId]);
     const localRow = localRows[0];
+    // A pending local delete (dirty=1 && deleted=1) is authoritative until
+    // the outbox push completes. Don't overwrite it from the server —
+    // doing so resets deleted=0 and the task flickers back into the UI
+    // until the next pull. The outbox drain will tear the server copy
+    // down shortly.
+    if (localRow && localRow.dirty === 1 && localRow.deleted === 1) {
+      return localId;
+    }
     if (localRow && localRow.dirty === 1) {
       const remoteSnap = JSON.stringify(payload);
       const localSnap = localRow.last_synced ?? '';

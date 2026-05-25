@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
 import { pullProjects } from './pull';
 import { reconcileDeletions } from './reconcile';
-import { startOutboxSync } from './push';
+import { startOutboxSync, drainOutbox } from './push';
 
 const INTERVAL_MS = 60_000;
 
@@ -21,6 +21,12 @@ export function usePeriodicSync() {
     if (!isAuthed) return;
 
     const stopOutbox = startOutboxSync();
+    // One-shot drain on mount so any rows left over from a prior session
+    // (or a crashed pre-fix drain) get pushed immediately, not on the next
+    // user mutation.
+    void drainOutbox().catch((err) =>
+      console.warn('[periodic-sync] initial drain failed:', err),
+    );
 
     let cancelled = false;
     const tick = async () => {
