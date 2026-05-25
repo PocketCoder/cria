@@ -1,14 +1,23 @@
 import { useState, useEffect } from 'react';
+
+import { register, unregister } from '@tauri-apps/api/globalShortcut';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { Button } from '@/components/ui/button';
+import { useRef } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { autostart } from '@tauri-apps/api/autostart';
+import { nativeNotify } from '@/utils/notify';
+import { TrayIcon } from '@/components/TrayIcon';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useUi } from '@/stores/ui';
+import { getDb } from '@/db';
 import { useProjects } from '@/queries/projects';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
+import { QuickAddModal } from '@/components/QuickAddModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
@@ -19,16 +28,68 @@ export function Shell() {
   const { data: projects = [] } = useProjects();
   const selectedId = useUi((s) => s.selectedProjectLocalId);
   const selected = projects.find((p) => p.localId === selectedId) ?? null;
+  const setSelectedProject = useUi((s) => s.setSelectedProject);
+  const setSelectedTask = useUi((s) => s.setSelectedTask);
   const displayName =
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
   const { data: outboxCount = 0 } = useOutboxCount();
+  const { data: conflictCount = 0 } = useConflictsCount();
 const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
+
+  // Track previous counts to fire notifications only on transition
+  const prevOutbox = useRef<number>(outboxCount);
+  const prevConflicts = useRef<number>(conflictCount);
+
+  // Notification side‑effects
+  useEffect(() => {
+    if (prevOutbox.current === 0 && outboxCount > 0) {
+      nativeNotify('Sync pending', `${outboxCount} mutation(s) awaiting upload`);
+    }
+    if (prevConflicts.current === 0 && conflictCount > 0) {
+      nativeNotify('Conflicts detected', `${conflictCount} conflict(s) need your attention`);
+    }
+    prevOutbox.current = outboxCount;
+    prevConflicts.current = conflictCount;
+  }, [outboxCount, conflictCount]);
+
+  // Deep‑link handling (vikunja://task/<id> or project)
+  useEffect(() => {
+    const unlisten = listen<string>('tauri://url', async (event) => {
+      const url = event.payload;
+      try {
+        const matches = url.match(/vikunja:\/\/(task|project)\/(\d+)/);
+        if (!matches) return;
+        const [, type, serverIdStr] = matches;
+        const serverId = parseInt(serverIdStr, 10);
+        const db = await getDb();
+        const row = await db.select<any[]>(
+          `SELECT local_id FROM ${type}s WHERE server_id = ? LIMIT 1`,
+          [serverId]
+        );
+        const localId = row[0]?.local_id;
+        if (localId) {
+          if (type === 'project') {
+            setSelectedProject(localId);
+          } else {
+            setSelectedTask(localId);
+          }
+        }
+      } catch (e) {
+        console.error('Deep link handling error', e);
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
+  }, []);
+
     const [showOutbox, setShowOutbox] = useState(false);
   const { data: conflictCount = 0 } = useConflictsCount();
   const [showConflicts, setShowConflicts] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -42,6 +103,17 @@ const [isOnline, setIsOnline] = useState(
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+
+  // Register global shortcut Cmd+Shift+A for Quick Add
+  useEffect(() => {
+    const shortcut = 'CommandOrControl+Shift+A';
+    register(shortcut, () => setShowQuickAdd(true)).catch((e) => console.error('Failed to register shortcut', e));
+    return () => {
+      unregister(shortcut).catch((e) => console.error('Failed to unregister shortcut', e));
+    };
+  }, []);
+
 
   return (
     <div className="flex h-full flex-col">
@@ -102,29 +174,43 @@ const [isOnline, setIsOnline] = useState(
               !isOnline ? 'bg-red-500 animate-pulse' : outboxCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
             )}
           />
-<span>
-                {!isOnline
-                  ? 'Offline'
-                  : outboxCount > 0
-                  ? (
-                      <button
-                        className="underline"
-                        onClick={() => setShowOutbox(true)}
-                      >
-                        Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
-                      </button>
-                    )
-                  : conflictCount > 0
-                  ? (
-                      <button
-                        className="underline"
-                        onClick={() => setShowConflicts(true)}
-                      >
-                        {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
-                      </button>
-                    )
-                  : 'Synced with server'}
-              </span>
+          <span>
+            {!isOnline
+              ? 'Offline'
+              : outboxCount > 0
+              ? (
+                  <button
+                    className="underline"
+                    onClick={() => setShowOutbox(true)}
+                  >
+                    Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
+                  </button>
+                )
+              : conflictCount > 0
+              ? (
+                  <button
+                    className="underline"
+                    onClick={() => setShowConflicts(true)}
+                  >
+                    {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
+                  </button>
+                )
+              : 'Synced with server'}
+          </span>
+          {/* Autostart toggle */}
+          <button
+            onClick={async () => {
+              try {
+                const enabled = await autostart.isEnabled();
+                if (enabled) await autostart.disable(); else await autostart.enable();
+              } catch (e) {
+                console.error('Autostart toggle failed', e);
+              }
+            }}
+            className="text-xs text-[var(--color-muted-foreground)] underline"
+          >
+            Autostart
+          </button>
         </div>
         <div>
           <span>Cria Desktop v0.2.0</span>
@@ -132,6 +218,8 @@ const [isOnline, setIsOnline] = useState(
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
+      {showQuickAdd && <QuickAddModal onClose={() => setShowQuickAdd(false)} />}
+      <TrayIcon />
       </div>
   );
 }
