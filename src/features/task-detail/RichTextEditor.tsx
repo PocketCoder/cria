@@ -177,7 +177,7 @@ function ReadView({
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
         onClick={onLinkClickOpenExternal}
       />
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-start">
         {editBtn}
       </div>
     </div>
