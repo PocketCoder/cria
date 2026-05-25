@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { OutboxModal } from '@/components/OutboxModal';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
@@ -20,9 +21,10 @@ export function Shell() {
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
   const { data: outboxCount = 0 } = useOutboxCount();
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  );
+const [isOnline, setIsOnline] = useState(
+      typeof navigator !== 'undefined' ? navigator.onLine : true
+    );
+    const [showOutbox, setShowOutbox] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -96,18 +98,26 @@ export function Shell() {
               !isOnline ? 'bg-red-500 animate-pulse' : outboxCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
             )}
           />
-          <span>
-            {!isOnline
-              ? 'Offline'
-              : outboxCount > 0
-              ? `Syncing… ${outboxCount} pending mutation${outboxCount === 1 ? '' : 's'}`
-              : 'Synced with server'}
-          </span>
+<span>
+              {!isOnline
+                ? 'Offline'
+                : outboxCount > 0
+                ? (
+                    <button
+                      className="underline"
+                      onClick={() => setShowOutbox(true)}
+                    >
+                      Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
+                    </button>
+                  )
+                : 'Synced with server'}
+            </span>
         </div>
         <div>
           <span>Cria Desktop v0.2.0</span>
         </div>
       </footer>
+      {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
     </div>
   );
 }

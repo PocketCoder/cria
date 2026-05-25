@@ -45,7 +45,7 @@ export function TaskDetail() {
     <section className="flex min-w-0 flex-1 flex-col overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-muted)] p-6">
       <h2 className="text-lg font-semibold mb-2">{task.title}</h2>
       {task.description && (
-        <p className="mb-4 whitespace-pre-wrap">{task.description}</p>
+        <div className="mb-4 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: task.description }} />
       )}
       <dl className="grid grid-cols-2 gap-2 text-sm text-[var(--color-muted-foreground)]">
         {task.dueDate && (
