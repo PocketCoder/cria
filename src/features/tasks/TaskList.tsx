@@ -7,6 +7,8 @@ import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask, deleteTask } from '@/db/tasks';
 import { Trash2, Plus, Loader2 } from 'lucide-react';
+import { useTaskLabels } from '@/queries/taskLabels';
+import { LabelChips } from './LabelChips';
 
 interface TaskListProps {
   project: Project;
@@ -93,6 +95,7 @@ function TaskRow({ task }: { task: Task }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { data: labels = [] } = useTaskLabels(task.localId);
 
   const handleToggle = async () => {
     try {
@@ -151,6 +154,11 @@ function TaskRow({ task }: { task: Task }) {
               </span>
             ) : null}
           </p>
+        ) : null}
+        {labels.length > 0 ? (
+          <div className="mt-1">
+            <LabelChips labels={labels} />
+          </div>
         ) : null}
       </div>
       {task.hexColor ? (

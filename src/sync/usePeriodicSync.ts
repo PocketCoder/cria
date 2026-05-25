@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
-import { pullProjects } from './pull';
+import { pullProjects, pullLabels } from './pull';
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
 
@@ -33,7 +33,12 @@ export function usePeriodicSync() {
       try {
         await pullProjects();
       } catch (err) {
-        console.warn('[periodic-sync] pull failed:', err);
+        console.warn('[periodic-sync] project pull failed:', err);
+      }
+      try {
+        await pullLabels();
+      } catch (err) {
+        console.warn('[periodic-sync] label pull failed:', err);
       }
     };
 

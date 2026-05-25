@@ -1,8 +1,13 @@
 import { createApiClient, type ApiClient } from '@/api/client';
 import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
+import {
+  replaceTaskLabelsFromServer,
+  upsertLabelFromServer,
+} from '@/db/labels';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import { taskResponseSchema, type TaskResponse } from '@/domain/task';
+import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { exec } from '@/db';
 import { notify } from '@/db/bus';
 
@@ -139,10 +144,55 @@ export async function pullTasksForProject(
   }
 
   for (const t of collected) {
-    await upsertTaskFromServer(t);
+    const taskLocalId = await upsertTaskFromServer(t);
+    if (taskLocalId && Array.isArray(t.labels)) {
+      // Each task payload carries its labels inline — route them through
+      // the label upsert so the labels table fills in too, then mirror
+      // the link set in task_labels.
+      const validLabels: LabelResponse[] = [];
+      for (const raw of t.labels) {
+        const parsed = labelResponseSchema.safeParse(raw);
+        if (parsed.success) validLabels.push(parsed.data);
+      }
+      await replaceTaskLabelsFromServer(taskLocalId, validLabels);
+    }
   }
 
   await stampSyncState('tasks_synced_at');
+  return collected.length;
+}
+
+/**
+ * Pull the full label catalogue (Vikunja's /labels endpoint). Run
+ * alongside project pulls so any label the user owns but hasn't yet
+ * applied to a task still shows up in the local catalogue.
+ */
+export async function pullLabels(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const collected: LabelResponse[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, response } = await client.GET('/labels', {
+      params: { query: { page, per_page: PER_PAGE } },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`pullLabels: HTTP ${response.status} ${text.slice(0, 200)}`);
+    }
+    const batch = data ?? [];
+    for (const raw of batch) {
+      const parsed = labelResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullLabels] skipping invalid label:', parsed.error);
+    }
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
+  }
+  for (const l of collected) await upsertLabelFromServer(l);
+  await stampSyncState('labels_synced_at');
   return collected.length;
 }
 

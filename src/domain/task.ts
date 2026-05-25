@@ -35,6 +35,10 @@ export const taskResponseSchema = z
     position: z.number().nullable().optional(),
     updated: z.string().nullable().optional(),
     created: z.string().nullable().optional(),
+    // Vikunja's GET /tasks embeds the task's labels inline. We don't
+    // validate the inner shape here — labelResponseSchema will do that
+    // when the sync layer routes each label through upsertLabelFromServer.
+    labels: z.array(z.unknown()).nullable().optional(),
   })
   .passthrough();
 
