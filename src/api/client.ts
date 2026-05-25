@@ -54,7 +54,10 @@ export async function callApi<T>(
   }
 
   const { data, response } = result;
-  if (response.ok && data !== undefined) return data;
+  // Any 2xx is success. `data` may be undefined for 204 No Content (e.g.
+  // DELETE endpoints) — callers that don't use the return value get
+  // `undefined` cast as T, which is fine for `await callApi(...)`.
+  if (response.ok) return data as T;
 
   const bodyText = await response.text().catch(() => '');
   throw await buildApiError(response.status, bodyText);
