@@ -110,14 +110,16 @@ export async function pullTasksForProject(
           page,
           per_page: PER_PAGE,
           filter: `project_id = ${projectServerId}`,
-          sort_by: 'position',
-          order_by: 'asc',
+          // No sort_by: `position` is per-view-only and Vikunja returns 400
+          // outside a view context. We sort locally in listTasksForProject.
         },
       },
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      throw new Error(`pullTasksForProject: HTTP ${response.status} ${text}`);
+      throw new Error(
+        `pullTasksForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
     }
     const batch = data ?? [];
     for (const raw of batch) {
