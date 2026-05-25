@@ -64,7 +64,12 @@ export async function callApi<T>(
  * Light healthcheck — fetches Vikunja's /info (no auth needed). Used during
  * login to verify the URL is reachable and points at a Vikunja instance.
  */
-export async function probeServer(serverUrl: string): Promise<{ version: string }> {
-  const client = createClient<paths>({ baseUrl: `${normalizeBase(serverUrl)}/api/v1` });
-  return callApi(client.GET('/info'));
+export async function probeServer(
+  serverUrl: string,
+): Promise<{ version: string | null }> {
+  const client = createClient<paths>({
+    baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
+  });
+  const info = await callApi(client.GET('/info'));
+  return { version: info.version ?? null };
 }

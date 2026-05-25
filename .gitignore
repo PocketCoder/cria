@@ -15,8 +15,8 @@ dist-ssr
 src-tauri/target/
 src-tauri/gen/
 
-# Generated
-src/api/schema.ts
+# Generated API types are committed (see SPEC §6.1). Regenerate with
+# `pnpm generate:api`; review the diff in code review.
 
 # Test
 coverage/
