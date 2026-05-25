@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { OutboxModal } from '@/components/OutboxModal';
+import { ConflictModal } from '@/components/ConflictModal';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
@@ -9,6 +10,7 @@ import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { useOutboxCount } from '@/queries/outbox';
+import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
 
 export function Shell() {
@@ -25,6 +27,8 @@ const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
     const [showOutbox, setShowOutbox] = useState(false);
+  const { data: conflictCount = 0 } = useConflictsCount();
+  const [showConflicts, setShowConflicts] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -99,25 +103,35 @@ const [isOnline, setIsOnline] = useState(
             )}
           />
 <span>
-              {!isOnline
-                ? 'Offline'
-                : outboxCount > 0
-                ? (
-                    <button
-                      className="underline"
-                      onClick={() => setShowOutbox(true)}
-                    >
-                      Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
-                    </button>
-                  )
-                : 'Synced with server'}
-            </span>
+                {!isOnline
+                  ? 'Offline'
+                  : outboxCount > 0
+                  ? (
+                      <button
+                        className="underline"
+                        onClick={() => setShowOutbox(true)}
+                      >
+                        Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
+                      </button>
+                    )
+                  : conflictCount > 0
+                  ? (
+                      <button
+                        className="underline"
+                        onClick={() => setShowConflicts(true)}
+                      >
+                        {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
+                      </button>
+                    )
+                  : 'Synced with server'}
+              </span>
         </div>
         <div>
           <span>Cria Desktop v0.2.0</span>
         </div>
       </footer>
-      {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
-    </div>
+{showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
+      {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
+      </div>
   );
 }
