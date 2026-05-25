@@ -37,5 +37,8 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     sourcemap: true,
+    rollupOptions: {
+      external: ['better-sqlite3'],
+    },
   },
 });

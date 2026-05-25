@@ -280,7 +280,7 @@ async function executeOp(
     const res = await callApi(
       client.PUT('/projects/{id}/tasks', {
         params: { path: { id: projectServerId } },
-        body: taskToBody(task),
+        body: taskToBody(task, projectServerId),
       }),
     );
     const newServerId = (res as { id?: number }).id;
@@ -302,18 +302,23 @@ async function executeOp(
     return;
   }
 
-  if (op.op === 'update') {
-    if (task.deleted === 1) return; // delete op will handle it
-    if (task.server_id === null) {
-      throw new ApiError(408, null, 'Cannot update a task without server id', true);
-    }
+    if (op.op === 'update') {
+      if (task.deleted === 1) return; // delete op will handle it
+      if (task.server_id === null) {
+        throw new ApiError(408, null, 'Cannot update a task without server id', true);
+      }
 
-    const res = await callApi(
-      client.POST('/tasks/{id}', {
-        params: { path: { id: task.server_id } },
-        body: taskToBody(task),
-      }),
-    );
+      const [projRow] = await db.select<ProjectLookup[]>(
+        `SELECT server_id FROM projects WHERE local_id = ? LIMIT 1`,
+        [task.project_local_id],
+      );
+
+      const res = await callApi(
+        client.POST('/tasks/{id}', {
+          params: { path: { id: task.server_id } },
+          body: taskToBody(task, projRow?.server_id ?? undefined),
+        }),
+      );
     const newUpdated = (res as { updated?: string }).updated;
 
     await withTx(async (tx) => {
@@ -352,9 +357,10 @@ async function executeOp(
   }
 }
 
-function taskToBody(task: TaskRow) {
+function taskToBody(task: TaskRow, projectServerId?: number) {
   return {
     title: task.title,
+    ...(projectServerId != null ? { project_id: projectServerId } : {}),
     description: task.description ?? undefined,
     done: task.done === 1,
     due_date: task.due_date ?? undefined,
