@@ -150,9 +150,9 @@ function ReadView({
     <button
       type="button"
       onClick={onEdit}
-      className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
+      className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1 text-xs font-medium text-[var(--color-foreground)] shadow-sm transition-colors hover:bg-[var(--color-muted)] hover:shadow"
     >
-      Edit
+      Edit description
     </button>
   );
 
