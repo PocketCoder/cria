@@ -1,0 +1,102 @@
+import { createApiClient, type ApiClient } from '@/api/client';
+import { upsertProjectFromServer } from '@/db/projects';
+import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
+import { getDb } from '@/db';
+import { notify } from '@/db/bus';
+
+const PER_PAGE = 50;
+const MAX_PAGES = 200; // safety bound
+
+interface PullResult {
+  projects: number;
+}
+
+/**
+ * Pull all projects the user has access to from the server and upsert them
+ * locally.
+ *
+ * Strategy:
+ * 1. Page through GET /projects (per_page=50). Vikunja returns
+ *    `x-pagination-total-pages` in the response headers.
+ * 2. For each batch: validate with Zod, then upsertProjectFromServer.
+ * 3. After the first pass, do a re-link pass: any project whose payload
+ *    referenced a parent that wasn't synced yet will have parent_local_id
+ *    NULL. Re-upserting fixes the link (because by then all parents are
+ *    in the local store).
+ * 4. Stamp sync_state.projects_synced_at.
+ *
+ * No conflict resolution here — M1 is read-only sync. M3 will introduce
+ * the dirty-aware merge path.
+ */
+export async function pullAll(
+  client: ApiClient = createApiClient(),
+): Promise<PullResult> {
+  const projects = await pullProjects(client);
+  return { projects };
+}
+
+export async function pullProjects(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const collected: ProjectResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, response } = await client.GET('/projects', {
+      params: {
+        query: {
+          page,
+          per_page: PER_PAGE,
+          is_archived: true,
+        },
+      },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`pullProjects: HTTP ${response.status} ${text}`);
+    }
+    const batch = data ?? [];
+    for (const raw of batch) {
+      const parsed = projectResponseSchema.safeParse(raw);
+      if (parsed.success) {
+        collected.push(parsed.data);
+      } else {
+        console.warn('[pullProjects] skipping invalid project:', parsed.error);
+      }
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
+  }
+
+  // Two-pass upsert so dangling parent links resolve on the second pass.
+  for (const p of collected) {
+    await upsertProjectFromServer(p);
+  }
+  for (const p of collected) {
+    if (
+      typeof p.parent_project_id === 'number' &&
+      p.parent_project_id > 0
+    ) {
+      await upsertProjectFromServer(p);
+    }
+  }
+
+  await stampSyncState('projects_synced_at');
+  return collected.length;
+}
+
+async function stampSyncState(
+  column: 'projects_synced_at' | 'tasks_synced_at' | 'labels_synced_at',
+): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.execute(
+    `UPDATE sync_state SET ${column} = ? WHERE id = 1`,
+    [now],
+  );
+  notify('sync_state');
+}
+
