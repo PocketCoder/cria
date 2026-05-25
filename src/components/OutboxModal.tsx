@@ -1,33 +1,11 @@
-import { useState } from 'react';
 import { useOutboxRows } from '@/queries/outboxRows';
-import { drainOutbox } from '@/sync/push';
 
 interface OutboxModalProps {
   onClose: () => void;
 }
 
-interface DrainState {
-  status: 'idle' | 'running' | 'done' | 'error';
-  detail?: string;
-}
-
 export function OutboxModal({ onClose }: OutboxModalProps) {
   const { data: rows = [], isLoading, isError } = useOutboxRows();
-  const [drain, setDrain] = useState<DrainState>({ status: 'idle' });
-
-  const runDrain = async () => {
-    setDrain({ status: 'running' });
-    try {
-      await drainOutbox();
-      setDrain({ status: 'done' });
-    } catch (err) {
-      console.error('[outbox] manual drain failed:', err);
-      setDrain({
-        status: 'error',
-        detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-      });
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -37,27 +15,6 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
           <button onClick={onClose} className="text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-primary)]">
             ✕
           </button>
-        </div>
-
-        <div className="mb-3 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void runDrain()}
-            disabled={drain.status === 'running' || rows.length === 0}
-            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-xs hover:bg-[var(--color-muted)] disabled:opacity-50"
-          >
-            {drain.status === 'running' ? 'Draining…' : 'Drain now'}
-          </button>
-          {drain.status === 'done' ? (
-            <span className="text-xs text-[var(--color-success)]">
-              Drain completed.
-            </span>
-          ) : null}
-          {drain.status === 'error' ? (
-            <span className="text-xs text-[var(--color-destructive)]" title={drain.detail}>
-              {drain.detail}
-            </span>
-          ) : null}
         </div>
 
         {isLoading && <p>Loading…</p>}

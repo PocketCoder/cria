@@ -246,21 +246,6 @@ export function Shell() {
            >
              Autostart: {autostartEnabled ? 'On' : 'Off'}
            </button>
-           {import.meta.env.MODE === 'development' && (
-             <button
-               onClick={async () => {
-                 try {
-                   const db = await getDb();
-                   await db.execute('DELETE FROM outbox');
-                 } catch (e) {
-                   console.error('Failed to clear outbox', e);
-                 }
-               }}
-               className="text-xs text-[var(--color-muted-foreground)] underline ml-2"
-             >
-               Clear outbox
-             </button>
-           )}
         </div>
         <div>
           <span>Cria Desktop {pkg.version}</span>
