@@ -10,13 +10,46 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
   const { data: conflicts = [], isLoading, isError } = useConflicts();
   const [resolvingId, setResolvingId] = useState<number | null>(null);
 
-  const resolveConflict = async (id: number) => {
+  const [action, setAction] = useState<string>('');
+  const resolveConflict = async (id: number, act: 'keep' | 'theirs') => {
     setResolvingId(id);
+    setAction(act);
     const db = await getDb();
     const now = new Date().toISOString();
+    if (act === 'theirs') {
+      // Apply remote snapshot to the local entity
+      const conflictRows = await db.select<any[]>(`SELECT remote_snapshot, entity_type, entity_local_id FROM conflicts WHERE id = ?`, [id]);
+      const conflict = conflictRows[0];
+      if (conflict) {
+        const remote = JSON.parse(conflict.remote_snapshot);
+        // Simple upsert: reuse existing upsert helpers via raw SQL for tasks only (as example)
+        if (conflict.entity_type === 'task') {
+          // Update the task row with remote values, clear dirty flag
+          const fields = [
+            'title', 'description', 'done', 'done_at', 'due_date', 'start_date',
+            'end_date', 'priority', 'percent_done', 'hex_color', 'position', 'updated_at'
+          ];
+          const setters: string[] = [];
+          const params: any[] = [];
+          for (const f of fields) {
+            if (remote[f] !== undefined) {
+              setters.push(`${f} = ?`);
+              params.push(remote[f]);
+            }
+          }
+          setters.push('dirty = 0');
+          params.push(conflict.entity_local_id);
+          await db.execute(`UPDATE tasks SET ${setters.join(', ')} WHERE local_id = ?`, params);
+        }
+        // Add similar branches for project/label if needed
+      }
+    }
+    // Mark conflict resolved regardless of action
     await db.execute(`UPDATE conflicts SET resolved_at = ? WHERE id = ?`, [now, id]);
     setResolvingId(null);
+    setAction('');
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -34,13 +67,22 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
           <div key={c.id} className="border-b py-2">
             <div className="flex justify-between items-center mb-2">
               <span className="font-medium">{c.entity_type} #{c.entity_local_id}</span>
+              <div className="flex gap-2">
               <button
-                onClick={() => resolveConflict(c.id)}
+                onClick={() => resolveConflict(c.id, 'keep')}
                 disabled={resolvingId === c.id}
                 className="px-2 py-1 bg-[var(--color-primary)] text-white rounded"
               >
-                {resolvingId === c.id ? 'Resolving…' : 'Mark Resolved'}
+                {resolvingId === c.id && action === 'keep' ? 'Resolving…' : 'Keep Mine'}
               </button>
+              <button
+                onClick={() => resolveConflict(c.id, 'theirs')}
+                disabled={resolvingId === c.id}
+                className="px-2 py-1 bg-[var(--color-primary)] text-white rounded"
+              >
+                {resolvingId === c.id && action === 'theirs' ? 'Resolving…' : 'Use Theirs'}
+              </button>
+            </div>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>

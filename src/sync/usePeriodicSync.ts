@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
 import { pullProjects } from './pull';
+import { reconcileDeletions } from './reconcile';
+import { startOutboxSync } from './push';
 
 const INTERVAL_MS = 60_000;
 
@@ -18,6 +20,8 @@ export function usePeriodicSync() {
   useEffect(() => {
     if (!isAuthed) return;
 
+    const stopOutbox = startOutboxSync();
+
     let cancelled = false;
     const tick = async () => {
       try {
@@ -31,6 +35,12 @@ export function usePeriodicSync() {
       if (!cancelled) void tick();
     }, INTERVAL_MS);
 
+    // Deletion reconciliation every 15 min
+    const RECONCILE_MS = 15 * 60 * 1000;
+    const reconId = setInterval(() => {
+      if (!cancelled) void reconcileDeletions();
+    }, RECONCILE_MS);
+
     const onFocus = () => {
       if (!cancelled) void tick();
     };
@@ -39,7 +49,9 @@ export function usePeriodicSync() {
     return () => {
       cancelled = true;
       clearInterval(id);
+      clearInterval(reconId);
       window.removeEventListener('focus', onFocus);
+      stopOutbox();
     };
   }, [isAuthed]);
 }
