@@ -17,6 +17,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { sanitizeHtml } from '@/lib/sanitize';
@@ -150,9 +151,9 @@ function ReadView({
     <button
       type="button"
       onClick={onEdit}
-      className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1 text-xs font-medium text-[var(--color-foreground)] shadow-sm transition-colors hover:bg-[var(--color-muted)] hover:shadow"
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-muted-foreground)] shadow-sm transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
     >
-      Edit description
+      <Pencil className="h-3.5 w-3.5" />
     </button>
   );
 
