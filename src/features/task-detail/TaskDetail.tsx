@@ -64,7 +64,7 @@ export function TaskDetail() {
   };
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-muted)]">
+    <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-muted)]">
       <div className="flex-1 p-5">
         <h2 className="mb-2 text-base font-semibold leading-tight">{task.title}</h2>
 

@@ -9,7 +9,7 @@ export function ProjectSidebar() {
   const select = useUi((s) => s.setSelectedProject);
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)]">
+    <aside className="flex h-full w-52 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)]">
       <header className="flex items-center justify-between px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
         <span>Projects</span>
         {isFetching ? <span aria-live="polite">syncing…</span> : null}

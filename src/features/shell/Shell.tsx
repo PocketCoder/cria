@@ -144,7 +144,7 @@ export function Shell() {
 
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col overflow-x-hidden">
       <header className="flex select-none items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
         <div className="text-sm font-medium tracking-tight">Cria</div>
         <div className="flex items-center gap-3">

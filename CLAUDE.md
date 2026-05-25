@@ -289,3 +289,17 @@ The schema is already there. The bus pattern flips: now `notify()` is
 - Debug console logs in `Shell` may need removal before release.
 - `src/global.d.ts` is now redundant after moving to runtime import; can be removed.
 
+## Recent work (claude-session-2)
+
+- **DB migration v2** (`002_task_fields.sql`): Added `is_favorite INTEGER`, `is_subscribed INTEGER` to tasks table. Registered in `lib.rs`.
+- **Domain** (`src/domain/task.ts`): Added `isFavorite`, `isSubscribed`, `repeatAfter`, `repeatMode`, `TaskAssigneeData` to `Task` interface and `taskResponseSchema`. Updated `TaskInput`/`TaskUpdate`.
+- **Repo** (`src/db/tasks.ts`): Wired `is_favorite`, `is_subscribed`, `repeat_after`, `repeat_mode` through `TaskRow`, `rowToTask()`, `SELECT_TASK_COLS`, `upsertTaskFromServer()`, `createTask()`, `updateTask()`.
+- **TaskActions sidebar** (`src/features/task-detail/TaskActions.tsx`): Created with 12+ action cards — Mark done, Priority (1-5), Progress (range), Color (presets+hex), Labels (toggle picker), Due/Start/End dates, Move (project list), Duplicate, Delete (with confirm), Favorite star toggle, Subscribe bell toggle, Assignees list+add, Repeat interval (seconds + mode selector).
+- **Assignee infrastructure** (`src/domain/task-assignee.ts`, `src/db/task-assignees.ts`): Domain type + zod schema. Repo functions: `listAssigneesForTask`, `upsertTaskAssigneesFromServer` (sync path), `addTaskAssignee`/`removeTaskAssignee` (user path, with outbox). Bus topic `task_assignees` already registered.
+- **Pull assignee sync** (`src/sync/pull.ts`): Parses `assignees` array from task response and upserts via `upsertTaskAssigneesFromServer`.
+- **Push** (`src/sync/push.ts`): Handles `task_assignee` entity type in `executeOp()` — `add` → `PUT /tasks/{taskID}/assignees`, `remove` → `DELETE /tasks/{taskID}/assignees/{userID}`. Added `subscribeToTask`/`unsubscribeFromTask` API wrappers that call `PUT/DELETE /subscriptions/{entity}/{entityID}` and stamp `is_subscribed` locally without outbox.
+- **TaskDetail cleanup**: Removed duplicated inline metadata editors; consolidated into TaskActions. Made aside `overflow-y-auto` by adding `min-h-0` to parent flex container in Shell.tsx.
+- **Test fix**: Updated `sync.test.ts` to run both migrations (`002_task_fields.sql`) and use `beforeAll` to avoid duplicate ALTER TABLE errors.
+- **Duplicate/move**: Added `duplicateTask` and `moveTask` to `src/db/tasks.ts` with outbox support.
+- **Label toggle outbox**: Extended `push.ts` to handle `task_label` entity type for label add/remove sync.
+
