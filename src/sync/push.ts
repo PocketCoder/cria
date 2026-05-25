@@ -115,10 +115,10 @@ async function executeOp(client: ApiClient, db: Database, op: OutboxRow): Promis
         if (!process.env.VK_URL) {
           console.log('VK_URL not set – mocking task creation');
           await withTx(async (tx) => {
-            await tx.execute(
-              `UPDATE tasks SET server_id = -1, synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?`,
-              [new Date().toISOString(), new Date().toISOString(), localId]
-            );
+await tx.execute(
+                  `UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?`,
+                  [Date.now(), new Date().toISOString(), new Date().toISOString(), localId]
+                );
           });
           notify('tasks');
           return;
