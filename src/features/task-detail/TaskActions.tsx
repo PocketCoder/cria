@@ -332,14 +332,14 @@ function InlineProgress({
   const [value, setValue] = useState(Math.round(task.percentDone * 100));
 
   useEffect(() => {
-    setValue(Math.round(task.percentDone * 100));
+    setValue(Math.round(task.percentDone));
   }, [task.percentDone]);
 
   return (
     <div>
       <ActionButton
         icon={<Percent className="h-4 w-4" />}
-        label={`Progress: ${Math.round(task.percentDone * 100)}%`}
+        label={`Progress: ${Math.round(task.percentDone)}%`}
         onClick={onToggle}
       />
       {expanded && (
@@ -351,10 +351,10 @@ function InlineProgress({
             value={value}
             onChange={(e) => setValue(Number(e.target.value))}
             onMouseUp={async () => {
-              await updateTask(task.localId, { percentDone: value / 100 });
+              await updateTask(task.localId, { percentDone: value });
             }}
             onTouchEnd={async () => {
-              await updateTask(task.localId, { percentDone: value / 100 });
+              await updateTask(task.localId, { percentDone: value });
             }}
             className="flex-1"
           />

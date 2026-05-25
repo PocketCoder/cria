@@ -361,11 +361,13 @@ function taskToBody(task: TaskRow) {
     start_date: task.start_date ?? undefined,
     end_date: task.end_date ?? undefined,
     priority: task.priority,
-    percent_done: task.percent_done,
-    hex_color: task.hex_color ?? undefined,
-    is_favorite: task.is_favorite === 1 ? true : undefined,
-    repeat_after: task.repeat_after !== 0 ? task.repeat_after : undefined,
-    repeat_mode: task.repeat_mode !== 0 ? (task.repeat_mode as 0 | 1 | 2) : undefined,
+    percent_done: task.percent_done <= 1
+      ? Math.round(task.percent_done * 100)
+      : Math.round(task.percent_done),
+    hex_color: (task.hex_color ?? '').replace(/^#/, '') || undefined,
+    is_favorite: task.is_favorite === 1 ? true : false,
+    repeat_after: task.repeat_after ?? undefined,
+    repeat_mode: task.repeat_mode != null ? (task.repeat_mode as 0 | 1 | 2) : undefined,
   };
 }
 
