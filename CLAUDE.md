@@ -303,3 +303,21 @@ The schema is already there. The bus pattern flips: now `notify()` is
 - **Duplicate/move**: Added `duplicateTask` and `moveTask` to `src/db/tasks.ts` with outbox support.
 - **Label toggle outbox**: Extended `push.ts` to handle `task_label` entity type for label add/remove sync.
 
+## Recent work (claude-session-3)
+
+- **UI/Layout fixes**:
+  - Horizontal scroll: added `w-full overflow-x-hidden` to Shell outer div
+  - Detail pane width: changed from fixed `w-96 shrink-0` to `w-96 shrink min-w-80` with `maxWidth: min(420px, 40vw)` so pane can grow
+  - Removed all `overflow-x: hidden` clipping; moved scroll to inner content div with `overflow-y-auto`
+  - Editor toolbar/prose: added `max-w-full`, `break-words`, `min-w-0` constraints so content fits within pane
+  - Edit button: moved below description text, changed to pencil icon, left-aligned
+  - Hint text shortened: `⌘+Enter · Esc · /commands`
+- **API correctness fixes** (`src/sync/push.ts` `taskToBody()`):
+  - `hex_color`: strip `#` prefix (Vikunja expects raw hex, caused 500)
+  - `percent_done`: normalize to 0-100 (UI stored 0-1, server expects 0-100)
+  - `is_favorite`: send explicit `false` instead of omitting (un-favorite was broken)
+  - `repeat_after`/`repeat_mode`: send `0` explicitly instead of omitting
+- **Progress slider** (`src/features/task-detail/TaskActions.tsx`): changed from `value / 100` to raw `value` (0-100)
+- **Editable task titles**: Added inline title editing in both TaskDetail pane (`TaskDetail.tsx`) and TaskList rows (`TaskList.tsx`). Click to edit, Enter/blur to save, Escape to cancel.
+- **Known issue**: Move task is local-only — `taskToBody` doesn't include `project_id`, so moves never reach the server.
+
