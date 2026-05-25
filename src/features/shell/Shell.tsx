@@ -4,6 +4,7 @@ import { useCurrentUser } from '@/queries/user';
 import { useUi } from '@/stores/ui';
 import { useProjects } from '@/queries/projects';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
+import { TaskList } from '@/features/tasks/TaskList';
 
 export function Shell() {
   const signOut = useAuth((s) => s.signOut);
@@ -47,9 +48,7 @@ export function Shell() {
                   {selected.title}
                 </h1>
               </header>
-              <section className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--color-muted-foreground)]">
-                Task list lands in the next M1 chunk.
-              </section>
+              <TaskList project={selected} />
             </>
           ) : (
             <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">

@@ -1,6 +1,8 @@
 import { createApiClient, type ApiClient } from '@/api/client';
 import { upsertProjectFromServer } from '@/db/projects';
+import { upsertTaskFromServer } from '@/db/tasks';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
+import { taskResponseSchema, type TaskResponse } from '@/domain/task';
 import { getDb } from '@/db';
 import { notify } from '@/db/bus';
 
@@ -85,6 +87,60 @@ export async function pullProjects(
   }
 
   await stampSyncState('projects_synced_at');
+  return collected.length;
+}
+
+/**
+ * Pull tasks for a single project from GET /tasks, filtered server-side.
+ * Returns the number of tasks upserted.
+ *
+ * The endpoint returns all tasks the user can read; we filter by
+ * `project_id = <id>` via the Vikunja filter DSL so the response is small.
+ */
+export async function pullTasksForProject(
+  projectServerId: number,
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const collected: TaskResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, response } = await client.GET('/tasks', {
+      params: {
+        query: {
+          page,
+          per_page: PER_PAGE,
+          filter: `project_id = ${projectServerId}`,
+          sort_by: 'position',
+          order_by: 'asc',
+        },
+      },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`pullTasksForProject: HTTP ${response.status} ${text}`);
+    }
+    const batch = data ?? [];
+    for (const raw of batch) {
+      const parsed = taskResponseSchema.safeParse(raw);
+      if (parsed.success) {
+        collected.push(parsed.data);
+      } else {
+        console.warn('[pullTasksForProject] skipping invalid task:', parsed.error);
+      }
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
+  }
+
+  for (const t of collected) {
+    await upsertTaskFromServer(t);
+  }
+
+  await stampSyncState('tasks_synced_at');
   return collected.length;
 }
 
