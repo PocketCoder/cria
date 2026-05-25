@@ -87,7 +87,6 @@ const [isOnline, setIsOnline] = useState(
   }, []);
 
     const [showOutbox, setShowOutbox] = useState(false);
-  const { data: conflictCount = 0 } = useConflictsCount();
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
 
