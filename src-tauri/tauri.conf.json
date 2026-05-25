@@ -45,5 +45,7 @@
     "shortDescription": "Native Vikunja client",
     "longDescription": "Offline-capable cross-platform desktop client for Vikunja."
   },
-  "plugins": {}
+  "plugins": {
+    "shell": {}
+  }
 }
