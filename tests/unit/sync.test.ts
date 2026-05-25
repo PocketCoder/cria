@@ -149,22 +149,21 @@ describe('M2 task mutations and outbox', () => {
     const task = await createTask({ title: 'push me', projectLocalId });
     // Verify outbox has one entry before drain
     const dbBefore = await getDb();
-    let outboxRows = await dbBefore.select<any[]>(`SELECT * FROM outbox`);
-    console.error('outbox rows before', outboxRows);
-    let outboxCount = [{ cnt: outboxRows.length }];
-    expect(outboxCount[0].cnt).toBe(1);
+    const outboxRows = await dbBefore.select<any[]>(`SELECT * FROM outbox`);
+    expect(outboxRows).toHaveLength(1);
     // Drain using mock client that pretends server creates task with id 999
     const client = mockApiClient();
 await drainOutbox(client);
     // Outbox should be empty
     const dbAfter = await getDb();
-    const outboxRowsAfter = await dbAfter.select<any[]>(`SELECT * FROM outbox`);
-    console.error('outbox rows after', outboxRowsAfter);
-    outboxCount = await dbAfter.select<any[]>(`SELECT COUNT(*) as cnt FROM outbox`);
-    expect(outboxCount[0].cnt).toBe(0);
-    // Task row should have server_id set and dirty cleared
-    const taskRow = await dbAfter.select<any[]>(`SELECT server_id, dirty FROM tasks WHERE local_id = ?`, [task.localId]);
-    expect(taskRow[0].server_id).toBe(123);
-    expect(taskRow[0].dirty).toBe(0);
+    const outboxAfter = await dbAfter.select<any[]>(`SELECT * FROM outbox`);
+    expect(outboxAfter).toHaveLength(0);
+    // Task row should have server_id set (from mock client) and dirty cleared
+    const taskRow = await dbAfter.select<any[]>(
+      `SELECT server_id, dirty FROM tasks WHERE local_id = ?`,
+      [task.localId],
+    );
+    expect(taskRow[0]?.server_id).toBe(123);
+    expect(taskRow[0]?.dirty).toBe(0);
   });
 });

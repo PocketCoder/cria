@@ -1,52 +1,90 @@
-let Database: any;
-// Lazy import to support both Tauri (browser) and Node (test) environments.
-// The actual module is loaded inside `getDb()` to avoid the `require`
-// ReferenceError that occurs in ESM contexts.
-export async function getDb(): Promise<Database> {
+/**
+ * SQLite handle. Two backends:
+ * - Tauri renderer → `@tauri-apps/plugin-sql` (real app)
+ * - Node test runner → `better-sqlite3` wrapped to match the same shape
+ *
+ * Both satisfy the `Database` interface below, which is the subset of the
+ * Tauri plugin's API the rest of the codebase actually uses. Keep this
+ * surface narrow — anything callsites need, add a typed method here, don't
+ * widen to `any`.
+ */
+
+export const DB_URI = 'sqlite:cria.db';
+
+export interface ExecuteResult {
+  rowsAffected: number;
+  lastInsertId?: number;
+}
+
+export interface Database {
+  execute(sql: string, params?: unknown[]): Promise<ExecuteResult>;
+  select<T = unknown>(sql: string, params?: unknown[]): Promise<T>;
+  close?(): Promise<boolean>;
+}
+
+let dbPromise: Promise<Database> | null = null;
+
+export function getDb(): Promise<Database> {
   if (!dbPromise) {
-    if (typeof window !== 'undefined') {
-      // Tauri renderer – load the official plugin.
-      const { default: Sqlite } = await import('@tauri-apps/plugin-sql');
-      Database = Sqlite;
-    } else {
-      // Node test environment – load better‑sqlite3 and wrap it.
-      const { default: DatabaseNode } = await import('better-sqlite3');
-      class NodeDatabase {
-        private db: any;
-        constructor(uri: string) {
-          const filename = uri.replace(/^sqlite:/, '');
-          this.db = new DatabaseNode(filename || ':memory:');
-        }
-        async execute(sql: string, params?: any[]) {
-          if (params && params.length) {
-            const stmt = this.db.prepare(sql);
-            stmt.run(...params);
-          } else {
-            this.db.exec(sql);
-          }
-        }
-        async select<T>(sql: string, params?: any[]): Promise<T[]> {
-          const stmt = this.db.prepare(sql);
-          const rows = stmt.all(...(params ?? []));
-          return rows as T[];
-        }
-        static async load(uri: string) {
-          return new NodeDatabase(uri);
-        }
-      }
-      Database = NodeDatabase;
-    }
-    dbPromise = Database.load(DB_URI);
+    dbPromise = loadDb().catch((err) => {
+      dbPromise = null; // allow retry after a failed open
+      throw err;
+    });
   }
   return dbPromise;
 }
 
+async function loadDb(): Promise<Database> {
+  if (typeof window !== 'undefined') {
+    // Tauri webview path. The plugin's `Database` class satisfies our
+    // interface (its execute/select shapes match).
+    const mod = await import('@tauri-apps/plugin-sql');
+    const Sqlite = (mod as { default: { load(uri: string): Promise<Database> } }).default;
+    return Sqlite.load(DB_URI);
+  }
+  return loadNodeDb();
+}
 
-export const DB_URI = 'sqlite:cria.db';
+async function loadNodeDb(): Promise<Database> {
+  // @ts-expect-error — no @types/better-sqlite3 installed; we type-narrow at the cast below.
+  const mod = await import('better-sqlite3');
+  const BetterSqlite = (mod as unknown as { default: new (path: string) => NodeSqlite }).default;
+  const filename = DB_URI.replace(/^sqlite:/, '') || ':memory:';
+  // In tests we always want a fresh, in-memory DB to avoid bleed between runs.
+  const db = new BetterSqlite(process.env.VITEST ? ':memory:' : filename);
 
-let dbPromise: Promise<Database> | null = null;
+  return {
+    async execute(sql, params) {
+      // better-sqlite3 only supports parameterised single statements; for
+      // multi-statement scripts (e.g. our schema migration) we route through
+      // exec() and lose the rowsAffected info, which the caller doesn't use
+      // in that path.
+      if (sql.trim().includes(';\n') || sql.includes('CREATE TABLE')) {
+        db.exec(sql);
+        return { rowsAffected: 0 };
+      }
+      const stmt = db.prepare(sql);
+      const info = stmt.run(...((params ?? []) as unknown[]));
+      return {
+        rowsAffected: Number(info.changes),
+        lastInsertId: Number(info.lastInsertRowid),
+      };
+    },
+    async select<T>(sql: string, params?: unknown[]): Promise<T> {
+      const stmt = db.prepare(sql);
+      return stmt.all(...((params ?? []) as unknown[])) as unknown as T;
+    },
+  };
+}
 
-/* getDb is defined above with dynamic imports */
+// Minimal type for the better-sqlite3 instance methods we use.
+interface NodeSqlite {
+  prepare(sql: string): {
+    run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
+    all(...params: unknown[]): unknown[];
+  };
+  exec(sql: string): void;
+}
 
 /**
  * Run a function inside a SQLite transaction. Rolls back on any thrown error
@@ -69,5 +107,3 @@ export async function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
     throw err;
   }
 }
-
-export type Database = any;
