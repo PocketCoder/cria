@@ -319,5 +319,5 @@ The schema is already there. The bus pattern flips: now `notify()` is
   - `repeat_after`/`repeat_mode`: send `0` explicitly instead of omitting
 - **Progress slider** (`src/features/task-detail/TaskActions.tsx`): changed from `value / 100` to raw `value` (0-100)
 - **Editable task titles**: Added inline title editing in both TaskDetail pane (`TaskDetail.tsx`) and TaskList rows (`TaskList.tsx`). Click to edit, Enter/blur to save, Escape to cancel.
-- **Known issue**: Move task is local-only — `taskToBody` doesn't include `project_id`, so moves never reach the server.
+- **Move task fix**: `taskToBody` now accepts optional `projectServerId` and includes `project_id` in the push body. Update op resolves project server_id before push. Create op also passes it.
 
