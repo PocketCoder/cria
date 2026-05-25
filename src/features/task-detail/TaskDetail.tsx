@@ -6,7 +6,7 @@ import { getTaskByLocalId, updateTask } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { LabelChips } from '@/features/tasks/LabelChips';
-import { DescriptionEditor } from './DescriptionEditor';
+import { RichTextEditor } from './RichTextEditor';
 import type { Task } from '@/domain/task';
 
 /**
@@ -77,7 +77,7 @@ export function TaskDetail() {
         <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
           Description
         </h3>
-        <DescriptionEditor
+        <RichTextEditor
           value={task.description}
           onSave={handleDescriptionSave}
         />
