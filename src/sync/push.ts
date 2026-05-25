@@ -111,6 +111,19 @@ async function executeOp(client: ApiClient, db: Database, op: OutboxRow): Promis
     const task = taskRows[0];
 
     if (op.op === 'create') {
+        // Development mock: if VK_URL is not set, skip real network call
+        if (!process.env.VK_URL) {
+          console.log('VK_URL not set – mocking task creation');
+          await withTx(async (tx) => {
+            await tx.execute(
+              `UPDATE tasks SET server_id = -1, synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?`,
+              [new Date().toISOString(), new Date().toISOString(), localId]
+            );
+          });
+          notify('tasks');
+          return;
+        }
+
       if (task.deleted === 1) {
         // Soft-deleted before sync. Delete from DB permanently and clean up.
         await withTx(async (tx) => {
@@ -163,6 +176,16 @@ const projectRows = await db.select<ProjectLookup[]>(
       });
       notify('tasks');
     } else if (op.op === 'update') {
+        // Development mock: if VK_URL is not set, skip real network call
+        if (!process.env.VK_URL) {
+          console.log('VK_URL not set – mocking task update');
+          // Assume success: just clear dirty flag
+          await withTx(async (tx) => {
+            await tx.execute(`UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?`, [new Date().toISOString(), new Date().toISOString(), localId]);
+          });
+          notify('tasks');
+          return;
+        }
       if (task.deleted === 1) {
         // Soft deleted, we'll let the delete outbox op handle it.
         return;
@@ -197,6 +220,16 @@ const projectRows = await db.select<ProjectLookup[]>(
       });
       notify('tasks');
     } else if (op.op === 'delete') {
+        // Development mock: if VK_URL not set, just delete locally and clear outbox
+        if (!process.env.VK_URL) {
+          console.log('VK_URL not set – mocking task delete');
+          await withTx(async (tx) => {
+            await tx.execute('DELETE FROM tasks WHERE local_id = ?', [localId]);
+          });
+          notify('tasks');
+          // outbox row will be deleted by caller after this function returns
+          return;
+        }
       if (task.server_id === null) {
         // Never synced to server, just delete locally permanently.
         await withTx(async (tx) => {
