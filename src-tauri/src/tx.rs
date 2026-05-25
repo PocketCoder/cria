@@ -38,10 +38,10 @@ pub async fn execute_tx(
         .get(&db)
         .ok_or_else(|| format!("db {db:?} not loaded"))?;
 
-    let pool = match pool {
-        DbPool::Sqlite(p) => p,
-        _ => return Err("only sqlite is supported".into()),
-    };
+    // DbPool only compiles the Sqlite variant for us (no mysql / postgres
+    // feature flags). Pattern-match without a catch-all so the compiler
+    // stays happy if a future plugin-sql version adds variants.
+    let DbPool::Sqlite(pool) = pool;
 
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     let mut results = Vec::with_capacity(stmts.len());
