@@ -38,6 +38,7 @@ export function Shell() {
   const { data: outboxCount = 0 } = useOutboxCount();
   console.log('UI outboxCount:', outboxCount);
   const { data: conflictCount = 0 } = useConflictsCount();
+  console.log('UI conflictCount:', conflictCount);
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
