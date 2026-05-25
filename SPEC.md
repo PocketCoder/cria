@@ -937,6 +937,20 @@ Milestones are defined by what's working, not by calendar time. Ship each one wh
 | **M2** | Local writes + outbox — create / edit / delete tasks round-trip to server | ✅ |
 | **M3** | Conflicts + deletion reconcile — code present, smoke test owed | 🟡 |
 | **M4** | Native polish — Tauri plugins (notification, autostart, global shortcut, tray) and a Rust-side `execute_tx` for real atomic transactions | ✅ |
+| **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner | 🔲 |
+
+### M4.5 — Auto-update distribution
+
+Auto-update so users receive new versions without re-downloading, re-installing, or reconfiguring API tokens. The app data directory (credentials, SQLite DB, preferences) is preserved across updates — only the binary is swapped.
+
+- **Updater plugin** — `tauri-plugin-updater` wired into Cargo.toml, lib.rs, tauri.conf.json, and capabilities
+- **Update manifest** — hosted at `https://pocketcoder.github.io/cria/update.json` (GitHub Pages), listing per-platform download URLs + Ed25519 signatures
+- **Signing** — Ed25519 key pair; private key stored as GitHub secret, public key baked into the app bundle
+- **Release workflow** — GitHub Actions triggered by `v*` tags: builds macOS aarch64 + x86_64 DMGs, signs both, creates a GitHub Release, and publishes the update manifest to `gh-pages`
+- **Frontend integration** — `checkUpdate()` on startup, silent background download, "Update ready — restart to apply" banner in the footer bar, `installUpdate()` on click
+- **Privacy** — the updater contacts only the update manifest URL; no telemetry, no phone-home beyond version checks
+
+**Exit criteria:** a user on v0.0.0-alpha gets a banner prompting restart when v0.1.0 is released. One click restarts into the new version. All credentials, tasks, and settings survive the update.
 
 ### M5 — Input parity with Todoist
 
