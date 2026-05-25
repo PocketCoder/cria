@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
 import { LoginScreen } from '@/features/login/LoginScreen';
-import { LandingScreen } from '@/features/login/LandingScreen';
+import { Shell } from '@/features/shell/Shell';
 
 export function App() {
   const status = useAuth((s) => s.status);
@@ -9,7 +9,7 @@ export function App() {
 
   useEffect(() => {
     if (status.kind === 'unknown') {
-      void hydrate();
+      hydrate();
     }
   }, [status.kind, hydrate]);
 
@@ -21,5 +21,5 @@ export function App() {
     );
   }
 
-  return status.kind === 'authenticated' ? <LandingScreen /> : <LoginScreen />;
+  return status.kind === 'authenticated' ? <Shell /> : <LoginScreen />;
 }
