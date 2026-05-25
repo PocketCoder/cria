@@ -136,8 +136,12 @@ export function Shell() {
         setShowQuickAdd(true);
       }
     };
+    console.log('Registering dev shortcut listener, mode:', import.meta.env.MODE);
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      console.log('Removing dev shortcut listener');
+      window.removeEventListener('keydown', handler);
+    };
   }, []);
 
 
@@ -263,7 +267,7 @@ export function Shell() {
           </button>
         </div>
         <div>
-          <span>Cria Desktop ${__APP_VERSION__}</span>
+          <span>Cria Desktop {__APP_VERSION__}</span>
         </div>
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
