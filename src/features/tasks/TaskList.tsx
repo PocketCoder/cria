@@ -107,6 +107,8 @@ export function TaskList({ project }: TaskListProps) {
 function TaskRow({ task }: { task: Task }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const { data: labels = [] } = useTaskLabels(task.localId);
 
@@ -129,6 +131,29 @@ function TaskRow({ task }: { task: Task }) {
     }
   };
 
+  const handleTitleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(task.title);
+    setEditing(true);
+  };
+
+  const handleTitleSave = async () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== task.title) {
+      await updateTask(task.localId, { title: trimmed });
+    }
+    setEditing(false);
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setEditing(false);
+    }
+  };
+
   return (
     <li
       className={cn(
@@ -137,7 +162,7 @@ function TaskRow({ task }: { task: Task }) {
         isDeleting && 'opacity-30 pointer-events-none',
         selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10'
       )}
-      onClick={() => setSelectedTask(task.localId)}
+      onClick={() => { if (!editing) setSelectedTask(task.localId); }}
     >
       <input
         type="checkbox"
@@ -147,15 +172,29 @@ function TaskRow({ task }: { task: Task }) {
         className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
       />
       <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            'truncate text-sm transition-all',
-            task.done && 'line-through text-[var(--color-muted-foreground)]',
-          )}
-          title={task.title}
-        >
-          {task.title}
-        </p>
+        {editing ? (
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => void handleTitleSave()}
+            onKeyDown={handleTitleKeyDown}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+          />
+        ) : (
+          <p
+            className={cn(
+              'cursor-pointer truncate rounded px-1 py-0.5 text-sm transition-all hover:bg-[var(--color-muted)]',
+              task.done && 'line-through text-[var(--color-muted-foreground)]',
+            )}
+            onClick={handleTitleEdit}
+            title={task.title}
+          >
+            {task.title}
+          </p>
+        )}
         {task.dueDate || task.priority > 0 ? (
           <p className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
