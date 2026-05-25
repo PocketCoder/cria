@@ -127,6 +127,20 @@ export function Shell() {
     })();
   }, []);
 
+  // Dev‑only shortcut listener (⌘+Shift+A) – works while running via Vite
+  useEffect(() => {
+    if (import.meta.env.MODE !== 'development') return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'A') {
+        console.log('Dev shortcut ⌘+Shift+A triggered – opening QuickAdd');
+        setShowQuickAdd(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+
 
   return (
     <div className="flex h-full flex-col">
@@ -230,10 +244,26 @@ export function Shell() {
             className="text-xs text-[var(--color-muted-foreground)] underline"
           >
             Autostart: {autostartEnabled ? 'On' : 'Off'}
+            {import.meta.env.MODE === 'development' && (
+            <button
+              onClick={async () => {
+                try {
+                  const db = await getDb();
+                  await db.execute('DELETE FROM outbox');
+                  console.log('Outbox cleared (dev)');
+                } catch (e) {
+                  console.error('Failed to clear outbox', e);
+                }
+              }}
+              className="text-xs text-[var(--color-muted-foreground)] underline ml-2"
+            >
+              Clear outbox
+            </button>
+          )}
           </button>
         </div>
         <div>
-          <span>Cria Desktop v0.2.0</span>
+          <span>Cria Desktop ${__APP_VERSION__}</span>
         </div>
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}

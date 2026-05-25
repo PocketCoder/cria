@@ -6,6 +6,9 @@ import path from 'node:path';
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(require('./package.json').version),
+  },
   plugins: [react(), tailwind()],
   resolve: {
     alias: {
