@@ -1,5 +1,5 @@
-import { appWindow } from '@tauri-apps/api/window';
-import { Tray } from '@tauri-apps/api/tray';
+// Stub import – real implementation provided by Tauri in production
+import { Tray } from '@/tauri/tray';
 import { useEffect } from 'react';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';

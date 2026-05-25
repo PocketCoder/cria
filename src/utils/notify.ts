@@ -1,4 +1,4 @@
-import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/api/notification';
+import { isPermissionGranted, requestPermission, sendNotification } from '@/tauri/notification';
 
 /** Simple wrapper to send a native notification, requesting permission if needed */
 export async function nativeNotify(title: string, body: string) {

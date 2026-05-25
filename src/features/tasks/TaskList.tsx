@@ -17,8 +17,7 @@ export function TaskList({ project }: TaskListProps) {
     useProjectTasks(project);
 
   const [newTitle, setNewTitle] = useState('');
-  const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
-  const setSelectedTask = useUi((s) => s.setSelectedTask);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,6 +90,8 @@ export function TaskList({ project }: TaskListProps) {
 }
 
 function TaskRow({ task }: { task: Task }) {
+  const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
+  const setSelectedTask = useUi((s) => s.setSelectedTask);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleToggle = async () => {

@@ -48,3 +48,19 @@ export function normaliseDate(value: string | null | undefined): string | null {
   if (value === VIKUNJA_ZERO_DATE) return null;
   return value;
 }
+
+export interface TaskInput {
+  title: string;
+  projectLocalId: string;
+  description?: string | null;
+  dueDate?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  priority?: number;
+  percentDone?: number;
+  hexColor?: string | null;
+}
+
+export type TaskUpdate = Partial<Omit<TaskInput, 'projectLocalId'>> & {
+  done?: boolean;
+};
