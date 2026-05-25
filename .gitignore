@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+.env
+.env.local
+
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Generated
+src/api/schema.ts
+
+# Test
+coverage/

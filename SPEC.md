@@ -922,16 +922,20 @@ A checklist file (`docs/smoke-test.md`) for each release: launch, login, create,
 
 ---
 
-## 14. Implementation Phases
+## 14. Implementation Milestones
 
-### Phase 0 — Skeleton (1 week)
+Milestones are defined by what's working, not by calendar time. Ship each one when its exit criteria are met. Earlier milestones unblock later ones, but within a milestone the order of work is flexible.
+
+### M0 — Skeleton
 
 - Tauri + Vite + React + Tailwind boilerplate
 - SQLite plugin wired up with initial migration
 - Login screen accepting server URL + API token
 - Hit `/api/v1/user`, store result, render "logged in as X"
 
-### Phase 1 — Read-only sync (2 weeks)
+**Exit criteria:** app launches, authenticates against a Vikunja instance, persists the token securely, and survives a relaunch still logged in.
+
+### M1 — Read-only sync
 
 - Generated API types
 - Repositories for projects, tasks, labels (read paths only)
@@ -939,7 +943,9 @@ A checklist file (`docs/smoke-test.md`) for each release: launch, login, create,
 - Three-pane UI shell, project sidebar, task list view
 - Detail pane (read-only)
 
-### Phase 2 — Local writes + outbox (2 weeks)
+**Exit criteria:** all of the user's projects and tasks appear in the UI, kept reasonably fresh by background polling. App is usable as a read-only viewer offline after first sync.
+
+### M2 — Local writes + outbox
 
 - Outbox table + push loop
 - Create/edit/delete tasks locally
@@ -947,13 +953,17 @@ A checklist file (`docs/smoke-test.md`) for each release: launch, login, create,
 - Optimistic UI throughout
 - Offline indicator
 
-### Phase 3 — Conflict resolution + deletion sweep (1 week)
+**Exit criteria:** a task created or edited offline shows up on the server after reconnect, with no user-visible spinner during the local interaction.
+
+### M3 — Conflict resolution + deletion sweep
 
 - `_lastSynced` snapshot column
 - Conflict detection + resolution UI
 - Periodic deletion reconciliation
 
-### Phase 4 — Polish & native integration (2 weeks)
+**Exit criteria:** simultaneous edits on two clients converge to a state the user can reason about; server-side deletions stop appearing locally within one reconciliation cycle.
+
+### M4 — Polish & native integration
 
 - Quick add with parser
 - Global shortcuts
@@ -963,21 +973,27 @@ A checklist file (`docs/smoke-test.md`) for each release: launch, login, create,
 - Deep links
 - Auto-updater
 
-### Phase 5 — Views beyond list (2 weeks)
+**Exit criteria:** the app feels like a native desktop tool, not a wrapped webpage. Updates ship to users without a manual reinstall.
+
+### M5 — Views beyond list
 
 - Kanban
 - Table view
 - Saved filters
 - Search (FTS5)
 
-### Phase 6 — Stretch
+**Exit criteria:** users with kanban-organised projects or large task databases can do their primary workflows here instead of in the web app.
+
+### M6 — Stretch
 
 - Attachments (download, cache, upload)
 - Comments + @mentions
 - Gantt
 - Time tracking (if Vikunja adds it server-side)
 
-Realistic solo dev timeline: ~3 months to a daily-driver v1.
+No exit criteria — these are individually shippable enhancements pulled in by demand.
+
+**Daily-driver target:** M0 through M3 is the minimum for the app to be the user's primary client. M4 is the minimum for it to feel polished. M5+ broadens the audience.
 
 ---
 
