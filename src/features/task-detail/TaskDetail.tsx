@@ -80,17 +80,14 @@ export function TaskDetail() {
           onSave={handleDescriptionSave}
         />
         </section>
-        <details className="mb-5 border-t border-[var(--color-border)] pt-3">
-          <summary className="text-xs font-semibold text-[var(--color-muted-foreground)]">Edit metadata</summary>
-          <div className="pt-2 flex flex-col gap-2">
-            <label className="text-xs text-[var(--color-muted-foreground)]">Due date</label>
-            <input type="date" value={task.dueDate?.slice(0,10) ?? ''} onChange={e => updateTask(task.localId, { dueDate: e.target.value || null })} className="max-w-xs" />
-            <label className="text-xs text-[var(--color-muted-foreground)]">Priority</label>
-            <select value={task.priority} onChange={e => updateTask(task.localId, { priority: Number(e.target.value) })} className="max-w-xs">
-              {[0,1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-        </details>
+        <div className="mb-5 p-2 bg-[var(--color-muted)] rounded-lg grid grid-cols-2 gap-2">
+          <label className="text-xs text-[var(--color-muted-foreground)]">Due date</label>
+          <input type="date" value={task.dueDate?.slice(0,10) ?? ''} onChange={e => updateTask(task.localId, { dueDate: e.target.value || null })} className="w-full" />
+          <label className="text-xs text-[var(--color-muted-foreground)]">Priority</label>
+          <select value={task.priority} onChange={e => updateTask(task.localId, { priority: Number(e.target.value) })} className="w-full">
+            {[0,1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
 
 
       <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1.5 text-xs">
