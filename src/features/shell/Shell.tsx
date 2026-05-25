@@ -25,7 +25,6 @@ import { cn } from '@/lib/cn';
 import pkg from '../../../package.json';
 
 export function Shell() {
-  console.log('APP version constant:', __APP_VERSION__);
   const signOut = useAuth((s) => s.signOut);
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
@@ -37,9 +36,7 @@ export function Shell() {
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
   const { data: outboxCount = 0 } = useOutboxCount();
-  console.log('UI outboxCount:', outboxCount);
   const { data: conflictCount = 0 } = useConflictsCount();
-  console.log('UI conflictCount:', conflictCount);
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -131,21 +128,17 @@ export function Shell() {
     })();
   }, []);
 
-  // Dev‑only shortcut listener (⌘+Shift+A) – works while running via Vite
+  // Dev‑only keyboard shortcut (⌘+Shift+A) — Tauri global shortcut covers
+  // production; this handler is just so the dev webview gets it too.
   useEffect(() => {
     if (import.meta.env.MODE !== 'development') return;
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'A') {
-        console.log('Dev shortcut ⌘+Shift+A triggered – opening QuickAdd');
         setShowQuickAdd(true);
       }
     };
-    console.log('Registering dev shortcut listener, mode:', import.meta.env.MODE);
     window.addEventListener('keydown', handler);
-    return () => {
-      console.log('Removing dev shortcut listener');
-      window.removeEventListener('keydown', handler);
-    };
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
 
@@ -259,7 +252,6 @@ export function Shell() {
                  try {
                    const db = await getDb();
                    await db.execute('DELETE FROM outbox');
-                   console.log('Outbox cleared (dev)');
                  } catch (e) {
                    console.error('Failed to clear outbox', e);
                  }

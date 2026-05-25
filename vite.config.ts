@@ -6,9 +6,10 @@ import path from 'node:path';
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-  define: {
-    __APP_VERSION__: JSON.stringify(require('./package.json').version),
-  },
+  // `__APP_VERSION__` define was removed when the Shell switched to a
+  // runtime `import pkg from '../../../package.json'`. If something
+  // re-needs a compile-time constant, restore here with the ESM-safe
+  // `JSON.parse(readFileSync(...))` pattern, not require().
   plugins: [react(), tailwind()],
   resolve: {
     alias: {

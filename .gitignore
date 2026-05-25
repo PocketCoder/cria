@@ -3,6 +3,12 @@ dist
 dist-ssr
 *.local
 
+# Local SQLite databases (dev + test)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 .env
 .env.local
 
