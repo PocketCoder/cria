@@ -87,21 +87,53 @@ interface NodeSqlite {
 }
 
 /**
- * Run a function inside a SQLite transaction. Rolls back on any thrown error
- * and rethrows. The Tauri SQL plugin doesn't expose transaction objects, so
- * we issue BEGIN / COMMIT / ROLLBACK manually.
+ * Global write serialisation.
  *
- * **Serialised globally.** SQLite only permits one transaction per connection
- * at a time; the Tauri SQL plugin shares one connection. Two `withTx` calls
- * that overlap will collide on `BEGIN` ("cannot start a transaction within a
- * transaction") or block ("database is locked"). We queue every call onto a
- * single promise chain so each transaction starts only after the previous
- * one has fully committed or rolled back.
+ * SQLite permits only one transaction per connection at a time; the Tauri
+ * SQL plugin shares one connection. Two writes that overlap collide on
+ * BEGIN ("cannot start a transaction within a transaction") or fail with
+ * "database is locked". We queue every write onto a single promise chain
+ * so each one starts only after the previous finishes.
+ *
+ * **Why globalThis.** Vite HMR reloads `src/db/index.ts` (e.g. when any
+ * sibling file in this folder changes), which would otherwise reset the
+ * module-level `writeChain` to `Promise.resolve()` while old in-flight
+ * transactions are still active on the connection. Pinning the chain to
+ * `globalThis` lets the new module observe the in-flight tail and wait
+ * for it instead of starting a fresh BEGIN that collides.
  */
-let writeChain: Promise<unknown> = Promise.resolve();
+declare global {
+  // eslint-disable-next-line no-var
+  var __cria_writeChain__: Promise<unknown> | undefined;
+}
 
+function chainHead(): Promise<unknown> {
+  return (globalThis.__cria_writeChain__ ??= Promise.resolve());
+}
+
+function setChainHead(p: Promise<unknown>): void {
+  globalThis.__cria_writeChain__ = p;
+}
+
+/**
+ * Queue `fn` onto the global write chain. Use for any write that must not
+ * overlap with another (transactional or single-statement). Rejections do
+ * not poison subsequent queue entries.
+ */
+export function serial<T>(fn: () => Promise<T>): Promise<T> {
+  const next = chainHead().then(fn);
+  setChainHead(next.catch(() => undefined));
+  return next as Promise<T>;
+}
+
+/**
+ * Run a function inside a SQLite transaction. Rolls back on any thrown
+ * error and rethrows. The Tauri SQL plugin doesn't expose transaction
+ * objects, so we issue BEGIN / COMMIT / ROLLBACK manually. Serialised via
+ * `serial` so concurrent callers don't trip BEGIN-in-BEGIN.
+ */
 export function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
-  const next = writeChain.then(async () => {
+  return serial(async () => {
     const db = await getDb();
     await db.execute('BEGIN');
     try {
@@ -117,8 +149,20 @@ export function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
       throw err;
     }
   });
-  // Keep the chain alive across rejections so one failed transaction
-  // doesn't poison every subsequent one.
-  writeChain = next.catch(() => undefined);
-  return next as Promise<T>;
+}
+
+/**
+ * Execute a single write statement, queued behind any in-flight
+ * transactions. Use whenever you'd otherwise call `db.execute(sql, params)`
+ * for a write (INSERT / UPDATE / DELETE). Reads (`db.select`) do not need
+ * this — they don't take the write lock.
+ */
+export async function exec(
+  sql: string,
+  params?: unknown[],
+): Promise<ExecuteResult> {
+  return serial(async () => {
+    const db = await getDb();
+    return db.execute(sql, params);
+  });
 }

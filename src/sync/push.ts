@@ -1,5 +1,5 @@
 import { createApiClient, callApi, type ApiClient } from '@/api/client';
-import { getDb, withTx, type Database } from '@/db';
+import { getDb, withTx, exec, type Database } from '@/db';
 import { notify, subscribe } from '@/db/bus';
 import { ApiError, NetworkError } from '@/api/errors';
 
@@ -53,17 +53,22 @@ const MAX_ATTEMPTS = 10;
  * drain is enough; subsequent callers no-op and rely on the running drain
  * to finish their work.
  */
-let isDraining = false;
+// HMR-safe: pin the guard on globalThis so a module reload doesn't reset
+// `false` while a previous module's drain is still in flight.
+declare global {
+  // eslint-disable-next-line no-var
+  var __cria_isDraining__: boolean | undefined;
+}
 
 export async function drainOutbox(
   client: ApiClient = createApiClient(),
 ): Promise<void> {
-  if (isDraining) return;
-  isDraining = true;
+  if (globalThis.__cria_isDraining__) return;
+  globalThis.__cria_isDraining__ = true;
   try {
     await drainLoop(client);
   } finally {
-    isDraining = false;
+    globalThis.__cria_isDraining__ = false;
   }
 }
 
@@ -83,7 +88,7 @@ async function drainLoop(client: ApiClient): Promise<void> {
 
     try {
       await executeOp(client, db, op);
-      await db.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+      await exec('DELETE FROM outbox WHERE id = ?', [op.id]);
       notify('outbox');
     } catch (err) {
       const attempts = op.attempts + 1;
@@ -116,7 +121,7 @@ async function drainLoop(client: ApiClient): Promise<void> {
       } else {
         const delay = Math.min(60_000, 2 ** attempts * 1000);
         const nextAttempt = new Date(Date.now() + delay).toISOString();
-        await db.execute(
+        await exec(
           `UPDATE outbox SET attempts = ?, last_error = ?, next_attempt_at = ? WHERE id = ?`,
           [attempts, String(err), nextAttempt, op.id],
         );

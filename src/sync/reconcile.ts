@@ -1,5 +1,5 @@
 import { createApiClient, type ApiClient } from '@/api/client';
-import { getDb } from '@/db';
+import { getDb, exec } from '@/db';
 import { notify } from '@/db/bus';
 
 /**
@@ -40,7 +40,7 @@ export async function reconcileDeletions(api: ApiClient = createApiClient()) {
   const localTaskRows = await db.select<any[]>(`SELECT local_id, server_id FROM tasks WHERE server_id IS NOT NULL`);
   for (const row of localTaskRows) {
     if (!serverTaskIds.has(row.server_id)) {
-      await db.execute(`DELETE FROM tasks WHERE local_id = ?`, [row.local_id]);
+      await exec(`DELETE FROM tasks WHERE local_id = ?`, [row.local_id]);
     }
   }
 
@@ -63,7 +63,7 @@ export async function reconcileDeletions(api: ApiClient = createApiClient()) {
   const localProjRows = await db.select<any[]>(`SELECT local_id, server_id FROM projects WHERE server_id IS NOT NULL`);
   for (const row of localProjRows) {
     if (!serverProjectIds.has(row.server_id)) {
-      await db.execute(`DELETE FROM projects WHERE local_id = ?`, [row.local_id]);
+      await exec(`DELETE FROM projects WHERE local_id = ?`, [row.local_id]);
     }
   }
 

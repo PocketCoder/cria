@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getDb } from './index';
+import { getDb, exec } from './index';
 import type { Project, ProjectResponse } from '@/domain/project';
 
 interface ProjectRow {
@@ -103,9 +103,8 @@ export async function upsertProjectFromServer(
       ? await localIdForServerId(payload.parent_project_id)
       : null;
 
-  const db = await getDb();
   if (existing) {
-    await db.execute(
+    await exec(
       `UPDATE projects SET
          title           = ?,
          description     = ?,
@@ -133,7 +132,7 @@ export async function upsertProjectFromServer(
       ],
     );
   } else {
-    await db.execute(
+    await exec(
       `INSERT INTO projects (
          local_id, server_id, title, description, parent_local_id,
          hex_color, is_archived, position, updated_at, synced_at,

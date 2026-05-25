@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getDb, withTx } from './index';
+import { getDb, withTx, exec } from './index';
 import { normaliseDate, type Task, type TaskResponse, type TaskInput, type TaskUpdate } from '@/domain/task';
 import { notify } from './bus';
 
@@ -176,14 +176,14 @@ export async function upsertTaskFromServer(
           }
         }
         const now = new Date().toISOString();
-        await db.execute(
+        await exec(
           `INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at) VALUES (?, ?, ?, ?, ?, ?)`,
           ['task', localId, JSON.stringify(fields), localSnap, remoteSnap, now],
         );
         // Skip automatic update; keep dirty flag for user resolution
       } else {
         // No conflict, proceed with normal update
-        await db.execute(
+        await exec(
           `UPDATE tasks SET
              project_local_id = ?,
              title            = ?,
@@ -208,7 +208,7 @@ export async function upsertTaskFromServer(
       }
     } else {
       // Not dirty, safe to update
-      await db.execute(
+      await exec(
         `UPDATE tasks SET
            project_local_id = ?,
            title            = ?,
@@ -232,7 +232,7 @@ export async function upsertTaskFromServer(
       );
     }
   } else {
-    await db.execute(
+    await exec(
       `INSERT INTO tasks (
          local_id, server_id, project_local_id, title, description, done,
          done_at, due_date, start_date, end_date, priority, percent_done,

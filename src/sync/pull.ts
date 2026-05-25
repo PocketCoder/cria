@@ -3,7 +3,7 @@ import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import { taskResponseSchema, type TaskResponse } from '@/domain/task';
-import { getDb } from '@/db';
+import { exec } from '@/db';
 import { notify } from '@/db/bus';
 
 const PER_PAGE = 50;
@@ -149,12 +149,8 @@ export async function pullTasksForProject(
 async function stampSyncState(
   column: 'projects_synced_at' | 'tasks_synced_at' | 'labels_synced_at',
 ): Promise<void> {
-  const db = await getDb();
   const now = new Date().toISOString();
-  await db.execute(
-    `UPDATE sync_state SET ${column} = ? WHERE id = 1`,
-    [now],
-  );
+  await exec(`UPDATE sync_state SET ${column} = ? WHERE id = 1`, [now]);
   notify('sync_state');
 }
 

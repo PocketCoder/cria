@@ -1,5 +1,5 @@
 import type { User } from '@/domain/user';
-import { getDb } from './index';
+import { getDb, exec } from './index';
 import { notify } from './bus';
 
 interface UserRow {
@@ -28,8 +28,7 @@ export async function getCachedUser(): Promise<User | null> {
 }
 
 export async function upsertUser(user: User): Promise<void> {
-  const db = await getDb();
-  await db.execute(
+  await exec(
     `INSERT INTO user (id, server_id, username, email, name, raw, fetched_at)
      VALUES (1, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
@@ -52,7 +51,6 @@ export async function upsertUser(user: User): Promise<void> {
 }
 
 export async function clearUser(): Promise<void> {
-  const db = await getDb();
-  await db.execute(`DELETE FROM user`);
+  await exec(`DELETE FROM user`);
   notify('user');
 }
