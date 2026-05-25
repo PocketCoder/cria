@@ -64,9 +64,9 @@ export function TaskDetail() {
   };
 
   return (
-    <aside className="flex w-96 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-muted)]">
-      <div className="flex-1 p-5 min-w-0" style={{ overflowY: 'overlay', overflowX: 'hidden' }}>
-        <h2 className="mb-2 text-base font-semibold leading-tight">{task.title}</h2>
+    <aside className="flex w-96 shrink min-w-80 flex-col border-l border-[var(--color-border)] bg-[var(--color-muted)]" style={{ maxWidth: 'min(420px, 40vw)' }}>
+      <div className="overflow-y-auto p-5 min-w-0">
+        <h2 className="mb-2 break-words text-base font-semibold leading-tight">{task.title}</h2>
 
         {labels.length > 0 ? (
           <div className="mb-3">
