@@ -183,10 +183,23 @@ export async function upsertTaskFromServer(
       return localId;
     }
     if (localRow && localRow.dirty === 1) {
+      // **Dirty rows are authoritative until the outbox drains them.**
+      // Never overwrite local from the server here:
+      //
+      //   - If both diverged since last_synced → real conflict; record it
+      //     and skip the update so the user resolves it from the conflict
+      //     modal.
+      //   - If server is unchanged from last_synced (most common after a
+      //     local edit while a pull races) → just skip. The outbox push
+      //     will land our change and the next clean pull will sync
+      //     last_synced forward.
+      //
+      // Earlier this branch hit "no conflict → overwrite", which clobbered
+      // the just-picked due-date (and any other in-flight edit) until the
+      // outbox finally pushed it back.
       const remoteSnap = JSON.stringify(payload);
       const localSnap = localRow.last_synced ?? '';
       if (localSnap && localSnap !== remoteSnap) {
-        // Determine differing fields (basic comparison)
         const compareFields = [
           'title', 'description', 'done', 'due_date', 'start_date', 'end_date',
           'priority', 'percent_done', 'hex_color', 'position',
@@ -206,36 +219,8 @@ export async function upsertTaskFromServer(
           `INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at) VALUES (?, ?, ?, ?, ?, ?)`,
           ['task', localId, JSON.stringify(fields), localSnap, remoteSnap, now],
         );
-        // Skip automatic update; keep dirty flag for user resolution
-      } else {
-        // No conflict, proceed with normal update
-        await exec(
-          `UPDATE tasks SET
-             project_local_id = ?,
-             title            = ?,
-             description      = ?,
-             done             = ?,
-             done_at          = ?,
-             due_date         = ?,
-             start_date       = ?,
-             end_date         = ?,
-             priority         = ?,
-             percent_done     = ?,
-             hex_color        = ?,
-             position         = ?,
-             is_favorite      = ?,
-             is_subscribed    = ?,
-             repeat_after     = ?,
-             repeat_mode      = ?,
-             updated_at       = ?,
-             synced_at        = ?,
-             last_synced      = ?,
-             dirty            = 0,
-             deleted          = 0
-           WHERE local_id = ?`,
-          [...params, localId],
-        );
       }
+      return localId;
     } else {
       // Not dirty, safe to update
       await exec(
