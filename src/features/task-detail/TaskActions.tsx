@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, type ButtonHTMLAttributes } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -239,30 +239,38 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
 
 /* ─── Shared sub-components ─── */
 
-function ActionButton({
-  icon,
-  label,
-  color,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  color?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors hover:bg-[var(--color-accent)]/10"
-      style={color ? { color } : undefined}
+// forwardRef so Radix-style `asChild` consumers (e.g. PopoverTrigger)
+// can clone us and merge their own handlers + refs in. Without this,
+// wrapping ActionButton in <PopoverTrigger asChild> would nest two
+// <button>s or lose the ref.
+const ActionButton = forwardRef<
+  HTMLButtonElement,
+  {
+    icon: React.ReactNode;
+    label: string;
+    color?: string;
+  } & ButtonHTMLAttributes<HTMLButtonElement>
+>(({ icon, label, color, className, style, ...rest }, ref) => (
+  <button
+    ref={ref}
+    type="button"
+    className={cn(
+      'flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors hover:bg-[var(--color-accent)]/10',
+      className,
+    )}
+    style={{ ...(color ? { color } : {}), ...style }}
+    {...rest}
+  >
+    <span
+      className="shrink-0"
+      style={color ? { color } : { color: 'var(--color-muted-foreground)' }}
     >
-      <span className="shrink-0" style={color ? { color } : { color: 'var(--color-muted-foreground)' }}>
-        {icon}
-      </span>
-      {label}
-    </button>
-  );
-}
+      {icon}
+    </span>
+    {label}
+  </button>
+));
+ActionButton.displayName = 'ActionButton';
 
 function SectionDivider() {
   return <div className="my-1 border-t border-[var(--color-border)]" />;
@@ -556,15 +564,10 @@ function InlineDate({
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className="w-full text-left">
-          <ActionButton
-            icon={icon}
-            label={display ? `${label}: ${display}` : label}
-            onClick={() => {
-              /* PopoverTrigger handles open/close; click is just a hit-target. */
-            }}
-          />
-        </button>
+        <ActionButton
+          icon={icon}
+          label={display ? `${label}: ${display}` : label}
+        />
       </PopoverTrigger>
       <PopoverContent align="start" side="left" sideOffset={8}>
         <CalendarGrid
