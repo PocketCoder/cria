@@ -8,17 +8,26 @@ fresh session needs.
 
 - **M0 done** (commit `b6dd56b`). Sign-in works, creds persist, relaunch lands on the shell.
 - **M1 done** (commit `cdbae21`). Projects + tasks sync from server, render in a
-  three-pane shell, refresh every 60s and on window focus. Usable as a
-  read-only viewer offline after the first sync.
+  three-pane shell, refresh every 60s and on window focus.
 - **M2 done** (commit `eb84f71`). Create/update/delete tasks locally; outbox
   drains to the server (PUT/POST/DELETE) and the UI updates live. Verified
   end-to-end against a self-hosted instance.
-- **M3 partial** (already in tree). Conflict modal + deletion reconciliation
-  landed; M3 exit-criteria not formally re-verified after the M2 concurrency
-  fix — worth a smoke test before declaring it done.
-- **M4 partial** (already in tree). Tray icon (real artwork now), TaskDetail,
-  QuickAddModal, deep-link, autostart/notification stubs. Tauri-side wiring
-  still TODO(M4) — see src/tauri/{tray,autostart,notification}.ts.
+- **M3 partial**. Conflict detection + modal + deletion reconciliation are
+  in tree. **Not formally smoke-tested** against a two-client scenario after
+  the M2 concurrency rewrite — worth a force-conflict test before declaring
+  M3 done.
+- **M4 done** (commit `83e8864` + follow-ups). Notification / autostart /
+  global-shortcut / tray plugins wired; Rust-side `execute_tx` command for
+  atomic transactions; alpaca app + tray icons.
+- **M4.5** — SPEC entry added (`73fb286`); auto-updater plugin **not yet
+  wired**. Open as the next pure-plumbing chunk.
+- **M5 partial**. Landed: TipTap WYSIWYG editor (with slash-commands and
+  underline), TaskActions sidebar (priority/progress/color/move/duplicate/
+  favorite/subscribe/repeat/assignees), inline title editing in list + detail,
+  full label model + sync + chip rendering + toggle outbox path, working
+  external links via plugin-opener.
+  **Pending:** natural-language quick-add parser (chrono-node already
+  installed in `package.json` — no parser file yet).
 
 **Deferred from M1** (exit criteria already met without them):
 - Read-only detail pane (third column showing the selected task)
@@ -326,4 +335,82 @@ The schema is already there. The bus pattern flips: now `notify()` is
 - **Progress slider** (`src/features/task-detail/TaskActions.tsx`): changed from `value / 100` to raw `value` (0-100)
 - **Editable task titles**: Added inline title editing in both TaskDetail pane (`TaskDetail.tsx`) and TaskList rows (`TaskList.tsx`). Click to edit, Enter/blur to save, Escape to cancel.
 - **Move task fix**: `taskToBody` now accepts optional `projectServerId` and includes `project_id` in the push body. Update op resolves project server_id before push. Create op also passes it.
+
+## Session handover (M4 close, M5 in flight)
+
+### What landed this session
+
+- **M4 polish complete**:
+  - All four Tauri plugins wired (notification, autostart, global-shortcut,
+    plus core tray via `@tauri-apps/api/tray`). Stubs replaced with real
+    calls in `src/tauri/{notification,autostart,globalShortcut,tray}.ts`.
+  - `tauri-plugin-opener` added; external link clicks in descriptions /
+    notes / comments route through `openUrl` instead of being swallowed by
+    the webview (`src/lib/openExternal.ts`).
+  - Alpaca app icons regenerated from `logo.png` via the Tauri icon CLI
+    (had to crop logo.png 1024×1025 → 1024×1024 with `sips` first).
+  - Static tray icon — state-reactive swap was tried and removed; footer
+    dot + `TrayStatus` badge cover the same signal.
+- **Rust-side atomic transactions** (`src-tauri/src/tx.rs`,
+  command `execute_tx`). Replaces the gimped JS `withTx` that couldn't
+  span multiple statements because plugin-sql's connection pool gave each
+  `db.execute()` a fresh connection. `withTx` in `src/db/index.ts` now
+  *batches* writes and ships them to the Rust command as one transaction.
+  Consequence the rest of the codebase still has to live with: SELECTs
+  inside the `withTx` callback see **pre-batch** state — see the §"`withTx`
+  is a *batched* transaction" gotcha for the SELECT-vs-execute rule.
+- **TipTap WYSIWYG description editor**
+  (`src/features/task-detail/RichTextEditor.tsx`). Replaces the
+  textarea-of-HTML. Toolbar (bold / italic / underline / strike / inline
+  code / H1-3 / list / quote / code block / link), slash-command popup,
+  Cmd+Enter to save, Esc to cancel. Output sanitised via DOMPurify
+  (`src/lib/sanitize.ts`) on save. Renders identically to what Vikunja's
+  own web client emits.
+- **Plan refocus** in SPEC §14 around Todoist parity. M5 = input parity
+  (NL quick-add + WYSIWYG + inline metadata pickers + label mutations).
+  M4.5 inserted for the auto-updater. Daily-driver bar moved to M5.
+
+### What's in tree but not formally verified
+
+- **M3** end-to-end (force a conflict by editing the same task in the web
+  UI and in Cria, then reconnect; check the conflict modal fires and
+  resolves cleanly).
+- **`task_label` outbox path** (`toggleTaskLabel` in `src/db/labels.ts`,
+  `task_label` op in `push.ts`). Untested against a real server — exercise
+  by toggling a label in `TaskActions` and checking the server reflects it.
+- **`task_assignee` outbox path** — same caveat as labels.
+
+### What's pending (pick this up next)
+
+1. **Natural-language quick-add parser.** The chrono-node dep is already
+   installed. Write `src/lib/quickAddParser.ts` taking a raw string and
+   returning `{title, dueDate, priority, labelHints, assigneeHints}`.
+   Wire into the "Add a task…" input on `TaskList` and the global
+   QuickAddModal. Token-coloured live preview as the user types. Initial
+   scope: title + date + `!priority`; label / assignee creation can wait.
+2. **Auto-updater** (`@tauri-apps/plugin-updater`). Pure plumbing per
+   SPEC §12.3 — install the plugin, generate an Ed25519 signing key,
+   ship public key in `tauri.conf.json`, host manifest on GitHub
+   Releases.
+3. **M3 smoke test** (above).
+4. **Inline metadata pickers in the TaskActions sidebar** — most already
+   exist; remaining gaps are an actual calendar popover for due/start/end
+   dates (currently raw inputs) and a combobox project chooser.
+
+### Files / dirs of interest for a fresh session
+
+- `src/features/task-detail/RichTextEditor.tsx` — TipTap setup, the slash
+  menu state machine lives here.
+- `src/features/task-detail/TaskActions.tsx` — the metadata sidebar; this
+  is where quick-add label / priority / date pickers will eventually
+  share components.
+- `src/sync/push.ts` `taskToBody()` — every Vikunja-server-side API
+  quirk we've hit lives here (raw hex, 0-100 percent, explicit-false on
+  is_favorite, explicit-zero on repeat_after, project_id on move).
+- `src-tauri/src/tx.rs` — the Rust transaction command. Anything that
+  needs multi-statement atomicity goes through `withTx` which goes
+  through here.
+- `SPEC.md` §14 — the milestone plan; M5 is the headline.
+- `CLAUDE.md` §"`withTx` is a *batched* transaction…" — read before
+  writing any new repository function that reads after writes.
 
