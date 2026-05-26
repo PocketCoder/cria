@@ -19,8 +19,13 @@ fresh session needs.
 - **M4 done** (commit `83e8864` + follow-ups). Notification / autostart /
   global-shortcut / tray plugins wired; Rust-side `execute_tx` command for
   atomic transactions; alpaca app + tray icons.
-- **M4.5** — SPEC entry added (`73fb286`); auto-updater plugin **not yet
-  wired**. Open as the next pure-plumbing chunk.
+- **M4.5 done** (merge `fd2fb5b` + release-pipeline fixes `df85933`
+  and `7c0c228`). `tauri-plugin-updater` + `plugin-process` wired,
+  Ed25519 signing keypair generated, GitHub Actions release workflow
+  publishes signed bundles for macOS aarch64 + x86_64 plus
+  `update.json` to the `gh-pages` branch. First release
+  `v0.1.0-alpha` shipped end-to-end; running builds see the banner
+  and `installUpdate()` works.
 - **M5 partial**. Landed: TipTap WYSIWYG editor (with slash-commands and
   underline), TaskActions sidebar (priority/progress/color/move/duplicate/
   favorite/subscribe/repeat/assignees), inline title editing in list + detail,
@@ -414,52 +419,54 @@ The schema is already there. The bus pattern flips: now `notify()` is
 - `CLAUDE.md` §"`withTx` is a *batched* transaction…" — read before
   writing any new repository function that reads after writes.
 
-## M4.5 — auto-updater (in flight on `feature/auto-update`)
+## M4.5 — auto-updater (done; `v0.1.0-alpha` shipped)
 
-Plugged into `tauri-plugin-updater` + `tauri-plugin-process`. Ed25519
-signing keypair lives at `~/.tauri/cria-update.key` (+ `.pub`); public
-key is baked into `src-tauri/tauri.conf.json`'s `plugins.updater.pubkey`.
+Wired in `tauri-plugin-updater` + `tauri-plugin-process`. Ed25519
+signing keypair lives at `~/.tauri/cria-update.key` on the dev box;
+public key is in `src-tauri/tauri.conf.json` under
+`plugins.updater.pubkey`, private is the `TAURI_SIGNING_PRIVATE_KEY`
+GitHub Actions secret.
 
-Frontend wiring done:
-- `src/tauri/updater.ts` — `checkForUpdate()` / `installUpdate()` wrapper
-- `src/queries/updater.ts` — `useUpdater()` state machine, one silent
-  check on mount, manual `runCheck()` available for a settings button
-- `src/features/shell/UpdateBanner.tsx` — footer pill, only renders when
-  an update is available / installing
+### Frontend
+- `src/tauri/updater.ts` — `checkForUpdate()` / `installUpdate()` wrapper.
+- `src/queries/updater.ts` — `useUpdater()` state machine with one
+  silent check on mount; expose `runCheck` for a future "Check for
+  updates" settings button.
+- `src/features/shell/UpdateBanner.tsx` — footer pill, only renders
+  when an update is `available` or `installing`.
 
-Release plumbing done in `.github/workflows/release.yml`:
-- Tag push (`v*`) triggers a macOS aarch64 + x86_64 matrix build
-- Bundles signed with `TAURI_SIGNING_PRIVATE_KEY` secret
-- Generates `update.json` from the per-target `.app.tar.gz.sig` files
-- Attaches DMGs + tarballs + sigs to a GitHub Release
-- Publishes `update.json` to the `gh-pages` branch (served at
-  `https://pocketcoder.github.io/cria/update.json`)
+### Release pipeline (`.github/workflows/release.yml`)
+- Trigger: any `v*` tag push on any branch (tags are branch-agnostic;
+  lock to main with `if: contains(github.event.base_ref, 'main')` if
+  desired later).
+- Builds: macOS `aarch64-apple-darwin` + `x86_64-apple-darwin`.
+- `tauri build --bundles app,dmg,updater` + `createUpdaterArtifacts: true`
+  in `tauri.conf.json` are both required to emit the `.app.tar.gz` +
+  `.sig` the updater verifies. Don't drop either.
+- Per-target updater bundles renamed to `Cria_<arch>.app.tar.gz{,.sig}`
+  in the staging step — otherwise both matrix jobs flatten to the same
+  `Cria.app.tar.gz` and the second overwrites the first.
+- `update.json` published to the `gh-pages` branch by
+  `peaceiris/actions-gh-pages`; served at
+  `https://pocketcoder.github.io/cria/update.json`.
 
-### Manual steps before the first real release
+### Cutting a release
 
-1. **Add the private key as a GitHub secret.** From the project root:
-   ```sh
-   gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/cria-update.key
-   gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --body ""
-   ```
-2. **Enable GitHub Pages** on `pocketcoder/cria`: Settings → Pages →
-   Source = `gh-pages` branch, root. The first release run will create
-   the branch.
-3. **Cut a tag.** From `main`:
-   ```sh
-   git tag v0.1.0-alpha && git push origin v0.1.0-alpha
-   ```
-   The workflow runs, the release appears, and the next launch of any
-   older Cria build picks up the update banner.
+```sh
+# from any branch with the workflow file
+git tag vX.Y.Z(-suffix) && git push origin vX.Y.Z(-suffix)
+```
 
-### Not in scope yet
+Bump `version` in `package.json` AND `src-tauri/tauri.conf.json` before
+tagging so the running build doesn't see itself as out of date.
 
-- Windows and Linux builds. Matrix is macOS-only for now; add
-  `windows-latest` + `ubuntu-latest` rows when needed.
-- Apple notarisation. We sign the *update bundle* with our Ed25519 key
-  (sufficient for Tauri's updater verification), but the DMG itself
-  isn't notarised — users will see the macOS "unidentified developer"
-  warning on first launch. M10 territory.
-- Per-platform release notes. The manifest just links back to the
-  GitHub Release page.
+### Not in scope
+
+- Windows / Linux builds — matrix is macOS-only. Add `windows-latest`
+  + `ubuntu-latest` rows when there's demand.
+- Apple notarisation — we sign the *updater bundle* (sufficient for
+  Tauri's updater check) but the DMG itself isn't notarised. First
+  launch will trip macOS's "unidentified developer" warning. M10.
+- Per-platform release notes — manifest just links back to the GitHub
+  Release page.
 
