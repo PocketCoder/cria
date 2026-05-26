@@ -1,102 +1,214 @@
-import { useConflicts } from '@/queries/conflicts';
-import { getDb } from '@/db';
 import { useState } from 'react';
+import { format } from 'date-fns';
+import { useConflicts } from '@/queries/conflicts';
+import {
+  resolveConflictKeepMine,
+  resolveConflictUseTheirs,
+  diffConflict,
+} from '@/db/conflicts';
+import { AlertTriangle, X } from 'lucide-react';
 
 interface ConflictModalProps {
   onClose: () => void;
 }
 
-export function ConflictModal({ onClose }: ConflictModalProps) {
-  const { data: conflicts = [], isLoading, isError } = useConflicts();
-  const [resolvingId, setResolvingId] = useState<number | null>(null);
+interface ConflictRow {
+  id: number;
+  entity_type: string;
+  entity_local_id: string;
+  fields: string;
+  local_snapshot: string;
+  remote_snapshot: string;
+  detected_at: string;
+}
 
-  const [action, setAction] = useState<string>('');
-  const resolveConflict = async (id: number, act: 'keep' | 'theirs') => {
-    setResolvingId(id);
-    setAction(act);
-    const db = await getDb();
-    const now = new Date().toISOString();
-    if (act === 'theirs') {
-      // Apply remote snapshot to the local entity
-      const conflictRows = await db.select<any[]>(`SELECT remote_snapshot, entity_type, entity_local_id FROM conflicts WHERE id = ?`, [id]);
-      const conflict = conflictRows[0];
-      if (conflict) {
-        const remote = JSON.parse(conflict.remote_snapshot);
-        // Simple upsert: reuse existing upsert helpers via raw SQL for tasks only (as example)
-        if (conflict.entity_type === 'task') {
-          // Update the task row with remote values, clear dirty flag
-          const fields = [
-            'title', 'description', 'done', 'done_at', 'due_date', 'start_date',
-            'end_date', 'priority', 'percent_done', 'hex_color', 'position', 'updated_at'
-          ];
-          const setters: string[] = [];
-          const params: any[] = [];
-          for (const f of fields) {
-            if (remote[f] !== undefined) {
-              setters.push(`${f} = ?`);
-              params.push(remote[f]);
-            }
-          }
-          setters.push('dirty = 0');
-          params.push(conflict.entity_local_id);
-          await db.execute(`UPDATE tasks SET ${setters.join(', ')} WHERE local_id = ?`, params);
-        }
-        // Add similar branches for project/label if needed
-      }
+/**
+ * Per-conflict resolution UI. Renders a field-by-field diff of the
+ * fields the sync layer flagged as divergent, with two top-level
+ * actions:
+ *
+ *   - Keep my version  — clears the conflict, outbox push wins
+ *   - Use server's     — overwrites local from the remote snapshot
+ *                        and drops the pending outbox entry
+ *
+ * Per-field merge ("keep this one, take that one") is a larger M3
+ * follow-up; for now the all-or-nothing choice plus a clear diff is
+ * enough to unstick people.
+ */
+export function ConflictModal({ onClose }: ConflictModalProps) {
+  const { data: conflicts = [], isLoading, isError } = useConflicts() as {
+    data: ConflictRow[];
+    isLoading: boolean;
+    isError: boolean;
+  };
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const run = async (
+    id: number,
+    fn: (id: number) => Promise<void>,
+  ): Promise<void> => {
+    setBusyId(id);
+    try {
+      await fn(id);
+    } catch (err) {
+      console.error('[conflicts] resolve failed:', err);
+    } finally {
+      setBusyId(null);
     }
-    // Mark conflict resolved regardless of action
-    await db.execute(`UPDATE conflicts SET resolved_at = ? WHERE id = ?`, [now, id]);
-    setResolvingId(null);
-    setAction('');
   };
 
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--color-background)] rounded-lg shadow-lg w-11/12 max-w-3xl max-h-[80vh] overflow-auto p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Conflicts</h2>
-          <button onClick={onClose} className="text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-primary)]">
-            ✕
-          </button>
-        </div>
-        {isLoading && <p>Loading…</p>}
-        {isError && <p className="text-[var(--color-warning)]">Failed to load conflicts.</p>}
-        {conflicts.length === 0 && <p>No conflicts.</p>}
-        {conflicts.map((c) => (
-          <div key={c.id} className="border-b py-2">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-medium">{c.entity_type} #{c.entity_local_id}</span>
-              <div className="flex gap-2">
-              <button
-                onClick={() => resolveConflict(c.id, 'keep')}
-                disabled={resolvingId === c.id}
-                className="px-2 py-1 bg-[var(--color-primary)] text-white rounded"
-              >
-                {resolvingId === c.id && action === 'keep' ? 'Resolving…' : 'Keep Mine'}
-              </button>
-              <button
-                onClick={() => resolveConflict(c.id, 'theirs')}
-                disabled={resolvingId === c.id}
-                className="px-2 py-1 bg-[var(--color-primary)] text-white rounded"
-              >
-                {resolvingId === c.id && action === 'theirs' ? 'Resolving…' : 'Use Theirs'}
-              </button>
-            </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <h4 className="font-semibold mb-1">Local (pre‑sync)</h4>
-                <pre className="whitespace-pre-wrap bg-[var(--color-muted)] p-2 rounded">{c.local_snapshot}</pre>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-1">Remote</h4>
-                <pre className="whitespace-pre-wrap bg-[var(--color-muted)] p-2 rounded">{c.remote_snapshot}</pre>
-              </div>
-            </div>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[80vh] w-11/12 max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--color-background)] shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-[var(--color-warning)]" />
+            <h2 className="text-sm font-semibold">
+              Conflicts
+              {conflicts.length > 0 ? (
+                <span className="ml-1 text-[var(--color-muted-foreground)]">
+                  ({conflicts.length})
+                </span>
+              ) : null}
+            </h2>
           </div>
-        ))}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
+              Loading…
+            </p>
+          ) : isError ? (
+            <p className="p-6 text-sm text-[var(--color-destructive)]">
+              Failed to load conflicts.
+            </p>
+          ) : conflicts.length === 0 ? (
+            <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
+              No conflicts. Your local edits are in sync with the server.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--color-border)]">
+              {conflicts.map((c) => (
+                <ConflictItem
+                  key={c.id}
+                  conflict={c}
+                  busy={busyId === c.id}
+                  onKeepMine={() => run(c.id, resolveConflictKeepMine)}
+                  onUseTheirs={() => run(c.id, resolveConflictUseTheirs)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function ConflictItem({
+  conflict,
+  busy,
+  onKeepMine,
+  onUseTheirs,
+}: {
+  conflict: ConflictRow;
+  busy: boolean;
+  onKeepMine: () => void;
+  onUseTheirs: () => void;
+}) {
+  const diffs = diffConflict(
+    conflict.fields,
+    conflict.local_snapshot,
+    conflict.remote_snapshot,
+  );
+
+  return (
+    <li className="space-y-3 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            {conflict.entity_type}
+          </p>
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            Detected {formatRelative(conflict.detected_at)}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onKeepMine}
+            disabled={busy}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-xs hover:bg-[var(--color-muted)] disabled:opacity-50"
+          >
+            {busy ? 'Working…' : 'Keep my version'}
+          </button>
+          <button
+            type="button"
+            onClick={onUseTheirs}
+            disabled={busy}
+            className="rounded-md bg-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? 'Working…' : "Use server's"}
+          </button>
+        </div>
+      </div>
+
+      {diffs.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted-foreground)]">
+          No field-level diff recorded.
+        </p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              <th className="w-[28%] py-1 pr-2 text-left font-medium">Field</th>
+              <th className="w-[36%] py-1 pr-2 text-left font-medium">
+                My version
+              </th>
+              <th className="w-[36%] py-1 text-left font-medium">
+                Server's version
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {diffs.map((d) => (
+              <tr
+                key={d.field}
+                className="align-top border-t border-[var(--color-border)]/60"
+              >
+                <td className="py-1.5 pr-2 font-medium">{d.label}</td>
+                <td className="py-1.5 pr-2 break-words">{d.local}</td>
+                <td className="py-1.5 break-words">{d.remote}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </li>
+  );
+}
+
+function formatRelative(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return format(d, sameYear ? 'd MMM HH:mm' : 'd MMM yyyy HH:mm');
+  } catch {
+    return iso;
+  }
 }
