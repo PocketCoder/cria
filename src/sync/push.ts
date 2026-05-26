@@ -410,21 +410,13 @@ export function startOutboxSync(): () => void {
   };
 }
 
-<<<<<<< Updated upstream
 /* ───────────────────────────── project ops ─────────────────────────── */
 
 interface ProjectRow {
-=======
-
-/* ───────────────────────────── label ops ─────────────────────────── */
-
-interface LabelRow {
->>>>>>> Stashed changes
   local_id: string;
   server_id: number | null;
   title: string;
   description: string | null;
-<<<<<<< Updated upstream
   parent_local_id: string | null;
   hex_color: string | null;
   is_archived: number;
@@ -432,28 +424,15 @@ interface LabelRow {
 }
 
 async function executeProjectOp(
-=======
-  hex_color: string | null;
-  deleted: number;
-}
-
-async function executeLabelOp(
->>>>>>> Stashed changes
   client: ApiClient,
   db: Database,
   op: OutboxRow,
 ): Promise<void> {
   const localId = op.entity_local_id;
-<<<<<<< Updated upstream
   const [row] = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
             hex_color, is_archived, deleted
        FROM projects WHERE local_id = ? LIMIT 1`,
-=======
-  const [row] = await db.select<LabelRow[]>(
-    `SELECT local_id, server_id, title, description, hex_color, deleted
-       FROM labels WHERE local_id = ? LIMIT 1`,
->>>>>>> Stashed changes
     [localId],
   );
   if (!row) return;
@@ -461,35 +440,20 @@ async function executeLabelOp(
   if (op.op === 'create') {
     if (row.deleted === 1) {
       await withTx(async (tx) => {
-<<<<<<< Updated upstream
         await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
       });
       notify('projects');
       return;
     }
-    if (row.server_id !== null) return; // already created
-    const res = await callApi(
-      client.PUT('/projects', { body: await projectBodyWithParent(row) }),
-=======
-        await tx.execute('DELETE FROM labels WHERE local_id = ?', [localId]);
-      });
-      notify('labels');
-      return;
-    }
     if (row.server_id !== null) return;
     const res = await callApi(
-      client.PUT('/labels', { body: labelBody(row) }),
->>>>>>> Stashed changes
+      client.PUT('/projects', { body: await projectBodyWithParent(row) }),
     );
     const newServerId = (res as { id?: number }).id;
     const newUpdated = (res as { updated?: string }).updated;
     await withTx(async (tx) => {
       await tx.execute(
-<<<<<<< Updated upstream
         `UPDATE projects SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
-=======
-        `UPDATE labels SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
->>>>>>> Stashed changes
          WHERE local_id = ?`,
         [
           newServerId ?? null,
@@ -499,17 +463,12 @@ async function executeLabelOp(
         ],
       );
     });
-<<<<<<< Updated upstream
     notify('projects');
-=======
-    notify('labels');
->>>>>>> Stashed changes
     return;
   }
 
   if (op.op === 'update') {
-<<<<<<< Updated upstream
-    if (row.deleted === 1) return; // delete op handles it
+    if (row.deleted === 1) return;
     if (row.server_id === null) {
       throw new ApiError(408, null, 'Cannot update a project without server id', true);
     }
@@ -517,26 +476,12 @@ async function executeLabelOp(
       client.POST('/projects/{id}', {
         params: { path: { id: row.server_id } },
         body: await projectBodyWithParent(row),
-=======
-    if (row.deleted === 1) return;
-    if (row.server_id === null) {
-      throw new ApiError(408, null, 'Cannot update a label without server id', true);
-    }
-    const res = await callApi(
-      client.POST('/labels/{id}', {
-        params: { path: { id: row.server_id } },
-        body: labelBody(row),
->>>>>>> Stashed changes
       }),
     );
     const newUpdated = (res as { updated?: string }).updated;
     await withTx(async (tx) => {
       await tx.execute(
-<<<<<<< Updated upstream
         `UPDATE projects SET synced_at = ?, dirty = 0, updated_at = ?
-=======
-        `UPDATE labels SET synced_at = ?, dirty = 0, updated_at = ?
->>>>>>> Stashed changes
          WHERE local_id = ?`,
         [
           new Date().toISOString(),
@@ -545,18 +490,13 @@ async function executeLabelOp(
         ],
       );
     });
-<<<<<<< Updated upstream
     notify('projects');
-=======
-    notify('labels');
->>>>>>> Stashed changes
     return;
   }
 
   if (op.op === 'delete') {
     if (row.server_id === null) {
       await withTx(async (tx) => {
-<<<<<<< Updated upstream
         await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
       });
       notify('projects');
@@ -567,7 +507,6 @@ async function executeLabelOp(
         params: { path: { id: row.server_id } },
       }),
     );
-    // Server cascades the delete; mirror locally.
     await withTx(async (tx) => {
       await tx.execute('DELETE FROM tasks WHERE project_local_id = ?', [localId]);
       await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
@@ -590,7 +529,106 @@ async function resolveParentServerId(
 }
 
 function projectBody(row: ProjectRow): Record<string, unknown> {
-=======
+  return {
+    title: row.title,
+    description: row.description ?? undefined,
+    hex_color: row.hex_color ? row.hex_color.replace(/^#/, '') : undefined,
+    is_archived: row.is_archived === 1,
+    parent_project_id: undefined as number | undefined,
+  };
+}
+
+async function projectBodyWithParent(row: ProjectRow): Promise<Record<string, unknown>> {
+  const body = projectBody(row);
+  body.parent_project_id =
+    (await resolveParentServerId(row.parent_local_id)) ?? undefined;
+  return body;
+}
+
+/* ───────────────────────────── label ops ─────────────────────────── */
+
+interface LabelRow {
+  local_id: string;
+  server_id: number | null;
+  title: string;
+  description: string | null;
+  hex_color: string | null;
+  deleted: number;
+}
+
+async function executeLabelOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  const localId = op.entity_local_id;
+  const [row] = await db.select<LabelRow[]>(
+    `SELECT local_id, server_id, title, description, hex_color, deleted
+       FROM labels WHERE local_id = ? LIMIT 1`,
+    [localId],
+  );
+  if (!row) return;
+
+  if (op.op === 'create') {
+    if (row.deleted === 1) {
+      await withTx(async (tx) => {
+        await tx.execute('DELETE FROM labels WHERE local_id = ?', [localId]);
+      });
+      notify('labels');
+      return;
+    }
+    if (row.server_id !== null) return;
+    const res = await callApi(
+      client.PUT('/labels', { body: labelBody(row) }),
+    );
+    const newServerId = (res as { id?: number }).id;
+    const newUpdated = (res as { updated?: string }).updated;
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE labels SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
+         WHERE local_id = ?`,
+        [
+          newServerId ?? null,
+          new Date().toISOString(),
+          newUpdated ?? new Date().toISOString(),
+          localId,
+        ],
+      );
+    });
+    notify('labels');
+    return;
+  }
+
+  if (op.op === 'update') {
+    if (row.deleted === 1) return;
+    if (row.server_id === null) {
+      throw new ApiError(408, null, 'Cannot update a label without server id', true);
+    }
+    const res = await callApi(
+      client.PUT('/labels/{id}', {
+        params: { path: { id: row.server_id } },
+        body: labelBody(row),
+      }),
+    );
+    const newUpdated = (res as { updated?: string }).updated;
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE labels SET synced_at = ?, dirty = 0, updated_at = ?
+         WHERE local_id = ?`,
+        [
+          new Date().toISOString(),
+          newUpdated ?? new Date().toISOString(),
+          localId,
+        ],
+      );
+    });
+    notify('labels');
+    return;
+  }
+
+  if (op.op === 'delete') {
+    if (row.server_id === null) {
+      await withTx(async (tx) => {
         await tx.execute('DELETE FROM labels WHERE local_id = ?', [localId]);
       });
       notify('labels');
@@ -611,29 +649,9 @@ function projectBody(row: ProjectRow): Record<string, unknown> {
 }
 
 function labelBody(row: LabelRow): Record<string, unknown> {
->>>>>>> Stashed changes
   return {
     title: row.title,
     description: row.description ?? undefined,
     hex_color: row.hex_color ? row.hex_color.replace(/^#/, '') : undefined,
-<<<<<<< Updated upstream
-    is_archived: row.is_archived === 1,
-    parent_project_id: undefined as number | undefined,
   };
 }
-
-// We can't make projectBody async without rewriting executeProjectOp's
-// callers; resolve the parent server id separately when needed. This
-// keeps the body builder synchronous and lets it stay shared between
-// create + update.
-async function projectBodyWithParent(row: ProjectRow): Promise<Record<string, unknown>> {
-  const body = projectBody(row);
-  body.parent_project_id =
-    (await resolveParentServerId(row.parent_local_id)) ?? undefined;
-  return body;
-}
-=======
-  };
-}
-
->>>>>>> Stashed changes

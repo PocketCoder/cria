@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
 import { listAssigneesForTask, addTaskAssignee, removeTaskAssignee } from '@/db/task-assignees';
 import { subscribeToTask, unsubscribeFromTask } from '@/sync/push';
@@ -476,6 +477,7 @@ function InlineLabels({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const [showManager, setShowManager] = useState(false);
   const currentIds = new Set(currentLabels.map((l) => l.localId));
 
   const handleToggle = async (labelLocalId: string) => {
@@ -525,8 +527,16 @@ function InlineLabels({
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setShowManager(true)}
+            className="sticky bottom-0 mt-1 flex items-center gap-2 rounded bg-[var(--color-background)] px-2 py-1 text-left text-[11px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          >
+            Manage labels…
+          </button>
         </div>
       )}
+      {showManager && <LabelManagerModal onClose={() => setShowManager(false)} />}
     </div>
   );
 }
