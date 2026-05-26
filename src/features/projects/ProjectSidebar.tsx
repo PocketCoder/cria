@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useProjects } from '@/queries/projects';
 import { useUi } from '@/stores/ui';
 import { createProject, updateProject, deleteProject } from '@/db/projects';
@@ -38,14 +38,17 @@ export function ProjectSidebar() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const creatingRef = useRef(false);
 
   const handleCreate = async () => {
+    if (creatingRef.current) return;
     const title = newTitle.trim();
     if (!title) {
       setCreating(false);
       setNewTitle('');
       return;
     }
+    creatingRef.current = true;
     setBusy(true);
     try {
       const project = await createProject({ title });
@@ -53,6 +56,7 @@ export function ProjectSidebar() {
     } catch (err) {
       console.error('[sidebar] createProject failed:', err);
     } finally {
+      creatingRef.current = false;
       setBusy(false);
       setCreating(false);
       setNewTitle('');

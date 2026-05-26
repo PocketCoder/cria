@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useLabels } from '@/queries/labels';
 import {
   createLabel,
@@ -26,14 +26,17 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
   const [editingTitle, setEditingTitle] = useState('');
   const [editingColor, setEditingColor] = useState('');
   const [busy, setBusy] = useState(false);
+  const creatingRef = useRef(false);
 
   const handleCreate = async () => {
+    if (creatingRef.current) return;
     const title = newTitle.trim();
     if (!title) {
       setCreating(false);
       setNewTitle('');
       return;
     }
+    creatingRef.current = true;
     setBusy(true);
     try {
       await createLabel({ title });
@@ -41,6 +44,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
     } catch (err) {
       console.error('[labels] createLabel failed:', err);
     } finally {
+      creatingRef.current = false;
       setBusy(false);
       setCreating(false);
       setNewTitle('');
