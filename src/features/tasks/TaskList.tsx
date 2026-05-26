@@ -6,10 +6,13 @@ import type { Project } from '@/domain/project';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask, deleteTask } from '@/db/tasks';
+import { listLabels, toggleTaskLabel } from '@/db/labels';
 import { Trash2, Plus, Loader2 } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { LabelChips } from './LabelChips';
+import { QuickAddPreview } from './QuickAddPreview';
 import type { TaskInput } from '@/domain/task';
+import { parseQuickAdd } from '@/lib/quickAddParser';
 
 interface TaskListProps {
   project: Project;
@@ -21,22 +24,61 @@ export function TaskList({ project }: TaskListProps) {
 
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
-
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Re-parsed on every keystroke. Pure function, cheap; no debounce
+  // needed at the scale of an input field.
+  const parsed = parseQuickAdd(newTitle);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || isSubmitting) return;
+    if (!parsed.title && !metadata.dueDate && !metadata.priority) return;
+    if (isSubmitting) return;
 
     try {
       setIsSubmitting(true);
-      await createTask({
-        title: newTitle.trim(),
+
+      // Merge: the explicit date/priority pickers win over the parser if
+      // the user touched them; otherwise we lift from the parsed values.
+      const input: TaskInput = {
+        title: parsed.title || newTitle.trim(),
         projectLocalId: project.localId,
+        ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
+        ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
         ...metadata,
-      });
+      };
+
+      const created = await createTask(input);
+
+      // Apply parsed #labels. We look up by case-insensitive title in
+      // the local catalogue; labels that don't exist yet are silently
+      // skipped (M5+ will offer create-as-you-type via the picker).
+      if (parsed.labelTitles.length > 0 && created.localId) {
+        try {
+          const all = await listLabels();
+          const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
+          for (const t of parsed.labelTitles) {
+            const id = lookup.get(t.toLowerCase());
+            if (id) await toggleTaskLabel(created.localId, id);
+          }
+        } catch (err) {
+          console.warn('[quick-add] label application failed:', err);
+        }
+      }
+
+      // Assignee resolution requires a local users table we don't keep
+      // yet. Surface a warning instead of dropping silently so the user
+      // knows why @alice didn't stick. M8 wires assignee creation
+      // properly.
+      if (parsed.assigneeUsernames.length > 0) {
+        console.info(
+          '[quick-add] @assignee tokens are parsed but not yet applied:',
+          parsed.assigneeUsernames,
+        );
+      }
+
       setNewTitle('');
-       setMetadata({});
+      setMetadata({});
     } catch (err) {
       console.error('Failed to create task:', err);
     } finally {
@@ -57,35 +99,52 @@ export function TaskList({ project }: TaskListProps) {
         {isFetching ? <span aria-live="polite">syncing…</span> : null}
       </div>
 
-      {/* Sleek Inline Create Task Input */}
+      {/* Inline create — natural-language parsing on the title field
+          (tomorrow / #label / !priority / @assignee). Explicit date +
+          priority controls stay for users who'd rather not type the
+          syntax; they override the parsed values when set. */}
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-3 border-b border-[var(--color-border)] px-6 py-3"
+        className="border-b border-[var(--color-border)] px-6 py-3"
       >
-        <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
-          {isSubmitting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
-        </span>
-        <input
-           type="text"
-           value={newTitle}
-           onChange={(e) => setNewTitle(e.target.value)}
-           placeholder="Add a task…"
-           disabled={isSubmitting}
-           className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
-        />
-        <input type="date" onChange={(e)=>setMetadata({...metadata,dueDate:e.target.value})} className="text-xs" />
-        <select onChange={(e)=>setMetadata({...metadata,priority:Number(e.target.value)})} className="text-xs">
-          <option value="0">Priority 0</option>
-          <option value="1">Priority 1</option>
-          <option value="2">Priority 2</option>
-          <option value="3">Priority 3</option>
-          <option value="4">Priority 4</option>
-          <option value="5">Priority 5</option>
-        </select>
+        <div className="flex items-center gap-3">
+          <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
+            {isSubmitting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </span>
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Add a task… e.g. Buy milk tomorrow #shopping !2"
+            disabled={isSubmitting}
+            className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
+          />
+          <input
+            type="date"
+            onChange={(e) =>
+              setMetadata({ ...metadata, dueDate: e.target.value || null })
+            }
+            className="text-xs"
+          />
+          <select
+            onChange={(e) =>
+              setMetadata({ ...metadata, priority: Number(e.target.value) })
+            }
+            className="text-xs"
+          >
+            <option value="0">Priority 0</option>
+            <option value="1">Priority 1</option>
+            <option value="2">Priority 2</option>
+            <option value="3">Priority 3</option>
+            <option value="4">Priority 4</option>
+            <option value="5">Priority 5</option>
+          </select>
+        </div>
+        <QuickAddPreview parsed={parsed} />
       </form>
 
       <ul className="flex-1 overflow-y-auto">
