@@ -245,6 +245,11 @@ async function executeOp(
     return;
   }
 
+  if (op.entity_type === 'project') {
+    await executeProjectOp(client, db, op);
+    return;
+  }
+
   if (op.entity_type !== 'task') return;
 
   const localId = op.entity_local_id;
@@ -398,4 +403,144 @@ export function startOutboxSync(): () => void {
       window.removeEventListener('online', trigger);
     }
   };
+}
+
+/* ───────────────────────────── project ops ─────────────────────────── */
+
+interface ProjectRow {
+  local_id: string;
+  server_id: number | null;
+  title: string;
+  description: string | null;
+  parent_local_id: string | null;
+  hex_color: string | null;
+  is_archived: number;
+  deleted: number;
+}
+
+async function executeProjectOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  const localId = op.entity_local_id;
+  const [row] = await db.select<ProjectRow[]>(
+    `SELECT local_id, server_id, title, description, parent_local_id,
+            hex_color, is_archived, deleted
+       FROM projects WHERE local_id = ? LIMIT 1`,
+    [localId],
+  );
+  if (!row) return;
+
+  if (op.op === 'create') {
+    if (row.deleted === 1) {
+      await withTx(async (tx) => {
+        await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
+      });
+      notify('projects');
+      return;
+    }
+    if (row.server_id !== null) return; // already created
+    const res = await callApi(
+      client.PUT('/projects', { body: await projectBodyWithParent(row) }),
+    );
+    const newServerId = (res as { id?: number }).id;
+    const newUpdated = (res as { updated?: string }).updated;
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE projects SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
+         WHERE local_id = ?`,
+        [
+          newServerId ?? null,
+          new Date().toISOString(),
+          newUpdated ?? new Date().toISOString(),
+          localId,
+        ],
+      );
+    });
+    notify('projects');
+    return;
+  }
+
+  if (op.op === 'update') {
+    if (row.deleted === 1) return; // delete op handles it
+    if (row.server_id === null) {
+      throw new ApiError(408, null, 'Cannot update a project without server id', true);
+    }
+    const res = await callApi(
+      client.POST('/projects/{id}', {
+        params: { path: { id: row.server_id } },
+        body: await projectBodyWithParent(row),
+      }),
+    );
+    const newUpdated = (res as { updated?: string }).updated;
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE projects SET synced_at = ?, dirty = 0, updated_at = ?
+         WHERE local_id = ?`,
+        [
+          new Date().toISOString(),
+          newUpdated ?? new Date().toISOString(),
+          localId,
+        ],
+      );
+    });
+    notify('projects');
+    return;
+  }
+
+  if (op.op === 'delete') {
+    if (row.server_id === null) {
+      await withTx(async (tx) => {
+        await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
+      });
+      notify('projects');
+      return;
+    }
+    await callApi(
+      client.DELETE('/projects/{id}', {
+        params: { path: { id: row.server_id } },
+      }),
+    );
+    // Server cascades the delete; mirror locally.
+    await withTx(async (tx) => {
+      await tx.execute('DELETE FROM tasks WHERE project_local_id = ?', [localId]);
+      await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
+    });
+    notify('projects');
+    notify('tasks');
+  }
+}
+
+async function resolveParentServerId(
+  parentLocalId: string | null,
+): Promise<number | null> {
+  if (!parentLocalId) return null;
+  const db = await getDb();
+  const [row] = await db.select<{ server_id: number | null }[]>(
+    `SELECT server_id FROM projects WHERE local_id = ? LIMIT 1`,
+    [parentLocalId],
+  );
+  return row?.server_id ?? null;
+}
+
+function projectBody(row: ProjectRow): Record<string, unknown> {
+  return {
+    title: row.title,
+    description: row.description ?? undefined,
+    hex_color: row.hex_color ? row.hex_color.replace(/^#/, '') : undefined,
+    is_archived: row.is_archived === 1,
+    parent_project_id: undefined as number | undefined,
+  };
+}
+
+// We can't make projectBody async without rewriting executeProjectOp's
+// callers; resolve the parent server id separately when needed. This
+// keeps the body builder synchronous and lets it stay shared between
+// create + update.
+async function projectBodyWithParent(row: ProjectRow): Promise<Record<string, unknown>> {
+  const body = projectBody(row);
+  body.parent_project_id =
+    (await resolveParentServerId(row.parent_local_id)) ?? undefined;
+  return body;
 }

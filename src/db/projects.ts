@@ -1,6 +1,22 @@
 import { nanoid } from 'nanoid';
-import { getDb, exec } from './index';
+import { getDb, exec, withTx } from './index';
+import { notify } from './bus';
 import type { Project, ProjectResponse } from '@/domain/project';
+
+export interface ProjectInput {
+  title: string;
+  description?: string | null;
+  hexColor?: string | null;
+  parentLocalId?: string | null;
+}
+
+export type ProjectUpdate = Partial<{
+  title: string;
+  description: string | null;
+  hexColor: string | null;
+  parentLocalId: string | null;
+  isArchived: boolean;
+}>;
 
 interface ProjectRow {
   local_id: string;
@@ -104,6 +120,17 @@ export async function upsertProjectFromServer(
       : null;
 
   if (existing) {
+    // Same rule as upsertTaskFromServer: dirty rows are authoritative
+    // until the outbox push lands. Overwriting them here would undo a
+    // user's pending rename / colour change / soft-delete.
+    const db = await getDb();
+    const [localRow] = await db.select<{ dirty: number; deleted: number }[]>(
+      `SELECT dirty, deleted FROM projects WHERE local_id = ? LIMIT 1`,
+      [localId],
+    );
+    if (localRow && localRow.dirty === 1) {
+      return localId;
+    }
     await exec(
       `UPDATE projects SET
          title           = ?,
@@ -157,8 +184,152 @@ export async function upsertProjectFromServer(
   // Intentionally no notify() here: sync-path upserts are driven from a
   // queryFn that re-reads after the pull completes. If we notified, the
   // bus subscription on useProjects would invalidate the query whose pull
-  // is currently in flight and trigger an infinite refetch loop. M2+ user
-  // mutations (createProject, updateProject, ...) live in separate
-  // functions and *will* notify.
+  // is currently in flight and trigger an infinite refetch loop. The
+  // user-mutation paths below live in separate functions and *do*
+  // notify.
   return localId;
+}
+
+/* ───────────────────────────── user mutations ─────────────────────────── */
+//
+// Same pattern as createTask/updateTask/deleteTask in src/db/tasks.ts:
+//   - Mint a local_id immediately (so foreign keys to other rows are
+//     stable across the sync round-trip).
+//   - Mark dirty=1; queue an outbox row; notify('projects') + 'outbox'.
+//   - The push loop drains the outbox against /projects (PUT/POST/DELETE
+//     per the Vikunja verb table).
+//
+// SELECT-then-write outside withTx is fine — serial() ensures no other
+// writer interleaves between the read and the batched writes.
+
+export async function createProject(input: ProjectInput): Promise<Project> {
+  const localId = nanoid();
+  const now = new Date().toISOString();
+
+  await withTx(async (db) => {
+    await db.execute(
+      `INSERT INTO projects (
+         local_id, server_id, title, description, parent_local_id,
+         hex_color, is_archived, position, updated_at, dirty, deleted
+       ) VALUES (?, NULL, ?, ?, ?, ?, 0, NULL, ?, 1, 0)`,
+      [
+        localId,
+        input.title,
+        input.description ?? null,
+        input.parentLocalId ?? null,
+        input.hexColor ?? null,
+        now,
+      ],
+    );
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('project', ?, 'create', ?, ?)`,
+      [localId, JSON.stringify(input), now],
+    );
+  });
+
+  notify('projects');
+  notify('outbox');
+
+  const created = await getProjectByLocalId(localId);
+  if (!created) {
+    throw new Error(`Failed to retrieve newly created project ${localId}`);
+  }
+  return created;
+}
+
+export async function updateProject(
+  localId: string,
+  input: ProjectUpdate,
+): Promise<Project> {
+  const now = new Date().toISOString();
+  const current = await getProjectByLocalId(localId);
+  if (!current) throw new Error(`Project not found: ${localId}`);
+
+  const sets: string[] = [];
+  const params: unknown[] = [];
+
+  if (input.title !== undefined) {
+    sets.push('title = ?');
+    params.push(input.title);
+  }
+  if (input.description !== undefined) {
+    sets.push('description = ?');
+    params.push(input.description);
+  }
+  if (input.hexColor !== undefined) {
+    sets.push('hex_color = ?');
+    params.push(input.hexColor);
+  }
+  if (input.parentLocalId !== undefined) {
+    sets.push('parent_local_id = ?');
+    params.push(input.parentLocalId);
+  }
+  if (input.isArchived !== undefined) {
+    sets.push('is_archived = ?');
+    params.push(input.isArchived ? 1 : 0);
+  }
+
+  if (sets.length > 0) {
+    sets.push('updated_at = ?');
+    params.push(now);
+    sets.push('dirty = 1');
+    params.push(localId);
+
+    await withTx(async (db) => {
+      await db.execute(
+        `UPDATE projects SET ${sets.join(', ')} WHERE local_id = ?`,
+        params,
+      );
+      await db.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('project', ?, 'update', ?, ?)`,
+        [localId, JSON.stringify(input), now],
+      );
+    });
+  }
+
+  notify('projects');
+  notify('outbox');
+
+  const updated = await getProjectByLocalId(localId);
+  if (!updated) throw new Error(`Failed to retrieve updated project ${localId}`);
+  return updated;
+}
+
+export async function deleteProject(localId: string): Promise<void> {
+  const now = new Date().toISOString();
+
+  await withTx(async (db) => {
+    const rows = await db.select<{ local_id: string }[]>(
+      `SELECT local_id FROM projects WHERE local_id = ? AND deleted = 0 LIMIT 1`,
+      [localId],
+    );
+    if (rows.length === 0) return;
+
+    // Soft-delete the project and every task that belongs to it. Server
+    // will cascade on its side; the local cascade keeps the UI honest
+    // immediately. Tasks need a soft delete + outbox 'delete' op only if
+    // they have a server_id; otherwise just drop them (they were never
+    // pushed). We keep this simple: soft-delete all locally with no
+    // task-level outbox row. The project's DELETE on the server takes
+    // the whole subtree with it.
+    await db.execute(
+      `UPDATE projects SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ?`,
+      [now, localId],
+    );
+    await db.execute(
+      `UPDATE tasks SET deleted = 1, updated_at = ? WHERE project_local_id = ? AND deleted = 0`,
+      [now, localId],
+    );
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('project', ?, 'delete', '{}', ?)`,
+      [localId, now],
+    );
+  });
+
+  notify('projects');
+  notify('tasks');
+  notify('outbox');
 }
