@@ -144,7 +144,7 @@ export async function upsertProjectFromServer(
          last_synced     = ?,
          dirty           = 0,
          deleted         = 0
-       WHERE local_id = ?`,
+       WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
       [
         payload.title,
         payload.description ?? null,

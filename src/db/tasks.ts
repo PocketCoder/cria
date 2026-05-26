@@ -246,7 +246,7 @@ export async function upsertTaskFromServer(
            last_synced      = ?,
            dirty            = 0,
            deleted          = 0
-         WHERE local_id = ?`,
+          WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
         [...params, localId],
       );
     }
