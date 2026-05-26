@@ -318,7 +318,7 @@ The schema is already there. The bus pattern flips: now `notify()` is
 - **Duplicate/move**: Added `duplicateTask` and `moveTask` to `src/db/tasks.ts` with outbox support.
 - **Label toggle outbox**: Extended `push.ts` to handle `task_label` entity type for label add/remove sync.
 
-## Recent work (claude-session-3)
+## Recent work (Deepseek V4 Pro)
 
 - **UI/Layout fixes**:
   - Horizontal scroll: added `w-full overflow-x-hidden` to Shell outer div
