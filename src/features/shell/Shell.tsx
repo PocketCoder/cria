@@ -23,6 +23,8 @@ import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
 import pkg from '../../../package.json';
+import { useUpdater } from '@/queries/updater';
+import { UpdateBanner } from './UpdateBanner';
 
 export function Shell() {
   const signOut = useAuth((s) => s.signOut);
@@ -37,6 +39,7 @@ export function Shell() {
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
+  const updater = useUpdater();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -247,7 +250,8 @@ export function Shell() {
              Autostart: {autostartEnabled ? 'On' : 'Off'}
            </button>
         </div>
-        <div>
+        <div className="flex items-center gap-3">
+          <UpdateBanner state={updater.state} onInstall={() => void updater.install()} />
           <span>Cria Desktop {pkg.version}</span>
         </div>
       </footer>

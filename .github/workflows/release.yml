@@ -1,0 +1,215 @@
+name: Release
+
+# Triggered by tag pushes matching v*. Builds signed macOS bundles for
+# aarch64 and x86_64, attaches them to a GitHub Release, and publishes
+# the per-platform update manifest to the gh-pages branch where Tauri's
+# updater plugin reads it from.
+#
+# Required GitHub secrets:
+#   - TAURI_SIGNING_PRIVATE_KEY            (contents of ~/.tauri/cria-update.key)
+#   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (empty string is fine for an
+#                                           unprotected dev key)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Allow re-running the release for an existing tag without re-tagging.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re-)release, e.g. v0.1.0-alpha'
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # Build signed bundles per macOS arch.
+  # ------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build signed bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles dmg,app
+
+      # The bundle layout under src-tauri/target/<target>/release/bundle:
+      #   dmg/Cria_<version>_<arch>.dmg
+      #   macos/Cria.app
+      #   macos/Cria.app.tar.gz
+      #   macos/Cria.app.tar.gz.sig    <-- signature the updater verifies
+      - name: Stage release assets
+        id: stage
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/release-${{ matrix.target }}"
+          mkdir -p "$out"
+          BUNDLE="src-tauri/target/${{ matrix.target }}/release/bundle"
+          cp "$BUNDLE"/dmg/*.dmg "$out/"
+          cp "$BUNDLE"/macos/*.app.tar.gz "$out/"
+          cp "$BUNDLE"/macos/*.app.tar.gz.sig "$out/"
+          ls -la "$out"
+          echo "dir=$out" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cria-${{ matrix.target }}
+          path: ${{ steps.stage.outputs.dir }}/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  # Collect all per-target artifacts, attach them to the GitHub Release,
+  # and write update.json to the gh-pages branch.
+  # ------------------------------------------------------------------
+  publish:
+    name: Publish release + update manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) \
+            -exec cp -v {} release/ \;
+          ls -la release
+
+      - name: Determine version
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Build the per-platform update manifest the Tauri updater plugin
+      # reads from the endpoint in tauri.conf.json. Format spec:
+      # https://v2.tauri.app/plugin/updater/#server-support
+      - name: Write update.json
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          tag="${{ steps.version.outputs.tag }}"
+          base="https://github.com/${{ github.repository }}/releases/download/${tag}"
+
+          sig_arm=$(cat release/*aarch64*.app.tar.gz.sig)
+          sig_x86=$(cat release/*x64*.app.tar.gz.sig 2>/dev/null \
+                  || cat release/*x86_64*.app.tar.gz.sig)
+
+          arm_archive=$(basename release/*aarch64*.app.tar.gz)
+          x86_archive=$(basename release/$(ls release | grep -E '(x64|x86_64).*app\.tar\.gz$' | head -n1))
+
+          cat > update.json <<EOF
+          {
+            "version": "${version}",
+            "notes": "See https://github.com/${{ github.repository }}/releases/tag/${tag}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${sig_arm}",
+                "url": "${base}/${arm_archive}"
+              },
+              "darwin-x86_64": {
+                "signature": "${sig_x86}",
+                "url": "${base}/${x86_archive}"
+              }
+            }
+          }
+          EOF
+          cat update.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
+          generate_release_notes: true
+          files: |
+            release/*.dmg
+            release/*.app.tar.gz
+            release/*.app.tar.gz.sig
+
+      # Push update.json to gh-pages so the configured updater endpoint
+      # (https://pocketcoder.github.io/cria/update.json) serves it.
+      # `publish_dir` is a staging dir holding only update.json so we don't
+      # also push the whole repo into gh-pages.
+      - name: Stage gh-pages content
+        run: |
+          set -euo pipefail
+          mkdir -p gh-pages-out
+          cp update.json gh-pages-out/
+
+      - name: Publish update.json to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: gh-pages-out
+          keep_files: true
+          commit_message: 'release: ${{ steps.version.outputs.tag }}'
