@@ -77,6 +77,19 @@ export async function upsertLabelFromServer(
   const updatedAt = payload.updated ?? now;
 
   if (existing) {
+    // Same dirty-guard pattern as upsertTaskFromServer /
+    // upsertProjectFromServer — leave pending local edits alone.
+    const db = await getDb();
+    const [localRow] = await db.select<{ dirty: number; deleted: number }[]>(
+      `SELECT dirty, deleted FROM labels WHERE local_id = ? LIMIT 1`,
+      [localId],
+    );
+    if (localRow && localRow.dirty === 1) {
+      return localId;
+    }
+  }
+
+  if (existing) {
     await exec(
       `UPDATE labels SET
          title       = ?,
@@ -222,4 +235,125 @@ export async function toggleTaskLabel(
   notify('task_labels');
   notify('outbox');
   return false;
+}
+
+/* ───────────────────────── user mutations on labels themselves ─────── */
+
+export interface LabelInput {
+  title: string;
+  description?: string | null;
+  hexColor?: string | null;
+}
+
+export type LabelUpdate = Partial<LabelInput>;
+
+export async function getLabelByLocalId(localId: string): Promise<Label | null> {
+  const db = await getDb();
+  const rows = await db.select<LabelRow[]>(
+    `SELECT ${SELECT_COLS} FROM labels WHERE local_id = ? AND deleted = 0 LIMIT 1`,
+    [localId],
+  );
+  const row = rows[0];
+  return row ? rowToLabel(row) : null;
+}
+
+export async function createLabel(input: LabelInput): Promise<Label> {
+  const localId = nanoid();
+  const now = new Date().toISOString();
+  await withTx(async (db) => {
+    await db.execute(
+      `INSERT INTO labels (
+         local_id, server_id, title, description, hex_color,
+         updated_at, dirty, deleted
+       ) VALUES (?, NULL, ?, ?, ?, ?, 1, 0)`,
+      [
+        localId,
+        input.title,
+        input.description ?? null,
+        input.hexColor ?? null,
+        now,
+      ],
+    );
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('label', ?, 'create', ?, ?)`,
+      [localId, JSON.stringify(input), now],
+    );
+  });
+  notify('labels');
+  notify('outbox');
+  const created = await getLabelByLocalId(localId);
+  if (!created) throw new Error(`Failed to retrieve newly created label ${localId}`);
+  return created;
+}
+
+export async function updateLabel(localId: string, input: LabelUpdate): Promise<Label> {
+  const now = new Date().toISOString();
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (input.title !== undefined) {
+    sets.push('title = ?');
+    params.push(input.title);
+  }
+  if (input.description !== undefined) {
+    sets.push('description = ?');
+    params.push(input.description);
+  }
+  if (input.hexColor !== undefined) {
+    sets.push('hex_color = ?');
+    params.push(input.hexColor);
+  }
+  if (sets.length === 0) {
+    const cur = await getLabelByLocalId(localId);
+    if (!cur) throw new Error(`Label not found: ${localId}`);
+    return cur;
+  }
+  sets.push('updated_at = ?');
+  params.push(now);
+  sets.push('dirty = 1');
+  params.push(localId);
+
+  await withTx(async (db) => {
+    await db.execute(`UPDATE labels SET ${sets.join(', ')} WHERE local_id = ?`, params);
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('label', ?, 'update', ?, ?)`,
+      [localId, JSON.stringify(input), now],
+    );
+  });
+  notify('labels');
+  notify('outbox');
+  const updated = await getLabelByLocalId(localId);
+  if (!updated) throw new Error(`Failed to retrieve updated label ${localId}`);
+  return updated;
+}
+
+export async function deleteLabel(localId: string): Promise<void> {
+  const now = new Date().toISOString();
+  await withTx(async (db) => {
+    const rows = await db.select<{ local_id: string }[]>(
+      `SELECT local_id FROM labels WHERE local_id = ? AND deleted = 0 LIMIT 1`,
+      [localId],
+    );
+    if (rows.length === 0) return;
+    // Soft-delete the label and remove every task_label link locally so
+    // the chips disappear immediately. The server-side DELETE cascades
+    // the join rows; the next pull confirms.
+    await db.execute(
+      `UPDATE labels SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ?`,
+      [now, localId],
+    );
+    await db.execute(
+      `DELETE FROM task_labels WHERE label_local_id = ?`,
+      [localId],
+    );
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('label', ?, 'delete', '{}', ?)`,
+      [localId, now],
+    );
+  });
+  notify('labels');
+  notify('task_labels');
+  notify('outbox');
 }
