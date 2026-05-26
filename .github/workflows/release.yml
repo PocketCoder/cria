@@ -84,20 +84,27 @@ jobs:
         run: pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg,updater
 
       # The bundle layout under src-tauri/target/<target>/release/bundle:
-      #   dmg/Cria_<version>_<arch>.dmg
+      #   dmg/Cria_<version>_<arch>.dmg            <-- already arch-tagged
       #   macos/Cria.app
-      #   macos/Cria.app.tar.gz
-      #   macos/Cria.app.tar.gz.sig    <-- signature the updater verifies
+      #   macos/Cria.app.tar.gz                    <-- updater archive
+      #   macos/Cria.app.tar.gz.sig                <-- updater signature
+      #
+      # The .app.tar.gz pair has no arch in its name, so when both matrix
+      # jobs upload their files into the same flattened release/ dir
+      # downstream, the second overwrites the first. Rename per-arch
+      # here so each artifact is uniquely identifiable end-to-end.
       - name: Stage release assets
         id: stage
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/release-${{ matrix.target }}"
           mkdir -p "$out"
+          arch="${{ matrix.target }}"
+          arch="${arch%%-*}"   # aarch64-apple-darwin -> aarch64
           BUNDLE="src-tauri/target/${{ matrix.target }}/release/bundle"
           cp "$BUNDLE"/dmg/*.dmg "$out/"
-          cp "$BUNDLE"/macos/*.app.tar.gz "$out/"
-          cp "$BUNDLE"/macos/*.app.tar.gz.sig "$out/"
+          cp "$BUNDLE"/macos/*.app.tar.gz     "$out/Cria_${arch}.app.tar.gz"
+          cp "$BUNDLE"/macos/*.app.tar.gz.sig "$out/Cria_${arch}.app.tar.gz.sig"
           ls -la "$out"
           echo "dir=$out" >> "$GITHUB_OUTPUT"
 
