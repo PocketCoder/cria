@@ -38,6 +38,22 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     }
   }, [projects, projectId]);
 
+  // Close on Escape. Listening on `window` rather than the dialog root
+  // means focus inside the <input> (which has its own keyboard handling)
+  // still surfaces Escape — input-level keydown doesn't stop propagation
+  // by default, but a stray library handler could; window-level is the
+  // belt-and-braces option for a one-off modal.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
   const parsed = useMemo(() => parseQuickAdd(text), [text]);
 
   const handleSubmit = async (e: React.FormEvent) => {
