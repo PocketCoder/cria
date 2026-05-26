@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, type ButtonHTMLAttributes } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -28,6 +28,8 @@ import type { TaskAssignee } from '@/domain/task-assignee';
 import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
 import { cn } from '@/lib/cn';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar as CalendarGrid } from '@/components/ui/calendar';
 
 interface TaskActionsProps {
   task: Task;
@@ -237,30 +239,38 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
 
 /* ─── Shared sub-components ─── */
 
-function ActionButton({
-  icon,
-  label,
-  color,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  color?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors hover:bg-[var(--color-accent)]/10"
-      style={color ? { color } : undefined}
+// forwardRef so Radix-style `asChild` consumers (e.g. PopoverTrigger)
+// can clone us and merge their own handlers + refs in. Without this,
+// wrapping ActionButton in <PopoverTrigger asChild> would nest two
+// <button>s or lose the ref.
+const ActionButton = forwardRef<
+  HTMLButtonElement,
+  {
+    icon: React.ReactNode;
+    label: string;
+    color?: string;
+  } & ButtonHTMLAttributes<HTMLButtonElement>
+>(({ icon, label, color, className, style, ...rest }, ref) => (
+  <button
+    ref={ref}
+    type="button"
+    className={cn(
+      'flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors hover:bg-[var(--color-accent)]/10',
+      className,
+    )}
+    style={{ ...(color ? { color } : {}), ...style }}
+    {...rest}
+  >
+    <span
+      className="shrink-0"
+      style={color ? { color } : { color: 'var(--color-muted-foreground)' }}
     >
-      <span className="shrink-0" style={color ? { color } : { color: 'var(--color-muted-foreground)' }}>
-        {icon}
-      </span>
-      {label}
-    </button>
-  );
-}
+      {icon}
+    </span>
+    {label}
+  </button>
+));
+ActionButton.displayName = 'ActionButton';
 
 function SectionDivider() {
   return <div className="my-1 border-t border-[var(--color-border)]" />;
@@ -522,6 +532,11 @@ function InlineLabels({
 }
 
 /* ─── Date inline ─── */
+//
+// Wraps the action button in a Radix popover anchored against the
+// sidebar; the popover hosts react-day-picker. The `expanded` /
+// `onToggle` API is preserved for the surrounding TaskActions state
+// machine so only one inline editor is open at a time.
 
 function InlineDate({
   icon,
@@ -539,33 +554,46 @@ function InlineDate({
   onToggle: () => void;
 }) {
   const display = value ? formatDateShort(value) : null;
+  const selectedDate = value ? new Date(value) : undefined;
 
   return (
-    <div>
-      <ActionButton
-        icon={icon}
-        label={display ? `${label}: ${display}` : label}
-        onClick={onToggle}
-      />
-      {expanded && (
-        <div className="mx-3 mb-1">
-          <input
-            type="date"
-            value={value?.slice(0, 10) ?? ''}
-            onChange={(e) => onChange(e.target.value || null)}
-            className="w-full rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs"
-          />
-          {value && (
-            <button
-              onClick={() => onChange(null)}
-              className="mt-1 text-[11px] text-[var(--color-muted-foreground)] underline hover:text-[var(--color-foreground)]"
-            >
-              Clear date
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+    <Popover
+      open={expanded}
+      onOpenChange={(open) => {
+        if (open !== expanded) onToggle();
+      }}
+    >
+      <PopoverTrigger asChild>
+        <ActionButton
+          icon={icon}
+          label={display ? `${label}: ${display}` : label}
+        />
+      </PopoverTrigger>
+      <PopoverContent align="start" side="left" sideOffset={8}>
+        <CalendarGrid
+          selected={selectedDate}
+          onSelect={(d) => {
+            // Persist as midnight UTC ISO so it round-trips with Vikunja's
+            // date fields. Time-of-day is out of scope for M5's date
+            // popover; bring it back in M8 with the recurrence work if
+            // needed.
+            if (!d) {
+              onChange(null);
+            } else {
+              const iso = new Date(
+                Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()),
+              ).toISOString();
+              onChange(iso);
+            }
+            onToggle();
+          }}
+          onClear={() => {
+            onChange(null);
+            onToggle();
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
