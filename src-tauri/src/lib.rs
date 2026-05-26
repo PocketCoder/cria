@@ -58,6 +58,8 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![tx::execute_tx])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

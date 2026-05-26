@@ -39,6 +39,9 @@
       "allow": [
         { "url": "*" }
       ]
-    }
+    },
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

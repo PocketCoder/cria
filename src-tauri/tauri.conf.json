@@ -45,5 +45,12 @@
     "shortDescription": "Native Vikunja client",
     "longDescription": "Offline-capable cross-platform desktop client for Vikunja."
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://pocketcoder.github.io/cria/update.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyN0Q4REMzRTVGMjc1QkEKUldTNmRmTGx3NDE5MHRwQjVOVkdMOEJINnhJTFhnU21xN2pjQ2c4U3psYU43MEcxTURLazJLWTMK"
+    }
+  }
 }

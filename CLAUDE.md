@@ -414,3 +414,52 @@ The schema is already there. The bus pattern flips: now `notify()` is
 - `CLAUDE.md` §"`withTx` is a *batched* transaction…" — read before
   writing any new repository function that reads after writes.
 
+## M4.5 — auto-updater (in flight on `feature/auto-update`)
+
+Plugged into `tauri-plugin-updater` + `tauri-plugin-process`. Ed25519
+signing keypair lives at `~/.tauri/cria-update.key` (+ `.pub`); public
+key is baked into `src-tauri/tauri.conf.json`'s `plugins.updater.pubkey`.
+
+Frontend wiring done:
+- `src/tauri/updater.ts` — `checkForUpdate()` / `installUpdate()` wrapper
+- `src/queries/updater.ts` — `useUpdater()` state machine, one silent
+  check on mount, manual `runCheck()` available for a settings button
+- `src/features/shell/UpdateBanner.tsx` — footer pill, only renders when
+  an update is available / installing
+
+Release plumbing done in `.github/workflows/release.yml`:
+- Tag push (`v*`) triggers a macOS aarch64 + x86_64 matrix build
+- Bundles signed with `TAURI_SIGNING_PRIVATE_KEY` secret
+- Generates `update.json` from the per-target `.app.tar.gz.sig` files
+- Attaches DMGs + tarballs + sigs to a GitHub Release
+- Publishes `update.json` to the `gh-pages` branch (served at
+  `https://pocketcoder.github.io/cria/update.json`)
+
+### Manual steps before the first real release
+
+1. **Add the private key as a GitHub secret.** From the project root:
+   ```sh
+   gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/cria-update.key
+   gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --body ""
+   ```
+2. **Enable GitHub Pages** on `pocketcoder/cria`: Settings → Pages →
+   Source = `gh-pages` branch, root. The first release run will create
+   the branch.
+3. **Cut a tag.** From `main`:
+   ```sh
+   git tag v0.1.0-alpha && git push origin v0.1.0-alpha
+   ```
+   The workflow runs, the release appears, and the next launch of any
+   older Cria build picks up the update banner.
+
+### Not in scope yet
+
+- Windows and Linux builds. Matrix is macOS-only for now; add
+  `windows-latest` + `ubuntu-latest` rows when needed.
+- Apple notarisation. We sign the *update bundle* with our Ed25519 key
+  (sufficient for Tauri's updater verification), but the DMG itself
+  isn't notarised — users will see the macOS "unidentified developer"
+  warning on first launch. M10 territory.
+- Per-platform release notes. The manifest just links back to the
+  GitHub Release page.
+
