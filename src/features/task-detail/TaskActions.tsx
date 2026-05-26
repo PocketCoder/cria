@@ -28,6 +28,8 @@ import type { TaskAssignee } from '@/domain/task-assignee';
 import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
 import { cn } from '@/lib/cn';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar as CalendarGrid } from '@/components/ui/calendar';
 
 interface TaskActionsProps {
   task: Task;
@@ -522,6 +524,11 @@ function InlineLabels({
 }
 
 /* ─── Date inline ─── */
+//
+// Wraps the action button in a Radix popover anchored against the
+// sidebar; the popover hosts react-day-picker. The `expanded` /
+// `onToggle` API is preserved for the surrounding TaskActions state
+// machine so only one inline editor is open at a time.
 
 function InlineDate({
   icon,
@@ -539,33 +546,51 @@ function InlineDate({
   onToggle: () => void;
 }) {
   const display = value ? formatDateShort(value) : null;
+  const selectedDate = value ? new Date(value) : undefined;
 
   return (
-    <div>
-      <ActionButton
-        icon={icon}
-        label={display ? `${label}: ${display}` : label}
-        onClick={onToggle}
-      />
-      {expanded && (
-        <div className="mx-3 mb-1">
-          <input
-            type="date"
-            value={value?.slice(0, 10) ?? ''}
-            onChange={(e) => onChange(e.target.value || null)}
-            className="w-full rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs"
+    <Popover
+      open={expanded}
+      onOpenChange={(open) => {
+        if (open !== expanded) onToggle();
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button type="button" className="w-full text-left">
+          <ActionButton
+            icon={icon}
+            label={display ? `${label}: ${display}` : label}
+            onClick={() => {
+              /* PopoverTrigger handles open/close; click is just a hit-target. */
+            }}
           />
-          {value && (
-            <button
-              onClick={() => onChange(null)}
-              className="mt-1 text-[11px] text-[var(--color-muted-foreground)] underline hover:text-[var(--color-foreground)]"
-            >
-              Clear date
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" side="left" sideOffset={8}>
+        <CalendarGrid
+          selected={selectedDate}
+          onSelect={(d) => {
+            // Persist as midnight UTC ISO so it round-trips with Vikunja's
+            // date fields. Time-of-day is out of scope for M5's date
+            // popover; bring it back in M8 with the recurrence work if
+            // needed.
+            if (!d) {
+              onChange(null);
+            } else {
+              const iso = new Date(
+                Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()),
+              ).toISOString();
+              onChange(iso);
+            }
+            onToggle();
+          }}
+          onClear={() => {
+            onChange(null);
+            onToggle();
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
