@@ -10,9 +10,17 @@ import { TaskActions } from './TaskActions';
 import type { Task } from '@/domain/task';
 
 export function TaskDetail() {
+  // **All hooks before any early return.** React's hook-order rule:
+  // every render must call the same hooks in the same order. Title edit
+  // state used to live below the loading / error early returns, which
+  // meant "no task" and "task loaded" renders called different numbers
+  // of hooks and React threw "Rendered more hooks than during the
+  // previous render."
   const selectedId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const queryClient = useQueryClient();
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
 
   useEffect(() => {
     return subscribe('tasks', () => {
@@ -54,9 +62,6 @@ export function TaskDetail() {
       </aside>
     );
   }
-
-  const [titleEditing, setTitleEditing] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
 
   const handleTitleEdit = () => {
     setTitleDraft(task.title);
