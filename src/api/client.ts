@@ -10,6 +10,44 @@ function normalizeBase(url: string): string {
 }
 
 /**
+ * Fetch wrapper that routes through Tauri's HTTP plugin when we're
+ * running inside the Tauri webview, falling back to `globalThis.fetch`
+ * otherwise.
+ *
+ * Why: in production the webview loads from `tauri://localhost`, so
+ * direct calls to a remote Vikunja host trip the browser's CORS checks
+ * (the server has no reason to whitelist a custom-protocol origin).
+ * Tauri's HTTP plugin issues the request from the Rust side, which has
+ * no CORS enforcement; the response comes back through the IPC bridge.
+ *
+ * Detection: `window.__TAURI_INTERNALS__` is set by Tauri's bootstrap
+ * before any app code runs. In vitest there's no `window`; in
+ * `pnpm vite` (browser-only dev) there's a window but no internals, so
+ * we use native fetch and the Vite proxy / browser CORS rules apply.
+ *
+ * openapi-fetch passes a `Request` object as the single argument; Tauri
+ * plugin-http accepts `URL | Request | string` so the pass-through is
+ * type-safe.
+ */
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+let cachedTauriFetch:
+  | ((input: Request) => Promise<Response>)
+  | null = null;
+
+async function platformFetch(request: Request): Promise<Response> {
+  if (isTauri) {
+    if (!cachedTauriFetch) {
+      const mod = await import('@tauri-apps/plugin-http');
+      cachedTauriFetch = mod.fetch as (input: Request) => Promise<Response>;
+    }
+    return cachedTauriFetch(request);
+  }
+  return globalThis.fetch(request);
+}
+
+/**
  * Build a Vikunja API client bound to the current auth snapshot.
  *
  * The snapshot is read each time the client is constructed; for long-running
@@ -27,6 +65,7 @@ export function createApiClient(opts?: {
   return createClient<paths>({
     baseUrl,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
+    fetch: platformFetch,
   });
 }
 
@@ -72,6 +111,7 @@ export async function probeServer(
 ): Promise<{ version: string | null }> {
   const client = createClient<paths>({
     baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
+    fetch: platformFetch,
   });
   const info = await callApi(client.GET('/info'));
   return { version: info.version ?? null };
