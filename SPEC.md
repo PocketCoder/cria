@@ -935,7 +935,7 @@ Milestones are defined by what's working, not by calendar time. Ship each one wh
 | **M0** | Skeleton — Tauri + Vite + React + SQLite + sign-in | ✅ |
 | **M1** | Read-only sync — projects + tasks + labels render, 60s background refresh | ✅ |
 | **M2** | Local writes + outbox — create / edit / delete tasks round-trip to server | ✅ |
-| **M3** | Conflicts + deletion reconcile — automated dirty-guard/conflict tests landed (`tests/unit/syncMerge.test.ts`); two-client manual smoke test still owed before formal sign-off | 🟡 |
+| **M3** | Conflicts + deletion reconcile — automated dirty-guard/conflict tests landed (`tests/unit/syncMerge.test.ts`); two-client manual smoke test owed but hard to repro (sync drains too fast to diverge), tracked in #32 | 🟡 |
 | **M4** | Native polish — Tauri plugins (notification, autostart, global shortcut, tray) and a Rust-side `execute_tx` for real atomic transactions | ✅ |
 | **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner. Shipped end-to-end (`v0.1.0-alpha` → `v0.3.0-beta.1`) | ✅ |
 | **M5** | Input parity with Todoist — NL quick-add, TipTap WYSIWYG editor, inline metadata pickers, label mutations through the outbox, external-link handling | ✅ |
@@ -1057,7 +1057,7 @@ criteria are met.
 | Version | Contents | Milestone | Rough effort |
 |---|---|---|---|
 | `v0.3.0` | M5 complete + offline-render fix + TaskList papercuts (#19, #20, #21) + undo-delete toast (#25) | M0–M5 | ✅ ready to tag |
-| `v0.3.1` | Header traffic-light overlap (#26) + M3 two-client conflict smoke test | M3 close | 1–2 days |
+| `v0.3.1` | Header/footer cleanup — drop app title (#26), remove redundant status pill | polish | ✅ ready to tag |
 | `v0.4.0` | **Today / Upcoming / Inbox smart views, FTS5 search, saved filters** | **M6** | ~1.5–2 wks |
 | `v0.5.0` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
 | `v0.6.0` | Sub-tasks, recurrence roll-on-complete, reminders | M8 | ~2–3 wks |
