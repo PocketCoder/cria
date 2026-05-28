@@ -7,7 +7,7 @@ import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask, deleteTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
-import { Trash2, Plus, Loader2 } from 'lucide-react';
+import { Trash2, Plus, Loader2, Pencil } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
@@ -123,6 +123,12 @@ export function TaskList({ project }: TaskListProps) {
             disabled={isSubmitting}
             className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
           />
+        </div>
+        {/* Secondary row: explicit date + priority pickers. They override
+            the NL-parsed values when touched, but live below the title so
+            they don't crowd the primary input (issue #19). `pl-7` aligns
+            them under the title input, past the plus-icon column. */}
+        <div className="mt-2 flex items-center gap-3 pl-7 text-[var(--color-muted-foreground)]">
           <input
             type="date"
             onChange={(e) =>
@@ -179,7 +185,8 @@ function TaskRow({ task }: { task: Task }) {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (isDeleting) return;
     try {
       setIsDeleting(true);
@@ -245,10 +252,10 @@ function TaskRow({ task }: { task: Task }) {
         ) : (
           <p
             className={cn(
-              'cursor-pointer truncate rounded px-1 py-0.5 text-sm transition-all hover:bg-[var(--color-muted)]',
+              'truncate rounded px-1 py-0.5 text-sm transition-all',
               task.done && 'line-through text-[var(--color-muted-foreground)]',
             )}
-            onClick={handleTitleEdit}
+            onDoubleClick={handleTitleEdit}
             title={task.title}
           >
             {task.title}
@@ -279,13 +286,26 @@ function TaskRow({ task }: { task: Task }) {
           style={{ background: task.hexColor }}
         />
       ) : null}
-      <button
-        onClick={handleDelete}
-        aria-label="Delete task"
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 -m-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
+          the title baseline (issue #21). Pencil enters inline rename —
+          the explicit affordance now that single-click on the title
+          opens detail instead of editing (issue #20). */}
+      <div className="mt-1 flex items-center gap-1">
+        <button
+          onClick={handleTitleEdit}
+          aria-label="Rename task"
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={handleDelete}
+          aria-label="Delete task"
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </li>
   );
 }
