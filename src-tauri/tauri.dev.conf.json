@@ -1,6 +1,5 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "_comment": "Overlay applied with `pnpm tauri build --config src-tauri/tauri.dev.conf.json` to produce a Cria Dev.app that lives side-by-side with the release Cria.app — separate bundle ID = separate macOS data dir = separate SQLite DB + localStorage. The updater is disabled because there is no dev release channel; you rebuild from the dev branch when you want a fresh snapshot.",
   "productName": "Cria Dev",
   "identifier": "io.cria.desktop.dev",
   "bundle": {
