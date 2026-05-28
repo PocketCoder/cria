@@ -8,7 +8,6 @@ import { useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
-import { TrayIcon } from '@/components/TrayIcon';
 import { TrayStatus } from '@/components/TrayStatus';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
@@ -257,7 +256,6 @@ export function Shell() {
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
       {showQuickAdd && <QuickAddModal onClose={() => setShowQuickAdd(false)} />}
-      <TrayIcon />
       </div>
   );
 }
