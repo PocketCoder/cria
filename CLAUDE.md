@@ -26,13 +26,19 @@ fresh session needs.
   `update.json` to the `gh-pages` branch. First release
   `v0.1.0-alpha` shipped end-to-end; running builds see the banner
   and `installUpdate()` works.
-- **M5 partial**. Landed: TipTap WYSIWYG editor (with slash-commands and
-  underline), TaskActions sidebar (priority/progress/color/move/duplicate/
+- **M5 done** (shipped in `v0.3.0-beta.1`). TipTap WYSIWYG editor (slash-commands
+  + underline), TaskActions sidebar (priority/progress/color/move/duplicate/
   favorite/subscribe/repeat/assignees), inline title editing in list + detail,
-  full label model + sync + chip rendering + toggle outbox path, working
-  external links via plugin-opener.
-  **Pending:** natural-language quick-add parser (chrono-node already
-  installed in `package.json` — no parser file yet).
+  full label model + sync + chip rendering + toggle outbox path, external
+  links via plugin-opener, **and** the natural-language quick-add parser
+  ([src/lib/quickAddParser.ts](src/lib/quickAddParser.ts), wired into the
+  TaskList add-input + the global Cmd+Shift+A modal, with a token-coloured
+  live preview). This hits the daily-driver bar (M0–M5).
+- **Now in beta.** Releases follow a minor-bump-per-milestone schedule —
+  see [SPEC.md §14 "Release schedule"](SPEC.md). Next up: M6 (Today /
+  Upcoming / Inbox smart views + FTS5 search), the headline Todoist-parity
+  unlock. The four open GitHub papercut issues (#19/#20/#21/#26 → `beta.2`,
+  #25 undo-toast → `beta.3`) clear first.
 
 **Deferred from M1** (exit criteria already met without them):
 - Read-only detail pane (third column showing the selected task)
