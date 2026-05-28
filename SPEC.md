@@ -928,16 +928,20 @@ Cria is targeting a **Todoist-feeling** client over Vikunja. The first four mile
 
 Milestones are defined by what's working, not by calendar time. Ship each one when its exit criteria are met.
 
-### Shipped foundation (M0–M4)
+### Shipped foundation (M0–M5)
 
 | | What | Status |
 |---|---|---|
 | **M0** | Skeleton — Tauri + Vite + React + SQLite + sign-in | ✅ |
 | **M1** | Read-only sync — projects + tasks + labels render, 60s background refresh | ✅ |
 | **M2** | Local writes + outbox — create / edit / delete tasks round-trip to server | ✅ |
-| **M3** | Conflicts + deletion reconcile — code present, smoke test owed | 🟡 |
+| **M3** | Conflicts + deletion reconcile — automated dirty-guard/conflict tests landed (`tests/unit/syncMerge.test.ts`); two-client manual smoke test still owed before formal sign-off | 🟡 |
 | **M4** | Native polish — Tauri plugins (notification, autostart, global shortcut, tray) and a Rust-side `execute_tx` for real atomic transactions | ✅ |
-| **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner | 🔲 |
+| **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner. Shipped end-to-end (`v0.1.0-alpha` → `v0.3.0-beta.1`) | ✅ |
+| **M5** | Input parity with Todoist — NL quick-add, TipTap WYSIWYG editor, inline metadata pickers, label mutations through the outbox, external-link handling | ✅ |
+
+**Current release:** `v0.3.0-beta.1` (public beta). The daily-driver bar
+(M0–M5) is met; the climb from here is the polish/power-user bar (M6–M9).
 
 ### M4.5 — Auto-update distribution
 
@@ -952,9 +956,9 @@ Auto-update so users receive new versions without re-downloading, re-installing,
 
 **Exit criteria:** a user on v0.0.0-alpha gets a banner prompting restart when v0.1.0 is released. One click restarts into the new version. All credentials, tasks, and settings survive the update.
 
-### M5 — Input parity with Todoist
+### M5 — Input parity with Todoist ✅ (shipped in `v0.3.0-beta.1`)
 
-The point at which the app stops feeling like a wrapper. This is the headline milestone for "Todoist clone."
+The point at which the app stops feeling like a wrapper. This is the headline milestone for "Todoist clone." All bullets below are landed.
 
 - **Natural-language quick-add** in the inline "Add a task…" field and the global Cmd+Shift+A modal:
   - `Buy milk tomorrow at 5pm #shopping !2 @alice`
@@ -1026,6 +1030,44 @@ Individually shippable; pulled in by demand:
 - **Power-user** bar: M0–M9. The app stops needing the web UI for anything routine.
 
 **Daily-driver target:** M0 through M3 is the minimum for the app to be the user's primary client. M4 is the minimum for it to feel polished. M5+ broadens the audience.
+
+### Release schedule
+
+Versioning: minor bump per milestone during beta, patch bumps for fixes
+within a milestone. Graduate to `1.0.0` at the polish bar (M7) once macOS
+notarisation lands. Dates are effort-ordered, not deadlines — ship each tag
+when its exit criteria are met.
+
+| Version | Contents | Milestone | Rough effort |
+|---|---|---|---|
+| `v0.3.0-beta.1` | Beta entry — M5 complete, offline-first foundation | M0–M5 | ✅ shipped |
+| `v0.3.0-beta.2` | Offline-render fix + TaskList papercuts (#19, #20, #21) + header overlap (#26) | polish | ~½ day |
+| `v0.3.0-beta.3` | Undo-delete toast (#25) + M3 two-client conflict smoke test | M3 close | 1–2 days |
+| `v0.4.0-beta` | **Today / Upcoming / Inbox smart views, FTS5 search, saved filters** | **M6** | ~1.5–2 wks |
+| `v0.5.0-beta` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
+| `v0.6.0-beta` | Sub-tasks, recurrence roll-on-complete, reminders | M8 | ~2–3 wks |
+| `v0.7.0-beta` | Drag-to-reorder, Kanban, table view | M9 | ~2–3 wks |
+| `v1.0.0` | macOS notarisation + polish + M3 fully signed off | graduation | ~1 wk |
+| `v1.x` | M10 stretch (attachments, comments, Gantt, notes) — by demand | M10 | per-feature |
+
+**The headline gap is M6.** Today/Upcoming are what make Todoist feel like
+Todoist — a user opens the app each morning to "what's due today." It's also
+the lowest-risk milestone: pure date-filtered queries over data already
+synced, the only schema change being an FTS5 virtual table for search. Do it
+first and resist reordering.
+
+Sequencing risks worth budgeting for:
+- **FTS5 (M6)** needs a `003_fts.sql` migration (virtual table + sync
+  triggers) — first schema change since 002.
+- **Recurrence (M8)** must match Vikunja's `repeat_mode` roll-on-complete
+  semantics exactly; reminders need `plugin-notification` wired to a
+  scheduler that survives the app sitting in the tray.
+- **Reorder (M9)** fights the `sort_by=position` HTTP 400 gotcha — positions
+  are per-view-only, so position persistence needs design time.
+- **Notarisation** (the Apple Developer cert) gates a friction-free 1.0
+  install; until then first launch trips the "unidentified developer"
+  warning. Revisit before 1.0 or document the right-click-open workaround in
+  release notes.
 
 ---
 
