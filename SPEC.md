@@ -935,7 +935,7 @@ Milestones are defined by what's working, not by calendar time. Ship each one wh
 | **M0** | Skeleton — Tauri + Vite + React + SQLite + sign-in | ✅ |
 | **M1** | Read-only sync — projects + tasks + labels render, 60s background refresh | ✅ |
 | **M2** | Local writes + outbox — create / edit / delete tasks round-trip to server | ✅ |
-| **M3** | Conflicts + deletion reconcile — automated dirty-guard/conflict tests landed (`tests/unit/syncMerge.test.ts`); two-client manual smoke test owed but hard to repro (sync drains too fast to diverge), tracked in #32 | 🟡 |
+| **M3** | Conflicts + deletion reconcile — dirty-guard/conflict logic unit-tested (`tests/unit/syncMerge.test.ts`) **and** the two-client conflict UI verified end-to-end (#32 closed: diff renders, "keep mine"/"use server's" resolve cleanly). Known gap: conflicts only surface on app launch, not while running — periodic sync doesn't poll the open view (#33, M6) | 🟡 |
 | **M4** | Native polish — Tauri plugins (notification, autostart, global shortcut, tray) and a Rust-side `execute_tx` for real atomic transactions | ✅ |
 | **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner. Shipped end-to-end (`v0.1.0-alpha` → `v0.3.0-beta.1`) | ✅ |
 | **M5** | Input parity with Todoist — NL quick-add, TipTap WYSIWYG editor, inline metadata pickers, label mutations through the outbox, external-link handling | ✅ |
