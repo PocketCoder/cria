@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
-import { getDb, withTx, exec } from './index';
+import { getDb, withTx } from './index';
+import { mergeFromServer } from './syncMerge';
 import {
   normaliseDate,
   type Task,
@@ -109,18 +110,18 @@ async function projectLocalIdForServerId(
   return rows[0]?.local_id ?? null;
 }
 
-interface TaskLookup {
-  local_id: string;
-}
-
-async function localIdForServerId(serverId: number): Promise<string | null> {
-  const db = await getDb();
-  const rows = await db.select<TaskLookup[]>(
-    `SELECT local_id FROM tasks WHERE server_id = ? LIMIT 1`,
-    [serverId],
-  );
-  return rows[0]?.local_id ?? null;
-}
+const TASK_CONFLICT_FIELDS = [
+  'title',
+  'description',
+  'done',
+  'due_date',
+  'start_date',
+  'end_date',
+  'priority',
+  'percent_done',
+  'hex_color',
+  'position',
+] as const;
 
 /**
  * Upsert a task payload that came from the server. Lookup by server_id;
@@ -129,10 +130,17 @@ async function localIdForServerId(serverId: number): Promise<string | null> {
  *
  * Tasks whose project isn't yet synced are skipped (returns null) and a
  * warning is logged. The next pull pass picks them up.
+ *
+ * Dirty-guard + conflict detection are delegated to mergeFromServer.
+ * Pending local deletes (dirty=1 && deleted=1) are a *subset* of dirty=1,
+ * so the helper's "skip-on-dirty" branch covers them — no special case
+ * needed here.
  */
 export async function upsertTaskFromServer(
   payload: TaskResponse,
 ): Promise<string | null> {
+  // Per-entity resolution: project_id → project_local_id. Must run before
+  // the helper because the INSERT/UPDATE column lists embed the FK.
   const projectLocalId = await projectLocalIdForServerId(payload.project_id);
   if (!projectLocalId) {
     console.warn(
@@ -142,12 +150,13 @@ export async function upsertTaskFromServer(
   }
 
   const serverId = payload.id;
-  const existing = await localIdForServerId(serverId);
-  const localId = existing ?? nanoid();
   const now = new Date().toISOString();
   const updatedAt = payload.updated ?? now;
 
-  const params = [
+  // Column values shared by INSERT and UPDATE. last_synced is appended
+  // separately by each callback because the helper injects the stringified
+  // remote payload as the `lastSyncedJson` argument.
+  const colParams = [
     projectLocalId,
     payload.title,
     payload.description ?? null,
@@ -166,104 +175,50 @@ export async function upsertTaskFromServer(
     payload.repeat_mode ?? 0,
     updatedAt,
     now,
-    JSON.stringify(payload),
   ];
 
-  const db = await getDb();
-  if (existing) {
-    // Conflict detection: if local row is dirty, compare snapshots
-    const localRows = await db.select<any[]>(`SELECT * FROM tasks WHERE local_id = ?`, [localId]);
-    const localRow = localRows[0];
-    // A pending local delete (dirty=1 && deleted=1) is authoritative until
-    // the outbox push completes. Don't overwrite it from the server —
-    // doing so resets deleted=0 and the task flickers back into the UI
-    // until the next pull. The outbox drain will tear the server copy
-    // down shortly.
-    if (localRow && localRow.dirty === 1 && localRow.deleted === 1) {
-      return localId;
-    }
-    if (localRow && localRow.dirty === 1) {
-      // **Dirty rows are authoritative until the outbox drains them.**
-      // Never overwrite local from the server here:
-      //
-      //   - If both diverged since last_synced → real conflict; record it
-      //     and skip the update so the user resolves it from the conflict
-      //     modal.
-      //   - If server is unchanged from last_synced (most common after a
-      //     local edit while a pull races) → just skip. The outbox push
-      //     will land our change and the next clean pull will sync
-      //     last_synced forward.
-      //
-      // Earlier this branch hit "no conflict → overwrite", which clobbered
-      // the just-picked due-date (and any other in-flight edit) until the
-      // outbox finally pushed it back.
-      const remoteSnap = JSON.stringify(payload);
-      const localSnap = localRow.last_synced ?? '';
-      if (localSnap && localSnap !== remoteSnap) {
-        const compareFields = [
-          'title', 'description', 'done', 'due_date', 'start_date', 'end_date',
-          'priority', 'percent_done', 'hex_color', 'position',
-        ];
-        const remoteObj: any = payload;
-        const localObj: any = JSON.parse(localSnap);
-        const fields: string[] = [];
-        for (const f of compareFields) {
-          const rv = (remoteObj as any)[f];
-          const lv = (localObj as any)[f];
-          if (rv !== undefined && rv !== lv) {
-            fields.push(f);
-          }
-        }
-        const now = new Date().toISOString();
-        await exec(
-          `INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at) VALUES (?, ?, ?, ?, ?, ?)`,
-          ['task', localId, JSON.stringify(fields), localSnap, remoteSnap, now],
-        );
-      }
-      return localId;
-    } else {
-      // Not dirty, safe to update
-      await exec(
-        `UPDATE tasks SET
-           project_local_id = ?,
-           title            = ?,
-           description      = ?,
-           done             = ?,
-           done_at          = ?,
-           due_date         = ?,
-           start_date       = ?,
-           end_date         = ?,
-           priority         = ?,
-           percent_done     = ?,
-           hex_color        = ?,
-           position         = ?,
-           is_favorite      = ?,
-           is_subscribed    = ?,
-           repeat_after     = ?,
-           repeat_mode      = ?,
-           updated_at       = ?,
-           synced_at        = ?,
-           last_synced      = ?,
-           dirty            = 0,
-           deleted          = 0
-          WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
-        [...params, localId],
-      );
-    }
-  } else {
-    await exec(
-      `INSERT INTO tasks (
-         local_id, server_id, project_local_id, title, description, done,
-         done_at, due_date, start_date, end_date, priority, percent_done,
-         hex_color, position, is_favorite, is_subscribed, repeat_after,
-         repeat_mode, updated_at, synced_at, last_synced, dirty, deleted
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-      [localId, serverId, ...params],
-    );
-  }
-
+  return mergeFromServer({
+    entity: 'task',
+    serverId,
+    remotePayload: payload as unknown as Record<string, unknown>,
+    conflictFields: TASK_CONFLICT_FIELDS,
+    insert: (localId, lastSyncedJson) => ({
+      sql: `INSERT INTO tasks (
+              local_id, server_id, project_local_id, title, description, done,
+              done_at, due_date, start_date, end_date, priority, percent_done,
+              hex_color, position, is_favorite, is_subscribed, repeat_after,
+              repeat_mode, updated_at, synced_at, last_synced, dirty, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+      params: [localId, serverId, ...colParams, lastSyncedJson],
+    }),
+    update: (localId, lastSyncedJson) => ({
+      sql: `UPDATE tasks SET
+              project_local_id = ?,
+              title            = ?,
+              description      = ?,
+              done             = ?,
+              done_at           = ?,
+              due_date          = ?,
+              start_date        = ?,
+              end_date          = ?,
+              priority          = ?,
+              percent_done      = ?,
+              hex_color         = ?,
+              position          = ?,
+              is_favorite       = ?,
+              is_subscribed     = ?,
+              repeat_after      = ?,
+              repeat_mode       = ?,
+              updated_at        = ?,
+              synced_at         = ?,
+              last_synced       = ?,
+              dirty             = 0,
+              deleted           = 0
+            WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
+      params: [...colParams, lastSyncedJson, localId],
+    }),
+  });
   // Intentionally no notify() — see the matching note in src/db/projects.ts.
-  return localId;
 }
 
 export async function createTask(input: TaskInput): Promise<Task> {

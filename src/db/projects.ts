@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
-import { getDb, exec, withTx } from './index';
+import { getDb, withTx } from './index';
 import { notify } from './bus';
+import { mergeFromServer } from './syncMerge';
 import type { Project, ProjectResponse } from '@/domain/project';
 
 export interface ProjectInput {
@@ -109,63 +110,30 @@ export async function upsertProjectFromServer(
   payload: ProjectResponse,
 ): Promise<string> {
   const serverId = payload.id;
-  const existing = await localIdForServerId(serverId);
-  const localId = existing ?? nanoid();
   const now = new Date().toISOString();
   const updatedAt = payload.updated ?? now;
   const isArchived = payload.is_archived === true ? 1 : 0;
+  // Per-entity resolution: parent_project_id → parent_local_id. Stays
+  // outside mergeFromServer because every entity resolves a different
+  // set of FKs (tasks resolve project_id, labels resolve nothing).
   const parentLocalId =
     typeof payload.parent_project_id === 'number' && payload.parent_project_id > 0
       ? await localIdForServerId(payload.parent_project_id)
       : null;
 
-  if (existing) {
-    // Same rule as upsertTaskFromServer: dirty rows are authoritative
-    // until the outbox push lands. Overwriting them here would undo a
-    // user's pending rename / colour change / soft-delete.
-    const db = await getDb();
-    const [localRow] = await db.select<{ dirty: number; deleted: number }[]>(
-      `SELECT dirty, deleted FROM projects WHERE local_id = ? LIMIT 1`,
-      [localId],
-    );
-    if (localRow && localRow.dirty === 1) {
-      return localId;
-    }
-    await exec(
-      `UPDATE projects SET
-         title           = ?,
-         description     = ?,
-         parent_local_id = ?,
-         hex_color       = ?,
-         is_archived     = ?,
-         position        = ?,
-         updated_at      = ?,
-         synced_at       = ?,
-         last_synced     = ?,
-         dirty           = 0,
-         deleted         = 0
-       WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
-      [
-        payload.title,
-        payload.description ?? null,
-        parentLocalId,
-        payload.hex_color ?? null,
-        isArchived,
-        payload.position ?? null,
-        updatedAt,
-        now,
-        JSON.stringify(payload),
-        localId,
-      ],
-    );
-  } else {
-    await exec(
-      `INSERT INTO projects (
-         local_id, server_id, title, description, parent_local_id,
-         hex_color, is_archived, position, updated_at, synced_at,
-         last_synced, dirty, deleted
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-      [
+  // Delegate dirty-guard + conflict detection to the shared helper.
+  // Caller is only responsible for column mapping.
+  return mergeFromServer({
+    entity: 'project',
+    serverId,
+    remotePayload: payload as unknown as Record<string, unknown>,
+    insert: (localId, lastSyncedJson) => ({
+      sql: `INSERT INTO projects (
+              local_id, server_id, title, description, parent_local_id,
+              hex_color, is_archived, position, updated_at, synced_at,
+              last_synced, dirty, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+      params: [
         localId,
         serverId,
         payload.title,
@@ -176,18 +144,43 @@ export async function upsertProjectFromServer(
         payload.position ?? null,
         updatedAt,
         now,
-        JSON.stringify(payload),
+        lastSyncedJson,
       ],
-    );
-  }
-
+    }),
+    update: (localId, lastSyncedJson) => ({
+      sql: `UPDATE projects SET
+              title           = ?,
+              description     = ?,
+              parent_local_id = ?,
+              hex_color       = ?,
+              is_archived     = ?,
+              position        = ?,
+              updated_at      = ?,
+              synced_at       = ?,
+              last_synced     = ?,
+              dirty           = 0,
+              deleted         = 0
+            WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
+      params: [
+        payload.title,
+        payload.description ?? null,
+        parentLocalId,
+        payload.hex_color ?? null,
+        isArchived,
+        payload.position ?? null,
+        updatedAt,
+        now,
+        lastSyncedJson,
+        localId,
+      ],
+    }),
+  });
   // Intentionally no notify() here: sync-path upserts are driven from a
   // queryFn that re-reads after the pull completes. If we notified, the
   // bus subscription on useProjects would invalidate the query whose pull
   // is currently in flight and trigger an infinite refetch loop. The
   // user-mutation paths below live in separate functions and *do*
   // notify.
-  return localId;
 }
 
 /* ───────────────────────────── user mutations ─────────────────────────── */
