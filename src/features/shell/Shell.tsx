@@ -9,7 +9,6 @@ import { useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
-import { TrayStatus } from '@/components/TrayStatus';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useUi } from '@/stores/ui';
@@ -145,8 +144,11 @@ export function Shell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden">
-      <header className="flex select-none items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
-        <div className="text-sm font-medium tracking-tight">Cria</div>
+      {/* No app title here — it lives in the footer. Dropping it also
+          sidesteps the macOS traffic-light overlap (issue #26): the
+          buttons now float over empty header space, and the user
+          controls stay clear on the right. */}
+      <header className="flex select-none items-center justify-end border-b border-[var(--color-border)] px-4 py-2">
         <div className="flex items-center gap-3">
           <span className="text-xs text-[var(--color-muted-foreground)]">
             {displayName}
@@ -225,7 +227,6 @@ export function Shell() {
                  )
                : 'Synced with server'}
            </span>
-           <TrayStatus />
           {/* Autostart toggle */}
 <button
              onClick={async () => {
@@ -251,7 +252,7 @@ export function Shell() {
           {/* Update banner moved to App.tsx so it's visible pre-auth
               too — see the comment there. Keeping just the version
               label here. */}
-          <span>Cria Desktop {pkg.version}</span>
+          <span>Cria {pkg.version}</span>
         </div>
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
