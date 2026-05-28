@@ -457,8 +457,16 @@ GitHub Actions secret.
 git tag vX.Y.Z(-suffix) && git push origin vX.Y.Z(-suffix)
 ```
 
-Bump `version` in `package.json` AND `src-tauri/tauri.conf.json` before
-tagging so the running build doesn't see itself as out of date.
+Bump `version` in all three places before tagging:
+- `package.json` (frontend / footer label)
+- `src-tauri/tauri.conf.json` (what Tauri bundles + the updater
+  compares against)
+- `src-tauri/Cargo.toml` (Rust crate version — cosmetic in terms of
+  what users see, but keep it in sync so `cargo metadata` and the
+  Cargo.lock line agree with everything else)
+
+Then re-run `cargo check --manifest-path src-tauri/Cargo.toml` once
+so `Cargo.lock` picks up the new version line.
 
 ### Not in scope
 
