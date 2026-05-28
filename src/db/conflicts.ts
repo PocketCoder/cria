@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { getDb, exec, withTx } from './index';
 import { notify } from './bus';
 import { normaliseDate } from '@/domain/task';
@@ -176,11 +177,22 @@ export function diffConflict(
   }));
 }
 
+// Matches an ISO-8601 datetime like "2026-05-28T01:00:00+01:00" so we can
+// render due/start/end dates human-readably instead of dumping the raw
+// string (issue #34).
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+
 function renderValue(v: unknown): string {
   if (v === null || v === undefined) return '—';
-  if (v === '0001-01-01T00:00:00Z') return '—';
+  if (v === '0001-01-01T00:00:00Z') return '—'; // Vikunja "no date" sentinel
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
-  if (typeof v === 'string') return v;
+  if (typeof v === 'string') {
+    if (ISO_DATETIME.test(v)) {
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) return format(d, 'd MMM yyyy, HH:mm');
+    }
+    return v;
+  }
   if (typeof v === 'number') return String(v);
   return JSON.stringify(v);
 }
