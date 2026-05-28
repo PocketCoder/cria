@@ -23,8 +23,6 @@ import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
 import pkg from '../../../package.json';
-import { useUpdater } from '@/queries/updater';
-import { UpdateBanner } from './UpdateBanner';
 
 export function Shell() {
   const signOut = useAuth((s) => s.signOut);
@@ -39,7 +37,6 @@ export function Shell() {
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
-  const updater = useUpdater();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -251,7 +248,9 @@ export function Shell() {
            </button>
         </div>
         <div className="flex items-center gap-3">
-          <UpdateBanner state={updater.state} onInstall={() => void updater.install()} />
+          {/* Update banner moved to App.tsx so it's visible pre-auth
+              too — see the comment there. Keeping just the version
+              label here. */}
           <span>Cria Desktop {pkg.version}</span>
         </div>
       </footer>
