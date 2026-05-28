@@ -940,8 +940,9 @@ Milestones are defined by what's working, not by calendar time. Ship each one wh
 | **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner. Shipped end-to-end (`v0.1.0-alpha` → `v0.3.0-beta.1`) | ✅ |
 | **M5** | Input parity with Todoist — NL quick-add, TipTap WYSIWYG editor, inline metadata pickers, label mutations through the outbox, external-link handling | ✅ |
 
-**Current release:** `v0.3.0-beta.1` (public beta). The daily-driver bar
-(M0–M5) is met; the climb from here is the polish/power-user bar (M6–M9).
+**Current release:** `v0.3.0`. The daily-driver bar (M0–M5) is met; the
+climb from here is the polish/power-user bar (M6–M9). Versioning is plain
+`0.x.y` (no `-beta`) — see the [Versioning policy](#versioning-policy) below.
 
 ### M4.5 — Auto-update distribution
 
@@ -956,7 +957,7 @@ Auto-update so users receive new versions without re-downloading, re-installing,
 
 **Exit criteria:** a user on v0.0.0-alpha gets a banner prompting restart when v0.1.0 is released. One click restarts into the new version. All credentials, tasks, and settings survive the update.
 
-### M5 — Input parity with Todoist ✅ (shipped in `v0.3.0-beta.1`)
+### M5 — Input parity with Todoist ✅ (shipped)
 
 The point at which the app stops feeling like a wrapper. This is the headline milestone for "Todoist clone." All bullets below are landed.
 
@@ -1031,22 +1032,36 @@ Individually shippable; pulled in by demand:
 
 **Daily-driver target:** M0 through M3 is the minimum for the app to be the user's primary client. M4 is the minimum for it to feel polished. M5+ broadens the audience.
 
-### Release schedule
+### Versioning policy
 
-Versioning: minor bump per milestone during beta, patch bumps for fixes
-within a milestone. Graduate to `1.0.0` at the polish bar (M7) once macOS
-notarisation lands. Dates are effort-ordered, not deadlines — ship each tag
-when its exit criteria are met.
+Plain [SemVer](https://semver.org) `0.MINOR.PATCH`, **no prerelease suffix**.
+The `0.` major *is* the stability signal — under SemVer a `0.x` release makes
+no compatibility promises, so an extra `-alpha`/`-beta` tag is redundant (and
+was actively misleading: "beta" implies feature-complete + stabilising, but
+we're still building out M6–M9). Rules:
+
+- **Minor** (`0.4.0`, `0.5.0`, …) — one per milestone (new features).
+- **Patch** (`0.3.1`, `0.3.2`, …) — fixes / polish within a milestone.
+- **`1.0.0`** carries the weight: "stable, daily-driver-ready for other
+  people, and I won't casually break their local data or token format."
+  Maps to the polish bar (M7) + macOS notarisation.
+
+The `v0.1.0-alpha` → `v0.3.0-beta.1` tags were the old scheme; `v0.3.0` is
+the first under this policy (it promotes `0.3.0-beta.1` and folds in the
+fixes that landed after it). SemVer ordering means installed beta clients
+still see `0.3.0` as an upgrade.
+
+Dates below are effort-ordered, not deadlines — ship each tag when its exit
+criteria are met.
 
 | Version | Contents | Milestone | Rough effort |
 |---|---|---|---|
-| `v0.3.0-beta.1` | Beta entry — M5 complete, offline-first foundation | M0–M5 | ✅ shipped |
-| `v0.3.0-beta.2` | Offline-render fix + TaskList papercuts (#19, #20, #21) + header overlap (#26) | polish | ~½ day |
-| `v0.3.0-beta.3` | Undo-delete toast (#25) + M3 two-client conflict smoke test | M3 close | 1–2 days |
-| `v0.4.0-beta` | **Today / Upcoming / Inbox smart views, FTS5 search, saved filters** | **M6** | ~1.5–2 wks |
-| `v0.5.0-beta` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
-| `v0.6.0-beta` | Sub-tasks, recurrence roll-on-complete, reminders | M8 | ~2–3 wks |
-| `v0.7.0-beta` | Drag-to-reorder, Kanban, table view | M9 | ~2–3 wks |
+| `v0.3.0` | M5 complete + offline-render fix + TaskList papercuts (#19, #20, #21) + undo-delete toast (#25) | M0–M5 | ✅ ready to tag |
+| `v0.3.1` | Header traffic-light overlap (#26) + M3 two-client conflict smoke test | M3 close | 1–2 days |
+| `v0.4.0` | **Today / Upcoming / Inbox smart views, FTS5 search, saved filters** | **M6** | ~1.5–2 wks |
+| `v0.5.0` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
+| `v0.6.0` | Sub-tasks, recurrence roll-on-complete, reminders | M8 | ~2–3 wks |
+| `v0.7.0` | Drag-to-reorder, Kanban, table view | M9 | ~2–3 wks |
 | `v1.0.0` | macOS notarisation + polish + M3 fully signed off | graduation | ~1 wk |
 | `v1.x` | M10 stretch (attachments, comments, Gantt, notes) — by demand | M10 | per-feature |
 
