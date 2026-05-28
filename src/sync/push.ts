@@ -60,7 +60,7 @@ interface ProjectLookup {
   server_id: number | null;
 }
 
-interface TaskRow {
+export interface TaskRow {
   local_id: string;
   server_id: number | null;
   project_local_id: string;
@@ -367,7 +367,7 @@ async function executeOp(
   }
 }
 
-function taskToBody(task: TaskRow, projectServerId?: number) {
+export function taskToBody(task: TaskRow, projectServerId?: number) {
   return {
     title: task.title,
     ...(projectServerId != null ? { project_id: projectServerId } : {}),
