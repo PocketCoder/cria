@@ -35,6 +35,16 @@ export function Shell() {
   const displayName =
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
+  // macOS draws the traffic-light buttons over the top-left of the
+  // window because tauri.conf.json uses titleBarStyle "Overlay" +
+  // hiddenTitle. Without a left inset they sit on top of the "Cria"
+  // label (issue #26). Windows/Linux put their controls on the right,
+  // so the inset is macOS-only. userAgent is synchronous and reliable
+  // inside the Tauri webview — no need for the async os plugin.
+  const isMac =
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent.includes('Macintosh');
+
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
   const [isOnline, setIsOnline] = useState(
@@ -145,7 +155,14 @@ export function Shell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden">
-      <header className="flex select-none items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
+      <header
+        className={cn(
+          'flex select-none items-center justify-between border-b border-[var(--color-border)] py-2 pr-4',
+          // Clear the macOS traffic lights (~70px cluster); plain px on
+          // other platforms.
+          isMac ? 'pl-20' : 'pl-4',
+        )}
+      >
         <div className="text-sm font-medium tracking-tight">Cria</div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-[var(--color-muted-foreground)]">
