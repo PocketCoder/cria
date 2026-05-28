@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import { getDb, exec, withTx } from './index';
+import { mergeFromServer } from './syncMerge';
 import { notify } from './bus';
 import type { Label, LabelResponse } from '@/domain/label';
 
@@ -53,71 +54,30 @@ export async function listLabelsForTask(taskLocalId: string): Promise<Label[]> {
   return rows.map(rowToLabel);
 }
 
-async function localIdForServerId(serverId: number): Promise<string | null> {
-  const db = await getDb();
-  const rows = await db.select<{ local_id: string }[]>(
-    `SELECT local_id FROM labels WHERE server_id = ? LIMIT 1`,
-    [serverId],
-  );
-  return rows[0]?.local_id ?? null;
-}
-
 /**
  * Upsert a label payload from the server (keyed by server_id). Sync-path
  * upsert — does not call `notify()` (see the matching note in
  * src/db/projects.ts).
+ *
+ * Dirty-guard + conflict detection delegated to mergeFromServer.
  */
 export async function upsertLabelFromServer(
   payload: LabelResponse,
 ): Promise<string> {
   const serverId = payload.id;
-  const existing = await localIdForServerId(serverId);
-  const localId = existing ?? nanoid();
   const now = new Date().toISOString();
   const updatedAt = payload.updated ?? now;
 
-  if (existing) {
-    // Same dirty-guard pattern as upsertTaskFromServer /
-    // upsertProjectFromServer — leave pending local edits alone.
-    const db = await getDb();
-    const [localRow] = await db.select<{ dirty: number; deleted: number }[]>(
-      `SELECT dirty, deleted FROM labels WHERE local_id = ? LIMIT 1`,
-      [localId],
-    );
-    if (localRow && localRow.dirty === 1) {
-      return localId;
-    }
-  }
-
-  if (existing) {
-    await exec(
-      `UPDATE labels SET
-         title       = ?,
-         description = ?,
-         hex_color   = ?,
-         updated_at  = ?,
-         synced_at   = ?,
-         last_synced = ?,
-         dirty       = 0,
-         deleted     = 0
-        WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
-      [
-        payload.title,
-        payload.description ?? null,
-        payload.hex_color ?? null,
-        updatedAt,
-        now,
-        JSON.stringify(payload),
-        localId,
-      ],
-    );
-  } else {
-    await exec(
-      `INSERT INTO labels (
-         local_id, server_id, title, description, hex_color,
-         updated_at, synced_at, last_synced, dirty, deleted
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-      [
+  return mergeFromServer({
+    entity: 'label',
+    serverId,
+    remotePayload: payload as unknown as Record<string, unknown>,
+    insert: (localId, lastSyncedJson) => ({
+      sql: `INSERT INTO labels (
+              local_id, server_id, title, description, hex_color,
+              updated_at, synced_at, last_synced, dirty, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+      params: [
         localId,
         serverId,
         payload.title,
@@ -125,11 +85,31 @@ export async function upsertLabelFromServer(
         payload.hex_color ?? null,
         updatedAt,
         now,
-        JSON.stringify(payload),
+        lastSyncedJson,
       ],
-    );
-  }
-  return localId;
+    }),
+    update: (localId, lastSyncedJson) => ({
+      sql: `UPDATE labels SET
+              title       = ?,
+              description = ?,
+              hex_color   = ?,
+              updated_at  = ?,
+              synced_at   = ?,
+              last_synced = ?,
+              dirty       = 0,
+              deleted     = 0
+            WHERE local_id = ? AND deleted = 0 AND dirty = 0`,
+      params: [
+        payload.title,
+        payload.description ?? null,
+        payload.hex_color ?? null,
+        updatedAt,
+        now,
+        lastSyncedJson,
+        localId,
+      ],
+    }),
+  });
 }
 
 /**
