@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tsc --noEmit && vite build && tauri build",
+    "build:dev-app": "tsc --noEmit && vite build && tauri build --config src-tauri/tauri.dev.conf.json",
     "vite": "vite",
     "vite:build": "vite build",
     "preview": "vite preview",

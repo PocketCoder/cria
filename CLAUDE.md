@@ -236,6 +236,44 @@ cargo check --manifest-path src-tauri/Cargo.toml     # Rust shell sanity
 (Going through `node_modules/.bin/` skips pnpm's pre-flight if it complains
 about build-script approvals.)
 
+## Running a dev build side-by-side with the release
+
+Two builds, two bundle IDs, two macOS data dirs. No cross-talk.
+
+| | `Cria.app` (release) | `Cria Dev.app` (dev) |
+|---|---|---|
+| Branch | `main` (auto-updates) | `dev` (manual rebuild) |
+| Bundle ID | `io.cria.desktop` | `io.cria.desktop.dev` |
+| Data dir | `~/Library/Application Support/io.cria.desktop` | `~/Library/Application Support/io.cria.desktop.dev` |
+| SQLite | separate | separate |
+| localStorage | separate (per-bundle webview) | separate |
+| Updater | `https://pocketcoder.github.io/cria/update.json` | disabled (endpoints point at an invalid host so the check fails silently — `src/queries/updater.ts` already swallows the error) |
+
+Build the dev one with the overlay config:
+
+```sh
+pnpm build:dev-app
+# outputs src-tauri/target/release/bundle/dmg/Cria Dev_<ver>_<arch>.dmg
+```
+
+Drag the resulting `.dmg` into `/Applications`. Re-run the build to refresh
+it. The overlay lives in [`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json) —
+only the fields that need to differ (productName, identifier, updater
+endpoints, updater-artifact flag); everything else inherits from
+`tauri.conf.json`.
+
+### Two-client behaviour with one Vikunja account
+
+Both apps will be talking to the same server with the same credentials.
+That's fine — but it means *every* edit you make in one app eventually
+shows up in the other, with up to ~60 s of pull lag. If you happen to
+edit the same task in both within that window, whichever pulls second
+will surface the conflict modal. Not a bug — that's the M3 conflict
+path firing naturally. (Free smoke test, in fact.)
+
+Outbox counts are per-app: each one shows only its own pending
+mutations.
+
 ## User preferences observed
 
 *(unchanged)*
