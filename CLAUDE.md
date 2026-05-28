@@ -331,141 +331,16 @@ Spec §5.2 + §7.1 has the design. Concrete first chunks:
 The schema is already there. The bus pattern flips: now `notify()` is
 **required** on every write.
 
-## Recent work (GPT-OSS-120B)
+## M3 — still owed
 
-- Bumped app version to `0.0.0-alpha` (package.json, Vite define, UI footer).
-- Fixed version display using runtime import of `package.json`.
-- Added dev‑only `keydown` listener for `⌘+Shift+A` shortcut.
-- Implemented dev mocks for outbox `create`, `update`, `delete` when `VK_URL` is not set, so outbox clears instantly in dev.
-- Added console logs for `outboxCount` and `conflictCount` for debugging.
-- Added “Clear outbox” dev‑only button in footer.
-- Implemented Autostart stub with in‑memory state and dev‑only UI toggle (label shows On/Off).
-- Created placeholder tray icons (`icon_idle.png`, `icon_sync.png`, `icon_conflict.png`) and ensured they are bundled.
-- Added `TrayStatus` fallback UI badge.
-- Added `global.d.ts` declaration for `__APP_VERSION__` (now unused but harmless).
-- Updated Vite config to expose `__APP_VERSION__`.
-- Fixed import path for `package.json` in `Shell.tsx`.
-- Updated dev scripts and ports to avoid conflicts.
+Two-client manual smoke test (force a conflict by editing the same task in
+the web UI and in Cria within the ~60 s pull window, then check the conflict
+modal fires and resolves cleanly). Hard to repro because sync drains too
+fast to diverge; tracked in #32. Automated dirty-guard + field-merge
+coverage already lives in `tests/unit/syncMerge.test.ts` +
+`tests/unit/upsertFromServer.test.ts`.
 
-### Open / Stuck issues
-
-- Real server sync (`VK_URL`) is still not configured; dev mocks bypass network calls, so production‑ready syncing has not been exercised.
-- Autostart stub only logs actions; the real Tauri autostart plugin has not been tested.
-- Placeholder tray icon PNGs are empty files; proper graphics are needed for production.
-- Debug console logs in `Shell` may need removal before release.
-- `src/global.d.ts` is now redundant after moving to runtime import; can be removed.
-
-## Recent work (claude-session-2)
-
-- **DB migration v2** (`002_task_fields.sql`): Added `is_favorite INTEGER`, `is_subscribed INTEGER` to tasks table. Registered in `lib.rs`.
-- **Domain** (`src/domain/task.ts`): Added `isFavorite`, `isSubscribed`, `repeatAfter`, `repeatMode`, `TaskAssigneeData` to `Task` interface and `taskResponseSchema`. Updated `TaskInput`/`TaskUpdate`.
-- **Repo** (`src/db/tasks.ts`): Wired `is_favorite`, `is_subscribed`, `repeat_after`, `repeat_mode` through `TaskRow`, `rowToTask()`, `SELECT_TASK_COLS`, `upsertTaskFromServer()`, `createTask()`, `updateTask()`.
-- **TaskActions sidebar** (`src/features/task-detail/TaskActions.tsx`): Created with 12+ action cards — Mark done, Priority (1-5), Progress (range), Color (presets+hex), Labels (toggle picker), Due/Start/End dates, Move (project list), Duplicate, Delete (with confirm), Favorite star toggle, Subscribe bell toggle, Assignees list+add, Repeat interval (seconds + mode selector).
-- **Assignee infrastructure** (`src/domain/task-assignee.ts`, `src/db/task-assignees.ts`): Domain type + zod schema. Repo functions: `listAssigneesForTask`, `upsertTaskAssigneesFromServer` (sync path), `addTaskAssignee`/`removeTaskAssignee` (user path, with outbox). Bus topic `task_assignees` already registered.
-- **Pull assignee sync** (`src/sync/pull.ts`): Parses `assignees` array from task response and upserts via `upsertTaskAssigneesFromServer`.
-- **Push** (`src/sync/push.ts`): Handles `task_assignee` entity type in `executeOp()` — `add` → `PUT /tasks/{taskID}/assignees`, `remove` → `DELETE /tasks/{taskID}/assignees/{userID}`. Added `subscribeToTask`/`unsubscribeFromTask` API wrappers that call `PUT/DELETE /subscriptions/{entity}/{entityID}` and stamp `is_subscribed` locally without outbox.
-- **TaskDetail cleanup**: Removed duplicated inline metadata editors; consolidated into TaskActions. Made aside `overflow-y-auto` by adding `min-h-0` to parent flex container in Shell.tsx.
-- **Test fix**: Updated `sync.test.ts` to run both migrations (`002_task_fields.sql`) and use `beforeAll` to avoid duplicate ALTER TABLE errors.
-- **Duplicate/move**: Added `duplicateTask` and `moveTask` to `src/db/tasks.ts` with outbox support.
-- **Label toggle outbox**: Extended `push.ts` to handle `task_label` entity type for label add/remove sync.
-
-## Recent work (Deepseek V4 Pro)
-
-- **UI/Layout fixes**:
-  - Horizontal scroll: added `w-full overflow-x-hidden` to Shell outer div
-  - Detail pane width: changed from fixed `w-96 shrink-0` to `w-96 shrink min-w-80` with `maxWidth: min(420px, 40vw)` so pane can grow
-  - Removed all `overflow-x: hidden` clipping; moved scroll to inner content div with `overflow-y-auto`
-  - Editor toolbar/prose: added `max-w-full`, `break-words`, `min-w-0` constraints so content fits within pane
-  - Edit button: moved below description text, changed to pencil icon, left-aligned
-  - Hint text shortened: `⌘+Enter · Esc · /commands`
-- **API correctness fixes** (`src/sync/push.ts` `taskToBody()`):
-  - `hex_color`: strip `#` prefix (Vikunja expects raw hex, caused 500)
-  - `percent_done`: normalize to 0-100 (UI stored 0-1, server expects 0-100)
-  - `is_favorite`: send explicit `false` instead of omitting (un-favorite was broken)
-  - `repeat_after`/`repeat_mode`: send `0` explicitly instead of omitting
-- **Progress slider** (`src/features/task-detail/TaskActions.tsx`): changed from `value / 100` to raw `value` (0-100)
-- **Editable task titles**: Added inline title editing in both TaskDetail pane (`TaskDetail.tsx`) and TaskList rows (`TaskList.tsx`). Click to edit, Enter/blur to save, Escape to cancel.
-- **Move task fix**: `taskToBody` now accepts optional `projectServerId` and includes `project_id` in the push body. Update op resolves project server_id before push. Create op also passes it.
-
-## Session handover (M4 close, M5 in flight)
-
-### What landed this session
-
-- **M4 polish complete**:
-  - All four Tauri plugins wired (notification, autostart, global-shortcut,
-    plus core tray via `@tauri-apps/api/tray`). Stubs replaced with real
-    calls in `src/tauri/{notification,autostart,globalShortcut,tray}.ts`.
-  - `tauri-plugin-opener` added; external link clicks in descriptions /
-    notes / comments route through `openUrl` instead of being swallowed by
-    the webview (`src/lib/openExternal.ts`).
-  - Alpaca app icons regenerated from `logo.png` via the Tauri icon CLI
-    (had to crop logo.png 1024×1025 → 1024×1024 with `sips` first).
-  - Static tray icon — state-reactive swap was tried and removed; footer
-    dot + `TrayStatus` badge cover the same signal.
-- **Rust-side atomic transactions** (`src-tauri/src/tx.rs`,
-  command `execute_tx`). Replaces the gimped JS `withTx` that couldn't
-  span multiple statements because plugin-sql's connection pool gave each
-  `db.execute()` a fresh connection. `withTx` in `src/db/index.ts` now
-  *batches* writes and ships them to the Rust command as one transaction.
-  Consequence the rest of the codebase still has to live with: SELECTs
-  inside the `withTx` callback see **pre-batch** state — see the §"`withTx`
-  is a *batched* transaction" gotcha for the SELECT-vs-execute rule.
-- **TipTap WYSIWYG description editor**
-  (`src/features/task-detail/RichTextEditor.tsx`). Replaces the
-  textarea-of-HTML. Toolbar (bold / italic / underline / strike / inline
-  code / H1-3 / list / quote / code block / link), slash-command popup,
-  Cmd+Enter to save, Esc to cancel. Output sanitised via DOMPurify
-  (`src/lib/sanitize.ts`) on save. Renders identically to what Vikunja's
-  own web client emits.
-- **Plan refocus** in SPEC §14 around Todoist parity. M5 = input parity
-  (NL quick-add + WYSIWYG + inline metadata pickers + label mutations).
-  M4.5 inserted for the auto-updater. Daily-driver bar moved to M5.
-
-### What's in tree but not formally verified
-
-- **M3** end-to-end (force a conflict by editing the same task in the web
-  UI and in Cria, then reconnect; check the conflict modal fires and
-  resolves cleanly).
-- **`task_label` outbox path** (`toggleTaskLabel` in `src/db/labels.ts`,
-  `task_label` op in `push.ts`). Untested against a real server — exercise
-  by toggling a label in `TaskActions` and checking the server reflects it.
-- **`task_assignee` outbox path** — same caveat as labels.
-
-### What's pending (pick this up next)
-
-1. **Natural-language quick-add parser.** The chrono-node dep is already
-   installed. Write `src/lib/quickAddParser.ts` taking a raw string and
-   returning `{title, dueDate, priority, labelHints, assigneeHints}`.
-   Wire into the "Add a task…" input on `TaskList` and the global
-   QuickAddModal. Token-coloured live preview as the user types. Initial
-   scope: title + date + `!priority`; label / assignee creation can wait.
-2. **Auto-updater** (`@tauri-apps/plugin-updater`). Pure plumbing per
-   SPEC §12.3 — install the plugin, generate an Ed25519 signing key,
-   ship public key in `tauri.conf.json`, host manifest on GitHub
-   Releases.
-3. **M3 smoke test** (above).
-4. **Inline metadata pickers in the TaskActions sidebar** — most already
-   exist; remaining gaps are an actual calendar popover for due/start/end
-   dates (currently raw inputs) and a combobox project chooser.
-
-### Files / dirs of interest for a fresh session
-
-- `src/features/task-detail/RichTextEditor.tsx` — TipTap setup, the slash
-  menu state machine lives here.
-- `src/features/task-detail/TaskActions.tsx` — the metadata sidebar; this
-  is where quick-add label / priority / date pickers will eventually
-  share components.
-- `src/sync/push.ts` `taskToBody()` — every Vikunja-server-side API
-  quirk we've hit lives here (raw hex, 0-100 percent, explicit-false on
-  is_favorite, explicit-zero on repeat_after, project_id on move).
-- `src-tauri/src/tx.rs` — the Rust transaction command. Anything that
-  needs multi-statement atomicity goes through `withTx` which goes
-  through here.
-- `SPEC.md` §14 — the milestone plan; M5 is the headline.
-- `CLAUDE.md` §"`withTx` is a *batched* transaction…" — read before
-  writing any new repository function that reads after writes.
-
-## M4.5 — auto-updater (done; `v0.1.0-alpha` shipped)
+## M4.5 — auto-updater (done; first shipped under `v0.1.0-alpha`, current under plain `0.x.y`)
 
 Wired in `tauri-plugin-updater` + `tauri-plugin-process`. Ed25519
 signing keypair lives at `~/.tauri/cria-update.key` on the dev box;

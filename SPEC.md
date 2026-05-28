@@ -2,7 +2,7 @@
 
 A polished, offline-capable, cross-platform desktop client for [Vikunja](https://vikunja.io), built with Tauri 2 and TypeScript.
 
-**Working name:** TBD (`vk`, `Kunja`, `Vikunja Native`, your call.)
+**Codename:** `Cria`.
 
 ---
 
@@ -783,77 +783,99 @@ Plugin: `@tauri-apps/plugin-single-instance`. Second launch attempt focuses the 
 
 ## 11. Project Structure
 
+Current layout (M5-era; will grow as M6+ lands):
+
 ```
-vikunja-desktop/
+cria/
 ├── src-tauri/                  # Rust shell (touch as little as possible)
 │   ├── src/
-│   │   ├── main.rs             # Plugin setup, window config
-│   │   └── commands.rs         # Custom commands (e.g., Spotlight, keychain)
+│   │   ├── main.rs             # entrypoint
+│   │   ├── lib.rs              # plugin setup, window config, migrations registry
+│   │   └── tx.rs               # execute_tx command (multi-statement atomic transactions)
 │   ├── tauri.conf.json
+│   ├── tauri.dev.conf.json     # side-by-side dev-build overlay
 │   ├── capabilities/           # Tauri 2 ACL
 │   └── icons/
 ├── src/                        # TypeScript app
 │   ├── api/
 │   │   ├── client.ts
 │   │   ├── errors.ts
+│   │   ├── user.ts
 │   │   └── schema.ts           # generated
 │   ├── auth/
-│   │   ├── storage.ts          # secure token storage
-│   │   └── flow.ts             # login UI logic
+│   │   ├── storage.ts          # token storage (localStorage; see CLAUDE.md gotcha)
+│   │   └── store.ts            # auth zustand store
 │   ├── db/
-│   │   ├── index.ts            # connection
+│   │   ├── index.ts            # connection + withTx batching + serial queue
 │   │   ├── bus.ts              # change notifications
 │   │   ├── migrations/
-│   │   │   └── 001_initial.sql
+│   │   │   ├── 001_initial.sql
+│   │   │   └── 002_task_fields.sql
 │   │   ├── tasks.ts            # repository
 │   │   ├── projects.ts
-│   │   └── labels.ts
-│   ├── domain/
-│   │   ├── task.ts             # domain types + zod schemas
+│   │   ├── labels.ts
+│   │   ├── task-assignees.ts
+│   │   ├── conflicts.ts
+│   │   ├── syncMerge.ts        # central dirty-guard + field-level merge
+│   │   └── user.ts
+│   ├── domain/                 # types + zod schemas
+│   │   ├── task.ts
 │   │   ├── project.ts
-│   │   └── label.ts
+│   │   ├── label.ts
+│   │   ├── task-assignee.ts
+│   │   └── user.ts
 │   ├── sync/
-│   │   ├── engine.ts           # scheduler
 │   │   ├── push.ts             # outbox drain
 │   │   ├── pull.ts             # delta fetch
 │   │   ├── reconcile.ts        # deletion sweep
-│   │   ├── conflict.ts         # resolution logic
-│   │   └── mapping.ts          # local <-> server ID
+│   │   └── usePeriodicSync.ts  # 60s timer + focus trigger
 │   ├── queries/                # TanStack Query hooks
 │   │   ├── tasks.ts
 │   │   ├── projects.ts
-│   │   └── ...
+│   │   ├── labels.ts
+│   │   ├── taskLabels.ts
+│   │   ├── outbox.ts
+│   │   ├── outboxRows.ts
+│   │   ├── conflicts.ts
+│   │   ├── updater.ts
+│   │   └── user.ts
 │   ├── stores/                 # Zustand stores
 │   │   ├── ui.ts
-│   │   └── sync.ts
-│   ├── features/               # feature folders, each self-contained
-│   │   ├── task-list/
-│   │   ├── task-detail/
-│   │   ├── project-sidebar/
-│   │   ├── quick-add/
-│   │   ├── kanban/
-│   │   ├── settings/
+│   │   └── pendingDeletes.ts
+│   ├── features/
+│   │   ├── shell/              # three-pane shell, header, footer, banners
+│   │   ├── projects/
+│   │   ├── tasks/              # task list + add input + quick-add preview
+│   │   ├── task-detail/        # detail pane, TipTap editor, TaskActions sidebar
 │   │   └── login/
-│   ├── lib/                    # shared utilities
-│   │   ├── parsers/            # natural language date, quick-add syntax
-│   │   ├── date.ts
-│   │   └── shortcuts.ts
-│   ├── components/             # shadcn/ui primitives + shared components
-│   ├── styles/
-│   │   └── globals.css
+│   ├── lib/
+│   │   ├── quickAddParser.ts   # natural-language parser (chrono-node + tokens)
+│   │   ├── openExternal.ts     # routes <a> clicks through plugin-opener
+│   │   ├── sanitize.ts         # DOMPurify wrapper for editor output
+│   │   └── cn.ts               # tailwind class merger
+│   ├── tauri/                  # Tauri plugin wrappers
+│   │   ├── autostart.ts
+│   │   ├── globalShortcut.ts
+│   │   ├── notification.ts
+│   │   └── updater.ts
+│   ├── components/             # shared UI: ConflictModal, QuickAddModal,
+│   │                           # OutboxModal, LabelManagerModal, UndoToast, ui/
+│   ├── utils/
 │   ├── App.tsx
-│   ├── main.tsx
-│   └── routes.tsx              # TanStack Router config
+│   └── main.tsx
 ├── tests/
-│   ├── unit/                   # Vitest
-│   │   └── sync.test.ts
-│   └── e2e/                    # Playwright
-│       └── quick-add.spec.ts
+│   └── unit/                   # Vitest — sync, syncMerge, taskToBody,
+│                               # quickAddParser, upsertFromServer, pendingDeletes
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
+├── vitest.config.ts
 └── README.md
 ```
+
+Notable absences vs the original sketch: no TanStack Router yet (single
+shell view; routing-by-state via Zustand), no Playwright E2E, no `features/
+kanban` or `features/settings` (M9 and later). Filled in by M6+.
 
 ---
 
