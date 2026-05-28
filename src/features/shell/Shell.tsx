@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { register, unregister } from '@/tauri/globalShortcut';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
+import { UndoToasts } from '@/components/UndoToast';
 import { Button } from '@/components/ui/button';
 import { useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
@@ -256,6 +257,7 @@ export function Shell() {
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
       {showQuickAdd && <QuickAddModal onClose={() => setShowQuickAdd(false)} />}
+      <UndoToasts />
       </div>
   );
 }

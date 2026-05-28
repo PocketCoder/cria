@@ -5,10 +5,11 @@ import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
-import { createTask, updateTask, deleteTask } from '@/db/tasks';
+import { createTask, updateTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
 import { Trash2, Plus, Loader2, Pencil } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
+import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import type { TaskInput } from '@/domain/task';
@@ -25,6 +26,13 @@ export function TaskList({ project }: TaskListProps) {
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Tasks queued for deletion are hidden immediately while the undo
+  // toast is live (issue #25). They're still deleted=0 in the DB until
+  // the undo window elapses, so we filter them out of the rendered list
+  // here rather than touching the query data.
+  const pendingDeletes = usePendingDeletes((s) => s.pending);
+  const visibleTasks = tasks.filter((t) => !pendingDeletes[t.localId]);
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
   // needed at the scale of an input field.
@@ -90,11 +98,11 @@ export function TaskList({ project }: TaskListProps) {
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
         <span>
-          {tasks.length === 0
+          {visibleTasks.length === 0
             ? isLoading
               ? 'Loading…'
               : 'No tasks'
-            : `${tasks.length} task${tasks.length === 1 ? '' : 's'}`}
+            : `${visibleTasks.length} task${visibleTasks.length === 1 ? '' : 's'}`}
         </span>
         {isFetching ? <span aria-live="polite">syncing…</span> : null}
       </div>
@@ -154,7 +162,7 @@ export function TaskList({ project }: TaskListProps) {
       </form>
 
       <ul className="flex-1 overflow-y-auto">
-        {tasks.map((t) => (
+        {visibleTasks.map((t) => (
           <TaskRow key={t.localId} task={t} />
         ))}
       </ul>
@@ -174,8 +182,8 @@ function TaskRow({ task }: { task: Task }) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
   const { data: labels = [] } = useTaskLabels(task.localId);
+  const enqueueDelete = usePendingDeletes((s) => s.enqueue);
 
   const handleToggle = async () => {
     try {
@@ -185,16 +193,12 @@ function TaskRow({ task }: { task: Task }) {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  // Deferred delete: stash the task and show the undo toast. The real
+  // deleteTask runs only if the undo window elapses (issue #25). The row
+  // vanishes immediately because TaskList filters out pending tasks.
+  const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isDeleting) return;
-    try {
-      setIsDeleting(true);
-      await deleteTask(task.localId);
-    } catch (err) {
-      console.error('Failed to delete task:', err);
-      setIsDeleting(false);
-    }
+    enqueueDelete(task);
   };
 
   const handleTitleEdit = (e: React.MouseEvent) => {
@@ -225,7 +229,6 @@ function TaskRow({ task }: { task: Task }) {
       className={cn(
         'group flex items-start gap-3 border-b border-[var(--color-border)] px-6 py-3 transition-colors hover:bg-[var(--color-accent)]/5',
         task.done && 'opacity-60',
-        isDeleting && 'opacity-30 pointer-events-none',
         selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10'
       )}
       onClick={() => { if (!editing) setSelectedTask(task.localId); }}
