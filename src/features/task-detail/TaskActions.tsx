@@ -22,7 +22,6 @@ import { listLabels, toggleTaskLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
 import { listAssigneesForTask, addTaskAssignee, removeTaskAssignee } from '@/db/task-assignees';
-import { subscribeToTask, unsubscribeFromTask } from '@/sync/push';
 import { useTaskLabels } from '@/queries/taskLabels';
 import type { Task } from '@/domain/task';
 import type { TaskAssignee } from '@/domain/task-assignee';
@@ -77,15 +76,6 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
 
   const handleToggleFavorite = async () => {
     await updateTask(task.localId, { isFavorite: !task.isFavorite });
-  };
-
-  const handleToggleSubscribe = async () => {
-    if (!task.serverId) return;
-    if (task.isSubscribed) {
-      await unsubscribeFromTask(task.serverId, task.localId);
-    } else {
-      await subscribeToTask(task.serverId, task.localId);
-    }
   };
 
   const handleAddAssignee = async (userServerId: number, username?: string) => {
@@ -148,7 +138,7 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
         icon={<Bell className={`h-4 w-4 ${task.isSubscribed ? 'fill-current' : ''}`} />}
         label={task.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
         color={task.isSubscribed ? '#3b82f6' : undefined}
-        onClick={handleToggleSubscribe}
+        className="pointer-events-none opacity-50"
       />
 
       <SectionDivider />
@@ -340,7 +330,7 @@ function InlineProgress({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const [value, setValue] = useState(Math.round(task.percentDone * 100));
+  const [value, setValue] = useState(Math.round(task.percentDone));
 
   useEffect(() => {
     setValue(Math.round(task.percentDone));
@@ -656,8 +646,8 @@ function InlineAssignees({
   assignees,
   expanded,
   onToggle,
-  onRemove,
-  onAdd,
+  onRemove: _onRemove,
+  onAdd: _onAdd,
 }: {
   assignees: TaskAssignee[];
   expanded: boolean;
@@ -665,17 +655,8 @@ function InlineAssignees({
   onRemove: (userServerId: number) => void;
   onAdd: (userServerId: number, username?: string) => void;
 }) {
-  const [addId, setAddId] = useState('');
-
-  const handleAdd = () => {
-    const id = Number(addId);
-    if (!Number.isFinite(id) || id <= 0) return;
-    onAdd(id);
-    setAddId('');
-  };
-
   return (
-    <div>
+    <div className="pointer-events-none opacity-50">
       <ActionButton
         icon={<User className="h-4 w-4" />}
         label={
@@ -693,36 +674,13 @@ function InlineAssignees({
               className="flex items-center gap-2 rounded bg-[var(--color-accent)]/5 px-2 py-1 text-[11px]"
             >
               <span className="flex-1 truncate">{a.username ?? `User #${a.userServerId}`}</span>
-              <button
-                onClick={() => onRemove(a.userServerId)}
-                className="text-red-500 hover:text-red-400"
-              >
-                ×
-              </button>
             </div>
           ))}
           {assignees.length === 0 && (
             <p className="py-1 text-[11px] text-[var(--color-muted-foreground)]">
-              No assignees
+              User search coming soon
             </p>
           )}
-          <div className="mt-1 flex items-center gap-1">
-            <input
-              type="number"
-              value={addId}
-              onChange={(e) => setAddId(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder="User ID"
-              className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-[11px]"
-            />
-            <button
-              onClick={handleAdd}
-              disabled={!addId}
-              className="rounded bg-[var(--color-accent)] px-2 py-1 text-[11px] text-[var(--color-accent-foreground)] disabled:opacity-50"
-            >
-              Add
-            </button>
-          </div>
         </div>
       )}
     </div>
@@ -731,11 +689,31 @@ function InlineAssignees({
 
 /* ─── Repeat interval inline ─── */
 
+const SECONDS = { HOUR: 3600, DAY: 86400, WEEK: 604800 };
+
+const CADENCE_PRESETS = [
+  { label: 'Every day', seconds: SECONDS.DAY },
+  { label: 'Every week', seconds: SECONDS.WEEK },
+  { label: 'Every 30 days', seconds: 30 * SECONDS.DAY },
+] as const;
+
 const REPEAT_MODE_LABELS: Record<number, string> = {
-  0: 'Repeat after (seconds)',
+  0: 'Default',
   1: 'Monthly',
-  2: 'From current date',
+  2: 'From completion date',
 };
+
+function secondsToDuration(seconds: number): { value: number; unit: 'hours' | 'days' | 'weeks' } {
+  if (seconds > 0 && seconds % SECONDS.WEEK === 0) return { value: seconds / SECONDS.WEEK, unit: 'weeks' };
+  if (seconds > 0 && seconds % SECONDS.DAY === 0) return { value: seconds / SECONDS.DAY, unit: 'days' };
+  return { value: seconds > 0 ? seconds / SECONDS.HOUR : 1, unit: 'hours' };
+}
+
+function durationToSeconds(value: number, unit: 'hours' | 'days' | 'weeks'): number {
+  return value * SECONDS[unit === 'weeks' ? 'WEEK' : unit === 'days' ? 'DAY' : 'HOUR'];
+}
+
+const UNIT_OPTIONS = ['hours', 'days', 'weeks'] as const;
 
 function InlineRepeat({
   task,
@@ -749,48 +727,91 @@ function InlineRepeat({
   const [repeatAfter, setRepeatAfter] = useState(task.repeatAfter);
   const [repeatMode, setRepeatMode] = useState(task.repeatMode);
 
+  const init = secondsToDuration(task.repeatAfter);
+  const [customValue, setCustomValue] = useState(init.value);
+  const [customUnit, setCustomUnit] = useState(init.unit);
+
   useEffect(() => {
     setRepeatAfter(task.repeatAfter);
     setRepeatMode(task.repeatMode);
+    const d = secondsToDuration(task.repeatAfter);
+    setCustomValue(d.value);
+    setCustomUnit(d.unit);
   }, [task.repeatAfter, task.repeatMode]);
 
-  const handleSave = async () => {
-    await updateTask(task.localId, {
-      repeatAfter: repeatAfter,
-      repeatMode: repeatMode,
-    });
+  const save = async (after: number, mode: number) => {
+    await updateTask(task.localId, { repeatAfter: after, repeatMode: mode });
   };
+
+  const label = task.repeatAfter > 0
+    ? `Repeats ${repeatMode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
+    : 'Set repeating';
 
   return (
     <div>
       <ActionButton
         icon={<RefreshCw className="h-4 w-4" />}
-        label={
-          task.repeatAfter > 0
-            ? `Repeats every ${formatDuration(task.repeatAfter)}`
-            : 'Set repeating'
-        }
+        label={label}
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
+        <div className="mx-3 mb-1 flex flex-col gap-2">
+          {/* Quick cadence presets */}
+          <div className="flex gap-1">
+            {CADENCE_PRESETS.map((p) => (
+              <button
+                key={p.seconds}
+                onClick={() => save(p.seconds, 0)}
+                className={cn(
+                  'flex-1 rounded px-1.5 py-1 text-[10px] font-medium transition-colors',
+                  repeatAfter === p.seconds && repeatMode === 0
+                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
+                    : 'bg-[var(--color-accent)]/5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/15',
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom interval */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-[var(--color-muted-foreground)]">Every</span>
             <input
               type="number"
-              min={0}
-              value={repeatAfter}
-              onChange={(e) => setRepeatAfter(Number(e.target.value))}
-              className="w-20 rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-[11px]"
+              min={1}
+              value={customValue}
+              onChange={(e) => setCustomValue(Math.max(1, Number(e.target.value)))}
+              className="w-12 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-[11px] text-center"
             />
-            <span className="text-[11px] text-[var(--color-muted-foreground)]">seconds</span>
+            <select
+              value={customUnit}
+              onChange={(e) => setCustomUnit(e.target.value as typeof customUnit)}
+              className="rounded border border-[var(--color-border)] bg-transparent px-1 py-1 text-[11px]"
+            >
+              {UNIT_OPTIONS.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                const s = durationToSeconds(customValue, customUnit);
+                save(s, repeatMode);
+              }}
+              className="ml-auto rounded bg-[var(--color-accent)] px-2 py-1 text-[10px] font-medium text-[var(--color-accent-foreground)]"
+            >
+              Apply
+            </button>
           </div>
+
+          {/* Repeat mode */}
           <div className="flex gap-1">
-            {[0, 1, 2].map((mode) => (
+            {([0, 1, 2] as const).map((mode) => (
               <button
                 key={mode}
-                onClick={() => setRepeatMode(mode)}
+                onClick={() => save(repeatAfter, mode)}
                 className={cn(
-                  'flex-1 rounded px-1 py-1 text-center text-[10px] transition-colors',
+                  'flex-1 rounded px-1.5 py-1 text-[10px] transition-colors',
                   mode === repeatMode
                     ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
                     : 'hover:bg-[var(--color-accent)]/10 text-[var(--color-muted-foreground)]',
@@ -800,12 +821,16 @@ function InlineRepeat({
               </button>
             ))}
           </div>
-          <button
-            onClick={handleSave}
-            className="self-end rounded bg-[var(--color-accent)] px-3 py-1 text-[11px] text-[var(--color-accent-foreground)]"
-          >
-            Save
-          </button>
+
+          {/* Clear */}
+          {repeatAfter > 0 && (
+            <button
+              onClick={() => save(0, 0)}
+              className="self-start rounded px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10"
+            >
+              Remove repeat
+            </button>
+          )}
         </div>
       )}
     </div>

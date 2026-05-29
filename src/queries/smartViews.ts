@@ -4,6 +4,7 @@ import { startOfDay, isBefore, isSameDay, addDays, format } from 'date-fns';
 import {
   listTasksWithDueDate,
   listTasksForLabel,
+  listFavoriteTasks,
   type TaskWithProject,
 } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
@@ -112,6 +113,38 @@ export function useLabelTasks(labelLocalId: string | null) {
     queryFn: async () => {
       if (!labelLocalId) return [];
       const all = await listTasksForLabel(labelLocalId);
+      const byProject = new Map<string, TaskWithProject[]>();
+      for (const t of all) {
+        const arr = byProject.get(t.projectTitle) ?? [];
+        arr.push(t);
+        byProject.set(t.projectTitle, arr);
+      }
+      return [...byProject.entries()].map(([title, tasks]) => ({
+        key: title,
+        label: title,
+        tasks,
+      }));
+    },
+  });
+}
+
+/** Favorited tasks, grouped by project. */
+export function useFavoriteTasks() {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      subscribe('tasks', () => {
+        void qc.invalidateQueries({ queryKey: ['smart', 'favorites'] });
+      }),
+    [qc],
+  );
+
+  return useQuery<TaskGroup[]>({
+    queryKey: ['smart', 'favorites'],
+    staleTime: 30_000,
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const all = await listFavoriteTasks();
       const byProject = new Map<string, TaskWithProject[]>();
       for (const t of all) {
         const arr = byProject.get(t.projectTitle) ?? [];

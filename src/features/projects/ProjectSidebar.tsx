@@ -13,6 +13,7 @@ import {
   Loader2,
   Calendar,
   CalendarDays,
+  Star,
 } from 'lucide-react';
 import {
   Popover,
@@ -161,6 +162,12 @@ export function ProjectSidebar() {
               label="Upcoming"
               isSelected={activeView?.kind === 'upcoming'}
               onClick={() => setActiveView({ kind: 'upcoming' })}
+            />
+            <NavItem
+              icon={Star}
+              label="Favorites"
+              isSelected={activeView?.kind === 'favorites'}
+              onClick={() => setActiveView({ kind: 'favorites' })}
             />
             <>
               <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">

@@ -136,6 +136,21 @@ export async function listTasksWithDueDate(): Promise<TaskWithProject[]> {
   return rows.map(rowToTaskWithProject);
 }
 
+/** All non-deleted, non-done favorited tasks, with project title,
+ * for the Favorites smart view. */
+export async function listFavoriteTasks(): Promise<TaskWithProject[]> {
+  const db = await getDb();
+  const rows = await db.select<TaskWithProjectRow[]>(
+    `SELECT ${SELECT_TASK_COLS_T}, p.title AS project_title
+       FROM tasks t
+       JOIN projects p ON p.local_id = t.project_local_id
+      WHERE t.deleted = 0 AND t.done = 0 AND t.is_favorite = 1
+        AND p.deleted = 0
+   ORDER BY t.due_date IS NULL, t.due_date ASC, t.priority DESC`,
+  );
+  return rows.map(rowToTaskWithProject);
+}
+
 /** All non-deleted tasks carrying the given label, with project title,
  * for the per-label smart view (grouped by project in the UI). */
 export async function listTasksForLabel(

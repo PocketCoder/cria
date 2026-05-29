@@ -265,7 +265,7 @@ function TaskRow({ task }: { task: Task }) {
             {task.title}
           </p>
         )}
-        {(task.dueDate || task.priority > 0 || labels.length > 0) ? (
+        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0) ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
               <span>Due {formatDate(task.dueDate)}</span>
@@ -276,6 +276,17 @@ function TaskRow({ task }: { task: Task }) {
               </span>
             ) : null}
             <LabelChips labels={labels} />
+            {task.percentDone > 0 ? (
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-12 overflow-hidden rounded-full bg-[var(--color-border)]">
+                  <span
+                    className="block h-full rounded-full bg-[var(--color-accent)]"
+                    style={{ width: `${Math.min(100, task.percentDone)}%` }}
+                  />
+                </span>
+                <span>{Math.round(task.percentDone)}%</span>
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>

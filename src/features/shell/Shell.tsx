@@ -20,6 +20,7 @@ import {
   TodayView,
   UpcomingView,
   LabelView,
+  FavoritesView,
 } from '@/features/smart-views/SmartViews';
 import { SearchView } from '@/features/search/SearchView';
 import { QuickAddModal } from '@/components/QuickAddModal';
@@ -221,6 +222,8 @@ export function Shell() {
         return <UpcomingView />;
       case 'label':
         return <LabelView labelLocalId={activeView.localId} />;
+      case 'favorites':
+        return <FavoritesView />;
       case 'search':
         return <SearchView query={searchQuery} />;
       case 'project': {

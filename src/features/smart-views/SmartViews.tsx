@@ -12,6 +12,7 @@ import {
   useTodayTasks,
   useUpcomingTasks,
   useLabelTasks,
+  useFavoriteTasks,
   groupTotal,
   type TaskGroup,
 } from '@/queries/smartViews';
@@ -371,6 +372,20 @@ export function LabelView({ labelLocalId }: { labelLocalId: string }) {
       showProject={false}
       defaultDueDate={todayISO()}
       defaultLabelLocalId={labelLocalId}
+    />
+  );
+}
+
+export function FavoritesView() {
+  const { data: groups = [], isLoading } = useFavoriteTasks();
+  return (
+    <SmartView
+      title="Favorites"
+      groups={groups}
+      isLoading={isLoading}
+      emptyMessage="No favorited tasks."
+      showProject
+      defaultDueDate={todayISO()}
     />
   );
 }

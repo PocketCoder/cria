@@ -11,7 +11,8 @@ export type ActiveView =
   | { kind: 'today' }
   | { kind: 'upcoming' }
   | { kind: 'label'; localId: string }
-  | { kind: 'search' };
+  | { kind: 'search' }
+  | { kind: 'favorites' };
 
 interface UiState {
   activeView: ActiveView | null;
