@@ -225,7 +225,6 @@ export function ProjectSidebar() {
                     value={newLabelTitle}
                     disabled={labelBusy}
                     onChange={(e) => setNewLabelTitle(e.target.value)}
-                    onBlur={() => void handleCreateLabel()}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();

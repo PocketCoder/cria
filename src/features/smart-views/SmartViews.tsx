@@ -233,7 +233,7 @@ function SmartView({
   );
 }
 
-function SmartTaskRow({
+export function SmartTaskRow({
   task,
   showProject,
 }: {
