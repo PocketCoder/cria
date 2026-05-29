@@ -178,6 +178,10 @@ export function Shell() {
                     {selected.title}
                   </h1>
                 </header>
+                {/* TaskList (flex-1) fills the pane; TaskDetail renders as
+                    an in-flow floating card on the right only when a task
+                    is selected, pushing the list narrower rather than
+                    overlapping it. */}
                 <div className="flex flex-1 min-h-0 min-w-0">
                   <TaskList project={selected} />
                   <TaskDetail />

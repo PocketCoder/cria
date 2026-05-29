@@ -26,6 +26,15 @@ export const useUi = create<UiState>()(
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     }),
-    { name: 'cria:ui/v1' },
+    {
+      name: 'cria:ui/v1',
+      // Persist project selection + layout, but NOT the selected task —
+      // otherwise the detail card would pop open on every relaunch. The
+      // card is a transient inspector; it should start closed.
+      partialize: (s) => ({
+        selectedProjectLocalId: s.selectedProjectLocalId,
+        sidebarCollapsed: s.sidebarCollapsed,
+      }),
+    },
   ),
 );
