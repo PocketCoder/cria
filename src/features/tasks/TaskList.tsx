@@ -7,7 +7,7 @@ import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
-import { Trash2, Plus, Loader2, Pencil } from 'lucide-react';
+import { Trash2, Plus, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { LabelChips } from './LabelChips';
@@ -265,7 +265,7 @@ function TaskRow({ task }: { task: Task }) {
             {task.title}
           </p>
         )}
-        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0) ? (
+        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0) ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
               <span>Due {formatDate(task.dueDate)}</span>
@@ -277,15 +277,18 @@ function TaskRow({ task }: { task: Task }) {
             ) : null}
             <LabelChips labels={labels} />
             {task.percentDone > 0 ? (
-              <span className="flex items-center gap-1">
-                <span className="h-1.5 w-12 overflow-hidden rounded-full bg-[var(--color-border)]">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
                   <span
-                    className="block h-full rounded-full bg-[var(--color-accent)]"
+                    className="block h-full rounded-full bg-[var(--color-accent)] transition-all"
                     style={{ width: `${Math.min(100, task.percentDone)}%` }}
                   />
                 </span>
-                <span>{Math.round(task.percentDone)}%</span>
+                <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
               </span>
+            ) : null}
+            {task.repeatAfter > 0 ? (
+              <RefreshCw className="h-3 w-3" aria-label="Repeating" />
             ) : null}
           </div>
         ) : null}
