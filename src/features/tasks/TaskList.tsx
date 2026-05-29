@@ -280,7 +280,7 @@ function TaskRow({ task }: { task: Task }) {
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
                   <span
-                    className="block h-full rounded-full bg-[var(--color-accent)] transition-all"
+                    className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
                     style={{ width: `${Math.min(100, task.percentDone)}%` }}
                   />
                 </span>
