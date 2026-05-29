@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
@@ -9,13 +10,19 @@ import { RichTextEditor } from './RichTextEditor';
 import { TaskActions } from './TaskActions';
 import type { Task } from '@/domain/task';
 
+/**
+ * Task detail, rendered as a right-docked floating inspector card rather
+ * than a permanent third column. Shows only when a task is selected;
+ * closes via the X button or Escape. There is intentionally **no
+ * backdrop** — the task list and sidebar stay live underneath, so
+ * clicking another task swaps the card's contents in place.
+ *
+ * Positioned `absolute`, so its parent (the pane row in Shell) must be
+ * `relative`. Height tracks the content area (top-3/bottom-3 inset),
+ * keeping the app header + footer reachable.
+ */
 export function TaskDetail() {
-  // **All hooks before any early return.** React's hook-order rule:
-  // every render must call the same hooks in the same order. Title edit
-  // state used to live below the loading / error early returns, which
-  // meant "no task" and "task loaded" renders called different numbers
-  // of hooks and React threw "Rendered more hooks than during the
-  // previous render."
+  // **All hooks before any early return** — React's hook-order rule.
   const selectedId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const queryClient = useQueryClient();
@@ -28,6 +35,16 @@ export function TaskDetail() {
     });
   }, [queryClient]);
 
+  // Escape closes the card while it's open.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedTask(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, setSelectedTask]);
+
   const { data: task, isLoading, isError } = useQuery<Task | null>({
     queryKey: ['task', selectedId],
     queryFn: async () => (selectedId ? getTaskByLocalId(selectedId) : null),
@@ -37,29 +54,27 @@ export function TaskDetail() {
 
   const { data: labels = [] } = useTaskLabels(selectedId);
 
-  if (!selectedId) {
-    return (
-      <aside className="flex w-80 shrink-0 items-center justify-center border-l border-[var(--color-border)] bg-[var(--color-muted)] p-6 text-center">
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Select a task to see details.
-        </p>
-      </aside>
-    );
-  }
+  if (!selectedId) return null;
+
+  const close = () => setSelectedTask(null);
 
   if (isLoading) {
     return (
-      <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-muted)] p-6 text-sm text-[var(--color-muted-foreground)]">
-        Loading…
-      </aside>
+      <DetailCard onClose={close}>
+        <p className="p-5 text-sm text-[var(--color-muted-foreground)]">
+          Loading…
+        </p>
+      </DetailCard>
     );
   }
 
   if (isError || !task) {
     return (
-      <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-muted)] p-6 text-sm text-[var(--color-warning)]">
-        Could not load task details.
-      </aside>
+      <DetailCard onClose={close}>
+        <p className="p-5 text-sm text-[var(--color-warning)]">
+          Could not load task details.
+        </p>
+      </DetailCard>
     );
   }
 
@@ -81,6 +96,8 @@ export function TaskDetail() {
       e.preventDefault();
       void handleTitleSave();
     } else if (e.key === 'Escape') {
+      // Cancel the title edit without closing the whole card.
+      e.stopPropagation();
       setTitleEditing(false);
     }
   };
@@ -94,8 +111,8 @@ export function TaskDetail() {
   };
 
   return (
-    <aside className="flex w-96 shrink min-w-80 flex-col border-l border-[var(--color-border)] bg-[var(--color-muted)]" style={{ maxWidth: 'min(420px, 40vw)' }}>
-      <div className="overflow-y-auto p-5 min-w-0">
+    <DetailCard onClose={close}>
+      <div className="min-w-0 flex-1 overflow-y-auto p-5">
         {titleEditing ? (
           <input
             type="text"
@@ -136,6 +153,41 @@ export function TaskDetail() {
           <TaskActions task={task} onDeleted={handleDeleted} />
         </div>
       </div>
+    </DetailCard>
+  );
+}
+
+/**
+ * The floating card chrome: right-docked, rounded, opaque, soft shadow,
+ * with a thin header strip carrying the close button. Slides in on mount.
+ */
+function DetailCard({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <aside
+      role="dialog"
+      aria-label="Task details"
+      className="absolute right-3 top-3 bottom-3 z-20 flex w-[460px] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-2xl animate-[card-slide-in_180ms_ease-out]"
+    >
+      <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          Task
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close details"
+          className="rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </header>
+      {children}
     </aside>
   );
 }

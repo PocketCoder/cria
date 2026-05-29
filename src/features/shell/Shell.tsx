@@ -178,7 +178,12 @@ export function Shell() {
                     {selected.title}
                   </h1>
                 </header>
-                <div className="flex flex-1 min-h-0 min-w-0">
+                {/* `relative` bounds the absolutely-positioned TaskDetail
+                    card to this pane area (below the project header, above
+                    the footer). TaskList is the only flow child, so it
+                    spans full width; the detail card floats over its right
+                    side when a task is selected. */}
+                <div className="relative flex flex-1 min-h-0 min-w-0">
                   <TaskList project={selected} />
                   <TaskDetail />
                 </div>
