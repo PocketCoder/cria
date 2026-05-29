@@ -2,6 +2,9 @@ import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import TiptapUnderline from '@tiptap/extension-underline';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import ImageExt from '@tiptap/extension-image';
 import { useEffect, useState, useRef } from 'react';
 import {
   Bold,
@@ -13,10 +16,13 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  ListChecks,
   Quote,
   Heading1,
   Heading2,
   Heading3,
+  Minus,
+  Image,
   Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -26,6 +32,12 @@ import { onLinkClickOpenExternal } from '@/lib/openExternal';
 interface RichTextEditorProps {
   value: string | null;
   onSave: (next: string) => Promise<void>;
+}
+
+let _triggerImagePicker: (() => void) | null = null;
+
+export function setImagePickerTrigger(fn: (() => void) | null) {
+  _triggerImagePicker = fn;
 }
 
 const COMMANDS = [
@@ -106,6 +118,27 @@ const COMMANDS = [
     icon: <Strikethrough className="h-4 w-4" />,
     action: (editor: Editor) => editor.chain().focus().toggleStrike().run(),
   },
+  {
+    key: 'tasklist',
+    label: 'Task list',
+    description: 'Track tasks with a to-do list',
+    icon: <ListChecks className="h-4 w-4" />,
+    action: (editor: Editor) => editor.chain().focus().toggleTaskList().run(),
+  },
+  {
+    key: 'hr',
+    label: 'Horizontal rule',
+    description: 'Divide a section',
+    icon: <Minus className="h-4 w-4" />,
+    action: (editor: Editor) => editor.chain().focus().setHorizontalRule().run(),
+  },
+  {
+    key: 'image',
+    label: 'Image',
+    description: 'Upload an image from your computer',
+    icon: <Image className="h-4 w-4" />,
+    action: () => _triggerImagePicker?.(),
+  },
 ];
 
 /**
@@ -174,7 +207,7 @@ function ReadView({
   return (
     <div className="min-w-0 max-w-full space-y-2">
       <div
-        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline"
+        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-2 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
         onClick={onLinkClickOpenExternal}
       />
@@ -292,6 +325,29 @@ function EditView({
     updateSlashState({ open: false });
   };
 
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImagePick = () => {
+    imageInputRef.current?.click();
+  };
+
+  useEffect(() => {
+    _triggerImagePicker = handleImagePick;
+    return () => { _triggerImagePicker = null; };
+  }, []);
+
+  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editor) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      editor.chain().focus().setImage({ src: dataUrl }).run();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -307,13 +363,25 @@ function EditView({
         },
       }),
       TiptapUnderline,
+      TaskList.configure({
+        HTMLAttributes: { class: 'not-prose pl-0 space-y-1' },
+      }),
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: { class: 'flex items-start gap-2' },
+      }),
+      ImageExt.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: { class: 'max-w-full h-auto rounded-md' },
+      }),
     ],
     content: initial || '<p></p>',
     autofocus: 'end',
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm max-w-none min-h-[6rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline',
+          'prose prose-sm max-w-none min-h-[6rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-2 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md',
       },
       handleKeyDown(view, event) {
         if (slashStateRef.current.open) {
@@ -401,7 +469,14 @@ function EditView({
 
   return (
     <div className="relative space-y-2">
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} onImagePick={handleImagePick} />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageFile}
+        className="hidden"
+      />
       <div className="min-w-0 max-w-full">
         <EditorContent editor={editor} />
       </div>
@@ -481,7 +556,7 @@ function EditView({
   );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, onImagePick }: { editor: Editor; onImagePick?: () => void }) {
   const btn = (
     label: string,
     icon: React.ReactNode,
@@ -593,6 +668,25 @@ function Toolbar({ editor }: { editor: Editor }) {
         <Quote className="h-3.5 w-3.5" />,
         editor.isActive('blockquote'),
         () => editor.chain().focus().toggleBlockquote().run()
+      )}
+      {btn(
+        'Task list',
+        <ListChecks className="h-3.5 w-3.5" />,
+        editor.isActive('taskList'),
+        () => editor.chain().focus().toggleTaskList().run()
+      )}
+      <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
+      {btn(
+        'Horizontal rule',
+        <Minus className="h-3.5 w-3.5" />,
+        false,
+        () => editor.chain().focus().setHorizontalRule().run()
+      )}
+      {btn(
+        'Image',
+        <Image className="h-3.5 w-3.5" />,
+        false,
+        () => onImagePick?.()
       )}
       <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
       {btn(
