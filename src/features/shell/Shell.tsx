@@ -178,12 +178,11 @@ export function Shell() {
                     {selected.title}
                   </h1>
                 </header>
-                {/* `relative` bounds the absolutely-positioned TaskDetail
-                    card to this pane area (below the project header, above
-                    the footer). TaskList is the only flow child, so it
-                    spans full width; the detail card floats over its right
-                    side when a task is selected. */}
-                <div className="relative flex flex-1 min-h-0 min-w-0">
+                {/* TaskList (flex-1) fills the pane; TaskDetail renders as
+                    an in-flow floating card on the right only when a task
+                    is selected, pushing the list narrower rather than
+                    overlapping it. */}
+                <div className="flex flex-1 min-h-0 min-w-0">
                   <TaskList project={selected} />
                   <TaskDetail />
                 </div>

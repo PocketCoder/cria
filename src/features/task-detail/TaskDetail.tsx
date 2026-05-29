@@ -11,15 +11,16 @@ import { TaskActions } from './TaskActions';
 import type { Task } from '@/domain/task';
 
 /**
- * Task detail, rendered as a right-docked floating inspector card rather
- * than a permanent third column. Shows only when a task is selected;
- * closes via the X button or Escape. There is intentionally **no
- * backdrop** — the task list and sidebar stay live underneath, so
- * clicking another task swaps the card's contents in place.
+ * Task detail, rendered as a right-docked floating card rather than a
+ * permanent column. Shows only when a task is selected; closes via the X
+ * button or Escape.
  *
- * Positioned `absolute`, so its parent (the pane row in Shell) must be
- * `relative`. Height tracks the content area (top-3/bottom-3 inset),
- * keeping the app header + footer reachable.
+ * It's an **in-flow flex item**, not an overlay: the card sits beside the
+ * list and pushes it narrower, so nothing gets clipped under it (no
+ * backdrop, no seam). Its `m-4` margin is the gutter the shadow casts
+ * into, which is what sells the "floating" read. The list stays fully
+ * visible + clickable beside it, so clicking another task swaps the
+ * card's contents in place.
  */
 export function TaskDetail() {
   // **All hooks before any early return** — React's hook-order rule.
@@ -110,29 +111,31 @@ export function TaskDetail() {
     setSelectedTask(null);
   };
 
-  return (
-    <DetailCard onClose={close}>
-      <div className="min-w-0 flex-1 overflow-y-auto p-5">
-        {titleEditing ? (
-          <input
-            type="text"
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={() => void handleTitleSave()}
-            onKeyDown={handleTitleKeyDown}
-            autoFocus
-            className="mb-2 w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-base font-semibold leading-tight focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-          />
-        ) : (
-          <h2
-            className="mb-2 cursor-pointer break-words rounded px-1 py-0.5 text-base font-semibold leading-tight hover:bg-[var(--color-muted)]"
-            onClick={handleTitleEdit}
-            title="Click to edit"
-          >
-            {task.title}
-          </h2>
-        )}
+  // The title lives in the card header (sticky context as the body
+  // scrolls), still click-to-edit inline.
+  const header = titleEditing ? (
+    <input
+      type="text"
+      value={titleDraft}
+      onChange={(e) => setTitleDraft(e.target.value)}
+      onBlur={() => void handleTitleSave()}
+      onKeyDown={handleTitleKeyDown}
+      autoFocus
+      className="w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-sm font-semibold leading-tight focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+    />
+  ) : (
+    <h2
+      className="cursor-pointer truncate rounded px-1 py-0.5 text-sm font-semibold leading-tight hover:bg-[var(--color-muted)]"
+      onClick={handleTitleEdit}
+      title="Click to edit"
+    >
+      {task.title}
+    </h2>
+  );
 
+  return (
+    <DetailCard onClose={close} header={header}>
+      <div className="min-w-0 flex-1 overflow-y-auto p-5">
         {labels.length > 0 ? (
           <div className="mb-3">
             <LabelChips labels={labels} />
@@ -158,31 +161,39 @@ export function TaskDetail() {
 }
 
 /**
- * The floating card chrome: right-docked, rounded, opaque, soft shadow,
- * with a thin header strip carrying the close button. Slides in on mount.
+ * The floating card chrome: right-docked, rounded, opaque, with a margin
+ * gutter + soft shadow that make it read as elevated above the list. The
+ * header strip carries the task title (or a fallback label) on the left
+ * and the close button on the right.
  */
 function DetailCard({
   onClose,
+  header,
   children,
 }: {
   onClose: () => void;
+  header?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <aside
       role="dialog"
       aria-label="Task details"
-      className="absolute right-3 top-3 bottom-3 z-20 flex w-[460px] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-2xl animate-[card-slide-in_180ms_ease-out]"
+      className="m-4 flex w-[420px] max-w-[calc(100%-2rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]"
     >
-      <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-          Task
-        </span>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
+        <div className="min-w-0 flex-1">
+          {header ?? (
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              Task
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close details"
-          className="rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
+          className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
         >
           <X className="h-4 w-4" />
         </button>
