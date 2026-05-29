@@ -20,9 +20,11 @@ const CONFIG = {
     'p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre', 'blockquote',
     'a', 'ul', 'ol', 'li',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'hr', 'span',
+    'hr', 'span', 'img',
+    'input', 'label',
+    'ul', 'ol', 'li',       // task-list uses <ul data-type="taskList">
   ],
-  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target'],
+  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type'],
   ALLOW_DATA_ATTR: false,
 };
 
