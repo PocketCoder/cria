@@ -190,7 +190,7 @@ function ReadView({
     </button>
   );
 
-  if (!value) {
+  if (!value || !value.replace(/<[^>]*>/g, '').trim()) {
     return (
       <div className="min-w-0 max-w-full space-y-2">
         <button
@@ -429,7 +429,11 @@ function EditView({
     if (!editor) return;
     setSaving(true);
     try {
-      await onSave(editor.getHTML());
+      const html = editor.getHTML();
+      // If the content is just an empty paragraph / whitespace, save as
+      // null so the read view shows the "Add a description…" placeholder.
+      const text = html.replace(/<[^>]*>/g, '').trim();
+      await onSave(text ? html : '');
     } finally {
       setSaving(false);
     }
