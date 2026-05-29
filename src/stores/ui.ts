@@ -10,7 +10,8 @@ export type ActiveView =
   | { kind: 'project'; localId: string }
   | { kind: 'today' }
   | { kind: 'upcoming' }
-  | { kind: 'label'; localId: string };
+  | { kind: 'label'; localId: string }
+  | { kind: 'search' };
 
 interface UiState {
   activeView: ActiveView | null;

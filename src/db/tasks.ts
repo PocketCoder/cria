@@ -156,6 +156,80 @@ export async function listTasksForLabel(
   return rows.map(rowToTaskWithProject);
 }
 
+export interface SearchFilters {
+  text: string;
+  dueDateStart?: string | null;
+  dueDateEnd?: string | null;
+  labelTitle?: string | null;
+  priority?: number | null;
+}
+
+/**
+ * Full-text search across all non-deleted tasks using FTS5, with optional
+ * structured filters (date range, label, priority). When `text` is empty
+ * FTS5 MATCH is skipped, so a pure filter query (e.g. "due today") returns
+ * all tasks matching the filters without a text constraint.
+ */
+export async function searchTasks(filters: SearchFilters): Promise<TaskWithProject[]> {
+  const sanitized = filters.text
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .trim();
+
+  const conditions: string[] = [
+    't.deleted = 0',
+    'p.deleted = 0',
+  ];
+  const params: unknown[] = [];
+
+  if (sanitized) {
+    const ftsQuery = sanitized
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => `${w}*`)
+      .join(' AND ');
+    conditions.push('tasks_fts MATCH ?');
+    params.push(ftsQuery);
+  }
+
+  if (filters.dueDateStart) {
+    conditions.push('t.due_date >= ?');
+    params.push(filters.dueDateStart);
+  }
+  if (filters.dueDateEnd) {
+    conditions.push('t.due_date <= ?');
+    params.push(filters.dueDateEnd);
+  }
+  if (filters.priority != null) {
+    conditions.push('t.priority = ?');
+    params.push(filters.priority);
+  }
+  if (filters.labelTitle) {
+    conditions.push(`t.local_id IN (
+      SELECT tl.task_local_id FROM task_labels tl
+      JOIN labels l ON l.local_id = tl.label_local_id
+      WHERE l.title = ? AND tl.deleted = 0
+    )`);
+    params.push(filters.labelTitle);
+  }
+
+  const fromClause = sanitized
+    ? 'tasks_fts fts JOIN tasks t ON t.rowid = fts.rowid JOIN projects p ON p.local_id = t.project_local_id'
+    : 'tasks t JOIN projects p ON p.local_id = t.project_local_id';
+
+  const orderBy = sanitized ? 'rank' : 't.due_date ASC, t.priority DESC';
+
+  const db = await getDb();
+  const rows = await db.select<TaskWithProjectRow[]>(
+    `SELECT ${sanitized ? SELECT_TASK_COLS_T : SELECT_TASK_COLS_T}, p.title AS project_title
+       FROM ${fromClause}
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ${orderBy}
+      LIMIT 50`,
+    params,
+  );
+  return rows.map(rowToTaskWithProject);
+}
+
 interface ProjectLookup {
   local_id: string;
 }

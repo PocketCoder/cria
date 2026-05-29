@@ -189,7 +189,6 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                     value={newTitle}
                     disabled={busy}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    onBlur={() => void handleCreate()}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();

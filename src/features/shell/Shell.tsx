@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import { register, unregister } from '@/tauri/globalShortcut';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
 import { Button } from '@/components/ui/button';
-import { useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
-import { useUi } from '@/stores/ui';
+import { useUi, type ActiveView } from '@/stores/ui';
 import { getDb } from '@/db';
 import { useProjects } from '@/queries/projects';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
@@ -22,10 +21,12 @@ import {
   UpcomingView,
   LabelView,
 } from '@/features/smart-views/SmartViews';
+import { SearchView } from '@/features/search/SearchView';
 import { QuickAddModal } from '@/components/QuickAddModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
+import { Search, X } from 'lucide-react';
 import pkg from '../../../package.json';
 
 export function Shell() {
@@ -33,6 +34,7 @@ export function Shell() {
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
   const activeView = useUi((s) => s.activeView);
+  const setActiveView = useUi((s) => s.setActiveView);
   const setSelectedProject = useUi((s) => s.setSelectedProject);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const displayName =
@@ -96,6 +98,11 @@ export function Shell() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
 
+  /* ── search ───────────────────────────────────────────── */
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const prevViewRef = useRef<ActiveView | null>(null);
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -139,12 +146,50 @@ export function Shell() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'A') {
         setShowQuickAdd(true);
       }
+      // Cmd/Ctrl+F → focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
 
+
+  /* ── search handlers ──────────────────────────────────── */
+  const handleSearchFocus = () => {
+    if (activeView?.kind !== 'search') {
+      prevViewRef.current = activeView;
+      setActiveView({ kind: 'search' });
+    }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setSearchQuery(v);
+    if (v.trim() && activeView?.kind !== 'search') {
+      prevViewRef.current = activeView;
+      setActiveView({ kind: 'search' });
+    } else if (!v.trim() && activeView?.kind === 'search') {
+      setActiveView(prevViewRef.current);
+      prevViewRef.current = null;
+    }
+  };
+
+  const handleSearchClear = () => {
+    setSearchQuery('');
+    setActiveView(prevViewRef.current);
+    prevViewRef.current = null;
+    searchInputRef.current?.focus();
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      handleSearchClear();
+    }
+  };
 
   function renderMain() {
     if (!activeView) {
@@ -168,6 +213,8 @@ export function Shell() {
         return <UpcomingView />;
       case 'label':
         return <LabelView labelLocalId={activeView.localId} />;
+      case 'search':
+        return <SearchView query={searchQuery} />;
       case 'project': {
         const project = projects.find(
           (p) => p.localId === activeView.localId,
@@ -208,12 +255,34 @@ export function Shell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden">
-      {/* No app title here — it lives in the footer. Dropping it also
-          sidesteps the macOS traffic-light overlap (issue #26): the
-          buttons now float over empty header space, and the user
-          controls stay clear on the right. */}
-      <header className="flex select-none items-center justify-end border-b border-[var(--color-border)] px-4 py-2">
-        <div className="flex items-center gap-3">
+      {/* macOS traffic-light spacer on the left; search is centre; user
+          controls on the right. */}
+      <header className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
+        <div className="flex-1" />
+        <div className="mx-4 flex flex-1 max-w-md">
+          <div className="relative w-full">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              onFocus={handleSearchFocus}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search tasks…  ⌘F"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-9 pr-8 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+            />
+            {searchQuery && (
+              <button
+                onClick={handleSearchClear}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-end gap-3">
           <span className="text-xs text-[var(--color-muted-foreground)]">
             {displayName}
           </span>
