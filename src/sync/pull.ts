@@ -146,26 +146,77 @@ export async function pullTasksForProject(
   }
 
   for (const t of collected) {
-    const taskLocalId = await upsertTaskFromServer(t);
-    if (taskLocalId && Array.isArray(t.labels)) {
-      // Each task payload carries its labels inline — route them through
-      // the label upsert so the labels table fills in too, then mirror
-      // the link set in task_labels.
-      const validLabels: LabelResponse[] = [];
-      for (const raw of t.labels) {
-        const parsed = labelResponseSchema.safeParse(raw);
-        if (parsed.success) validLabels.push(parsed.data);
-      }
-      await replaceTaskLabelsFromServer(taskLocalId, validLabels);
+    await upsertTaskWithRelations(t);
+  }
+
+  await stampSyncState('tasks_synced_at');
+  return collected.length;
+}
+
+/**
+ * Upsert one task payload plus its inline labels + assignees. Shared by
+ * the per-project and all-tasks pulls. Silent (no notify) — see the
+ * sync-upsert rule in src/db.
+ */
+async function upsertTaskWithRelations(t: TaskResponse): Promise<void> {
+  const taskLocalId = await upsertTaskFromServer(t);
+  if (taskLocalId && Array.isArray(t.labels)) {
+    const validLabels: LabelResponse[] = [];
+    for (const raw of t.labels) {
+      const parsed = labelResponseSchema.safeParse(raw);
+      if (parsed.success) validLabels.push(parsed.data);
     }
-    if (taskLocalId && Array.isArray(t.assignees)) {
-      const validAssignees: AssigneeResponse[] = [];
-      for (const raw of t.assignees) {
-        const parsed = assigneeResponseSchema.safeParse(raw);
-        if (parsed.success) validAssignees.push(parsed.data);
-      }
-      await upsertTaskAssigneesFromServer(taskLocalId, validAssignees);
+    await replaceTaskLabelsFromServer(taskLocalId, validLabels);
+  }
+  if (taskLocalId && Array.isArray(t.assignees)) {
+    const validAssignees: AssigneeResponse[] = [];
+    for (const raw of t.assignees) {
+      const parsed = assigneeResponseSchema.safeParse(raw);
+      if (parsed.success) validAssignees.push(parsed.data);
     }
+    await upsertTaskAssigneesFromServer(taskLocalId, validAssignees);
+  }
+}
+
+/**
+ * Pull *every* task the user can read (no project filter), so the smart
+ * views (Today / Upcoming / Labels) have cross-project data without the
+ * user having to open each project first. Same `GET /tasks` endpoint as
+ * pullTasksForProject, just without the `project_id` filter.
+ *
+ * Closes the M1→M2 "tasks aren't on the periodic pull" gap (#33). Silent,
+ * like all sync-path upserts.
+ */
+export async function pullAllTasks(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const collected: TaskResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, response } = await client.GET('/tasks', {
+      params: { query: { page, per_page: PER_PAGE } },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullAllTasks: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch = data ?? [];
+    for (const raw of batch) {
+      const parsed = taskResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullAllTasks] skipping invalid task:', parsed.error);
+    }
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
+  }
+
+  for (const t of collected) {
+    await upsertTaskWithRelations(t);
   }
 
   await stampSyncState('tasks_synced_at');

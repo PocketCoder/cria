@@ -55,9 +55,7 @@ export const usePendingDeletes = create<PendingDeletesState>((set, get) => ({
   },
 
   undo: (localId) => {
-    const t = timers.get(localId);
-    if (t) clearTimeout(t);
-    timers.delete(localId);
+    if (!timers.delete(localId)) return; // timer already fired — commit in flight
     set((s) => {
       if (!(localId in s.pending)) return s;
       const next = { ...s.pending };
@@ -66,19 +64,20 @@ export const usePendingDeletes = create<PendingDeletesState>((set, get) => ({
     });
   },
 
-  commit: (localId) => {
+  commit: async (localId) => {
     timers.delete(localId);
     const task = get().pending[localId];
+    if (!task) return;
+    try {
+      await deleteTask(localId);
+    } catch (err) {
+      console.error('[pendingDeletes] commit failed:', err);
+    }
     set((s) => {
       const next = { ...s.pending };
       delete next[localId];
       return { pending: next };
     });
-    if (task) {
-      void deleteTask(localId).catch((err) =>
-        console.error('[pendingDeletes] commit failed:', err),
-      );
-    }
   },
 }));
 

@@ -95,6 +95,67 @@ export async function getTaskByLocalId(localId: string): Promise<Task | null> {
   return row ? rowToTask(row) : null;
 }
 
+/* ───────────────────────── cross-project reads (M6 smart views) ────── */
+
+/** A task plus its owning project's title, for grouped views where the
+ * project context isn't implicit (Today / Upcoming / Label). */
+export interface TaskWithProject extends Task {
+  projectTitle: string;
+}
+
+interface TaskWithProjectRow extends TaskRow {
+  project_title: string;
+}
+
+// SELECT_TASK_COLS prefixed with the `t.` table alias for joins; SQLite
+// returns each as its bare column name, so it still maps to TaskRow.
+const SELECT_TASK_COLS_T = SELECT_TASK_COLS.split(',')
+  .map((c) => `t.${c.trim()}`)
+  .join(', ');
+
+function rowToTaskWithProject(row: TaskWithProjectRow): TaskWithProject {
+  return { ...rowToTask(row), projectTitle: row.project_title };
+}
+
+/**
+ * Every incomplete, non-deleted task that has a due date, across all
+ * projects, with its project title. The Today/Upcoming bucketing
+ * (overdue / today / next-7-days) is done in the query layer to avoid
+ * SQLite timezone arithmetic on the ISO `due_date` strings.
+ */
+export async function listTasksWithDueDate(): Promise<TaskWithProject[]> {
+  const db = await getDb();
+  const rows = await db.select<TaskWithProjectRow[]>(
+    `SELECT ${SELECT_TASK_COLS_T}, p.title AS project_title
+       FROM tasks t
+       JOIN projects p ON p.local_id = t.project_local_id
+      WHERE t.deleted = 0 AND t.done = 0 AND t.due_date IS NOT NULL
+        AND p.deleted = 0
+   ORDER BY t.due_date ASC, t.priority DESC`,
+  );
+  return rows.map(rowToTaskWithProject);
+}
+
+/** All non-deleted tasks carrying the given label, with project title,
+ * for the per-label smart view (grouped by project in the UI). */
+export async function listTasksForLabel(
+  labelLocalId: string,
+): Promise<TaskWithProject[]> {
+  const db = await getDb();
+  const rows = await db.select<TaskWithProjectRow[]>(
+    `SELECT ${SELECT_TASK_COLS_T}, p.title AS project_title
+       FROM tasks t
+       JOIN task_labels tl ON tl.task_local_id = t.local_id
+       JOIN projects p ON p.local_id = t.project_local_id
+      WHERE tl.label_local_id = ? AND tl.deleted = 0
+        AND t.deleted = 0 AND p.deleted = 0
+   ORDER BY t.done ASC, t.due_date IS NULL, t.due_date ASC,
+            t.title COLLATE NOCASE ASC`,
+    [labelLocalId],
+  );
+  return rows.map(rowToTaskWithProject);
+}
+
 interface ProjectLookup {
   local_id: string;
 }

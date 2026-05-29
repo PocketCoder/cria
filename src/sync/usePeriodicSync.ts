@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
-import { pullProjects, pullLabels } from './pull';
+import { pullProjects, pullLabels, pullAllTasks } from './pull';
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
 
@@ -39,6 +39,13 @@ export function usePeriodicSync() {
         await pullLabels();
       } catch (err) {
         console.warn('[periodic-sync] label pull failed:', err);
+      }
+      try {
+        // Pull every task (not just the open project) so the smart views
+        // have cross-project data and project lists stay warm (#33).
+        await pullAllTasks();
+      } catch (err) {
+        console.warn('[periodic-sync] all-tasks pull failed:', err);
       }
     };
 

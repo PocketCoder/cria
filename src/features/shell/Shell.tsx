@@ -17,6 +17,11 @@ import { useProjects } from '@/queries/projects';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
+import {
+  TodayView,
+  UpcomingView,
+  LabelView,
+} from '@/features/smart-views/SmartViews';
 import { QuickAddModal } from '@/components/QuickAddModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
@@ -27,8 +32,7 @@ export function Shell() {
   const signOut = useAuth((s) => s.signOut);
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
-  const selectedId = useUi((s) => s.selectedProjectLocalId);
-  const selected = projects.find((p) => p.localId === selectedId) ?? null;
+  const activeView = useUi((s) => s.activeView);
   const setSelectedProject = useUi((s) => s.setSelectedProject);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const displayName =
@@ -142,6 +146,66 @@ export function Shell() {
 
 
 
+  function renderMain() {
+    if (!activeView) {
+      return (
+        <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            Pick a project from the sidebar.
+          </p>
+          <p className="max-w-md text-xs text-[var(--color-muted-foreground)]">
+            Create and manage your tasks offline, syncing automatically in the
+            background.
+          </p>
+        </section>
+      );
+    }
+
+    switch (activeView.kind) {
+      case 'today':
+        return <TodayView />;
+      case 'upcoming':
+        return <UpcomingView />;
+      case 'label':
+        return <LabelView labelLocalId={activeView.localId} />;
+      case 'project': {
+        const project = projects.find(
+          (p) => p.localId === activeView.localId,
+        );
+        if (!project) {
+          return (
+            <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+              <p className="text-sm text-[var(--color-muted-foreground)]">
+                Project not found.
+              </p>
+            </section>
+          );
+        }
+        return (
+          <>
+            <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 rounded-full"
+                style={{
+                  background:
+                    project.hexColor || 'var(--color-muted-foreground)',
+                }}
+              />
+              <h1 className="text-base font-semibold tracking-tight">
+                {project.title}
+              </h1>
+            </header>
+            <div className="flex min-h-0 min-w-0 flex-1">
+              <TaskList project={project} />
+              <TaskDetail />
+            </div>
+          </>
+        );
+      }
+    }
+  }
+
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden">
       {/* No app title here — it lives in the footer. Dropping it also
@@ -163,40 +227,7 @@ export function Shell() {
         <ProjectSidebar />
 
         <main className="flex min-w-0 flex-1 flex-col">
-{selected ? (
-              <>
-                <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
-                  <span
-                    aria-hidden="true"
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{
-                      background:
-                        selected.hexColor || 'var(--color-muted-foreground)',
-                    }}
-                  />
-                  <h1 className="text-base font-semibold tracking-tight">
-                    {selected.title}
-                  </h1>
-                </header>
-                {/* TaskList (flex-1) fills the pane; TaskDetail renders as
-                    an in-flow floating card on the right only when a task
-                    is selected, pushing the list narrower rather than
-                    overlapping it. */}
-                <div className="flex flex-1 min-h-0 min-w-0">
-                  <TaskList project={selected} />
-                  <TaskDetail />
-                </div>
-              </>
-            ) : (
-            <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-              <p className="text-sm text-[var(--color-muted-foreground)]">
-                Pick a project from the sidebar.
-              </p>
-              <p className="max-w-md text-xs text-[var(--color-muted-foreground)]">
-                Create and manage your tasks offline, syncing automatically in the background.
-              </p>
-            </section>
-          )}
+          {renderMain()}
         </main>
       </div>
 
