@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
@@ -27,6 +27,7 @@ export function TaskDetail() {
   const selectedId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const queryClient = useQueryClient();
+  const cardRef = useRef<HTMLElement>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
@@ -46,6 +47,27 @@ export function TaskDetail() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedId, setSelectedTask]);
 
+  // Click-away closes the card, with three exceptions:
+  //  - inside the card (incl. the fixed-but-DOM-nested slash menu);
+  //  - inside a portaled Radix popper (the date picker lives in a body
+  //    portal — closing the card mid-date-pick would be maddening);
+  //  - on another task row — let the row's own click swap the card's
+  //    contents in place instead of close-then-reopen (no re-animation).
+  // pointerdown (not click) so dismissal feels immediate.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target) return;
+      if (cardRef.current?.contains(target)) return;
+      if (target.closest('[data-radix-popper-content-wrapper]')) return;
+      if (target.closest('[data-task-row]')) return;
+      setSelectedTask(null);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [selectedId, setSelectedTask]);
+
   const { data: task, isLoading, isError } = useQuery<Task | null>({
     queryKey: ['task', selectedId],
     queryFn: async () => (selectedId ? getTaskByLocalId(selectedId) : null),
@@ -61,7 +83,7 @@ export function TaskDetail() {
 
   if (isLoading) {
     return (
-      <DetailCard onClose={close}>
+      <DetailCard onClose={close} cardRef={cardRef}>
         <p className="p-5 text-sm text-[var(--color-muted-foreground)]">
           Loading…
         </p>
@@ -71,7 +93,7 @@ export function TaskDetail() {
 
   if (isError || !task) {
     return (
-      <DetailCard onClose={close}>
+      <DetailCard onClose={close} cardRef={cardRef}>
         <p className="p-5 text-sm text-[var(--color-warning)]">
           Could not load task details.
         </p>
@@ -134,7 +156,7 @@ export function TaskDetail() {
   );
 
   return (
-    <DetailCard onClose={close} header={header}>
+    <DetailCard onClose={close} header={header} cardRef={cardRef}>
       <div className="min-w-0 flex-1 overflow-y-auto p-5">
         {labels.length > 0 ? (
           <div className="mb-3">
@@ -169,14 +191,17 @@ export function TaskDetail() {
 function DetailCard({
   onClose,
   header,
+  cardRef,
   children,
 }: {
   onClose: () => void;
   header?: React.ReactNode;
+  cardRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
   return (
     <aside
+      ref={cardRef}
       role="dialog"
       aria-label="Task details"
       className="m-4 flex w-[420px] max-w-[calc(100%-2rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]"

@@ -226,6 +226,7 @@ function TaskRow({ task }: { task: Task }) {
 
   return (
     <li
+      data-task-row=""
       className={cn(
         'group flex items-start gap-3 border-b border-[var(--color-border)] px-6 py-3 transition-colors hover:bg-[var(--color-accent)]/5',
         task.done && 'opacity-60',
