@@ -12,16 +12,26 @@ import type { ApiClient } from '@/api/client';
 // Helper to run the schema SQL
 async function initSchema() {
   const db = await getDb();
-  const sql1 = await import('fs').then(m => m.promises.readFile(
-    require('path').join(__dirname, '../../src/db/migrations/001_initial.sql'),
-    'utf8',
-  ));
-  const sql2 = await import('fs').then(m => m.promises.readFile(
-    require('path').join(__dirname, '../../src/db/migrations/002_task_fields.sql'),
-    'utf8',
-  ));
-  await db.execute(sql1);
-  await db.execute(sql2);
+  const { promises: fs } = await import('node:fs');
+  const { join } = await import('node:path');
+  const ms = [
+    '001_initial.sql',
+    '002_task_fields.sql',
+    '003_fts.sql',
+    '004_project_favorite.sql',
+  ];
+  for (const file of ms) {
+    const sql = await fs.readFile(
+      join(__dirname, '../../src/db/migrations', file),
+      'utf8',
+    );
+    try {
+      await db.execute(sql);
+    } catch (e: unknown) {
+      const msg = String((e as Error)?.message ?? e);
+      if (!/duplicate column name/i.test(msg)) throw e;
+    }
+  }
 }
 
 // Helper to clear all data tables between tests

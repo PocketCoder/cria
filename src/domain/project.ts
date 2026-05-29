@@ -17,6 +17,7 @@ export interface Project {
   parentLocalId: string | null;
   hexColor: string | null;
   isArchived: boolean;
+  isFavorite: boolean;
   position: number | null;
   updatedAt: string;
 }
@@ -34,6 +35,7 @@ export const projectResponseSchema = z
     parent_project_id: z.number().nullable().optional(),
     hex_color: z.string().nullable().optional(),
     is_archived: z.boolean().nullable().optional(),
+    is_favorite: z.boolean().nullable().optional(),
     position: z.number().nullable().optional(),
     updated: z.string().nullable().optional(),
   })

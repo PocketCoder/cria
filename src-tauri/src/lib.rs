@@ -5,6 +5,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 const INITIAL_MIGRATION_SQL: &str = include_str!("../../src/db/migrations/001_initial.sql");
 const MIGRATION_2_SQL: &str = include_str!("../../src/db/migrations/002_task_fields.sql");
 const MIGRATION_3_SQL: &str = include_str!("../../src/db/migrations/003_fts.sql");
+const MIGRATION_4_SQL: &str = include_str!("../../src/db/migrations/004_project_favorite.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -24,6 +25,12 @@ fn migrations() -> Vec<Migration> {
             version: 3,
             description: "FTS5 full-text search",
             sql: MIGRATION_3_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "project is_favorite column",
+            sql: MIGRATION_4_SQL,
             kind: MigrationKind::Up,
         },
     ]

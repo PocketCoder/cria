@@ -17,6 +17,7 @@ export type ProjectUpdate = Partial<{
   hexColor: string | null;
   parentLocalId: string | null;
   isArchived: boolean;
+  isFavorite: boolean;
 }>;
 
 interface ProjectRow {
@@ -27,6 +28,7 @@ interface ProjectRow {
   parent_local_id: string | null;
   hex_color: string | null;
   is_archived: number;
+  is_favorite: number;
   position: number | null;
   updated_at: string;
 }
@@ -40,6 +42,7 @@ function rowToProject(row: ProjectRow): Project {
     parentLocalId: row.parent_local_id,
     hexColor: row.hex_color,
     isArchived: row.is_archived === 1,
+    isFavorite: row.is_favorite === 1,
     position: row.position,
     updatedAt: row.updated_at,
   };
@@ -49,7 +52,7 @@ export async function listProjects(): Promise<Project[]> {
   const db = await getDb();
   const rows = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
-            hex_color, is_archived, position, updated_at
+            hex_color, is_archived, is_favorite, position, updated_at
        FROM projects
       WHERE deleted = 0
    ORDER BY position IS NULL, position ASC, title COLLATE NOCASE ASC`,
@@ -63,7 +66,7 @@ export async function getProjectByLocalId(
   const db = await getDb();
   const rows = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
-            hex_color, is_archived, position, updated_at
+            hex_color, is_archived, is_favorite, position, updated_at
        FROM projects
       WHERE local_id = ?
         AND deleted = 0
@@ -130,9 +133,9 @@ export async function upsertProjectFromServer(
     insert: (localId, lastSyncedJson) => ({
       sql: `INSERT INTO projects (
               local_id, server_id, title, description, parent_local_id,
-              hex_color, is_archived, position, updated_at, synced_at,
-              last_synced, dirty, deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+              hex_color, is_archived, is_favorite, position, updated_at,
+              synced_at, last_synced, dirty, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       params: [
         localId,
         serverId,
@@ -141,6 +144,7 @@ export async function upsertProjectFromServer(
         parentLocalId,
         payload.hex_color ?? null,
         isArchived,
+        payload.is_favorite === true ? 1 : 0,
         payload.position ?? null,
         updatedAt,
         now,
@@ -154,6 +158,7 @@ export async function upsertProjectFromServer(
               parent_local_id = ?,
               hex_color       = ?,
               is_archived     = ?,
+              is_favorite     = ?,
               position        = ?,
               updated_at      = ?,
               synced_at       = ?,
@@ -167,6 +172,7 @@ export async function upsertProjectFromServer(
         parentLocalId,
         payload.hex_color ?? null,
         isArchived,
+        payload.is_favorite === true ? 1 : 0,
         payload.position ?? null,
         updatedAt,
         now,
@@ -203,8 +209,8 @@ export async function createProject(input: ProjectInput): Promise<Project> {
     await db.execute(
       `INSERT INTO projects (
          local_id, server_id, title, description, parent_local_id,
-         hex_color, is_archived, position, updated_at, dirty, deleted
-       ) VALUES (?, NULL, ?, ?, ?, ?, 0, NULL, ?, 1, 0)`,
+         hex_color, is_archived, is_favorite, position, updated_at, dirty, deleted
+       ) VALUES (?, NULL, ?, ?, ?, ?, 0, 0, NULL, ?, 1, 0)`,
       [
         localId,
         input.title,
@@ -261,6 +267,10 @@ export async function updateProject(
   if (input.isArchived !== undefined) {
     sets.push('is_archived = ?');
     params.push(input.isArchived ? 1 : 0);
+  }
+  if (input.isFavorite !== undefined) {
+    sets.push('is_favorite = ?');
+    params.push(input.isFavorite ? 1 : 0);
   }
 
   if (sets.length > 0) {

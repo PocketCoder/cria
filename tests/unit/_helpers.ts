@@ -11,16 +11,21 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { getDb } from '@/db';
 
-/** Run both migrations against the in-memory DB.
+/** Run all migrations against the in-memory DB.
  *
- * 001 uses `CREATE TABLE IF NOT EXISTS` so it's idempotent. 002 uses
+ * 001 uses `CREATE TABLE IF NOT EXISTS` so it's idempotent. 002+ use
  * bare `ALTER TABLE ADD COLUMN` which will throw "duplicate column" on
  * the second invocation. Vitest can share a worker (and therefore the
  * `getDb()` module singleton) across test files, so we swallow that
  * specific error here. Any other migration failure still bubbles up. */
 export async function initSchema(): Promise<void> {
   const db = await getDb();
-  for (const file of ['001_initial.sql', '002_task_fields.sql']) {
+  for (const file of [
+    '001_initial.sql',
+    '002_task_fields.sql',
+    '003_fts.sql',
+    '004_project_favorite.sql',
+  ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),
       'utf8',

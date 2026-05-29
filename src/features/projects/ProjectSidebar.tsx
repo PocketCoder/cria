@@ -284,7 +284,11 @@ export function ProjectSidebar() {
             </p>
           ) : (
             <ul className="space-y-0.5">
-              {projects.map((p) => (
+              {/* Filter out Vikunja's virtual "Favorites" container project.
+                  The server returns it as a real project when any project is
+                  favorited. We identify it by title since its server_id isn't
+                  predictable. */}
+              {projects.filter((p) => p.title !== 'Favorites').map((p) => (
                 <ProjectRow
                   key={p.localId}
                   project={p}
