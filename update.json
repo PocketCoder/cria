@@ -1,15 +1,15 @@
 {
-  "version": "0.3.1",
-  "notes": "See https://github.com/PocketCoder/cria/releases/tag/v0.3.1",
-  "pub_date": "2026-05-28T20:42:36Z",
+  "version": "0.4.0",
+  "notes": "See https://github.com/PocketCoder/cria/releases/tag/v0.4.0",
+  "pub_date": "2026-05-29T08:40:52Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MGdneVY1VGh5Zkc3WkZ5bklWUkVDNUd3cmQ1T01LUXNTQ01vMmxXNzFQUUJFYlJpeUJJd0c0d0dKeFc0WDMyZGdSZXdOSjVPVHdnaTFrd3hKeGNPendzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwMDAwOTAxCWZpbGU6Q3JpYS5hcHAudGFyLmd6Cnd5TFgvT1FhVERScitnOUxpcFVXaVhtUmFQaFpTK1kxQk5WNHVkV2pxZTJrejV0T0JUTkVBU2E3d1ZCeitVVzRaSVVCSDNHRXE2bnB4V0duQ2VGOUFnPT0K",
-      "url": "https://github.com/PocketCoder/cria/releases/download/v0.3.1/Cria_aarch64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHVBNlJQMXBJRVdmZWFwN3VQYXJwb25TOXRaSG9NYzRxaUIySFVJT20ycVFkQzJua0xvK1cyVCtST3E1Q0QvRnpHeDdEVElobWxIUmFNcmtCb28vaXdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwMDQ0MDAxCWZpbGU6Q3JpYS5hcHAudGFyLmd6CmNHRGVMOFlYb2RLZGtDMnRoVlR3T0NkNmV1VkpuK0NxVFdNZjFBK0JMeTMrS2Q5cVRLVlgwNnVLRmQwWTh5Q1JzWStqc1JpSEFCSTNaWTlaWHo2aEFRPT0K",
+      "url": "https://github.com/PocketCoder/cria/releases/download/v0.4.0/Cria_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHJyTlRjQW1VMGtkcWVaaGtmaXF6RmErTGxYN2c0RG5POHVqSjQ0WlBuS280K2N1UmI0N1ZxRjZaQlczcTdOdnM4ZzhCY1V0dzhWS3BJekZKNTVzMmdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwMDAwNzYxCWZpbGU6Q3JpYS5hcHAudGFyLmd6CmV4MTA3T1BKS0lia09ZRU9Ja1BEeVpJQ1dXL3JnMWVQeW4yNGhFSzRyem1CNDcxOEdRTmdSVXY3L2dxVzBoZjhDVXF3QW1TVERhWVNwUW9nMHBLTkF3PT0K",
-      "url": "https://github.com/PocketCoder/cria/releases/download/v0.3.1/Cria_x86_64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHM4UnJYRmpnWTBsc1Y0UURBMlc3cVoxZGptNGNXRWpoVmU2Q1pRZklsaXkvN0NoZHZYUkRjckdwamFzTmVvMHVMQ1RwdFZxWjl3ZzlIL1lYVjZnbkFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwMDQzOTQ3CWZpbGU6Q3JpYS5hcHAudGFyLmd6Cjk4Wm1GZU9HTEZnMHljTjN5dEs0Vi91clA4cFl2NkZmOVZqWWIvQ2FTbXpkK01YTVoxaGFML3JhS1o5bENNaE1ERTZVVGNrTG9lNjFUMHlGSlhDcEJBPT0K",
+      "url": "https://github.com/PocketCoder/cria/releases/download/v0.4.0/Cria_x86_64.app.tar.gz"
     }
   }
 }
