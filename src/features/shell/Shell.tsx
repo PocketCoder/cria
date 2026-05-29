@@ -255,9 +255,11 @@ export function Shell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden">
-      {/* macOS traffic-light spacer on the left; search is centre; user
-          controls on the right. */}
-      <header className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
+      {/* data-tauri-drag-region on the header lets the window be
+          dragged from the header background — interactive children
+          (inputs, buttons) still work because Tauri intercepts them.
+          The flex-1 spacer on the left sits behind macOS traffic lights. */}
+      <header data-tauri-drag-region className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
         <div className="flex-1" />
         <div className="mx-4 flex flex-1 max-w-md">
           <div className="relative w-full">
