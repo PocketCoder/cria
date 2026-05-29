@@ -689,31 +689,27 @@ function InlineAssignees({
 
 /* ─── Repeat interval inline ─── */
 
-const SECONDS = { HOUR: 3600, DAY: 86400, WEEK: 604800 };
-
-const CADENCE_PRESETS = [
-  { label: 'Every day', seconds: SECONDS.DAY },
-  { label: 'Every week', seconds: SECONDS.WEEK },
-  { label: 'Every 30 days', seconds: 30 * SECONDS.DAY },
-] as const;
+const SECONDS = { HOUR: 3600, DAY: 86400, MONTH: 2_592_000 };
 
 const REPEAT_MODE_LABELS: Record<number, string> = {
-  0: 'Default',
-  1: 'Monthly',
+  0: 'From creation date',
+  1: 'Monthly (same day)',
   2: 'From completion date',
 };
 
-function secondsToDuration(seconds: number): { value: number; unit: 'hours' | 'days' | 'weeks' } {
-  if (seconds > 0 && seconds % SECONDS.WEEK === 0) return { value: seconds / SECONDS.WEEK, unit: 'weeks' };
-  if (seconds > 0 && seconds % SECONDS.DAY === 0) return { value: seconds / SECONDS.DAY, unit: 'days' };
-  return { value: seconds > 0 ? seconds / SECONDS.HOUR : 1, unit: 'hours' };
+function secondsToValueUnit(seconds: number): { value: number; unit: 'day' | 'month' | 'hour' } {
+  if (seconds > 0 && seconds % SECONDS.MONTH === 0) return { value: seconds / SECONDS.MONTH, unit: 'month' };
+  if (seconds > 0 && seconds % SECONDS.DAY === 0) return { value: seconds / SECONDS.DAY, unit: 'day' };
+  return { value: seconds > 0 ? seconds / SECONDS.HOUR : 1, unit: 'hour' };
 }
 
-function durationToSeconds(value: number, unit: 'hours' | 'days' | 'weeks'): number {
-  return value * SECONDS[unit === 'weeks' ? 'WEEK' : unit === 'days' ? 'DAY' : 'HOUR'];
+function valueUnitToSeconds(value: number, unit: 'day' | 'month' | 'hour'): number {
+  if (unit === 'month') return value * SECONDS.MONTH;
+  if (unit === 'day') return value * SECONDS.DAY;
+  return value * SECONDS.HOUR;
 }
 
-const UNIT_OPTIONS = ['hours', 'days', 'weeks'] as const;
+const UNIT_OPTIONS = ['hour', 'day', 'month'] as const;
 
 function InlineRepeat({
   task,
@@ -724,27 +720,24 @@ function InlineRepeat({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const [repeatAfter, setRepeatAfter] = useState(task.repeatAfter);
-  const [repeatMode, setRepeatMode] = useState(task.repeatMode);
-
-  const init = secondsToDuration(task.repeatAfter);
-  const [customValue, setCustomValue] = useState(init.value);
-  const [customUnit, setCustomUnit] = useState(init.unit);
+  const init = secondsToValueUnit(task.repeatAfter);
+  const [value, setValue] = useState(init.value);
+  const [unit, setUnit] = useState<'hour' | 'day' | 'month'>(init.unit);
+  const [mode, setMode] = useState(task.repeatMode);
 
   useEffect(() => {
-    setRepeatAfter(task.repeatAfter);
-    setRepeatMode(task.repeatMode);
-    const d = secondsToDuration(task.repeatAfter);
-    setCustomValue(d.value);
-    setCustomUnit(d.unit);
+    const d = secondsToValueUnit(task.repeatAfter);
+    setValue(d.value);
+    setUnit(d.unit);
+    setMode(task.repeatMode);
   }, [task.repeatAfter, task.repeatMode]);
 
-  const save = async (after: number, mode: number) => {
-    await updateTask(task.localId, { repeatAfter: after, repeatMode: mode });
+  const save = async (after: number, m: number) => {
+    await updateTask(task.localId, { repeatAfter: after, repeatMode: m });
   };
 
   const label = task.repeatAfter > 0
-    ? `Repeats ${repeatMode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
+    ? `Repeats ${mode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
     : 'Set repeating';
 
   return (
@@ -756,49 +749,28 @@ function InlineRepeat({
       />
       {expanded && (
         <div className="mx-3 mb-1 flex flex-col gap-2">
-          {/* Quick cadence presets */}
-          <div className="flex gap-1">
-            {CADENCE_PRESETS.map((p) => (
-              <button
-                key={p.seconds}
-                onClick={() => save(p.seconds, 0)}
-                className={cn(
-                  'flex-1 rounded px-1.5 py-1 text-[10px] font-medium transition-colors',
-                  repeatAfter === p.seconds && repeatMode === 0
-                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                    : 'bg-[var(--color-accent)]/5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/15',
-                )}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom interval */}
+          {/* Interval input */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[var(--color-muted-foreground)]">Every</span>
+            <span className="text-xs text-[var(--color-muted-foreground)]">Every</span>
             <input
               type="number"
               min={1}
-              value={customValue}
-              onChange={(e) => setCustomValue(Math.max(1, Number(e.target.value)))}
-              className="w-12 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-[11px] text-center"
+              value={value}
+              onChange={(e) => setValue(Math.max(1, Number(e.target.value)))}
+              className="w-14 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-xs text-center"
             />
             <select
-              value={customUnit}
-              onChange={(e) => setCustomUnit(e.target.value as typeof customUnit)}
-              className="rounded border border-[var(--color-border)] bg-transparent px-1 py-1 text-[11px]"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value as typeof unit)}
+              className="rounded border border-[var(--color-border)] bg-transparent px-1 py-1 text-xs"
             >
               {UNIT_OPTIONS.map((u) => (
-                <option key={u} value={u}>{u}</option>
+                <option key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</option>
               ))}
             </select>
             <button
-              onClick={() => {
-                const s = durationToSeconds(customValue, customUnit);
-                save(s, repeatMode);
-              }}
-              className="ml-auto rounded bg-[var(--color-accent)] px-2 py-1 text-[10px] font-medium text-[var(--color-accent-foreground)]"
+              onClick={() => save(valueUnitToSeconds(value, unit), mode)}
+              className="ml-auto rounded bg-[var(--color-accent)] px-2.5 py-1 text-[10px] font-medium text-[var(--color-accent-foreground)]"
             >
               Apply
             </button>
@@ -806,24 +778,24 @@ function InlineRepeat({
 
           {/* Repeat mode */}
           <div className="flex gap-1">
-            {([0, 1, 2] as const).map((mode) => (
+            {([0, 1, 2] as const).map((m) => (
               <button
-                key={mode}
-                onClick={() => save(repeatAfter, mode)}
+                key={m}
+                onClick={() => save(valueUnitToSeconds(value, unit), m)}
                 className={cn(
                   'flex-1 rounded px-1.5 py-1 text-[10px] transition-colors',
-                  mode === repeatMode
+                  m === mode
                     ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
                     : 'hover:bg-[var(--color-accent)]/10 text-[var(--color-muted-foreground)]',
                 )}
               >
-                {REPEAT_MODE_LABELS[mode]}
+                {REPEAT_MODE_LABELS[m]}
               </button>
             ))}
           </div>
 
           {/* Clear */}
-          {repeatAfter > 0 && (
+          {task.repeatAfter > 0 && (
             <button
               onClick={() => save(0, 0)}
               className="self-start rounded px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10"
