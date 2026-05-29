@@ -27,6 +27,7 @@ import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { cn } from '@/lib/cn';
 import { Search, X } from 'lucide-react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
 export function Shell() {
@@ -191,6 +192,13 @@ export function Shell() {
     }
   };
 
+  /* ── window drag ──────────────────────────────────────── */
+  const handleHeaderMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, button, a, [role="button"], textarea, select')) return;
+    getCurrentWindow().startDragging().catch(() => {});
+  };
+
   function renderMain() {
     if (!activeView) {
       return (
@@ -255,11 +263,10 @@ export function Shell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden">
-      {/* data-tauri-drag-region on the header lets the window be
-          dragged from the header background — interactive children
-          (inputs, buttons) still work because Tauri intercepts them.
-          The flex-1 spacer on the left sits behind macOS traffic lights. */}
-      <header data-tauri-drag-region className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
+      {/* Left spacer sits behind macOS traffic lights; programmatic
+          drag via getCurrentWindow().startDragging() on mousedown when
+          the target isn't an interactive element. */}
+      <header onMouseDown={handleHeaderMouseDown} className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
         <div className="flex-1" />
         <div className="mx-4 flex flex-1 max-w-md">
           <div className="relative w-full">
