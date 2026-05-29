@@ -20,7 +20,9 @@ import type { TaskInput } from '@/domain/task';
 export function QuickAddModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const selectedProjectId = useUi((s) => s.selectedProjectLocalId);
+  const activeView = useUi((s) => s.activeView);
+  const selectedProjectId =
+    activeView?.kind === 'project' ? activeView.localId : null;
   const { data: projects = [] } = useProjects();
   const [projectId, setProjectId] = useState<string | null>(
     selectedProjectId ?? null,

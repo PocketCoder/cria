@@ -334,6 +334,7 @@ export async function deleteLabel(localId: string): Promise<void> {
     );
   });
   notify('labels');
+  notify('tasks');
   notify('task_labels');
   notify('outbox');
 }

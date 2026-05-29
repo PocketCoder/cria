@@ -265,8 +265,8 @@ function TaskRow({ task }: { task: Task }) {
             {task.title}
           </p>
         )}
-        {task.dueDate || task.priority > 0 ? (
-          <p className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--color-muted-foreground)]">
+        {(task.dueDate || task.priority > 0 || labels.length > 0) ? (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
               <span>Due {formatDate(task.dueDate)}</span>
             ) : null}
@@ -275,10 +275,6 @@ function TaskRow({ task }: { task: Task }) {
                 {'!'.repeat(Math.min(5, task.priority))}
               </span>
             ) : null}
-          </p>
-        ) : null}
-        {labels.length > 0 ? (
-          <div className="mt-1">
             <LabelChips labels={labels} />
           </div>
         ) : null}
