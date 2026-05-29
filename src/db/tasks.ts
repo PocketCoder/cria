@@ -45,7 +45,9 @@ function rowToTask(row: TaskRow): Task {
     startDate: row.start_date,
     endDate: row.end_date,
     priority: row.priority,
-    percentDone: row.percent_done,
+    percentDone: row.percent_done <= 1
+      ? Math.round(row.percent_done * 100)
+      : Math.round(row.percent_done),
     hexColor: row.hex_color,
     position: row.position,
     isFavorite: row.is_favorite === 1,
