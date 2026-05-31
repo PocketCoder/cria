@@ -1,4 +1,5 @@
 import { exec, getDb } from './index';
+import { notify } from './bus';
 import type { TaskAttachmentResponse } from '@/domain/task';
 
 export interface TaskAttachment {
@@ -69,6 +70,45 @@ export async function listAttachmentsForTask(
     mime: r.mime,
     createdAt: r.created_at,
   }));
+}
+
+/**
+ * Mirror a single server-returned attachment into the local store and
+ * fire the 'tasks' bus event so the detail card refreshes. Used by the
+ * upload path after a successful PUT — saves us a full pull just to
+ * surface a freshly-uploaded file.
+ */
+export async function upsertAttachmentLocal(
+  taskLocalId: string,
+  attachment: TaskAttachmentResponse,
+): Promise<void> {
+  await exec(
+    `INSERT OR REPLACE INTO task_attachments
+       (task_local_id, server_id, file_id, file_name, file_size, mime, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      taskLocalId,
+      attachment.id,
+      attachment.file?.id ?? null,
+      attachment.file?.name ?? null,
+      attachment.file?.size ?? null,
+      attachment.file?.mime ?? null,
+      attachment.created ?? null,
+    ],
+  );
+  notify('tasks');
+}
+
+/** Remove a single attachment from the local mirror. */
+export async function deleteAttachmentLocal(
+  taskLocalId: string,
+  attachmentServerId: number,
+): Promise<void> {
+  await exec(
+    `DELETE FROM task_attachments WHERE task_local_id = ? AND server_id = ?`,
+    [taskLocalId, attachmentServerId],
+  );
+  notify('tasks');
 }
 
 /** local_ids of every task that has ≥1 attachment — drives the row

@@ -173,6 +173,8 @@ export function TaskDetail() {
           <RichTextEditor
             value={task.description}
             onSave={handleDescriptionSave}
+            taskLocalId={task.localId}
+            taskServerId={task.serverId}
           />
         </section>
 
