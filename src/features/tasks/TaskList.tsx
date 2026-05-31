@@ -85,6 +85,7 @@ export function TaskList({ project }: TaskListProps) {
         projectLocalId: project.localId,
         ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter ? { repeatAfter: parsed.repeatAfter, repeatMode: parsed.repeatMode } : {}),
         ...metadata,
       };
 

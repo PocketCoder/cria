@@ -70,6 +70,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
         projectLocalId: projectId,
         ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter ? { repeatAfter: parsed.repeatAfter, repeatMode: parsed.repeatMode } : {}),
       };
       const created = await createTask(input);
 

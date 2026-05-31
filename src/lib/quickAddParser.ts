@@ -39,6 +39,8 @@ export interface QuickAddResult {
   title: string;
   dueDate: string | null;
   priority: number | null;
+  repeatAfter: number;
+  repeatMode: number;
   labelTitles: string[];
   assigneeUsernames: string[];
   tokens: QuickAddToken[];
@@ -49,7 +51,8 @@ export type QuickAddToken =
   | { kind: 'date'; start: number; end: number; text: string; iso: string }
   | { kind: 'priority'; start: number; end: number; text: string; value: number }
   | { kind: 'label'; start: number; end: number; text: string; title: string }
-  | { kind: 'assignee'; start: number; end: number; text: string; username: string };
+  | { kind: 'assignee'; start: number; end: number; text: string; username: string }
+  | { kind: 'recurrence'; start: number; end: number; text: string; repeatAfter: number; repeatMode: number };
 
 // Regex source-of-truth for the symbol tokens. Kept narrow on purpose so
 // the title can contain `#` / `!` / `@` characters mid-word and only the
@@ -57,9 +60,10 @@ export type QuickAddToken =
 const LABEL_RE = /(?:^|\s)(#"[^"]+"|#[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
 const ASSIGNEE_RE = /(?:^|\s)(@[A-Za-z0-9_-]+)(?=\s|$)/g;
+const RECURRENCE_RE = /(?:^|\s)(every\s+\d+\s+(day|week|month|year)s?|every\s+(day|week|month|year)s?|daily|weekly|monthly|yearly)(?=\s|$)/gi;
 
 interface RawToken {
-  kind: 'label' | 'priority' | 'assignee' | 'date';
+  kind: 'label' | 'priority' | 'assignee' | 'date' | 'recurrence';
   start: number;
   end: number;
   text: string;
@@ -67,6 +71,9 @@ interface RawToken {
   payload: string | number;
   /** For date tokens only: the ISO timestamp the date phrase resolves to. */
   iso?: string;
+  /** For recurrence tokens only. */
+  repeatAfter?: number;
+  repeatMode?: number;
 }
 
 export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddResult {
@@ -101,6 +108,30 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     const end = start + matchText.length;
     const username = matchText.slice(1);
     claimed.push({ kind: 'assignee', start, end, text: matchText, payload: username });
+  }
+
+  // --- Recurrence (before chrono so "every day" doesn't leak as a date) ---
+  //
+  // Patterns: "every day", "every 3 days", "daily", "weekly", "monthly",
+  // "every month", "every 2 weeks", "every year", etc.
+
+  for (const m of raw.matchAll(RECURRENCE_RE)) {
+    const matchText = m[1]!;
+    const start = m.index! + (m[0]!.length - matchText.length);
+    const end = start + matchText.length;
+    if (overlaps(start, end, claimed)) continue;
+    const parsed = parseRecurrenceText(matchText);
+    if (parsed) {
+      claimed.push({
+        kind: 'recurrence',
+        start,
+        end,
+        text: matchText,
+        payload: 0,
+        repeatAfter: parsed.repeatAfter,
+        repeatMode: parsed.repeatMode,
+      });
+    }
   }
 
   // --- Date (chrono-node) — skip ranges already claimed by symbol tokens ---
@@ -144,6 +175,8 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   const assigneeUsernames: string[] = [];
   let priority: number | null = null;
   let dueDate: string | null = null;
+  let repeatAfter = 0;
+  let repeatMode = 0;
   for (const t of claimed) {
     if (t.kind === 'label') labelTitles.push(t.payload as string);
     else if (t.kind === 'assignee') assigneeUsernames.push(t.payload as string);
@@ -151,6 +184,9 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       priority = priority === null ? (t.payload as number) : Math.max(priority, t.payload as number);
     } else if (t.kind === 'date' && t.iso && !dueDate) {
       dueDate = t.iso;
+    } else if (t.kind === 'recurrence') {
+      repeatAfter = t.repeatAfter ?? 0;
+      repeatMode = t.repeatMode ?? 0;
     }
   }
 
@@ -171,6 +207,12 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       tokens.push({ kind: 'assignee', start: t.start, end: t.end, text: t.text, username: t.payload as string });
     } else if (t.kind === 'date' && t.iso) {
       tokens.push({ kind: 'date', start: t.start, end: t.end, text: t.text, iso: t.iso });
+    } else if (t.kind === 'recurrence') {
+      tokens.push({
+        kind: 'recurrence', start: t.start, end: t.end, text: t.text,
+        repeatAfter: t.repeatAfter ?? 0,
+        repeatMode: t.repeatMode ?? 0,
+      });
     }
     walk = t.end;
   }
@@ -178,7 +220,36 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     tokens.push({ kind: 'text', start: walk, end: raw.length, text: raw.slice(walk) });
   }
 
-  return { title, dueDate, priority, labelTitles, assigneeUsernames, tokens };
+  return { title, dueDate, priority, repeatAfter, repeatMode, labelTitles, assigneeUsernames, tokens };
+}
+
+/** Convert a recurrence phrase like "every 3 days" to repeatAfter + repeatMode. */
+function parseRecurrenceText(
+  text: string,
+): { repeatAfter: number; repeatMode: number } | null {
+  const lower = text.toLowerCase().trim();
+
+  if (lower === 'daily') return { repeatAfter: 86_400, repeatMode: 0 };
+  if (lower === 'weekly') return { repeatAfter: 604_800, repeatMode: 0 };
+  if (lower === 'monthly') return { repeatAfter: 0, repeatMode: 1 };
+  if (lower === 'yearly') return { repeatAfter: 31_536_000, repeatMode: 0 };
+
+  const m = lower.match(/^every\s+(\d+)?\s*(day|week|month|year)s?$/);
+  if (!m) return null;
+
+  const count = m[1] ? parseInt(m[1], 10) : 1;
+  const unit = m[2]!;
+
+  if (unit === 'month') return { repeatAfter: 0, repeatMode: 1 };
+
+  const SECONDS: Record<string, number> = {
+    day: 86_400,
+    week: 604_800,
+    year: 31_536_000,
+  };
+  const per = SECONDS[unit];
+  if (!per) return null;
+  return { repeatAfter: per * count, repeatMode: 0 };
 }
 
 function overlaps(start: number, end: number, ranges: RawToken[]): boolean {

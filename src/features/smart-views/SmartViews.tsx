@@ -103,6 +103,7 @@ function SmartView({
         projectLocalId: pid,
         ...(effectiveDueDate ? { dueDate: effectiveDueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter ? { repeatAfter: parsed.repeatAfter, repeatMode: parsed.repeatMode } : {}),
         ...metadata,
       };
 
