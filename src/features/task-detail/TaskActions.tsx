@@ -18,7 +18,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { listLabels, toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
 import { listAssigneesForTask, addTaskAssignee, removeTaskAssignee } from '@/db/task-assignees';
@@ -468,10 +468,30 @@ function InlineLabels({
   onToggle: () => void;
 }) {
   const [showManager, setShowManager] = useState(false);
+  const [search, setSearch] = useState('');
   const currentIds = new Set(currentLabels.map((l) => l.localId));
 
   const handleToggle = async (labelLocalId: string) => {
     await toggleTaskLabel(taskLocalId, labelLocalId);
+  };
+
+  const filtered = search.trim()
+    ? allLabels.filter((l) => l.title.toLowerCase().includes(search.toLowerCase()))
+    : allLabels;
+  const exactMatch = search.trim()
+    ? allLabels.some((l) => l.title.toLowerCase() === search.trim().toLowerCase())
+    : false;
+
+  const handleCreateAndToggle = async () => {
+    const title = search.trim();
+    if (!title) return;
+    try {
+      const label = await createLabel({ title });
+      await toggleTaskLabel(taskLocalId, label.localId);
+      setSearch('');
+    } catch (err) {
+      console.error('[labels] inline create failed:', err);
+    }
   };
 
   return (
@@ -486,13 +506,20 @@ function InlineLabels({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
-          {allLabels.length === 0 && (
+        <div className="mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+          <input
+            type="text"
+            placeholder="Search or create…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="sticky top-0 z-10 mb-1 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+          />
+          {filtered.length === 0 && !search.trim() && (
             <p className="py-1 text-[11px] text-[var(--color-muted-foreground)]">
               No labels available.
             </p>
           )}
-          {allLabels.map((label) => {
+          {filtered.map((label) => {
             const active = currentIds.has(label.localId);
             return (
               <button
@@ -517,6 +544,16 @@ function InlineLabels({
               </button>
             );
           })}
+          {search.trim() && !exactMatch && (
+            <button
+              type="button"
+              onClick={handleCreateAndToggle}
+              className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-[var(--color-primary)] hover:bg-[var(--color-accent)]/5"
+            >
+              <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-[var(--color-primary)] text-[9px] leading-none">+</span>
+              <span className="flex-1 truncate">Create &quot;{search.trim()}&quot;</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowManager(true)}
