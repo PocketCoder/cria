@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getDb, exec, withTx } from './index';
+import { getDb, withTx } from './index';
 import { mergeFromServer } from './syncMerge';
 import { notify } from './bus';
 import type { Label, LabelResponse } from '@/domain/label';
@@ -133,18 +133,21 @@ export async function replaceTaskLabelsFromServer(
   }
 
   // Wipe the existing links, then insert the new set. Cheap because the
-  // typical task has < 10 labels.
-  await exec(`DELETE FROM task_labels WHERE task_local_id = ?`, [
-    taskLocalId,
-  ]);
-  for (const labelLocalId of labelLocalIds) {
-    await exec(
-      `INSERT INTO task_labels
-         (task_local_id, label_local_id, updated_at, synced_at, dirty, deleted)
-       VALUES (?, ?, ?, ?, 0, 0)`,
-      [taskLocalId, labelLocalId, now, now],
-    );
-  }
+  // typical task has < 10 labels. Atomic — a concurrent reader between
+  // the DELETE and the first INSERT would otherwise see zero labels.
+  await withTx(async (tx) => {
+    await tx.execute(`DELETE FROM task_labels WHERE task_local_id = ?`, [
+      taskLocalId,
+    ]);
+    for (const labelLocalId of labelLocalIds) {
+      await tx.execute(
+        `INSERT INTO task_labels
+           (task_local_id, label_local_id, updated_at, synced_at, dirty, deleted)
+         VALUES (?, ?, ?, ?, 0, 0)`,
+        [taskLocalId, labelLocalId, now, now],
+      );
+    }
+  });
 }
 
 /**

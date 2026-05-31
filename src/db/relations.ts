@@ -17,7 +17,7 @@
  * server creates the inverse on the other task automatically, so we
  * don't push it ourselves.
  */
-import { exec, getDb, withTx } from './index';
+import { getDb, withTx } from './index';
 import { notify } from './bus';
 import {
   inverseRelationKind,
@@ -59,44 +59,45 @@ export async function replaceTaskRelationsFromServer(
   taskLocalId: string,
   related: Record<string, RelatedTaskResponse[]>,
 ): Promise<void> {
-  const db = await getDb();
-  const [{ dirty } = { dirty: 0 }] = await db.select<{ dirty: number }[]>(
-    `SELECT dirty FROM tasks WHERE local_id = ? LIMIT 1`,
-    [taskLocalId],
-  );
-  if (dirty === 1) return;
+  await withTx(async (tx) => {
+    const [{ dirty } = { dirty: 0 }] = await tx.select<{ dirty: number }[]>(
+      `SELECT dirty FROM tasks WHERE local_id = ? LIMIT 1`,
+      [taskLocalId],
+    );
+    if (dirty === 1) return;
 
-  await exec(`DELETE FROM task_relations WHERE task_local_id = ?`, [
-    taskLocalId,
-  ]);
+    await tx.execute(`DELETE FROM task_relations WHERE task_local_id = ?`, [
+      taskLocalId,
+    ]);
 
-  for (const [kind, peers] of Object.entries(related)) {
-    if (!peers) continue;
-    for (const peer of peers) {
-      // Resolve the peer's local id by server id when possible. If the
-      // peer task isn't synced yet, fall back to carrying the server id
-      // so the row is still useful (the title comes from the embedded
-      // payload; the next pull will re-resolve once the peer lands).
-      const [row] = await db.select<{ local_id: string }[]>(
-        `SELECT local_id FROM tasks WHERE server_id = ? LIMIT 1`,
-        [peer.id],
-      );
-      const otherLocalId: string | null = row?.local_id ?? null;
-      await exec(
-        `INSERT OR REPLACE INTO task_relations
-           (task_local_id, other_task_local_id, other_task_server_id,
-            relation_kind, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          taskLocalId,
-          otherLocalId,
-          otherLocalId ? null : peer.id,
-          kind,
-          null, // server doesn't return a per-relation created_at in this map
-        ],
-      );
+    for (const [kind, peers] of Object.entries(related)) {
+      if (!peers) continue;
+      for (const peer of peers) {
+        // Resolve the peer's local id by server id when possible. If the
+        // peer task isn't synced yet, fall back to carrying the server id
+        // so the row is still useful (the title comes from the embedded
+        // payload; the next pull will re-resolve once the peer lands).
+        const [row] = await tx.select<{ local_id: string }[]>(
+          `SELECT local_id FROM tasks WHERE server_id = ? LIMIT 1`,
+          [peer.id],
+        );
+        const otherLocalId: string | null = row?.local_id ?? null;
+        await tx.execute(
+          `INSERT OR REPLACE INTO task_relations
+             (task_local_id, other_task_local_id, other_task_server_id,
+              relation_kind, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            taskLocalId,
+            otherLocalId,
+            otherLocalId ? null : peer.id,
+            kind,
+            null, // server doesn't return a per-relation created_at in this map
+          ],
+        );
+      }
     }
-  }
+  });
 }
 
 /** List a task's relations, joining the peer's title + done state for

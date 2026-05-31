@@ -32,19 +32,25 @@ function normalizeBase(url: string): string {
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-let cachedTauriFetch:
-  | ((input: Request) => Promise<Response>)
-  | null = null;
+let cachedTauriFetch: typeof fetch | null = null;
 
-async function platformFetch(request: Request): Promise<Response> {
+/**
+ * Public so other modules that bypass openapi-fetch (e.g. multipart
+ * uploads and blob downloads in `sync/attachments.ts`) can share the
+ * same CORS-dodge + import-once cache instead of reimplementing it.
+ */
+export async function platformFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
   if (isTauri) {
     if (!cachedTauriFetch) {
       const mod = await import('@tauri-apps/plugin-http');
-      cachedTauriFetch = mod.fetch as (input: Request) => Promise<Response>;
+      cachedTauriFetch = mod.fetch as typeof fetch;
     }
-    return cachedTauriFetch(request);
+    return cachedTauriFetch(input, init);
   }
-  return globalThis.fetch(request);
+  return globalThis.fetch(input, init);
 }
 
 /**

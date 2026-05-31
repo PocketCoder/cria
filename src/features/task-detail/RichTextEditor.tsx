@@ -27,12 +27,12 @@ import {
   Image,
   Pencil,
   Loader2,
-  AlertTriangle,
-  X as XIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { onLinkClickOpenExternal } from '@/lib/openExternal';
+import { isOfflineError } from '@/lib/errors';
+import { InlineWarning } from '@/components/InlineWarning';
 
 interface RichTextEditorProps {
   value: string | null;
@@ -480,13 +480,12 @@ function EditView({
       }
     } catch (err) {
       console.error('[RichTextEditor] image upload failed:', err);
-      const msg = String(err instanceof Error ? err.message : err);
-      const offlineish = /error sending request|Failed to fetch|Load failed|NetworkError/i.test(msg);
-      setImageUploadError(
-        offlineish
-          ? "Couldn't upload image — check your connection and try again."
-          : `Image upload failed: ${msg}`,
-      );
+      if (isOfflineError(err)) {
+        setImageUploadError("Couldn't upload image — check your connection and try again.");
+      } else {
+        const msg = String(err instanceof Error ? err.message : err);
+        setImageUploadError(`Image upload failed: ${msg}`);
+      }
     } finally {
       setUploadingImage(false);
     }
@@ -691,20 +690,9 @@ function EditView({
         className="hidden"
       />
       {imageUploadError ? (
-        <div className="flex items-start gap-2 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-2 py-1.5 text-xs">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warning)]" />
-          <div className="flex-1 leading-snug text-[var(--color-foreground)]">
-            {imageUploadError}
-          </div>
-          <button
-            type="button"
-            onClick={() => setImageUploadError(null)}
-            aria-label="Dismiss"
-            className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-          >
-            <XIcon className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <InlineWarning onDismiss={() => setImageUploadError(null)}>
+          {imageUploadError}
+        </InlineWarning>
       ) : null}
       <div className="min-w-0 max-w-full">
         <EditorContent editor={editor} />

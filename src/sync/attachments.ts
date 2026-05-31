@@ -15,6 +15,7 @@
  * an auth-required attachment and swap the src for a blob URL.
  */
 import { getAuthSnapshot } from '@/auth/store';
+import { platformFetch } from '@/api/client';
 import {
   upsertAttachmentLocal,
   deleteAttachmentLocal,
@@ -71,19 +72,6 @@ export function parseAttachmentUrl(
 }
 
 /**
- * Pick the right fetch (`@tauri-apps/plugin-http` inside the Tauri
- * webview, native `fetch` in the browser/dev server). Centralised so
- * upload + download + delete don't each maintain the branch.
- */
-async function pickFetch(): Promise<typeof fetch> {
-  const isTauri =
-    typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-  if (!isTauri) return globalThis.fetch;
-  const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-  return tauriFetch as unknown as typeof fetch;
-}
-
-/**
  * Upload one or more files to a task as attachments. Mirrors each
  * returned attachment into the local task_attachments table so the
  * detail card updates without waiting for the next pull.
@@ -111,8 +99,7 @@ export async function uploadAttachment(
     form.append('files', f, f.name);
   }
 
-  const doFetch = await pickFetch();
-  const res = await doFetch(
+  const res = await platformFetch(
     `${apiBase()}/api/v1/tasks/${taskServerId}/attachments`,
     {
       method: 'PUT',
@@ -151,8 +138,7 @@ export async function deleteAttachment(
   taskLocalId: string,
   attachmentServerId: number,
 ): Promise<void> {
-  const doFetch = await pickFetch();
-  const res = await doFetch(
+  const res = await platformFetch(
     `${apiBase()}/api/v1/tasks/${taskServerId}/attachments/${attachmentServerId}`,
     { method: 'DELETE', headers: authHeaders() },
   );
@@ -177,12 +163,37 @@ export async function fetchAttachmentBlob(
   taskServerId: number,
   attachmentServerId: number,
 ): Promise<Blob> {
-  const doFetch = await pickFetch();
-  const res = await doFetch(buildAttachmentUrl(taskServerId, attachmentServerId), {
-    headers: authHeaders(),
-  });
+  const res = await platformFetch(
+    buildAttachmentUrl(taskServerId, attachmentServerId),
+    { headers: authHeaders() },
+  );
   if (!res.ok) {
     throw new Error(`fetchAttachmentBlob: HTTP ${res.status}`);
   }
   return res.blob();
+}
+
+/**
+ * Auth-fetch the attachment and trigger a browser download via a
+ * synthetic anchor click. Centralised so the AttachmentList row and
+ * ImageLightbox don't each maintain their own blob → object-URL → anchor
+ * → revokeObjectURL choreography.
+ */
+export async function downloadAttachment(
+  taskServerId: number,
+  attachmentServerId: number,
+  fileName: string,
+): Promise<void> {
+  const blob = await fetchAttachmentBlob(taskServerId, attachmentServerId);
+  const objUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    URL.revokeObjectURL(objUrl);
+  }
 }

@@ -60,8 +60,3 @@ export function notify(topic: Topic): void {
     }
   }
 }
-
-/** Used by tests to start fresh. */
-export function _clearAllListeners(): void {
-  getListeners().clear();
-}
