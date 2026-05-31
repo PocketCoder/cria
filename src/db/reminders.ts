@@ -1,4 +1,5 @@
-import { exec, getDb } from './index';
+import { exec, getDb, withTx } from './index';
+import { notify } from './bus';
 import type { TaskReminderResponse } from '@/domain/task';
 
 export interface TaskReminder {
@@ -109,4 +110,64 @@ export async function markReminderNotified(
       WHERE task_local_id = ? AND reminder_at = ?`,
     [taskLocalId, reminderAt],
   );
+}
+
+/* ───────────────────────── user mutations ──────────────────────────── */
+//
+// Reminders are a task FIELD in Vikunja (no dedicated endpoint), so a
+// reminder change is pushed as a task update: we edit task_reminders,
+// mark the task dirty, and queue a task 'update' outbox op. The drain
+// (push.ts) reads the current task_reminders set and sends it in the
+// task body. `reminderAt` is an absolute ISO datetime.
+
+/** Add a reminder to a task and queue the sync. */
+export async function addReminder(
+  taskLocalId: string,
+  reminderAt: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await withTx(async (tx) => {
+    await tx.execute(
+      `INSERT OR IGNORE INTO task_reminders
+         (task_local_id, reminder_at, relative_period, relative_to, notified)
+       VALUES (?, ?, NULL, NULL, 0)`,
+      [taskLocalId, reminderAt],
+    );
+    await tx.execute(
+      `UPDATE tasks SET dirty = 1, updated_at = ? WHERE local_id = ?`,
+      [now, taskLocalId],
+    );
+    await tx.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('task', ?, 'update', ?, ?)`,
+      [taskLocalId, JSON.stringify({ reminders: true }), now],
+    );
+  });
+  notify('tasks');
+  notify('outbox');
+}
+
+/** Remove a reminder from a task and queue the sync. */
+export async function removeReminder(
+  taskLocalId: string,
+  reminderAt: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await withTx(async (tx) => {
+    await tx.execute(
+      `DELETE FROM task_reminders WHERE task_local_id = ? AND reminder_at = ?`,
+      [taskLocalId, reminderAt],
+    );
+    await tx.execute(
+      `UPDATE tasks SET dirty = 1, updated_at = ? WHERE local_id = ?`,
+      [now, taskLocalId],
+    );
+    await tx.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('task', ?, 'update', ?, ?)`,
+      [taskLocalId, JSON.stringify({ reminders: true }), now],
+    );
+  });
+  notify('tasks');
+  notify('outbox');
 }

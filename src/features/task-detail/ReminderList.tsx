@@ -1,19 +1,26 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { Bell } from 'lucide-react';
-import { listRemindersForTask, type TaskReminder } from '@/db/reminders';
+import { Bell, Plus, X } from 'lucide-react';
+import {
+  listRemindersForTask,
+  addReminder,
+  removeReminder,
+  type TaskReminder,
+} from '@/db/reminders';
 import { subscribe } from '@/db/bus';
 
 /**
- * Read-only list of a task's reminders, shown in the detail card.
- * Mirrored locally on pull; a local scheduler fires desktop
- * notifications when they come due (see useReminderScheduler). Setting /
- * clearing reminders from Cria is the next slice — for now they're
- * managed in Vikunja's web UI and surfaced + notified here.
+ * Reminders for a task: list + add (datetime picker) + remove. Edits go
+ * through the task-update outbox path (reminders are a task field in
+ * Vikunja); a local scheduler fires desktop notifications when they come
+ * due (see useReminderScheduler).
  */
 export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
   const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+
   useEffect(
     () =>
       subscribe('tasks', () => {
@@ -28,26 +35,96 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
     queryFn: () => listRemindersForTask(taskLocalId),
   });
 
-  if (reminders.length === 0) return null;
+  const handleAdd = async () => {
+    if (!draft) return;
+    const at = new Date(draft); // datetime-local is in local time
+    if (Number.isNaN(at.getTime())) return;
+    try {
+      await addReminder(taskLocalId, at.toISOString());
+      setDraft('');
+      setAdding(false);
+    } catch (err) {
+      console.error('[reminders] add failed:', err);
+    }
+  };
+
+  const handleRemove = async (reminderAt: string) => {
+    try {
+      await removeReminder(taskLocalId, reminderAt);
+    } catch (err) {
+      console.error('[reminders] remove failed:', err);
+    }
+  };
 
   return (
     <section className="mb-4">
       <h3 className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
         <Bell className="h-3 w-3" />
         Reminders
-        <span className="font-normal">{reminders.length}</span>
+        {reminders.length > 0 ? (
+          <span className="font-normal">{reminders.length}</span>
+        ) : null}
       </h3>
-      <ul className="space-y-1">
-        {reminders.map((r) => (
-          <li
-            key={r.reminderAt}
-            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+
+      {reminders.length > 0 ? (
+        <ul className="mb-1 space-y-1">
+          {reminders.map((r) => (
+            <li
+              key={r.reminderAt}
+              className="group flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+            >
+              <Bell className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
+              <span className="flex-1">{formatReminder(r.reminderAt)}</span>
+              <button
+                type="button"
+                onClick={() => void handleRemove(r.reminderAt)}
+                aria-label="Remove reminder"
+                className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning)] group-hover:opacity-100 cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {adding ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="datetime-local"
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleAdd();
+              } else if (e.key === 'Escape') {
+                setAdding(false);
+                setDraft('');
+              }
+            }}
+            className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+          />
+          <button
+            type="button"
+            onClick={() => void handleAdd()}
+            disabled={!draft}
+            className="rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 cursor-pointer"
           >
-            <Bell className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
-            <span className="flex-1">{formatReminder(r.reminderAt)}</span>
-          </li>
-        ))}
-      </ul>
+            Add
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add reminder
+        </button>
+      )}
     </section>
   );
 }
