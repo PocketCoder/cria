@@ -118,7 +118,14 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
       ) : (
         <button
           type="button"
-          onClick={() => setAdding(true)}
+          onClick={() => {
+            // Seed a real value (1h from now, local). WebKit renders an
+            // empty datetime-local as a greyed placeholder showing "now",
+            // which looks filled but leaves the value "" — so without a
+            // seed the Add button stays (correctly) disabled.
+            setDraft(toLocalInput(new Date(Date.now() + 60 * 60 * 1000)));
+            setAdding(true);
+          }}
           className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -135,4 +142,11 @@ function formatReminder(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/** Format a Date as a `datetime-local` value (local time, minute
+ * precision) — not toISOString(), which would be UTC. */
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
