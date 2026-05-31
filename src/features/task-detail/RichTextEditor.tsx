@@ -4,7 +4,10 @@ import Link from '@tiptap/extension-link';
 import TiptapUnderline from '@tiptap/extension-underline';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import ImageExt from '@tiptap/extension-image';
+import { VikunjaImage, getAttachmentObjectUrl } from './tiptapImageExtension';
+import { uploadAttachment } from '@/sync/attachments';
+import { buildAttachmentUrl, isAttachmentUrl, parseAttachmentUrl } from '@/sync/attachments';
+import { ImageLightbox } from './ImageLightbox';
 import { useEffect, useState, useRef } from 'react';
 import {
   Bold,
@@ -24,6 +27,7 @@ import {
   Minus,
   Image,
   Pencil,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { sanitizeHtml } from '@/lib/sanitize';
@@ -32,6 +36,14 @@ import { onLinkClickOpenExternal } from '@/lib/openExternal';
 interface RichTextEditorProps {
   value: string | null;
   onSave: (next: string) => Promise<void>;
+  /** Local row id — required for the upload path to mirror new
+   * attachments into the local DB so the AttachmentList refreshes
+   * without waiting for the next pull. */
+  taskLocalId: string;
+  /** Server id — null for tasks that haven't yet synced. Inline image
+   * uploads are disabled in that state (we have nothing to attach to);
+   * a visual hint covers it. */
+  taskServerId: number | null;
 }
 
 let _triggerImagePicker: (() => void) | null = null;
@@ -155,11 +167,22 @@ const COMMANDS = [
  * round-tripping a description between Cria and the web UI doesn't lose
  * formatting.
  */
-export function RichTextEditor({ value, onSave }: RichTextEditorProps) {
+export function RichTextEditor({
+  value,
+  onSave,
+  taskLocalId,
+  taskServerId,
+}: RichTextEditorProps) {
   const [editing, setEditing] = useState(false);
 
   if (!editing) {
-    return <ReadView value={value} onEdit={() => setEditing(true)} />;
+    return (
+      <ReadView
+        value={value}
+        onEdit={() => setEditing(true)}
+        taskServerId={taskServerId}
+      />
+    );
   }
   return (
     <EditView
@@ -169,6 +192,8 @@ export function RichTextEditor({ value, onSave }: RichTextEditorProps) {
         await onSave(sanitizeHtml(html));
         setEditing(false);
       }}
+      taskLocalId={taskLocalId}
+      taskServerId={taskServerId}
     />
   );
 }
@@ -176,10 +201,85 @@ export function RichTextEditor({ value, onSave }: RichTextEditorProps) {
 function ReadView({
   value,
   onEdit,
+  taskServerId,
 }: {
   value: string | null;
   onEdit: () => void;
+  taskServerId: number | null;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [preview, setPreview] = useState<{
+    taskServerId: number;
+    attachmentServerId: number;
+    fileName: string;
+  } | null>(null);
+
+  /**
+   * Click on an inline image → open the lightbox. We walk to the
+   * nearest `<img>` (in case the click landed on a wrapping link or
+   * figcaption) and read its data-src/src to recover the
+   * (taskId, attId) tuple. Links keep going through onLinkClickOpenExternal.
+   */
+  const onContainerClick = (e: React.MouseEvent<HTMLElement>) => {
+    const img = (e.target as HTMLElement).closest('img');
+    if (img) {
+      const dataSrc = img.getAttribute('data-src');
+      const rawSrc = img.getAttribute('src');
+      const realSrc = dataSrc ?? rawSrc ?? '';
+      if (isAttachmentUrl(realSrc)) {
+        const parsed = parseAttachmentUrl(realSrc);
+        if (parsed) {
+          e.preventDefault();
+          e.stopPropagation();
+          setPreview({
+            taskServerId: parsed.taskServerId,
+            attachmentServerId: parsed.attachmentServerId,
+            fileName: img.getAttribute('alt') || 'image',
+          });
+          return;
+        }
+      }
+    }
+    onLinkClickOpenExternal(e);
+  };
+
+  // Auth-fetch any inline images that reference our server. The
+  // sanitised HTML lands in the DOM as-is with either
+  //   <img data-src="<server>/.../attachments/<id>" src="#">  (current)
+  // or, for older / pre-VikunjaImage descriptions:
+  //   <img src="<server>/.../attachments/<id>">
+  // In the first case the browser does nothing (src is just '#'); in
+  // the second the browser fires a no-auth fetch that 401s before we
+  // can intercept, but we can still detect and replace. Either way
+  // we end up with `img.src = <object-url>` after the auth fetch.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const imgs = Array.from(root.querySelectorAll('img'));
+    let cancelled = false;
+    for (const img of imgs) {
+      const dataSrc = img.getAttribute('data-src');
+      const rawSrc = img.getAttribute('src');
+      const realSrc = dataSrc ?? rawSrc;
+      if (!realSrc || !isAttachmentUrl(realSrc)) continue;
+      const parsed = parseAttachmentUrl(realSrc);
+      if (!parsed) continue;
+      // Suppress the browser's pending no-auth fetch immediately —
+      // this also clears the broken-image icon while we resolve.
+      if (rawSrc !== '#') img.src = '#';
+      void getAttachmentObjectUrl(parsed.taskServerId, parsed.attachmentServerId).then(
+        (url) => {
+          if (!cancelled) img.src = url;
+        },
+        (err) => console.warn('[ReadView] inline image fetch failed:', err),
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+    // Re-run when the description html or task changes.
+  }, [value, taskServerId]);
+
   const editBtn = (
     <button
       type="button"
@@ -207,10 +307,19 @@ function ReadView({
   return (
     <div className="min-w-0 max-w-full space-y-2">
       <div
-        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:mt-0.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md"
+        ref={containerRef}
+        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:mt-0.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md cursor-default"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
-        onClick={onLinkClickOpenExternal}
+        onClick={onContainerClick}
       />
+      {preview ? (
+        <ImageLightbox
+          taskServerId={preview.taskServerId}
+          attachmentServerId={preview.attachmentServerId}
+          fileName={preview.fileName}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
       <div className="flex items-center justify-start">
         {editBtn}
       </div>
@@ -222,10 +331,14 @@ function EditView({
   initial,
   onCancel,
   onSave,
+  taskLocalId,
+  taskServerId,
 }: {
   initial: string;
   onCancel: () => void;
   onSave: (html: string) => Promise<void>;
+  taskLocalId: string;
+  taskServerId: number | null;
 }) {
   const [saving, setSaving] = useState(false);
 
@@ -336,16 +449,39 @@ function EditView({
     return () => { _triggerImagePicker = null; };
   }, []);
 
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  /**
+   * Upload one or more image files to the task as attachments, then
+   * insert each as an `<img src="<attachment-url>">` into the editor.
+   * The url is the *server* attachment URL — `<api>/tasks/{id}/attachments/{id}` —
+   * which our VikunjaImage extension swaps for an auth-fetched blob at
+   * render time. Stored exactly the same way Vikunja-web stores it,
+   * so the description round-trips between clients without translation.
+   *
+   * Disabled while the task hasn't yet got a server id; we have nothing
+   * to attach to in that state. (Surface this in the toolbar.)
+   */
+  const uploadAndInsertImages = async (files: File[]) => {
+    if (!editor || taskServerId == null || files.length === 0) return;
+    setUploadingImage(true);
+    try {
+      const created = await uploadAttachment(taskServerId, taskLocalId, files);
+      for (const att of created) {
+        const url = buildAttachmentUrl(taskServerId, att.id);
+        editor.chain().focus().setImage({ src: url }).run();
+      }
+    } catch (err) {
+      console.error('[RichTextEditor] image upload failed:', err);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editor) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      editor.chain().focus().setImage({ src: dataUrl }).run();
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    await uploadAndInsertImages(files);
   };
 
   const editor = useEditor({
@@ -370,8 +506,12 @@ function EditView({
         nested: true,
         HTMLAttributes: { class: 'flex items-start gap-2' },
       }),
-      ImageExt.configure({
+      VikunjaImage.configure({
         inline: false,
+        // allowBase64 stays on so legacy descriptions with data: URIs
+        // (anything saved by the parked wip/description-images branch)
+        // still round-trip without being stripped on parse. New images
+        // go through the upload path and never hit base64.
         allowBase64: true,
         HTMLAttributes: { class: 'max-w-full h-auto rounded-md' },
       }),
@@ -382,6 +522,48 @@ function EditView({
       attributes: {
         class:
           'prose prose-sm max-w-none min-h-[6rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:mt-0.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md',
+      },
+      // Clipboard paste of image files → upload + insert. Returning
+      // true tells ProseMirror we handled the event so its default
+      // (which would either ignore the binary or paste a tag-less mess)
+      // doesn't run. Non-image pastes fall through.
+      handlePaste(_view, event) {
+        const items = event.clipboardData?.items;
+        if (!items || items.length === 0) return false;
+        const files: File[] = [];
+        for (const it of items) {
+          if (it.kind === 'file' && it.type.startsWith('image/')) {
+            const f = it.getAsFile();
+            if (f) files.push(f);
+          }
+        }
+        if (files.length === 0) return false;
+        if (taskServerId == null) {
+          // Better to silently no-op + log than to lose the user's
+          // clipboard contents to a half-handled paste.
+          console.warn('[RichTextEditor] paste-image ignored: task not synced yet');
+          return true;
+        }
+        event.preventDefault();
+        void uploadAndInsertImages(files);
+        return true;
+      },
+      // Drag-and-drop of image files. Same logic as paste; the only
+      // wrinkle is `event.dataTransfer.files` (a FileList).
+      handleDrop(_view, event) {
+        const dt = (event as DragEvent).dataTransfer;
+        if (!dt?.files?.length) return false;
+        const files = Array.from(dt.files).filter((f) =>
+          f.type.startsWith('image/'),
+        );
+        if (files.length === 0) return false;
+        if (taskServerId == null) {
+          console.warn('[RichTextEditor] drop-image ignored: task not synced yet');
+          return true;
+        }
+        event.preventDefault();
+        void uploadAndInsertImages(files);
+        return true;
       },
       handleKeyDown(view, event) {
         if (slashStateRef.current.open) {
@@ -473,7 +655,12 @@ function EditView({
 
   return (
     <div className="relative space-y-2">
-      <Toolbar editor={editor} onImagePick={handleImagePick} />
+      <Toolbar
+        editor={editor}
+        onImagePick={handleImagePick}
+        imagePickEnabled={taskServerId != null}
+        imageUploading={uploadingImage}
+      />
       <input
         ref={imageInputRef}
         type="file"
@@ -560,7 +747,20 @@ function EditView({
   );
 }
 
-function Toolbar({ editor, onImagePick }: { editor: Editor; onImagePick?: () => void }) {
+function Toolbar({
+  editor,
+  onImagePick,
+  imagePickEnabled = true,
+  imageUploading = false,
+}: {
+  editor: Editor;
+  onImagePick?: () => void;
+  /** False while the task hasn't yet got a server id — the image button
+   * is dimmed and inert because there's nothing to upload against. */
+  imagePickEnabled?: boolean;
+  /** True while an upload is in flight — image button shows a spinner. */
+  imageUploading?: boolean;
+}) {
   const btn = (
     label: string,
     icon: React.ReactNode,
@@ -686,12 +886,28 @@ function Toolbar({ editor, onImagePick }: { editor: Editor; onImagePick?: () => 
         false,
         () => editor.chain().focus().setHorizontalRule().run()
       )}
-      {btn(
-        'Image',
-        <Image className="h-3.5 w-3.5" />,
-        false,
-        () => onImagePick?.()
-      )}
+      <button
+        type="button"
+        key="Image"
+        title={
+          imagePickEnabled
+            ? 'Image'
+            : 'Save the task first — images upload as attachments and need a server id'
+        }
+        aria-label="Image"
+        disabled={!imagePickEnabled || imageUploading}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onImagePick?.()}
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-muted-foreground)]',
+        )}
+      >
+        {imageUploading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Image className="h-3.5 w-3.5" />
+        )}
+      </button>
       <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
       {btn(
         'Link',
