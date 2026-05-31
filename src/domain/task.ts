@@ -54,10 +54,89 @@ export const taskResponseSchema = z
     // reminders are embedded; parsed by taskReminderSchema and mirrored
     // into task_reminders on pull (drives local notifications).
     reminders: z.array(z.unknown()).nullable().optional(),
+    // related_tasks is a map keyed by RelationKind ("subtask",
+    // "parenttask", "related", "blocking", "blocked", "duplicates",
+    // "duplicateof", "precedes", "follows", "copiedfrom", "copiedto")
+    // whose values are arrays of Task. Mirrored into task_relations on
+    // pull. We don't validate the inner Task shape here — the relation
+    // sync only needs each task's id + title + done state, and pulling
+    // the full task list afterwards keeps the rest in sync.
+    related_tasks: z.record(z.array(z.unknown())).nullable().optional(),
   })
   .passthrough();
 
 export type TaskResponse = z.infer<typeof taskResponseSchema>;
+
+/**
+ * Vikunja's RelationKind enum, verbatim. Vikunja's frontend exposes 9
+ * of these in its add-relation picker (the inverses parenttask /
+ * blocked / follows / duplicateof / copiedto auto-populate from the
+ * other side) but the server returns all 12 in the related_tasks map.
+ * We mirror the same: store everything, pick from the picker subset.
+ */
+export const TASK_RELATION_KINDS = [
+  'subtask',
+  'parenttask',
+  'related',
+  'duplicates',
+  'duplicateof',
+  'blocking',
+  'blocked',
+  'precedes',
+  'follows',
+  'copiedfrom',
+  'copiedto',
+] as const;
+export type TaskRelationKind = (typeof TASK_RELATION_KINDS)[number];
+
+/** Kinds the user can pick from the add-relation UI. The other six come
+ * back automatically on the other task once the server inverts. */
+export const TASK_RELATION_PICKABLE_KINDS = [
+  'subtask',
+  'parenttask',
+  'related',
+  'blocking',
+  'blocked',
+  'duplicates',
+  'precedes',
+  'follows',
+  'copiedfrom',
+] as const satisfies readonly TaskRelationKind[];
+
+/** Inverse used when the server auto-creates the other side. Kept
+ * client-side so we can show optimistic inverse rows before the next
+ * pull confirms them. */
+export function inverseRelationKind(k: TaskRelationKind): TaskRelationKind {
+  switch (k) {
+    case 'subtask': return 'parenttask';
+    case 'parenttask': return 'subtask';
+    case 'related': return 'related';
+    case 'duplicates': return 'duplicateof';
+    case 'duplicateof': return 'duplicates';
+    case 'blocking': return 'blocked';
+    case 'blocked': return 'blocking';
+    case 'precedes': return 'follows';
+    case 'follows': return 'precedes';
+    case 'copiedfrom': return 'copiedto';
+    case 'copiedto': return 'copiedfrom';
+  }
+}
+
+/**
+ * Minimal shape needed from the embedded related task to render a row
+ * (title + done + ids). The full task lands separately through the
+ * regular task pull, so we don't need every field here.
+ */
+export const relatedTaskSchema = z
+  .object({
+    id: z.number(),
+    title: z.string().nullable().optional(),
+    done: z.boolean().nullable().optional(),
+    project_id: z.number().nullable().optional(),
+  })
+  .passthrough();
+
+export type RelatedTaskResponse = z.infer<typeof relatedTaskSchema>;
 
 /**
  * One inline task reminder (models.TaskReminder). `reminder` is the

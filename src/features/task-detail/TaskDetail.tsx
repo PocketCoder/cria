@@ -10,6 +10,7 @@ import { RichTextEditor } from './RichTextEditor';
 import { TaskActions } from './TaskActions';
 import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
+import { RelatedTasks } from './RelatedTasks';
 import type { Task } from '@/domain/task';
 
 /**
@@ -179,6 +180,11 @@ export function TaskDetail() {
         </section>
 
         <ReminderList taskLocalId={task.localId} />
+
+        <RelatedTasks
+          taskLocalId={task.localId}
+          taskServerId={task.serverId}
+        />
 
         <AttachmentList
           taskLocalId={task.localId}

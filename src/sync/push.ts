@@ -245,6 +245,77 @@ async function executeOp(
     return;
   }
 
+  if (op.entity_type === 'task_relation') {
+    // Payload shape:
+    //   add    → { otherTaskLocalId, kind }
+    //   remove → { otherTaskLocalId | null, otherTaskServerId | null, kind }
+    // For remove the row may have only the carried server id (peer task
+    // hadn't synced when the row was mirrored), so we accept either side.
+    const payload = JSON.parse(op.payload);
+    const kind: string = payload.kind;
+
+    const [taskRow] = await db.select<TaskRow[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+      [op.entity_local_id],
+    );
+    const taskServerId = taskRow?.server_id;
+    if (!taskServerId) {
+      // Owning task isn't synced yet — retry once its 'create' op lands.
+      throw new ApiError(408, null, 'task_relation: owning task has no server id', true);
+    }
+
+    // Resolve the peer's server id. Prefer the local lookup; fall back
+    // to a carried value from `remove` payloads where we only had the
+    // server id at the time the row was mirrored.
+    let otherServerId: number | null =
+      typeof payload.otherTaskServerId === 'number' ? payload.otherTaskServerId : null;
+    if (!otherServerId && payload.otherTaskLocalId) {
+      const [otherRow] = await db.select<TaskRow[]>(
+        `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+        [payload.otherTaskLocalId],
+      );
+      otherServerId = otherRow?.server_id ?? null;
+    }
+    if (!otherServerId) {
+      // Peer task isn't synced yet — retryable; once it's created the
+      // local id resolves to a server id and this op can run.
+      throw new ApiError(408, null, 'task_relation: peer task has no server id', true);
+    }
+
+    if (op.op === 'add') {
+      await callApi(
+        client.PUT('/tasks/{taskID}/relations', {
+          params: { path: { taskID: taskServerId } },
+          body: {
+            task_id: taskServerId,
+            other_task_id: otherServerId,
+            // Vikunja's openapi spec types relation_kind as an enum; cast
+            // through unknown because our string union is the source of
+            // truth and the spec's enum is just the same set of literals.
+            relation_kind: kind as unknown as undefined,
+          },
+        }),
+      );
+    } else if (op.op === 'remove') {
+      await callApi(
+        client.DELETE('/tasks/{taskID}/relations/{relationKind}/{otherTaskID}', {
+          params: {
+            path: {
+              taskID: taskServerId,
+              relationKind: kind,
+              otherTaskID: otherServerId,
+            },
+          },
+          // The DELETE endpoint declares a body but doesn't actually
+          // require its contents — server reads the path params. An
+          // empty object keeps the openapi client happy.
+          body: {},
+        }),
+      );
+    }
+    return;
+  }
+
   if (op.entity_type === 'project') {
     await executeProjectOp(client, db, op);
     return;

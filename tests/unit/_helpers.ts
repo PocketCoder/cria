@@ -25,6 +25,9 @@ export async function initSchema(): Promise<void> {
     '002_task_fields.sql',
     '003_fts.sql',
     '004_project_favorite.sql',
+    '005_task_attachments.sql',
+    '006_task_reminders.sql',
+    '007_task_relations.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),
@@ -48,6 +51,9 @@ export async function clearTables(): Promise<void> {
     'conflicts',
     'outbox_dead_letter',
     'outbox',
+    'task_relations',
+    'task_reminders',
+    'task_attachments',
     'task_assignees',
     'task_labels',
     'tasks',

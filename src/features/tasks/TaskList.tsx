@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUi } from '@/stores/ui';
 import { format } from 'date-fns';
 import { useProjectTasks } from '@/queries/tasks';
@@ -7,7 +8,9 @@ import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
-import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip } from 'lucide-react';
+import { listSubtaskRelationsForProject } from '@/db/relations';
+import { subscribe } from '@/db/bus';
+import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, ChevronRight } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -35,6 +38,32 @@ export function TaskList({ project }: TaskListProps) {
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const visibleTasks = tasks.filter((t) => !pendingDeletes[t.localId]);
   const { data: attachmentIds } = useTasksWithAttachments();
+  const qc = useQueryClient();
+
+  const { data: subtaskMap = new Map() } = useQuery({
+    queryKey: ['subtasks', project.localId],
+    queryFn: () => listSubtaskRelationsForProject(project.localId),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => subscribe('tasks', () => {
+    qc.invalidateQueries({ queryKey: ['subtasks', project.localId] });
+  }), [qc, project.localId]);
+
+  const [expandedSet, setExpandedSet] = useState<Set<string>>(() => new Set());
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const taskTree = useMemo(
+    () => buildTaskTree(visibleTasks, subtaskMap),
+    [visibleTasks, subtaskMap],
+  );
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
   // needed at the scale of an input field.
@@ -164,11 +193,14 @@ export function TaskList({ project }: TaskListProps) {
       </form>
 
       <ul className="flex-1 overflow-y-auto">
-        {visibleTasks.map((t) => (
-          <TaskRow
-            key={t.localId}
-            task={t}
-            hasAttachments={attachmentIds?.has(t.localId) ?? false}
+        {taskTree.map((node) => (
+          <TreeBranch
+            key={node.task.localId}
+            node={node}
+            depth={0}
+            expandedSet={expandedSet}
+            onToggle={toggleExpand}
+            attachmentIds={attachmentIds}
           />
         ))}
       </ul>
@@ -183,12 +215,90 @@ export function TaskList({ project }: TaskListProps) {
   );
 }
 
+/* ─── Sub-task tree data structures ─── */
+
+interface TaskTreeNode {
+  task: Task;
+  children: TaskTreeNode[];
+}
+
+function buildTaskTree(tasks: Task[], parentMap: Map<string, string[]>): TaskTreeNode[] {
+  const taskMap = new Map(tasks.map((t) => [t.localId, t]));
+  const childSet = new Set<string>();
+  for (const [, children] of parentMap) {
+    for (const c of children) childSet.add(c);
+  }
+
+  function childrenOf(parentId: string): TaskTreeNode[] {
+    return (parentMap.get(parentId) ?? [])
+      .map((childId) => {
+        const t = taskMap.get(childId);
+        if (!t) return null;
+        return { task: t, children: childrenOf(childId) };
+      })
+      .filter(Boolean) as TaskTreeNode[];
+  }
+
+  return tasks
+    .filter((t) => !childSet.has(t.localId))
+    .map((t) => ({ task: t, children: childrenOf(t.localId) }));
+}
+
+function TreeBranch({
+  node,
+  depth,
+  expandedSet,
+  onToggle,
+  attachmentIds,
+}: {
+  node: TaskTreeNode;
+  depth: number;
+  expandedSet: Set<string>;
+  onToggle: (id: string) => void;
+  attachmentIds: Set<string> | undefined;
+}) {
+  const isExpanded = expandedSet.has(node.task.localId);
+  return (
+    <>
+      <TaskRow
+        task={node.task}
+        hasAttachments={attachmentIds?.has(node.task.localId) ?? false}
+        depth={depth}
+        hasChildren={node.children.length > 0}
+        expanded={isExpanded}
+        onToggleChildren={() => onToggle(node.task.localId)}
+      />
+      {isExpanded &&
+        node.children.map((child) => (
+          <TreeBranch
+            key={child.task.localId}
+            node={child}
+            depth={depth + 1}
+            expandedSet={expandedSet}
+            onToggle={onToggle}
+            attachmentIds={attachmentIds}
+          />
+        ))}
+    </>
+  );
+}
+
+/* ─── Task row ─── */
+
 function TaskRow({
   task,
   hasAttachments,
+  depth = 0,
+  hasChildren = false,
+  expanded = false,
+  onToggleChildren,
 }: {
   task: Task;
   hasAttachments: boolean;
+  depth?: number;
+  hasChildren?: boolean;
+  expanded?: boolean;
+  onToggleChildren?: () => void;
 }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
@@ -240,12 +350,31 @@ function TaskRow({
     <li
       data-task-row=""
       className={cn(
-        'group flex items-start gap-3 border-b border-[var(--color-border)] px-6 py-3 transition-colors hover:bg-[var(--color-accent)]/5',
+        'group flex items-start gap-3 border-b border-[var(--color-border)] py-3 transition-colors hover:bg-[var(--color-accent)]/5',
+        'px-6',
         task.done && 'opacity-60',
         selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10'
       )}
+      style={{ paddingLeft: `${24 + depth * 20}px` }}
       onClick={() => { if (!editing) setSelectedTask(task.localId); }}
     >
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleChildren?.();
+          }}
+          aria-label={expanded ? 'Collapse subtasks' : 'Expand subtasks'}
+          className="mt-1 h-4 w-4 shrink-0 flex items-center justify-center text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+        >
+          <ChevronRight
+            className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          />
+        </button>
+      ) : depth > 0 ? (
+        <span className="mt-1 h-4 w-4 shrink-0" />
+      ) : null}
       <input
         type="checkbox"
         checked={task.done}
