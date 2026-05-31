@@ -950,21 +950,24 @@ Cria is targeting a **Todoist-feeling** client over Vikunja. The first four mile
 
 Milestones are defined by what's working, not by calendar time. Ship each one when its exit criteria are met.
 
-### Shipped foundation (M0–M5)
+### Shipped foundation (M0–M6)
 
 | | What | Status |
 |---|---|---|
 | **M0** | Skeleton — Tauri + Vite + React + SQLite + sign-in | ✅ |
 | **M1** | Read-only sync — projects + tasks + labels render, 60s background refresh | ✅ |
 | **M2** | Local writes + outbox — create / edit / delete tasks round-trip to server | ✅ |
-| **M3** | Conflicts + deletion reconcile — dirty-guard/conflict logic unit-tested (`tests/unit/syncMerge.test.ts`) **and** the two-client conflict UI verified end-to-end (#32 closed: diff renders, "keep mine"/"use server's" resolve cleanly). Known gap: conflicts only surface on app launch, not while running — periodic sync doesn't poll the open view (#33, M6) | 🟡 |
+| **M3** | Conflicts + deletion reconcile — dirty-guard/conflict logic unit-tested (`tests/unit/syncMerge.test.ts`) **and** the two-client conflict UI verified end-to-end (#32 closed: diff renders, "keep mine"/"use server's" resolve cleanly). Known gap: conflicts only surface on app launch, not while running — periodic sync doesn't poll the open view (#33). Considered for a follow-up "live sync" pass (see end of §14) | 🟡 |
 | **M4** | Native polish — Tauri plugins (notification, autostart, global shortcut, tray) and a Rust-side `execute_tx` for real atomic transactions | ✅ |
 | **M4.5** | Auto-update distribution — updater plugin, signing, release workflow, `update.json` on GitHub Pages, silent download + restart banner. Shipped end-to-end (`v0.1.0-alpha` → `v0.3.0-beta.1`) | ✅ |
 | **M5** | Input parity with Todoist — NL quick-add, TipTap WYSIWYG editor, inline metadata pickers, label mutations through the outbox, external-link handling | ✅ |
+| **M6** | Smart views & search — Today / Upcoming / Inbox + saved filters + FTS5 across the local DB | ✅ |
 
-**Current release:** `v0.3.0`. The daily-driver bar (M0–M5) is met; the
-climb from here is the polish/power-user bar (M6–M9). Versioning is plain
-`0.x.y` (no `-beta`) — see the [Versioning policy](#versioning-policy) below.
+**Current release:** `v0.4.2`. The daily-driver bar (M0–M5) is met; M6
+shipped in `v0.4.0`. The climb from here is the polish/power-user bar
+(M7–M9) plus selective pickups from M10 (attachments already mostly
+landed via PR #41). Versioning is plain `0.x.y` (no `-beta`) — see the
+[Versioning policy](#versioning-policy) below.
 
 ### M4.5 — Auto-update distribution
 
@@ -1024,11 +1027,11 @@ The point at which the app stops feeling like a wrapper. This is the headline mi
 
 ### M8 — Hierarchy, recurrence, reminders
 
-- **Sub-tasks**: render Vikunja's task relations as an indented, collapsible tree under each parent
+- **Reminders** ✅ (PR #39, stacked) — render `task_reminders`, schedule local notifications via plugin-notification when due, deliver while the app is open or sitting in the tray, surface a System-Settings deep-link when macOS notifications are off, macOS Dock badge for outstanding reminders. Server-side overdue reminders still fire via Vikunja's own email path independently.
+- **Sub-tasks**: render Vikunja's `task_relations` (`subtask` kind) as an indented, collapsible tree under each parent. Detail card surfaces "parent task" linkback. Create / promote / demote works through the existing outbox path
 - **Recurring tasks**: surface `repeat_after` / `repeat_mode` in the detail pane with a human-readable editor ("Every weekday", "Monthly on the 1st"). Mark-done auto-rolls the dates per Vikunja's semantics
-- **Reminders**: render `reminders`, schedule local notifications via plugin-notification when due, deliver even when the app is in the tray
 
-**Exit criteria:** the weekly "Take out the bins" task fires its reminder on time and reappears the day after it's completed, with no web-UI intervention.
+**Exit criteria:** the weekly "Take out the bins" task fires its reminder on time and reappears the day after it's completed; sub-tasks render as a collapsible tree with full keyboard navigation parity to the flat list, with no web-UI intervention.
 
 ### M9 — Reorder, drag-and-drop, Kanban
 
@@ -1041,7 +1044,7 @@ The point at which the app stops feeling like a wrapper. This is the headline mi
 ### M10 — Stretch
 
 Individually shippable; pulled in by demand:
-- **Attachments** (download, local cache with LRU eviction, upload)
+- **Attachments** ✅ (PR #41, stacked on #39) — list below description, paperclip indicator on rows, multipart upload (button + drag-drop zone), per-row delete + download, inline images in descriptions (Vikunja-compatible `data-src` + auth-fetch pattern so the same description renders identically in Cria and Vikunja-web), click-to-preview lightbox. Local-cache-with-LRU-eviction is still TODO; for now blob URLs are kept per-session in a module-level cache and revoked when the session ends
 - **Comments + @mentions** with notification on next pull
 - **Gantt** view
 - **Per-project notes** — a markdown notebook docked to the sidebar
@@ -1078,33 +1081,74 @@ criteria are met.
 
 | Version | Contents | Milestone | Rough effort |
 |---|---|---|---|
-| `v0.3.0` | M5 complete + offline-render fix + TaskList papercuts (#19, #20, #21) + undo-delete toast (#25) | M0–M5 | ✅ ready to tag |
-| `v0.3.1` | Header/footer cleanup — drop app title (#26), remove redundant status pill | polish | ✅ ready to tag |
-| `v0.4.0` | **Today / Upcoming / Inbox smart views, FTS5 search, saved filters** | **M6** | ~1.5–2 wks |
-| `v0.5.0` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
-| `v0.6.0` | Sub-tasks, recurrence roll-on-complete, reminders | M8 | ~2–3 wks |
+| `v0.3.0` | M5 complete + offline-render fix + TaskList papercuts (#19, #20, #21) + undo-delete toast (#25) | M0–M5 | ✅ shipped |
+| `v0.3.1` | Header/footer cleanup — drop app title (#26), remove redundant status pill | polish | ✅ shipped |
+| `v0.4.0` | Today / Upcoming / Inbox smart views, FTS5 search, saved filters | M6 | ✅ shipped |
+| `v0.4.x` | Reminders (PR #39) + attachments incl. inline images (PR #41) — slips into the 0.4.x line because the work landed alongside M6's polish rather than waiting for its own milestone slot | M8 partial, M10 partial | 🟡 in PR |
+| `v0.5.0` | **Sub-tasks tree + recurrence editor** — the rest of M8, now that reminders is done | M8 | ~2 wks |
+| `v0.6.0` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
 | `v0.7.0` | Drag-to-reorder, Kanban, table view | M9 | ~2–3 wks |
+| `v0.8.0` | **Live sync (WebSockets)** — replace 60s polling, close #33 (conflicts during running), make the app feel native (see §14a below) | M3.5 | ~1.5–2 wks |
+| `v0.9.0` | Pick-up wins: Vikunja importers (Todoist/Trello/Asana/Microsoft To Do/TickTick — already implemented server-side, expose via Settings), task/project duplicate, export-my-data | drive-bys | ~3–5 days total |
 | `v1.0.0` | macOS notarisation + polish + M3 fully signed off | graduation | ~1 wk |
-| `v1.x` | M10 stretch (attachments, comments, Gantt, notes) — by demand | M10 | per-feature |
+| `v1.x` | Remaining M10 (comments + @mentions, Gantt, per-project notes, attachment LRU cache) — by demand | M10 | per-feature |
 
-**The headline gap is M6.** Today/Upcoming are what make Todoist feel like
-Todoist — a user opens the app each morning to "what's due today." It's also
-the lowest-risk milestone: pure date-filtered queries over data already
-synced, the only schema change being an FTS5 virtual table for search. Do it
-first and resist reordering.
+**The headline gap is now M7 + M8 sub-tasks/recurrence.** Reminders and
+attachments slipped in alongside M6 — both were small enough to land
+without their own minor bump. After M7/M8 the daily-driver / polish
+bars are met for the second half of the Todoist parity table.
 
 Sequencing risks worth budgeting for:
 - **FTS5 (M6)** needs a `003_fts.sql` migration (virtual table + sync
-  triggers) — first schema change since 002.
+  triggers) — first schema change since 002. ✅ landed.
 - **Recurrence (M8)** must match Vikunja's `repeat_mode` roll-on-complete
-  semantics exactly; reminders need `plugin-notification` wired to a
-  scheduler that survives the app sitting in the tray.
+  semantics exactly; reminders ✅ wired through `plugin-notification` and
+  survive the tray.
 - **Reorder (M9)** fights the `sort_by=position` HTTP 400 gotcha — positions
   are per-view-only, so position persistence needs design time.
 - **Notarisation** (the Apple Developer cert) gates a friction-free 1.0
   install; until then first launch trips the "unidentified developer"
   warning. Revisit before 1.0 or document the right-click-open workaround in
   release notes.
+
+### M3.5 — Live sync via WebSockets (proposed)
+
+Vikunja's server exposes a WebSocket endpoint (`pkg/websocket/`) that
+pushes per-entity updates to connected clients. Adopting it would close
+three things at once:
+
+- **#33** — conflicts during a running session. Today the periodic pull
+  fires every 60s, so two clients editing the same task can both write
+  for up to a minute before the merge runs and the conflict surfaces.
+  With push the local view sees the other client's change in seconds.
+- **Polling cost** — the 60s `pullAllTasks` cycle goes away. The outbox
+  push stays (it's still how *we* write); pulls become event-triggered.
+- **Perceived "native" feel** — open the app on two devices, change a
+  title on one, watch it animate on the other. Sells the daily-driver
+  story even harder.
+
+The work is roughly: connect on auth, maintain a heartbeat, dispatch
+inbound deltas through the same `upsert*FromServer` helpers the polling
+path uses, fall back to polling if the socket drops. Should be slotted
+*after* M7/M8 so it has solid client behaviour to layer onto, but
+*before* `v1.0.0` because it's the kind of foundational shift that gets
+harder once the user base widens.
+
+### Vikunja-side backlog (free wins worth picking up opportunistically)
+
+The Vikunja server already implements features we haven't surfaced. These
+are cheap because the backend cost is zero — Cria just exposes a UI.
+Slot them into any minor release that has slack.
+
+| Feature | Endpoint(s) | Effort |
+|---|---|---|
+| **Import from Todoist / Trello / Asana / Microsoft To Do / TickTick / Vikunja-file** | `POST /migration/{service}/migrate` + a small "Import" panel in Settings | ~1 day |
+| **Duplicate task** | `PUT /tasks/{taskID}/duplicate` | ~2 hours |
+| **Duplicate project** (with children) | `PUT /projects/{projectID}/duplicate` | ~2 hours |
+| **Export my data** | `POST /user/export/request` → poll → download | ~3 hours |
+| **CalDAV docs** | Nothing to build — settings page link explaining how to subscribe Calendar.app to `<server>/dav/projects` | ~30 min |
+| **Webhook management UI** | `GET/POST/PUT/DELETE /projects/{id}/webhooks` | ~half day |
+| **In-app notification inbox** | `GET /notifications`, mark-read endpoints | ~1 day (likely fold into a comments milestone) |
 
 ---
 
