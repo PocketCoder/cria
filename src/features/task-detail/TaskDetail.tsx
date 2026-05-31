@@ -8,6 +8,8 @@ import { useTaskLabels } from '@/queries/taskLabels';
 import { LabelChips } from '@/features/tasks/LabelChips';
 import { RichTextEditor } from './RichTextEditor';
 import { TaskActions } from './TaskActions';
+import { AttachmentList } from './AttachmentList';
+import { ReminderList } from './ReminderList';
 import type { Task } from '@/domain/task';
 
 /**
@@ -171,8 +173,17 @@ export function TaskDetail() {
           <RichTextEditor
             value={task.description}
             onSave={handleDescriptionSave}
+            taskLocalId={task.localId}
+            taskServerId={task.serverId}
           />
         </section>
+
+        <ReminderList taskLocalId={task.localId} />
+
+        <AttachmentList
+          taskLocalId={task.localId}
+          taskServerId={task.serverId}
+        />
 
         <div className="space-y-1">
           <TaskActions task={task} onDeleted={handleDeleted} />

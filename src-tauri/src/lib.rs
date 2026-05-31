@@ -6,6 +6,8 @@ const INITIAL_MIGRATION_SQL: &str = include_str!("../../src/db/migrations/001_in
 const MIGRATION_2_SQL: &str = include_str!("../../src/db/migrations/002_task_fields.sql");
 const MIGRATION_3_SQL: &str = include_str!("../../src/db/migrations/003_fts.sql");
 const MIGRATION_4_SQL: &str = include_str!("../../src/db/migrations/004_project_favorite.sql");
+const MIGRATION_5_SQL: &str = include_str!("../../src/db/migrations/005_task_attachments.sql");
+const MIGRATION_6_SQL: &str = include_str!("../../src/db/migrations/006_task_reminders.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -31,6 +33,18 @@ fn migrations() -> Vec<Migration> {
             version: 4,
             description: "project is_favorite column",
             sql: MIGRATION_4_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "task attachments mirror",
+            sql: MIGRATION_5_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "task reminders mirror",
+            sql: MIGRATION_6_SQL,
             kind: MigrationKind::Up,
         },
     ]

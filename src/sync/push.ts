@@ -323,10 +323,19 @@ async function executeOp(
         [task.project_local_id],
       );
 
+      // The local task_reminders table is the source of truth for this
+      // task's reminders; send the current set (possibly empty) so adds
+      // and clears both propagate.
+      const reminderRows = await db.select<{ reminder_at: string }[]>(
+        `SELECT reminder_at FROM task_reminders WHERE task_local_id = ?`,
+        [localId],
+      );
+      const reminders = reminderRows.map((r) => ({ reminder: r.reminder_at }));
+
       const res = await callApi(
         client.POST('/tasks/{id}', {
           params: { path: { id: task.server_id } },
-          body: taskToBody(task, projRow?.server_id ?? undefined),
+          body: taskToBody(task, projRow?.server_id ?? undefined, reminders),
         }),
       );
     const newUpdated = (res as { updated?: string }).updated;
@@ -367,7 +376,11 @@ async function executeOp(
   }
 }
 
-export function taskToBody(task: TaskRow, projectServerId?: number) {
+export function taskToBody(
+  task: TaskRow,
+  projectServerId?: number,
+  reminders?: { reminder: string }[],
+) {
   return {
     title: task.title,
     ...(projectServerId != null ? { project_id: projectServerId } : {}),
@@ -384,6 +397,10 @@ export function taskToBody(task: TaskRow, projectServerId?: number) {
     is_favorite: task.is_favorite === 1 ? true : false,
     repeat_after: task.repeat_after ?? undefined,
     repeat_mode: task.repeat_mode != null ? (task.repeat_mode as 0 | 1 | 2) : undefined,
+    // Reminders are a task field in Vikunja (no separate endpoint), so a
+    // reminder change rides the task update. Sent whenever provided —
+    // including an empty array, so clearing all reminders propagates.
+    ...(reminders ? { reminders } : {}),
   };
 }
 

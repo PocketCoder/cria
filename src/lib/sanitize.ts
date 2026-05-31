@@ -24,7 +24,12 @@ const CONFIG = {
     'input', 'label',
     'ul', 'ol', 'li',       // task-list uses <ul data-type="taskList">
   ],
-  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type'],
+  // `data-src` is allowed because our VikunjaImage TipTap extension (and
+  // Vikunja-web's matching one) store the real attachment URL there and
+  // set `src="#"` to suppress the browser's unauthenticated fetch. The
+  // image is then auth-fetched and the src swapped at runtime. See
+  // src/features/task-detail/tiptapImageExtension.ts.
+  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type', 'data-src'],
   ALLOW_DATA_ATTR: false,
 };
 

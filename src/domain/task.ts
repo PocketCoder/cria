@@ -48,10 +48,55 @@ export const taskResponseSchema = z
     labels: z.array(z.unknown()).nullable().optional(),
     // assignees are embedded in the task response; parsed separately
     assignees: z.array(z.unknown()).nullable().optional(),
+    // attachments are embedded read-only; parsed by taskAttachmentSchema
+    // and mirrored into task_attachments on pull.
+    attachments: z.array(z.unknown()).nullable().optional(),
+    // reminders are embedded; parsed by taskReminderSchema and mirrored
+    // into task_reminders on pull (drives local notifications).
+    reminders: z.array(z.unknown()).nullable().optional(),
   })
   .passthrough();
 
 export type TaskResponse = z.infer<typeof taskResponseSchema>;
+
+/**
+ * One inline task reminder (models.TaskReminder). `reminder` is the
+ * absolute trigger time (Vikunja resolves it even for relative
+ * reminders); relative_period/relative_to describe a relative offset.
+ */
+export const taskReminderSchema = z
+  .object({
+    reminder: z.string().nullable().optional(),
+    relative_period: z.number().nullable().optional(),
+    relative_to: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export type TaskReminderResponse = z.infer<typeof taskReminderSchema>;
+
+/**
+ * One inline task attachment (models.TaskAttachment). `id` is the
+ * attachment id used to build the download URL; `file` carries the
+ * displayable metadata (name / size / mime).
+ */
+export const taskAttachmentSchema = z
+  .object({
+    id: z.number(),
+    task_id: z.number().nullable().optional(),
+    created: z.string().nullable().optional(),
+    file: z
+      .object({
+        id: z.number().nullable().optional(),
+        name: z.string().nullable().optional(),
+        size: z.number().nullable().optional(),
+        mime: z.string().nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+
+export type TaskAttachmentResponse = z.infer<typeof taskAttachmentSchema>;
 
 const VIKUNJA_ZERO_DATE = '0001-01-01T00:00:00Z';
 
