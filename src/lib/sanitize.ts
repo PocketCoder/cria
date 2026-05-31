@@ -29,7 +29,13 @@ const CONFIG = {
   // set `src="#"` to suppress the browser's unauthenticated fetch. The
   // image is then auth-fetched and the src swapped at runtime. See
   // src/features/task-detail/tiptapImageExtension.ts.
-  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type', 'data-src'],
+  //
+  // `data-checked` is how TipTap's TaskItem records the checkbox state
+  // on each <li data-type="taskItem">. Stripping it would round-trip
+  // every checked item back to unchecked on the next pull because
+  // TaskItem's parseHTML reads `el.dataset.checked === "true"`. Both
+  // Cria and Vikunja-web rely on this attribute being preserved.
+  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type', 'data-src', 'data-checked'],
   ALLOW_DATA_ATTR: false,
 };
 

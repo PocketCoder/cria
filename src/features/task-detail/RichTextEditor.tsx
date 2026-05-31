@@ -182,6 +182,12 @@ export function RichTextEditor({
         value={value}
         onEdit={() => setEditing(true)}
         taskServerId={taskServerId}
+        onSave={async (html) => {
+          // ReadView re-uses the same sanitize-wrap rule as EditView so
+          // task-list checkbox toggles round-trip through the server in
+          // the same shape Vikunja-web would emit.
+          await onSave(sanitizeHtml(html));
+        }}
       />
     );
   }
@@ -203,10 +209,15 @@ function ReadView({
   value,
   onEdit,
   taskServerId,
+  onSave,
 }: {
   value: string | null;
   onEdit: () => void;
   taskServerId: number | null;
+  /** Same shape as EditView's onSave. We need it here so checkbox
+   * toggles in rendered task-lists persist without forcing the user
+   * to enter edit mode. */
+  onSave: (html: string) => Promise<void>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [preview, setPreview] = useState<{
@@ -216,13 +227,46 @@ function ReadView({
   } | null>(null);
 
   /**
-   * Click on an inline image → open the lightbox. We walk to the
-   * nearest `<img>` (in case the click landed on a wrapping link or
-   * figcaption) and read its data-src/src to recover the
-   * (taskId, attId) tuple. Links keep going through onLinkClickOpenExternal.
+   * Container click dispatch for rendered descriptions.
+   *
+   * 1. **Task-list checkbox** → toggle + serialize + save in place.
+   *    There's no TipTap editor in ReadView (the description is just
+   *    sanitised HTML through dangerouslySetInnerHTML), so we have to
+   *    mutate the DOM ourselves and call onSave directly. We
+   *    preventDefault before the browser's own toggle runs so the
+   *    attribute/property pair stays in sync — otherwise innerHTML
+   *    serialisation reads the old attribute and the toggle reverts on
+   *    the next refetch.
+   * 2. **Inline image** → open the lightbox (same `<img>` walk as
+   *    before).
+   * 3. **Anchor** → route through `onLinkClickOpenExternal` to open
+   *    in the OS browser.
    */
   const onContainerClick = (e: React.MouseEvent<HTMLElement>) => {
-    const img = (e.target as HTMLElement).closest('img');
+    const target = e.target as HTMLElement;
+
+    if (
+      target instanceof HTMLInputElement &&
+      target.type === 'checkbox' &&
+      target.closest('li[data-type="taskItem"]')
+    ) {
+      // By the time React's synthetic onClick fires, the browser has
+      // already toggled `target.checked` (the property). What hasn't
+      // synced is the `checked` *attribute* — and that's what
+      // innerHTML serialisation reads. Mirror property → attribute so
+      // the saved HTML reflects the new state, then update the LI's
+      // data-checked so TipTap parses it back correctly on next pull.
+      const newChecked = target.checked;
+      if (newChecked) target.setAttribute('checked', 'checked');
+      else target.removeAttribute('checked');
+      const li = target.closest('li[data-type="taskItem"]') as HTMLElement;
+      li.setAttribute('data-checked', String(newChecked));
+      const html = containerRef.current?.innerHTML;
+      if (html) void onSave(html);
+      return;
+    }
+
+    const img = target.closest('img');
     if (img) {
       const dataSrc = img.getAttribute('data-src');
       const rawSrc = img.getAttribute('src');
@@ -309,7 +353,7 @@ function ReadView({
     <div className="min-w-0 max-w-full space-y-2">
       <div
         ref={containerRef}
-        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:mt-0.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md cursor-default"
+        className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-center [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md cursor-default"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
         onClick={onContainerClick}
       />
@@ -537,7 +581,7 @@ function EditView({
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm max-w-none min-h-[6rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:mt-0.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md',
+          'prose prose-sm max-w-none min-h-[6rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-center [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md',
       },
       // Clipboard paste of image files → upload + insert. Returning
       // true tells ProseMirror we handled the event so its default
@@ -658,6 +702,29 @@ function EditView({
     };
     dom.addEventListener('keydown', handler);
     return () => dom.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
+  // Persist task-list checkbox toggles immediately. We can't use
+  // editorProps.handleClick — TipTap's TaskItem node view sets
+  // contentEditable=false on the checkbox wrapper and preventDefault's
+  // mousedown (see @tiptap/extension-list's addNodeView), so
+  // ProseMirror's click pipeline never sees the event. The node view's
+  // own `change` listener still fires the transaction internally, so
+  // the doc state is already correct by the time our listener runs;
+  // we just need to persist. Native `change` bubbles through the
+  // editor DOM, so one listener at the root catches every checkbox.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const onChange = (e: Event) => {
+      const t = e.target as HTMLElement;
+      if (t.tagName === 'INPUT' && (t as HTMLInputElement).type === 'checkbox') {
+        void handleSave();
+      }
+    };
+    dom.addEventListener('change', onChange);
+    return () => dom.removeEventListener('change', onChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 

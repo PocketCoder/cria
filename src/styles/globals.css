@@ -85,3 +85,14 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* TipTap task-list — zero the inner <p> margins so each checked item
+   sits flush with its checkbox row. The editor wrapper has
+   `[&_p]:my-1` for everything *outside* task lists; the equivalent
+   arbitrary-variant override (`[&_ul[data-type=taskList]_li>div>p]`)
+   was unreliable in Tailwind v4's class-name parser. A plain CSS rule
+   wins on specificity without ambiguity, and applies to both the
+   TipTap editor DOM and the sanitised ReadView render. */
+ul[data-type="taskList"] li > div > p {
+  margin: 0;
+}
