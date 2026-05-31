@@ -6,16 +6,17 @@ import {
   Plus,
   X,
   Image as ImageIcon,
-  AlertTriangle,
 } from 'lucide-react';
 import { useTaskAttachments } from '@/queries/attachments';
 import {
   uploadAttachment,
   deleteAttachment,
-  fetchAttachmentBlob,
+  downloadAttachment,
 } from '@/sync/attachments';
 import { getAttachmentObjectUrl } from './tiptapImageExtension';
 import { ImageLightbox } from './ImageLightbox';
+import { InlineWarning } from '@/components/InlineWarning';
+import { isOfflineError } from '@/lib/errors';
 import type { TaskAttachment } from '@/db/attachments';
 
 /**
@@ -105,15 +106,7 @@ export function AttachmentList({
     if (taskServerId == null || busyId != null) return;
     setBusyId(att.serverId);
     try {
-      const blob = await fetchAttachmentBlob(taskServerId, att.serverId);
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = att.fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objUrl);
+      await downloadAttachment(taskServerId, att.serverId, att.fileName);
     } catch (err) {
       console.error('[attachments] download failed:', err);
     } finally {
@@ -178,20 +171,9 @@ export function AttachmentList({
       </div>
 
       {opError ? (
-        <div className="mb-1 flex items-start gap-2 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-2 py-1.5 text-xs">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warning)]" />
-          <div className="flex-1 leading-snug text-[var(--color-foreground)]">
-            {opError}
-          </div>
-          <button
-            type="button"
-            onClick={() => setOpError(null)}
-            aria-label="Dismiss"
-            className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <InlineWarning className="mb-1" onDismiss={() => setOpError(null)}>
+          {opError}
+        </InlineWarning>
       ) : null}
 
       {empty ? (
@@ -345,17 +327,12 @@ function AttachmentRow({
  * leaking the raw URL.
  */
 function formatOpError(err: unknown, verb: 'upload' | 'delete'): string {
-  const msg = String(err instanceof Error ? err.message : err);
-  // Tauri's plugin-http surfaces transport failures as "error sending
-  // request for url …" — reqwest's Display impl for ClientError. The
-  // browser-fetch fallback uses "Failed to fetch" / "Load failed".
-  if (
-    /error sending request|Failed to fetch|Load failed|NetworkError/i.test(msg)
-  ) {
+  if (isOfflineError(err)) {
     return verb === 'upload'
       ? "Couldn't upload — check your connection and try again. Attachments aren't yet queued offline."
       : "Couldn't delete — check your connection and try again.";
   }
+  const msg = String(err instanceof Error ? err.message : err);
   return `${verb === 'upload' ? 'Upload' : 'Delete'} failed: ${msg}`;
 }
 

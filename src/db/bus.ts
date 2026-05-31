@@ -50,6 +50,11 @@ export function subscribe(topic: Topic, fn: Listener): () => void {
   };
 }
 
+/** Clears all listeners. Used by tests between runs. */
+export function _clearAllListeners(): void {
+  getListeners().clear();
+}
+
 export function notify(topic: Topic): void {
   const set = getListeners().get(topic);
   if (!set) return;
@@ -61,9 +66,4 @@ export function notify(topic: Topic): void {
       console.error(`[db/bus] listener for "${topic}" threw:`, err);
     }
   }
-}
-
-/** Used by tests to start fresh. */
-export function _clearAllListeners(): void {
-  getListeners().clear();
 }

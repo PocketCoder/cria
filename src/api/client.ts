@@ -40,11 +40,17 @@ function normalizeBase(url: string): string {
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-let cachedTauriFetch:
-  | ((input: Request) => Promise<Response>)
-  | null = null;
+let cachedTauriFetch: typeof fetch | null = null;
 
-async function platformFetch(request: Request): Promise<Response> {
+/**
+ * Public so other modules that bypass openapi-fetch (e.g. multipart
+ * uploads and blob downloads in `sync/attachments.ts`) can share the
+ * same CORS-dodge + import-once cache instead of reimplementing it.
+ */
+export async function platformFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
   // Fail fast while the circuit is open, instead of starting a request that
   // will only hang and time out.
   if (!canAttemptRequest()) {
@@ -56,16 +62,16 @@ async function platformFetch(request: Request): Promise<Response> {
   // Bound every request: abort the underlying call and race a timeout so a
   // hung origin (e.g. a Cloudflare 524) fails in ~20s, not ~100s.
   const controller = new AbortController();
-  const signalled = new Request(request, { signal: controller.signal });
+  const signalledInit: RequestInit = { ...init, signal: controller.signal };
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     if (isTauri && !cachedTauriFetch) {
       const mod = await import('@tauri-apps/plugin-http');
-      cachedTauriFetch = mod.fetch as (input: Request) => Promise<Response>;
+      cachedTauriFetch = mod.fetch as typeof fetch;
     }
     const doFetch = isTauri
-      ? cachedTauriFetch!(signalled)
-      : globalThis.fetch(signalled);
+      ? cachedTauriFetch!(input, signalledInit)
+      : globalThis.fetch(input, signalledInit);
     const response = await withTimeout(doFetch, REQUEST_TIMEOUT_MS);
     // A 5xx means the server is unhealthy; 2xx/4xx mean it's responding.
     if (response.status >= 500) recordRequestFailure();

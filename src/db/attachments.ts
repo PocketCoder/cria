@@ -1,4 +1,4 @@
-import { exec, getDb } from './index';
+import { exec, getDb, withTx } from './index';
 import { notify } from './bus';
 import type { TaskAttachmentResponse } from '@/domain/task';
 
@@ -25,30 +25,35 @@ interface AttachmentRow {
  * Replace the local mirror of a task's attachments with the server's set.
  * Read-only sync path — silent (no notify), like
  * replaceTaskLabelsFromServer. Called from the task pull.
+ *
+ * Atomic: DELETE + INSERTs ride one transaction so a concurrent reader
+ * can't observe zero rows between the DELETE and the first INSERT.
  */
 export async function replaceTaskAttachmentsFromServer(
   taskLocalId: string,
   attachments: TaskAttachmentResponse[],
 ): Promise<void> {
-  await exec(`DELETE FROM task_attachments WHERE task_local_id = ?`, [
-    taskLocalId,
-  ]);
-  for (const a of attachments) {
-    await exec(
-      `INSERT OR REPLACE INTO task_attachments
-         (task_local_id, server_id, file_id, file_name, file_size, mime, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        taskLocalId,
-        a.id,
-        a.file?.id ?? null,
-        a.file?.name ?? null,
-        a.file?.size ?? null,
-        a.file?.mime ?? null,
-        a.created ?? null,
-      ],
-    );
-  }
+  await withTx(async (tx) => {
+    await tx.execute(`DELETE FROM task_attachments WHERE task_local_id = ?`, [
+      taskLocalId,
+    ]);
+    for (const a of attachments) {
+      await tx.execute(
+        `INSERT OR REPLACE INTO task_attachments
+           (task_local_id, server_id, file_id, file_name, file_size, mime, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          taskLocalId,
+          a.id,
+          a.file?.id ?? null,
+          a.file?.name ?? null,
+          a.file?.size ?? null,
+          a.file?.mime ?? null,
+          a.created ?? null,
+        ],
+      );
+    }
+  });
 }
 
 export async function listAttachmentsForTask(

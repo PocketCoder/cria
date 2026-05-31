@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDateFormatter, type DateFormatters } from '@/lib/dateFormat';
-import { AlertTriangle, Bell, ChevronDown, Plus, X } from 'lucide-react';
+import { Bell, ChevronDown, Plus, X } from 'lucide-react';
 import {
   listRemindersForTask,
   addReminder,
@@ -17,6 +17,7 @@ import {
   RELATIVE_REMINDER_PRESETS,
   type PeriodUnit,
 } from '@/lib/period';
+import { InlineWarning } from '@/components/InlineWarning';
 
 /**
  * Reminders for a task: list + add + remove. Edits go through the
@@ -113,23 +114,20 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
       ) : null}
 
       {pickerOpen && !notifyOk ? (
-        <div className="mb-1 flex items-start gap-2 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-2 py-1.5 text-xs text-[var(--color-warning)]">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <div className="flex-1 leading-snug text-[var(--color-foreground)]">
-            Notifications are disabled for Cria — reminders you add here
-            won't fire.
-            <button
-              type="button"
-              onClick={() => {
-                void openNotificationSettings();
-                void recheckNotify();
-              }}
-              className="ml-1 underline underline-offset-2 hover:opacity-80 cursor-pointer"
-            >
-              Open System Settings
-            </button>
-          </div>
-        </div>
+        <InlineWarning className="mb-1">
+          Notifications are disabled for Cria — reminders you add here
+          won't fire.
+          <button
+            type="button"
+            onClick={() => {
+              void openNotificationSettings();
+              void recheckNotify();
+            }}
+            className="ml-1 underline underline-offset-2 hover:opacity-80 cursor-pointer"
+          >
+            Open System Settings
+          </button>
+        </InlineWarning>
       ) : null}
 
       {pickerOpen ? (

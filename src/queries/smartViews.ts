@@ -22,6 +22,23 @@ export function groupTotal(groups: TaskGroup[]): number {
   return groups.reduce((n, g) => n + g.tasks.length, 0);
 }
 
+/** Bucket a flat task list into one group per project (using its title
+ * as both key and label). Preserves first-seen project order, matching
+ * the order the underlying query returned. */
+function groupByProject(tasks: TaskWithProject[]): TaskGroup[] {
+  const byProject = new Map<string, TaskWithProject[]>();
+  for (const t of tasks) {
+    const arr = byProject.get(t.projectTitle) ?? [];
+    arr.push(t);
+    byProject.set(t.projectTitle, arr);
+  }
+  return [...byProject.entries()].map(([title, group]) => ({
+    key: title,
+    label: title,
+    tasks: group,
+  }));
+}
+
 /** Today = overdue (surfaced first) + due-today, across all projects. */
 export function useTodayTasks() {
   const qc = useQueryClient();
@@ -115,18 +132,7 @@ export function useLabelTasks(labelLocalId: string | null) {
     refetchInterval: 15_000,
     queryFn: async () => {
       if (!labelLocalId) return [];
-      const all = await listTasksForLabel(labelLocalId);
-      const byProject = new Map<string, TaskWithProject[]>();
-      for (const t of all) {
-        const arr = byProject.get(t.projectTitle) ?? [];
-        arr.push(t);
-        byProject.set(t.projectTitle, arr);
-      }
-      return [...byProject.entries()].map(([title, tasks]) => ({
-        key: title,
-        label: title,
-        tasks,
-      }));
+      return groupByProject(await listTasksForLabel(labelLocalId));
     },
   });
 }
@@ -182,19 +188,6 @@ export function useFavoriteTasks() {
     queryKey: ['smart', 'favorites'],
     staleTime: 30_000,
     refetchInterval: 15_000,
-    queryFn: async () => {
-      const all = await listFavoriteTasks();
-      const byProject = new Map<string, TaskWithProject[]>();
-      for (const t of all) {
-        const arr = byProject.get(t.projectTitle) ?? [];
-        arr.push(t);
-        byProject.set(t.projectTitle, arr);
-      }
-      return [...byProject.entries()].map(([title, tasks]) => ({
-        key: title,
-        label: title,
-        tasks,
-      }));
-    },
+    queryFn: async () => groupByProject(await listFavoriteTasks()),
   });
 }

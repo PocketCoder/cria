@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X, Download, Loader2 } from 'lucide-react';
-import { fetchAttachmentBlob } from '@/sync/attachments';
+import { downloadAttachment } from '@/sync/attachments';
 import { getAttachmentObjectUrl } from './tiptapImageExtension';
 
 /**
@@ -58,20 +58,11 @@ export function ImageLightbox({
   }, [onClose]);
 
   const downloadCurrent = async () => {
+    // Fresh blob fetch (rather than reusing the displayed object URL) —
+    // Safari refuses cross-document object-URL downloads in some setups,
+    // and this keeps the code path identical to AttachmentRow's download.
     try {
-      // If we already have an object URL we *could* trigger the
-      // download anchor against it — but Safari refuses cross-document
-      // object-URL downloads in some setups, and a fresh blob keeps
-      // the code path identical to AttachmentRow's download.
-      const blob = await fetchAttachmentBlob(taskServerId, attachmentServerId);
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objUrl);
+      await downloadAttachment(taskServerId, attachmentServerId, fileName);
     } catch (e) {
       console.error('[lightbox] download failed:', e);
     }
