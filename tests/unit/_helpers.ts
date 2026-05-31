@@ -28,6 +28,7 @@ export async function initSchema(): Promise<void> {
     '005_task_attachments.sql',
     '006_task_reminders.sql',
     '007_task_relations.sql',
+    '008_task_reminders_relative.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),
@@ -37,7 +38,16 @@ export async function initSchema(): Promise<void> {
       await db.execute(sql);
     } catch (e: unknown) {
       const msg = String((e as Error)?.message ?? e);
-      if (!/duplicate column name/i.test(msg)) throw e;
+      // Idempotent-on-re-run failure modes from the migration set:
+      // - 002+ use bare ALTER TABLE ADD COLUMN ("duplicate column")
+      // - 008 rebuilds task_reminders, second run trips "table already
+      //   exists" on the staging table.
+      if (
+        !/duplicate column name/i.test(msg) &&
+        !/already exists/i.test(msg)
+      ) {
+        throw e;
+      }
     }
   }
 }

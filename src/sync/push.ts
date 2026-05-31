@@ -396,12 +396,28 @@ async function executeOp(
 
       // The local task_reminders table is the source of truth for this
       // task's reminders; send the current set (possibly empty) so adds
-      // and clears both propagate.
-      const reminderRows = await db.select<{ reminder_at: string }[]>(
-        `SELECT reminder_at FROM task_reminders WHERE task_local_id = ?`,
+      // and clears both propagate. Each row carries either an absolute
+      // `reminder` (column NOT NULL on absolute rows) or a relative
+      // pair (`relative_period` + `relative_to`) or both — we forward
+      // whatever's present and let Vikunja resolve.
+      const reminderRows = await db.select<{
+        reminder_at: string | null;
+        relative_period: number | null;
+        relative_to: string | null;
+      }[]>(
+        `SELECT reminder_at, relative_period, relative_to
+           FROM task_reminders WHERE task_local_id = ?`,
         [localId],
       );
-      const reminders = reminderRows.map((r) => ({ reminder: r.reminder_at }));
+      const reminders = reminderRows.map((r) => ({
+        reminder: r.reminder_at ?? undefined,
+        relative_period: r.relative_period ?? undefined,
+        relative_to: (r.relative_to ?? undefined) as
+          | 'due_date'
+          | 'start_date'
+          | 'end_date'
+          | undefined,
+      }));
 
       const res = await callApi(
         client.POST('/tasks/{id}', {
@@ -450,7 +466,11 @@ async function executeOp(
 export function taskToBody(
   task: TaskRow,
   projectServerId?: number,
-  reminders?: { reminder: string }[],
+  reminders?: {
+    reminder?: string;
+    relative_period?: number;
+    relative_to?: 'due_date' | 'start_date' | 'end_date';
+  }[],
 ) {
   return {
     title: task.title,
