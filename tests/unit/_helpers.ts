@@ -29,6 +29,7 @@ export async function initSchema(): Promise<void> {
     '006_task_reminders.sql',
     '007_task_relations.sql',
     '008_task_reminders_relative.sql',
+    '009_task_identifier.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),

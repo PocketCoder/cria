@@ -19,6 +19,7 @@ async function initSchema() {
     '002_task_fields.sql',
     '003_fts.sql',
     '004_project_favorite.sql',
+    '009_task_identifier.sql',
   ];
   for (const file of ms) {
     const sql = await fs.readFile(

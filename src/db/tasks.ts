@@ -13,6 +13,7 @@ import { notify } from './bus';
 interface TaskRow {
   local_id: string;
   server_id: number | null;
+  identifier: string | null;
   project_local_id: string;
   title: string;
   description: string | null;
@@ -55,13 +56,15 @@ function rowToTask(row: TaskRow): Task {
     repeatAfter: row.repeat_after,
     repeatMode: row.repeat_mode,
     updatedAt: row.updated_at,
+    identifier: row.identifier,
   };
 }
 
 const SELECT_TASK_COLS = `
   local_id, server_id, project_local_id, title, description, done, done_at,
   due_date, start_date, end_date, priority, percent_done, hex_color,
-  position, is_favorite, is_subscribed, repeat_after, repeat_mode, updated_at`;
+  position, is_favorite, is_subscribed, repeat_after, repeat_mode,
+  updated_at, identifier`;
 
 export async function listTasksForProject(
   projectLocalId: string,
@@ -325,6 +328,7 @@ export async function upsertTaskFromServer(
     (payload as any).subscription != null ? 1 : 0,
     payload.repeat_after ?? 0,
     payload.repeat_mode ?? 0,
+    payload.identifier ?? null,
     updatedAt,
     now,
   ];
@@ -339,8 +343,9 @@ export async function upsertTaskFromServer(
               local_id, server_id, project_local_id, title, description, done,
               done_at, due_date, start_date, end_date, priority, percent_done,
               hex_color, position, is_favorite, is_subscribed, repeat_after,
-              repeat_mode, updated_at, synced_at, last_synced, dirty, deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+              repeat_mode, identifier, updated_at, synced_at, last_synced,
+              dirty, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       params: [localId, serverId, ...colParams, lastSyncedJson],
     }),
     update: (localId, lastSyncedJson) => ({
@@ -361,6 +366,7 @@ export async function upsertTaskFromServer(
               is_subscribed     = ?,
               repeat_after      = ?,
               repeat_mode       = ?,
+              identifier        = ?,
               updated_at        = ?,
               synced_at         = ?,
               last_synced       = ?,
@@ -386,8 +392,8 @@ export async function createTask(input: TaskInput): Promise<Task> {
          local_id, server_id, project_local_id, title, description, done,
          done_at, due_date, start_date, end_date, priority, percent_done,
          hex_color, position, is_favorite, is_subscribed, repeat_after,
-         repeat_mode, updated_at, dirty, deleted
-       ) VALUES (?, NULL, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 1, 0)`,
+         repeat_mode, identifier, updated_at, dirty, deleted
+       ) VALUES (?, NULL, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, 1, 0)`,
       [
         localId,
         input.projectLocalId,
