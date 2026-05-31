@@ -7,12 +7,15 @@ import {
 } from '@/db/labels';
 import { upsertTaskAssigneesFromServer } from '@/db/task-assignees';
 import { replaceTaskAttachmentsFromServer } from '@/db/attachments';
+import { replaceTaskRemindersFromServer } from '@/db/reminders';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import {
   taskResponseSchema,
   taskAttachmentSchema,
+  taskReminderSchema,
   type TaskResponse,
   type TaskAttachmentResponse,
+  type TaskReminderResponse,
 } from '@/domain/task';
 import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
@@ -189,6 +192,14 @@ async function upsertTaskWithRelations(t: TaskResponse): Promise<void> {
       if (parsed.success) validAttachments.push(parsed.data);
     }
     await replaceTaskAttachmentsFromServer(taskLocalId, validAttachments);
+  }
+  if (taskLocalId && Array.isArray(t.reminders)) {
+    const validReminders: TaskReminderResponse[] = [];
+    for (const raw of t.reminders) {
+      const parsed = taskReminderSchema.safeParse(raw);
+      if (parsed.success) validReminders.push(parsed.data);
+    }
+    await replaceTaskRemindersFromServer(taskLocalId, validReminders);
   }
 }
 

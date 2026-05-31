@@ -51,10 +51,28 @@ export const taskResponseSchema = z
     // attachments are embedded read-only; parsed by taskAttachmentSchema
     // and mirrored into task_attachments on pull.
     attachments: z.array(z.unknown()).nullable().optional(),
+    // reminders are embedded; parsed by taskReminderSchema and mirrored
+    // into task_reminders on pull (drives local notifications).
+    reminders: z.array(z.unknown()).nullable().optional(),
   })
   .passthrough();
 
 export type TaskResponse = z.infer<typeof taskResponseSchema>;
+
+/**
+ * One inline task reminder (models.TaskReminder). `reminder` is the
+ * absolute trigger time (Vikunja resolves it even for relative
+ * reminders); relative_period/relative_to describe a relative offset.
+ */
+export const taskReminderSchema = z
+  .object({
+    reminder: z.string().nullable().optional(),
+    relative_period: z.number().nullable().optional(),
+    relative_to: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export type TaskReminderResponse = z.infer<typeof taskReminderSchema>;
 
 /**
  * One inline task attachment (models.TaskAttachment). `id` is the

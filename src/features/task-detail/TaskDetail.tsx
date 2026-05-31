@@ -9,6 +9,7 @@ import { LabelChips } from '@/features/tasks/LabelChips';
 import { RichTextEditor } from './RichTextEditor';
 import { TaskActions } from './TaskActions';
 import { AttachmentList } from './AttachmentList';
+import { ReminderList } from './ReminderList';
 import type { Task } from '@/domain/task';
 
 /**
@@ -174,6 +175,8 @@ export function TaskDetail() {
             onSave={handleDescriptionSave}
           />
         </section>
+
+        <ReminderList taskLocalId={task.localId} />
 
         <AttachmentList
           taskLocalId={task.localId}

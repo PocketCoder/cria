@@ -3,6 +3,8 @@ import { useAuth } from '@/auth/store';
 import { LoginScreen } from '@/features/login/LoginScreen';
 import { Shell } from '@/features/shell/Shell';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
+import { useReminderScheduler } from '@/sync/useReminderScheduler';
+import { useDockBadge } from '@/queries/badge';
 import { useUpdater } from '@/queries/updater';
 import { UpdateBanner } from '@/features/shell/UpdateBanner';
 
@@ -17,6 +19,8 @@ export function App() {
   }, [status.kind, hydrate]);
 
   usePeriodicSync();
+  useReminderScheduler();
+  useDockBadge();
 
   // **Mounted at App level**, not inside Shell, so the banner is visible
   // even on the LoginScreen. Otherwise a release that ships with broken
