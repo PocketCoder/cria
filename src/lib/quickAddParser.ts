@@ -26,6 +26,11 @@
  *   !priority   — `!` followed by a digit `1`..`5`. Highest wins if the
  *                 user wrote several.
  *   @assignee   — `@` followed by `[A-Za-z0-9_-]`. Multiple accumulate.
+ *   +project    — `+` followed by `[A-Za-z0-9_-]`. First match wins for
+ *                 project targeting in the global quick-add modal. For
+ *                 inline forms (project / smart views) the project is
+ *                 set contextually and the `+project` token is stripped
+ *                 from the title but otherwise ignored.
  *   <date>      — *anywhere*, parsed by chrono-node. We take the first
  *                 non-empty result.
  *
@@ -41,6 +46,7 @@ export interface QuickAddResult {
   priority: number | null;
   labelTitles: string[];
   assigneeUsernames: string[];
+  projectTitle: string | null;
   tokens: QuickAddToken[];
 }
 
@@ -49,7 +55,8 @@ export type QuickAddToken =
   | { kind: 'date'; start: number; end: number; text: string; iso: string }
   | { kind: 'priority'; start: number; end: number; text: string; value: number }
   | { kind: 'label'; start: number; end: number; text: string; title: string }
-  | { kind: 'assignee'; start: number; end: number; text: string; username: string };
+  | { kind: 'assignee'; start: number; end: number; text: string; username: string }
+  | { kind: 'project'; start: number; end: number; text: string; title: string };
 
 // Regex source-of-truth for the symbol tokens. Kept narrow on purpose so
 // the title can contain `#` / `!` / `@` characters mid-word and only the
@@ -57,9 +64,10 @@ export type QuickAddToken =
 const LABEL_RE = /(?:^|\s)(#"[^"]+"|#[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
 const ASSIGNEE_RE = /(?:^|\s)(@[A-Za-z0-9_-]+)(?=\s|$)/g;
+const PROJECT_RE = /(?:^|\s)(\+[A-Za-z0-9_-]+)(?=\s|$)/g;
 
 interface RawToken {
-  kind: 'label' | 'priority' | 'assignee' | 'date';
+  kind: 'label' | 'priority' | 'assignee' | 'date' | 'project';
   start: number;
   end: number;
   text: string;
@@ -103,6 +111,16 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     claimed.push({ kind: 'assignee', start, end, text: matchText, payload: username });
   }
 
+  for (const m of raw.matchAll(PROJECT_RE)) {
+    const matchText = m[1]!;
+    const start = m.index! + (m[0]!.length - matchText.length);
+    const end = start + matchText.length;
+    const title = matchText.slice(1);
+    if (title.length > 0) {
+      claimed.push({ kind: 'project', start, end, text: matchText, payload: title });
+    }
+  }
+
   // --- Date (chrono-node) — skip ranges already claimed by symbol tokens ---
   //
   // chrono will happily match "tomorrow" anywhere; we let it run on the
@@ -144,6 +162,7 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   const assigneeUsernames: string[] = [];
   let priority: number | null = null;
   let dueDate: string | null = null;
+  let projectTitle: string | null = null;
   for (const t of claimed) {
     if (t.kind === 'label') labelTitles.push(t.payload as string);
     else if (t.kind === 'assignee') assigneeUsernames.push(t.payload as string);
@@ -151,6 +170,8 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       priority = priority === null ? (t.payload as number) : Math.max(priority, t.payload as number);
     } else if (t.kind === 'date' && t.iso && !dueDate) {
       dueDate = t.iso;
+    } else if (t.kind === 'project' && !projectTitle) {
+      projectTitle = t.payload as string;
     }
   }
 
@@ -171,6 +192,8 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       tokens.push({ kind: 'assignee', start: t.start, end: t.end, text: t.text, username: t.payload as string });
     } else if (t.kind === 'date' && t.iso) {
       tokens.push({ kind: 'date', start: t.start, end: t.end, text: t.text, iso: t.iso });
+    } else if (t.kind === 'project') {
+      tokens.push({ kind: 'project', start: t.start, end: t.end, text: t.text, title: t.payload as string });
     }
     walk = t.end;
   }
@@ -178,7 +201,7 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     tokens.push({ kind: 'text', start: walk, end: raw.length, text: raw.slice(walk) });
   }
 
-  return { title, dueDate, priority, labelTitles, assigneeUsernames, tokens };
+  return { title, dueDate, priority, labelTitles, assigneeUsernames, projectTitle, tokens };
 }
 
 function overlaps(start: number, end: number, ranges: RawToken[]): boolean {

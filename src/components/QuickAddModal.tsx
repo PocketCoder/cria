@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+
 import { createTask } from '@/db/tasks';
 import { applyLabelsByTitle } from '@/db/labels';
 import { useUi } from '@/stores/ui';
@@ -57,6 +58,23 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const parsed = useMemo(() => parseQuickAdd(text), [text]);
+
+  // Resolve a +ProjectName token from the parser to a project local_id.
+  // Matches case-insensitively against the project title. If found, it
+  // takes priority over the sidebar-selected project.
+  const projectFromToken = useMemo(() => {
+    if (!parsed.projectTitle) return null;
+    const lower = parsed.projectTitle.toLowerCase();
+    return projects.find((p) => p.title.toLowerCase() === lower)?.localId ?? null;
+  }, [parsed.projectTitle, projects]);
+
+  // Apply +ProjectName token: when the resolved id differs from the
+  // current picker value, switch to it.
+  useEffect(() => {
+    if (projectFromToken && projectFromToken !== projectId) {
+      setProjectId(projectFromToken);
+    }
+  }, [projectFromToken, projectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

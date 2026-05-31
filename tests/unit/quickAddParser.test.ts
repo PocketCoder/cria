@@ -87,6 +87,33 @@ describe('parseQuickAdd', () => {
     expect(r.title).toBe('Email me at jake@example.com about C#');
   });
 
+  it('strips a +project token', () => {
+    const r = parseQuickAdd('Buy milk +MyProject', NOW);
+    expect(r.title).toBe('Buy milk');
+    expect(r.projectTitle).toBe('MyProject');
+  });
+
+  it('supports project names with hyphens and underscores', () => {
+    const r = parseQuickAdd('Fix bug +my-project_1', NOW);
+    expect(r.title).toBe('Fix bug');
+    expect(r.projectTitle).toBe('my-project_1');
+  });
+
+  it('strips +project and combines with other tokens', () => {
+    const r = parseQuickAdd('Design +Frontend tomorrow #ux !3', NOW);
+    expect(r.title).toBe('Design');
+    expect(r.projectTitle).toBe('Frontend');
+    expect(r.dueDate).not.toBeNull();
+    expect(r.priority).toBe(3);
+    expect(r.labelTitles).toEqual(['ux']);
+  });
+
+  it('strays + mid-word stays in the title', () => {
+    const r = parseQuickAdd('C++ book', NOW);
+    expect(r.title).toBe('C++ book');
+    expect(r.projectTitle).toBeNull();
+  });
+
   it('produces interleaved tokens for live preview', () => {
     const r = parseQuickAdd('Ship #v2 tomorrow', NOW);
     const kinds = r.tokens.map((t) => t.kind);

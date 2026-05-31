@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { CalendarDays, Hash, AtSign, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Hash, AtSign, AlertTriangle, FolderKanban } from 'lucide-react';
 import type { QuickAddResult } from '@/lib/quickAddParser';
 
 interface Props {
@@ -18,12 +18,13 @@ interface Props {
  * help.
  */
 export function QuickAddPreview({ parsed }: Props) {
-  const { dueDate, priority, labelTitles, assigneeUsernames } = parsed;
+  const { dueDate, priority, labelTitles, assigneeUsernames, projectTitle } = parsed;
   const hasAny =
     dueDate ||
     priority !== null ||
     labelTitles.length > 0 ||
-    assigneeUsernames.length > 0;
+    assigneeUsernames.length > 0 ||
+    projectTitle != null;
   if (!hasAny) return null;
 
   return (
@@ -58,6 +59,13 @@ export function QuickAddPreview({ parsed }: Props) {
           label={u}
         />
       ))}
+      {projectTitle ? (
+        <Chip
+          icon={<FolderKanban className="h-3 w-3" />}
+          tone="teal"
+          label={projectTitle}
+        />
+      ) : null}
     </ul>
   );
 }
@@ -69,13 +77,14 @@ function Chip({
 }: {
   icon: React.ReactNode;
   label: string;
-  tone: 'blue' | 'amber' | 'neutral' | 'violet';
+  tone: 'blue' | 'amber' | 'neutral' | 'violet' | 'teal';
 }) {
   const toneClass = {
     blue: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
     amber: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
     neutral: 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]',
     violet: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+    teal: 'bg-teal-500/15 text-teal-700 dark:text-teal-300',
   }[tone];
   return (
     <li
