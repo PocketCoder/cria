@@ -8,14 +8,17 @@ import {
 import { upsertTaskAssigneesFromServer } from '@/db/task-assignees';
 import { replaceTaskAttachmentsFromServer } from '@/db/attachments';
 import { replaceTaskRemindersFromServer } from '@/db/reminders';
+import { replaceTaskRelationsFromServer } from '@/db/relations';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import {
   taskResponseSchema,
   taskAttachmentSchema,
   taskReminderSchema,
+  relatedTaskSchema,
   type TaskResponse,
   type TaskAttachmentResponse,
   type TaskReminderResponse,
+  type RelatedTaskResponse,
 } from '@/domain/task';
 import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
@@ -163,6 +166,38 @@ export async function pullTasksForProject(
 }
 
 /**
+ * Refetch a single task by server id and mirror it (including all
+ * embedded relations: labels, assignees, attachments, reminders,
+ * related_tasks). Used after a relation push so the inverse row that
+ * Vikunja's server auto-creates on the *other* task shows up locally
+ * in seconds rather than after the next periodic pull tick.
+ *
+ * Best-effort: callers should tolerate failure (network blip, 404,
+ * permissions changed). We notify('tasks') on success so the UI
+ * refreshes; on error we log and return.
+ */
+export async function refetchTaskByServerId(
+  taskServerId: number,
+  client: ApiClient = createApiClient(),
+): Promise<void> {
+  try {
+    const { data, response } = await client.GET('/tasks/{id}', {
+      params: { path: { id: taskServerId } },
+    });
+    if (!response.ok || !data) return;
+    const parsed = taskResponseSchema.safeParse(data);
+    if (!parsed.success) {
+      console.warn('[refetchTaskByServerId] invalid response:', parsed.error);
+      return;
+    }
+    await upsertTaskWithRelations(parsed.data);
+    notify('tasks');
+  } catch (err) {
+    console.warn('[refetchTaskByServerId] failed:', err);
+  }
+}
+
+/**
  * Upsert one task payload plus its inline labels + assignees. Shared by
  * the per-project and all-tasks pulls. Silent (no notify) — see the
  * sync-upsert rule in src/db.
@@ -200,6 +235,23 @@ async function upsertTaskWithRelations(t: TaskResponse): Promise<void> {
       if (parsed.success) validReminders.push(parsed.data);
     }
     await replaceTaskRemindersFromServer(taskLocalId, validReminders);
+  }
+  if (taskLocalId && t.related_tasks && typeof t.related_tasks === 'object') {
+    // Vikunja sends related_tasks as { [kind]: Task[] }. Validate each
+    // peer through relatedTaskSchema (minimal id/title/done shape); the
+    // full task lands separately through the regular task pull, so we
+    // don't need every field here.
+    const validRelated: Record<string, RelatedTaskResponse[]> = {};
+    for (const [kind, peers] of Object.entries(t.related_tasks)) {
+      if (!Array.isArray(peers)) continue;
+      const validPeers: RelatedTaskResponse[] = [];
+      for (const raw of peers) {
+        const parsed = relatedTaskSchema.safeParse(raw);
+        if (parsed.success) validPeers.push(parsed.data);
+      }
+      if (validPeers.length > 0) validRelated[kind] = validPeers;
+    }
+    await replaceTaskRelationsFromServer(taskLocalId, validRelated);
   }
 }
 

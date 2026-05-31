@@ -51,13 +51,13 @@ release").**
 | M5 input parity (TipTap WYSIWYG, NL quick-add, inline pickers, label mutations) | ✅ |
 | M6 smart views (Today / Upcoming / Inbox) + saved filters + FTS5 search | ✅ |
 | M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
-| M8 hierarchy, recurrence, reminders | 🟡 reminders in PR #39; sub-tasks + recurrence pending |
+| M8 hierarchy, recurrence, reminders | ✅ sub-tasks tree (indent + collapse in project view), recurrence already shipped |
 | M9 reorder, DnD, Kanban, table view | ⏳ |
 | M10 stretch — attachments, comments, Gantt, notes | 🟡 attachments (list / upload / delete / inline images / preview) in PR #41 stacked on #39; comments / Gantt / notes pending |
 
-**Next up:** M8 sub-tasks tree — render Vikunja `task_relations` as
-indent-and-collapse under each parent. After that, M8 recurrence UI
-and M7 keyboard-first. See [SPEC.md §14](SPEC.md).
+**Next up:** M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable).
+After that, M9 reorder/DnD/Kanban/table view and M10 stretch goals.
+See [SPEC.md §14](SPEC.md).
 
 **Known gaps / deferred:**
 - **M3 two-client conflict smoke test** still owed (#32) — hard to repro
