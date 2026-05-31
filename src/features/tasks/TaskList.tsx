@@ -10,7 +10,7 @@ import { createTask, updateTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, ChevronRight } from 'lucide-react';
+import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, ChevronRight, CheckSquare, Square } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -18,6 +18,7 @@ import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
+
 
 interface TaskListProps {
   project: Project;
@@ -283,8 +284,19 @@ function TreeBranch({
   );
 }
 
-/* ─── Task row ─── */
+/* ─── Checklist progress from description HTML ─── */
 
+function countChecklistItems(html: string | null | undefined): { checked: number; total: number } {
+  if (!html) return { checked: 0, total: 0 };
+  const inputs = html.match(/<input\s[^>]*?type="checkbox"[^>]*?>/gi) ?? [];
+  let checked = 0;
+  for (const input of inputs) {
+    if (/\bchecked\s*[= >]/i.test(input)) checked++;
+  }
+  return { checked, total: inputs.length };
+}
+
+/* ─── Task row ─── */
 function TaskRow({
   task,
   hasAttachments,
@@ -306,6 +318,7 @@ function TaskRow({
   const [draft, setDraft] = useState('');
   const { data: labels = [] } = useTaskLabels(task.localId);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
+  const checklist = countChecklistItems(task.description);
 
   const handleToggle = async () => {
     try {
@@ -406,13 +419,23 @@ function TaskRow({
             {task.title}
           </p>
         )}
-        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments) ? (
+        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
               <span>Due {formatDate(task.dueDate)}</span>
             ) : null}
             {hasAttachments ? (
               <Paperclip className="h-3 w-3" aria-label="Has attachments" />
+            ) : null}
+            {checklist.total > 0 ? (
+              <span className="flex items-center gap-1">
+                {checklist.checked === checklist.total ? (
+                  <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
+                ) : (
+                  <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
+                )}
+                <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
+              </span>
             ) : null}
             {task.priority > 0 ? (
               <span aria-label={`Priority ${task.priority}`}>
