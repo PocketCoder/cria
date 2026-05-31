@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { Bell, Plus, X } from 'lucide-react';
+import { AlertTriangle, Bell, Plus, X } from 'lucide-react';
 import {
   listRemindersForTask,
   addReminder,
@@ -9,6 +9,7 @@ import {
   type TaskReminder,
 } from '@/db/reminders';
 import { subscribe } from '@/db/bus';
+import { notificationsAllowed, openNotificationSettings } from '@/utils/notify';
 
 /**
  * Reminders for a task: list + add (datetime picker) + remove. Edits go
@@ -33,6 +34,20 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
     queryKey: ['reminders', taskLocalId],
     staleTime: 30_000,
     queryFn: () => listRemindersForTask(taskLocalId),
+  });
+
+  // OS-level permission gate. macOS only fires the requestPermission
+  // dialog once per app install — after that it returns the current
+  // value silently — so once the user has denied (or disabled
+  // Notifications in System Settings), there's no way to re-prompt from
+  // JS. Best we can do is surface the state and deep-link them to the
+  // settings pane. Refetched on tab focus so toggling the OS setting
+  // and coming back updates the UI without a full reload.
+  const { data: notifyOk = true, refetch: recheckNotify } = useQuery({
+    queryKey: ['notifications-allowed'],
+    queryFn: notificationsAllowed,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const handleAdd = async () => {
@@ -88,6 +103,27 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
         </ul>
       ) : null}
 
+      {adding && !notifyOk ? (
+        <div className="mb-1 flex items-start gap-2 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-2 py-1.5 text-xs text-[var(--color-warning)]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="flex-1 leading-snug text-[var(--color-foreground)]">
+            Notifications are disabled for Cria — reminders you add here
+            won't fire.
+            <button
+              type="button"
+              onClick={() => {
+                void openNotificationSettings();
+                // User likely about to flip the OS toggle; re-check when
+                // they come back to the app.
+                void recheckNotify();
+              }}
+              className="ml-1 underline underline-offset-2 hover:opacity-80 cursor-pointer"
+            >
+              Open System Settings
+            </button>
+          </div>
+        </div>
+      ) : null}
       {adding ? (
         <div className="flex items-center gap-2">
           <input

@@ -32,8 +32,11 @@ export function useReminderScheduler(): void {
           if (cancelled) return;
           const at = new Date(r.reminderAt).getTime();
           if (Number.isNaN(at) || at > now) continue; // not due yet
-          await nativeNotify('Reminder', r.taskTitle);
-          await markReminderNotified(r.taskLocalId, r.reminderAt);
+          const fired = await nativeNotify('Reminder', r.taskTitle);
+          // Only mark notified if the OS actually accepted delivery — otherwise
+          // a "notifications off" period would silently burn reminders the user
+          // expected to see, and re-enabling permission wouldn't recover them.
+          if (fired) await markReminderNotified(r.taskLocalId, r.reminderAt);
         }
       } catch (err) {
         console.warn('[reminder-scheduler] tick failed:', err);
