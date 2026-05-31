@@ -260,14 +260,25 @@ Two builds, two bundle IDs, two macOS data dirs. No cross-talk.
 | Updater | live `update.json` | disabled (invalid endpoint, error swallowed) |
 
 ```sh
-pnpm build:dev-app
-# → src-tauri/target/release/bundle/dmg/Cria Dev_<ver>_<arch>.dmg
+pnpm dev            # HMR dev run, ALSO under io.cria.desktop.dev
+pnpm build:dev-app  # → …/bundle/dmg/Cria Dev_<ver>_<arch>.dmg
 ```
 
 Drag the `.dmg` into `/Applications`; re-run to refresh. The overlay
 ([`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json)) only
 overrides productName / identifier / updater endpoints; everything else
 inherits from `tauri.conf.json`.
+
+**Why `pnpm dev` uses the dev identifier (don't revert this).** Migrations
+are registered Rust-side and the plugin records applied versions in the
+DB. If `pnpm dev` ran under the release identifier (`io.cria.desktop`,
+the old default), running it from a branch with a *newer* migration would
+upgrade the **installed release app's** database — and the older release
+binary then aborts with `migration N … missing in the resolved
+migrations`, bricking the shipped app's DB. Routing `pnpm dev` through
+`tauri.dev.conf.json` (`io.cria.desktop.dev`) keeps dev's schema fully
+isolated. `pnpm dev:release-id` is the escape hatch if you ever
+deliberately need the release DB.
 
 **Two-client note:** both apps hit the same server with the same credentials,
 so an edit in one shows up in the other within ~60s of pull lag. Editing the

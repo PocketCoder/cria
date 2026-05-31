@@ -4,7 +4,8 @@
   "version": "0.4.2",
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
+    "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "dev:release-id": "tauri dev",
     "build": "tsc --noEmit && vite build && tauri build",
     "build:dev-app": "tsc --noEmit && vite build && tauri build --config src-tauri/tauri.dev.conf.json",
     "vite": "vite",
