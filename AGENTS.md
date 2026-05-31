@@ -31,9 +31,14 @@ done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
 
 ## Current state
 
-Daily-driver bar (M0–M5) is **met**; shipped through `v0.3.x`. Current
-version is `0.3.1` (in `package.json`, `src-tauri/tauri.conf.json`,
-`src-tauri/Cargo.toml` — keep all three in sync).
+Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
+shipped. Current version is `0.4.2` (in `package.json`,
+`src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
+keep all in sync). **`v0.4.0`/`v0.4.1` were tagged without bumping
+these files, leaving them stuck at `0.3.1` → running builds reported
+the wrong version and the updater offered a perpetual update. Always
+verify all four match the tag before releasing (see "Cutting a
+release").**
 
 | Milestone | Status |
 |---|---|
