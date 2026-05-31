@@ -7,8 +7,9 @@ import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask } from '@/db/tasks';
 import { listLabels, toggleTaskLabel } from '@/db/labels';
-import { Trash2, Plus, Loader2, Pencil, RefreshCw } from 'lucide-react';
+import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
+import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
@@ -33,6 +34,7 @@ export function TaskList({ project }: TaskListProps) {
   // here rather than touching the query data.
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const visibleTasks = tasks.filter((t) => !pendingDeletes[t.localId]);
+  const { data: attachmentIds } = useTasksWithAttachments();
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
   // needed at the scale of an input field.
@@ -163,7 +165,11 @@ export function TaskList({ project }: TaskListProps) {
 
       <ul className="flex-1 overflow-y-auto">
         {visibleTasks.map((t) => (
-          <TaskRow key={t.localId} task={t} />
+          <TaskRow
+            key={t.localId}
+            task={t}
+            hasAttachments={attachmentIds?.has(t.localId) ?? false}
+          />
         ))}
       </ul>
 
@@ -177,7 +183,13 @@ export function TaskList({ project }: TaskListProps) {
   );
 }
 
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({
+  task,
+  hasAttachments,
+}: {
+  task: Task;
+  hasAttachments: boolean;
+}) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const [editing, setEditing] = useState(false);
@@ -265,10 +277,13 @@ function TaskRow({ task }: { task: Task }) {
             {task.title}
           </p>
         )}
-        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0) ? (
+        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments) ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
               <span>Due {formatDate(task.dueDate)}</span>
+            ) : null}
+            {hasAttachments ? (
+              <Paperclip className="h-3 w-3" aria-label="Has attachments" />
             ) : null}
             {task.priority > 0 ? (
               <span aria-label={`Priority ${task.priority}`}>

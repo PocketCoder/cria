@@ -48,10 +48,37 @@ export const taskResponseSchema = z
     labels: z.array(z.unknown()).nullable().optional(),
     // assignees are embedded in the task response; parsed separately
     assignees: z.array(z.unknown()).nullable().optional(),
+    // attachments are embedded read-only; parsed by taskAttachmentSchema
+    // and mirrored into task_attachments on pull.
+    attachments: z.array(z.unknown()).nullable().optional(),
   })
   .passthrough();
 
 export type TaskResponse = z.infer<typeof taskResponseSchema>;
+
+/**
+ * One inline task attachment (models.TaskAttachment). `id` is the
+ * attachment id used to build the download URL; `file` carries the
+ * displayable metadata (name / size / mime).
+ */
+export const taskAttachmentSchema = z
+  .object({
+    id: z.number(),
+    task_id: z.number().nullable().optional(),
+    created: z.string().nullable().optional(),
+    file: z
+      .object({
+        id: z.number().nullable().optional(),
+        name: z.string().nullable().optional(),
+        size: z.number().nullable().optional(),
+        mime: z.string().nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+
+export type TaskAttachmentResponse = z.infer<typeof taskAttachmentSchema>;
 
 const VIKUNJA_ZERO_DATE = '0001-01-01T00:00:00Z';
 

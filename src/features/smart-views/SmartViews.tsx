@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { format } from 'date-fns';
-import { Plus, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
 import { createTask, updateTask } from '@/db/tasks';
@@ -20,6 +20,7 @@ import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { QuickAddPreview } from '@/features/tasks/QuickAddPreview';
 import { LabelChips } from '@/features/tasks/LabelChips';
 import { useTaskLabels } from '@/queries/taskLabels';
+import { useTasksWithAttachments } from '@/queries/attachments';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import type { TaskWithProject } from '@/db/tasks';
 import type { TaskInput } from '@/domain/task';
@@ -245,6 +246,8 @@ export function SmartTaskRow({
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
   const { data: labels = [] } = useTaskLabels(task.localId);
+  const { data: attachmentIds } = useTasksWithAttachments();
+  const hasAttachments = attachmentIds?.has(task.localId) ?? false;
 
   const handleToggle = async () => {
     try {
@@ -293,6 +296,9 @@ export function SmartTaskRow({
             <span aria-label={`Priority ${task.priority}`}>
               {'!'.repeat(Math.min(5, task.priority))}
             </span>
+          ) : null}
+          {hasAttachments ? (
+            <Paperclip className="h-3 w-3" aria-label="Has attachments" />
           ) : null}
           <LabelChips labels={labels} />
         </div>
