@@ -32,7 +32,7 @@ done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped. Current version is `0.4.2` (in `package.json`,
+shipped in `v0.4.0`. Current version is `0.4.2` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **`v0.4.0`/`v0.4.1` were tagged without bumping
 these files, leaving them stuck at `0.3.1` → running builds reported
@@ -49,9 +49,15 @@ release").**
 | M4 native polish (notification/autostart/global-shortcut/tray, `execute_tx`) | ✅ |
 | M4.5 auto-update distribution (updater, signing, release workflow) | ✅ |
 | M5 input parity (TipTap WYSIWYG, NL quick-add, inline pickers, label mutations) | ✅ |
+| M6 smart views (Today / Upcoming / Inbox) + saved filters + FTS5 search | ✅ |
+| M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
+| M8 hierarchy, recurrence, reminders | 🟡 reminders in PR #39; sub-tasks + recurrence pending |
+| M9 reorder, DnD, Kanban, table view | ⏳ |
+| M10 stretch — attachments, comments, Gantt, notes | 🟡 attachments (list / upload / delete / inline images / preview) in PR #41 stacked on #39; comments / Gantt / notes pending |
 
-**Next up:** M6 — Today / Upcoming / Inbox smart views + FTS5 search →
-`v0.4.0`, the headline Todoist-parity unlock. See [SPEC.md §14](SPEC.md).
+**Next up:** M8 sub-tasks tree — render Vikunja `task_relations` as
+indent-and-collapse under each parent. After that, M8 recurrence UI
+and M7 keyboard-first. See [SPEC.md §14](SPEC.md).
 
 **Known gaps / deferred:**
 - **M3 two-client conflict smoke test** still owed (#32) — hard to repro
