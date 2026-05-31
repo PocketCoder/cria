@@ -140,4 +140,75 @@ describe('parseQuickAdd', () => {
     expect(kinds).toContain('date');
     expect(kinds).toContain('assignee');
   });
+
+  it('parses "every day" as daily recurrence', () => {
+    const r = parseQuickAdd('Water plants every day', NOW);
+    expect(r.title).toBe('Water plants');
+    expect(r.repeatAfter).toBe(86400);
+    expect(r.repeatMode).toBe(0);
+  });
+
+  it('parses "daily" shorthand', () => {
+    const r = parseQuickAdd('Water routine daily', NOW);
+    expect(r.title).toBe('Water routine');
+    expect(r.repeatAfter).toBe(86400);
+    expect(r.repeatMode).toBe(0);
+  });
+
+  it('parses "every N days"', () => {
+    const r = parseQuickAdd('Take meds every 3 days', NOW);
+    expect(r.title).toBe('Take meds');
+    expect(r.repeatAfter).toBe(259200);
+    expect(r.repeatMode).toBe(0);
+  });
+
+  it('parses "weekly" and "every week"', () => {
+    const r1 = parseQuickAdd('Team standup weekly', NOW);
+    expect(r1.repeatAfter).toBe(604800);
+    expect(r1.repeatMode).toBe(0);
+    const r2 = parseQuickAdd('Review every week', NOW);
+    expect(r2.repeatAfter).toBe(604800);
+    expect(r2.repeatMode).toBe(0);
+  });
+
+  it('parses "monthly" and "every month"', () => {
+    const r1 = parseQuickAdd('Pay rent monthly', NOW);
+    expect(r1.repeatAfter).toBeNull();
+    expect(r1.repeatMode).toBe(1);
+    const r2 = parseQuickAdd('Check in every month', NOW);
+    expect(r2.repeatAfter).toBeNull();
+    expect(r2.repeatMode).toBe(1);
+  });
+
+  it('parses day-of-week: "every monday" as weekly', () => {
+    const r = parseQuickAdd('Prep meals every monday', NOW);
+    expect(r.title).toBe('Prep meals');
+    expect(r.repeatAfter).toBe(604800);
+    expect(r.repeatMode).toBe(0);
+  });
+
+  it('strips recurrence and date together', () => {
+    const r = parseQuickAdd('Submit report tomorrow monthly', NOW);
+    expect(r.title).toBe('Submit report');
+    expect(r.dueDate).not.toBeNull();
+    expect(r.repeatMode).toBe(1);
+  });
+
+  it('includes recurrence token in interleaved tokens', () => {
+    const r = parseQuickAdd('Gym daily', NOW);
+    const kinds = r.tokens.map((t) => t.kind);
+    expect(kinds).toContain('recurrence');
+    const recTok = r.tokens.find((t) => t.kind === 'recurrence');
+    expect(recTok).toBeDefined();
+    if (recTok?.kind === 'recurrence') {
+      expect(recTok.repeatAfter).toBe(86400);
+    }
+  });
+
+  it('leaves unparseable "every" phrases in the title', () => {
+    const r = parseQuickAdd('Review every detail', NOW);
+    expect(r.repeatAfter).toBeNull();
+    expect(r.repeatMode).toBeNull();
+    expect(r.title).toBe('Review every detail');
+  });
 });

@@ -41,6 +41,8 @@ export interface QuickAddResult {
   labelTitles: string[];
   assigneeUsernames: string[];
   projectTitle: string | null;
+  repeatAfter: number | null;
+  repeatMode: number | null;
   tokens: QuickAddToken[];
 }
 
@@ -50,7 +52,8 @@ export type QuickAddToken =
   | { kind: 'priority'; start: number; end: number; text: string; value: number }
   | { kind: 'label'; start: number; end: number; text: string; title: string }
   | { kind: 'assignee'; start: number; end: number; text: string; username: string }
-  | { kind: 'project'; start: number; end: number; text: string; title: string };
+  | { kind: 'project'; start: number; end: number; text: string; title: string }
+  | { kind: 'recurrence'; start: number; end: number; text: string; repeatAfter: number | null; repeatMode: number | null };
 
 // Vikunja's *default* Quick Add Magic prefixes
 // (pkg frontend: src/modules/quickAddMagic/prefixes.ts → VIKUNJA_PREFIXES):
@@ -66,12 +69,44 @@ const PROJECT_RE = /(?:^|\s)(\+["“”][^"“”]+["“”]|\+[A-Za-z0-9_-]+)(?
 const ASSIGNEE_RE = /(?:^|\s)(@[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
 
+// Recurrence phrases. Must be checked before chrono-date so "every monday"
+// is consumed here and not by chrono-node.
+const RECURRENCE_RE = /(?:^|\s)((?:every\s+\d+\s+(?:day|week|month|year|hour)s?|every\s+(?:day|week|month|year|hour)|(?:daily|weekly|monthly|yearly|hourly)|every\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)))(?=\s|$)/gi;
+
+const SECONDS = { day: 86400, week: 604800, year: 31536000, hour: 3600 } as const;
+
+function parseRecurrence(text: string): { repeatAfter: number | null; repeatMode: number | null } | null {
+  const lower = text.toLowerCase();
+  // "every N <unit>"
+  const nUnit = lower.match(/^every\s+(\d+)\s+(day|week|month|year|hour)s?$/);
+  if (nUnit) {
+    const n = parseInt(nUnit[1]!, 10);
+    const unit = nUnit[2]!;
+    if (unit === 'month') return { repeatAfter: null, repeatMode: 1 };
+    if (unit in SECONDS) return { repeatAfter: n * SECONDS[unit as keyof typeof SECONDS], repeatMode: 0 };
+    return { repeatAfter: null, repeatMode: null };
+  }
+  // "every <day-of-week>"
+  if (/^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/.test(lower)) {
+    return { repeatAfter: SECONDS.week, repeatMode: 0 };
+  }
+  // "every <unit>" / standalone keyword
+  if (lower === 'every day' || lower === 'daily') return { repeatAfter: SECONDS.day, repeatMode: 0 };
+  if (lower === 'every week' || lower === 'weekly') return { repeatAfter: SECONDS.week, repeatMode: 0 };
+  if (lower === 'every hour' || lower === 'hourly') return { repeatAfter: SECONDS.hour, repeatMode: 0 };
+  if (lower === 'every month' || lower === 'monthly') return { repeatAfter: null, repeatMode: 1 };
+  if (lower === 'every year' || lower === 'yearly') return { repeatAfter: SECONDS.year, repeatMode: 0 };
+  return null;
+}
+
 interface RawToken {
-  kind: 'label' | 'project' | 'priority' | 'assignee' | 'date';
+  kind: 'label' | 'project' | 'priority' | 'assignee' | 'date' | 'recurrence';
   start: number;
   end: number;
   text: string;
-  payload: string | number;
+  /** Field-typed payload — narrowed when converted to QuickAddToken. */
+  payload: string | number | { repeatAfter: number | null; repeatMode: number | null };
+  /** For date tokens only: the ISO timestamp the date phrase resolves to. */
   iso?: string;
 }
 
@@ -124,6 +159,24 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     const title = parseQuoted(matchText, '+');
     if (title.length > 0) {
       claimed.push({ kind: 'project', start, end, text: matchText, payload: title });
+    }
+  }
+
+  // --- Recurrence — before chrono-date so "every monday" is claimed first ---
+
+  for (const m of raw.matchAll(RECURRENCE_RE)) {
+    const matchText = m[1]!;
+    const start = m.index! + (m[0]!.length - matchText.length);
+    const end = start + matchText.length;
+    const parsed = parseRecurrence(matchText);
+    if (parsed && !overlaps(start, end, claimed)) {
+      claimed.push({
+        kind: 'recurrence',
+        start,
+        end,
+        text: matchText,
+        payload: parsed,
+      });
     }
   }
 
@@ -191,6 +244,8 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   let priority: number | null = null;
   let dueDate: string | null = null;
   let projectTitle: string | null = null;
+  let repeatAfter: number | null = null;
+  let repeatMode: number | null = null;
   for (const t of claimed) {
     if (t.kind === 'label') labelTitles.push(t.payload as string);
     else if (t.kind === 'assignee') assigneeUsernames.push(t.payload as string);
@@ -199,6 +254,10 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       priority = priority === null ? (t.payload as number) : Math.max(priority, t.payload as number);
     } else if (t.kind === 'date' && t.iso && !dueDate) {
       dueDate = t.iso;
+    } else if (t.kind === 'recurrence') {
+      const p = t.payload as { repeatAfter: number | null; repeatMode: number | null };
+      if (!repeatAfter) repeatAfter = p.repeatAfter;
+      if (!repeatMode) repeatMode = p.repeatMode;
     }
   }
 
@@ -221,6 +280,9 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       tokens.push({ kind: 'assignee', start: t.start, end: t.end, text: t.text, username: t.payload as string });
     } else if (t.kind === 'date' && t.iso) {
       tokens.push({ kind: 'date', start: t.start, end: t.end, text: t.text, iso: t.iso });
+    } else if (t.kind === 'recurrence') {
+      const p = t.payload as { repeatAfter: number | null; repeatMode: number | null };
+      tokens.push({ kind: 'recurrence', start: t.start, end: t.end, text: t.text, repeatAfter: p.repeatAfter, repeatMode: p.repeatMode });
     }
     walk = t.end;
   }
@@ -228,7 +290,7 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     tokens.push({ kind: 'text', start: walk, end: raw.length, text: raw.slice(walk) });
   }
 
-  return { title, dueDate, priority, labelTitles, assigneeUsernames, projectTitle, tokens };
+  return { title, dueDate, priority, labelTitles, assigneeUsernames, projectTitle, repeatAfter, repeatMode, tokens };
 }
 
 function overlaps(start: number, end: number, ranges: RawToken[]): boolean {

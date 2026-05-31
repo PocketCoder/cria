@@ -72,6 +72,8 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
         projectLocalId: matchedProject?.localId ?? projectId,
         ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter !== null ? { repeatAfter: parsed.repeatAfter } : {}),
+        ...(parsed.repeatMode !== null ? { repeatMode: parsed.repeatMode } : {}),
       };
       const created = await createTask(input);
 
