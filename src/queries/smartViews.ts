@@ -5,8 +5,11 @@ import {
   listTasksWithDueDate,
   listTasksForLabel,
   listFavoriteTasks,
+  listTasksForProject,
   type TaskWithProject,
 } from '@/db/tasks';
+import { getDb } from '@/db';
+import { useCurrentUser } from '@/queries/user';
 import { subscribe } from '@/db/bus';
 
 export interface TaskGroup {
@@ -124,6 +127,42 @@ export function useLabelTasks(labelLocalId: string | null) {
         label: title,
         tasks,
       }));
+    },
+  });
+}
+
+/** Tasks in the user's default inbox project, grouped by project. */
+export function useInboxTasks() {
+  const qc = useQueryClient();
+  const { data: user } = useCurrentUser();
+  useEffect(
+    () =>
+      subscribe('tasks', () => {
+        void qc.invalidateQueries({ queryKey: ['smart', 'inbox'] });
+      }),
+    [qc],
+  );
+
+  return useQuery<TaskGroup[]>({
+    queryKey: ['smart', 'inbox'],
+    enabled: !!user?.defaultProjectId,
+    staleTime: 30_000,
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      if (!user?.defaultProjectId) return [];
+      const db = await getDb();
+      const rows = await db.select<{ local_id: string; title: string }[]>(
+        `SELECT local_id, title FROM projects WHERE server_id = ? LIMIT 1`,
+        [user.defaultProjectId],
+      );
+      const project = rows[0];
+      if (!project) return [];
+      const tasks = await listTasksForProject(project.local_id);
+      const withProject: TaskWithProject[] = tasks.map((t) => ({
+        ...t,
+        projectTitle: project.title,
+      }));
+      return [{ key: 'inbox', label: project.title, tasks: withProject }];
     },
   });
 }

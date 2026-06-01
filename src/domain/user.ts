@@ -12,6 +12,8 @@ export interface User {
   raw: unknown;
   /** ISO 8601 timestamp when we last fetched the user from the server. */
   fetchedAt: string;
+  /** The project new tasks default to (per user settings on the server). */
+  defaultProjectId: number | null;
 }
 
 /**
@@ -31,6 +33,8 @@ export type UserResponse = z.infer<typeof userResponseSchema>;
 
 export function userFromResponse(payload: unknown): User {
   const parsed = userResponseSchema.parse(payload);
+  const raw = payload as Record<string, unknown>;
+  const settings = raw.settings as Record<string, unknown> | undefined;
   return {
     serverId: parsed.id,
     username: parsed.username,
@@ -38,5 +42,6 @@ export function userFromResponse(payload: unknown): User {
     name: parsed.name ?? null,
     raw: payload,
     fetchedAt: new Date().toISOString(),
+    defaultProjectId: (settings?.default_project_id as number | undefined) ?? null,
   };
 }

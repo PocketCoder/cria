@@ -12,6 +12,7 @@ import {
   useTodayTasks,
   useUpcomingTasks,
   useLabelTasks,
+  useInboxTasks,
   useFavoriteTasks,
   groupTotal,
   type TaskGroup,
@@ -386,6 +387,21 @@ export function FavoritesView() {
       isLoading={isLoading}
       emptyMessage="No favorited tasks."
       showProject
+      defaultDueDate={todayISO()}
+    />
+  );
+}
+
+export function InboxView() {
+  const { data: groups = [], isLoading } = useInboxTasks();
+  const title = groups[0]?.label ?? 'Inbox';
+  return (
+    <SmartView
+      title={title}
+      groups={groups}
+      isLoading={isLoading}
+      emptyMessage="No inbox project set. Configure it in your Vikunja server settings."
+      showProject={false}
       defaultDueDate={todayISO()}
     />
   );
