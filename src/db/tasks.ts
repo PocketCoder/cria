@@ -605,3 +605,14 @@ export async function deleteTask(localId: string): Promise<void> {
   notify('tasks');
   notify('outbox');
 }
+
+export async function listActiveTaskCounts(): Promise<Map<string, number>> {
+  const db = await getDb();
+  const rows = await db.select<{ project_local_id: string; cnt: number }[]>(
+    `SELECT project_local_id, COUNT(*) as cnt
+     FROM tasks
+     WHERE deleted = 0 AND done = 0
+     GROUP BY project_local_id`,
+  );
+  return new Map(rows.map((r) => [r.project_local_id, r.cnt]));
+}

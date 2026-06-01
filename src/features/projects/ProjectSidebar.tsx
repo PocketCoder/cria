@@ -1,9 +1,12 @@
-import { useState, useRef, type ComponentType } from 'react';
+import { useEffect, useState, useRef, type ComponentType } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { useUi } from '@/stores/ui';
 import { createProject, updateProject, deleteProject } from '@/db/projects';
 import { createLabel, updateLabel, deleteLabel } from '@/db/labels';
+import { listActiveTaskCounts } from '@/db/tasks';
+import { subscribe } from '@/db/bus';
 import { cn } from '@/lib/cn';
 import {
   Plus,
@@ -65,6 +68,20 @@ export function ProjectSidebar() {
   const { data: labels = [] } = useLabels();
   const activeView = useUi((s) => s.activeView);
   const setActiveView = useUi((s) => s.setActiveView);
+
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      subscribe('tasks', () => {
+        void qc.invalidateQueries({ queryKey: ['taskCounts'] });
+      }),
+    [qc],
+  );
+  const { data: taskCounts = new Map<string, number>() } = useQuery({
+    queryKey: ['taskCounts'],
+    staleTime: 30_000,
+    queryFn: listActiveTaskCounts,
+  });
 
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -292,6 +309,7 @@ export function ProjectSidebar() {
                 <ProjectRow
                   key={p.localId}
                   project={p}
+                  taskCount={taskCounts.get(p.localId) ?? 0}
                   isSelected={
                     activeView?.kind === 'project' &&
                     activeView.localId === p.localId
@@ -385,6 +403,7 @@ export function ProjectSidebar() {
 
 function ProjectRow({
   project,
+  taskCount,
   isSelected,
   isEditing,
   editingTitle,
@@ -396,6 +415,7 @@ function ProjectRow({
   onDelete,
 }: {
   project: Project;
+  taskCount: number;
   isSelected: boolean;
   isEditing: boolean;
   editingTitle: string;
@@ -454,6 +474,10 @@ function ProjectRow({
         {project.isArchived ? (
           <span className="ml-auto text-[10px] uppercase text-[var(--color-muted-foreground)]">
             archived
+          </span>
+        ) : taskCount > 0 ? (
+          <span className="ml-auto text-[10px] text-[var(--color-muted-foreground)]">
+            {taskCount}
           </span>
         ) : null}
       </button>
