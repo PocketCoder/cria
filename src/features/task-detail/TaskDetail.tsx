@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
+import { toggleTaskLabel } from '@/db/labels';
 import { subscribe } from '@/db/bus';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { LabelChips } from '@/features/tasks/LabelChips';
@@ -147,6 +148,19 @@ export function TaskDetail() {
     setSelectedTask(null);
   };
 
+  const handleRemoveLabel = async (labelLocalId: string) => {
+    // The label is currently applied, so toggleTaskLabel removes it
+    // (soft-delete + queued 'remove' outbox op). Invalidate explicitly:
+    // toggleTaskLabel notifies the 'task_labels' bus topic, and we
+    // refresh the chip query immediately rather than wait for a pull.
+    try {
+      await toggleTaskLabel(task.localId, labelLocalId);
+      await queryClient.invalidateQueries({ queryKey: ['task-labels'] });
+    } catch (err) {
+      console.error('[labels] remove failed:', err);
+    }
+  };
+
   // The title lives in the card header (sticky context as the body
   // scrolls), still click-to-edit inline.
   const header = titleEditing ? (
@@ -179,7 +193,10 @@ export function TaskDetail() {
       <div className="min-w-0 flex-1 overflow-y-auto p-5">
         {labels.length > 0 ? (
           <div className="mb-3">
-            <LabelChips labels={labels} />
+            <LabelChips
+              labels={labels}
+              onRemove={(id) => void handleRemoveLabel(id)}
+            />
           </div>
         ) : null}
 

@@ -1,11 +1,23 @@
+import { X } from 'lucide-react';
 import type { Label } from '@/domain/label';
 
 /**
  * Inline pill list for task labels. Uses the label's hex_color as the
  * background and picks a readable text colour. Keeps the chips tight so
  * the row height doesn't grow.
+ *
+ * When `onRemove` is supplied, each chip gains a hover-revealed × that
+ * removes the label from the task. Without it the chips are read-only —
+ * which is what the dense task-row usages (TaskList / SmartViews) want;
+ * only the detail card passes `onRemove`.
  */
-export function LabelChips({ labels }: { labels: Label[] }) {
+export function LabelChips({
+  labels,
+  onRemove,
+}: {
+  labels: Label[];
+  onRemove?: (labelLocalId: string) => void;
+}) {
   if (labels.length === 0) return null;
   return (
     <ul className="flex flex-wrap items-center gap-1">
@@ -17,7 +29,7 @@ export function LabelChips({ labels }: { labels: Label[] }) {
           <li
             key={l.localId}
             title={l.description ?? l.title}
-            className="rounded-full px-1.5 py-px text-[10px] leading-tight"
+            className="group/chip inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] leading-tight"
             style={{
               background: bg,
               color: fg,
@@ -28,6 +40,19 @@ export function LabelChips({ labels }: { labels: Label[] }) {
             }}
           >
             {l.title}
+            {onRemove ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(l.localId);
+                }}
+                aria-label={`Remove label ${l.title}`}
+                className="ml-0.5 inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-black/15 group-hover/chip:opacity-70 hover:!opacity-100 cursor-pointer"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            ) : null}
           </li>
         );
       })}
