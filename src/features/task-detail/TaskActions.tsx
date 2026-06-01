@@ -18,11 +18,12 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel, createLabel } from '@/db/labels';
+import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
 import { listAssigneesForTask, addTaskAssignee, removeTaskAssignee } from '@/db/task-assignees';
 import { useTaskLabels } from '@/queries/taskLabels';
+import { useLabels } from '@/queries/labels';
 import type { Task } from '@/domain/task';
 import type { TaskAssignee } from '@/domain/task-assignee';
 import type { Label } from '@/domain/label';
@@ -40,11 +41,11 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const { data: labels = [] } = useTaskLabels(task.localId);
 
-  const { data: allLabels = [] } = useQuery<Label[]>({
-    queryKey: ['all-labels'],
-    queryFn: listLabels,
-    staleTime: 30_000,
-  });
+  // Shared, bus-subscribed label list (same hook + cache the sidebar
+  // uses). A bare useQuery here didn't refresh on the `labels` topic, so
+  // a label created via the popover or deleted via the manager modal
+  // wouldn't appear/disappear in this list until the card remounted.
+  const { data: allLabels = [] } = useLabels();
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['all-projects'],
