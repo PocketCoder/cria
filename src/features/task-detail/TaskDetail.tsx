@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { Copy, X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
 import { toggleTaskLabel } from '@/db/labels';
@@ -13,6 +13,7 @@ import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
 import { RelatedTasks } from './RelatedTasks';
 import type { Task } from '@/domain/task';
+import { getAuthSnapshot } from '@/auth/store';
 
 /**
  * Task detail, rendered as a right-docked floating card rather than a
@@ -34,6 +35,7 @@ export function TaskDetail() {
   const cardRef = useRef<HTMLElement>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     return subscribe('tasks', () => {
@@ -161,6 +163,21 @@ export function TaskDetail() {
     }
   };
 
+  const handleCopyLink = async () => {
+    const { serverUrl } = getAuthSnapshot();
+    let text = task.title;
+    if (task.serverId && serverUrl) {
+      text = `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access may be denied in some contexts — silently ignore.
+    }
+  };
+
   // The title lives in the card header (sticky context as the body
   // scrolls), still click-to-edit inline.
   const header = titleEditing ? (
@@ -174,18 +191,37 @@ export function TaskDetail() {
       className="w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-sm font-semibold leading-tight focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
     />
   ) : (
-    <h2
-      className="cursor-pointer truncate rounded px-1 py-0.5 text-sm font-semibold leading-tight hover:bg-[var(--color-muted)]"
-      onClick={handleTitleEdit}
-      title="Click to edit"
-    >
-      {task.identifier ? (
-        <span className="mr-1.5 text-[10px] font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
-          {task.identifier}
+    <div className="flex items-center gap-1">
+      <h2
+        className="min-w-0 flex-1 cursor-pointer truncate rounded px-1 py-0.5 text-sm font-semibold leading-tight hover:bg-[var(--color-muted)]"
+        onClick={handleTitleEdit}
+        title="Click to edit"
+      >
+        {task.identifier ? (
+          <span className="mr-1.5 text-[10px] font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            {task.identifier}
+          </span>
+        ) : null}
+        {task.title}
+      </h2>
+      <button
+        type="button"
+        onClick={() => void handleCopyLink()}
+        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+        title={
+          task.serverId
+            ? 'Copy task link to clipboard'
+            : 'Task not synced yet — copy title instead'
+        }
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+      {copied ? (
+        <span className="shrink-0 text-[10px] text-[var(--color-primary)] animate-in fade-in">
+          Copied!
         </span>
       ) : null}
-      {task.title}
-    </h2>
+    </div>
   );
 
   return (
