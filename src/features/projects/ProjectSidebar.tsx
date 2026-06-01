@@ -18,6 +18,7 @@ import {
   CalendarDays,
   Star,
   Inbox,
+  GripVertical,
 } from 'lucide-react';
 import {
   Popover,
@@ -97,6 +98,55 @@ export function ProjectSidebar() {
   const [labelEditingTitle, setLabelEditingTitle] = useState('');
   const [labelBusy, setLabelBusy] = useState(false);
   const labelCreatingRef = useRef(false);
+
+  /* ── project drag-to-reorder ───────────────────────────── */
+  const draggedIdRef = useRef<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const visibleProjects = projects.filter((p) => p.title !== 'Favorites');
+
+  const handleDragStart = (localId: string) => {
+    draggedIdRef.current = localId;
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    const draggedId = draggedIdRef.current;
+    draggedIdRef.current = null;
+    if (!draggedId) return;
+
+    const fromIndex = visibleProjects.findIndex((p) => p.localId === draggedId);
+    if (fromIndex === -1 || fromIndex === dropIndex) return;
+
+    const reordered = [...visibleProjects];
+    const removed = reordered.splice(fromIndex, 1);
+    if (removed.length === 0) return;
+    const item = removed[0]!;
+    reordered.splice(dropIndex, 0, item);
+
+    const before: Project | undefined = reordered[dropIndex - 1];
+    const after: Project | undefined = reordered[dropIndex + 1];
+    const beforePos: number = before?.position ?? 0;
+    const afterPos: number = after?.position ?? (beforePos + 2048);
+    const newPosition: number = (beforePos + afterPos) / 2;
+
+    try {
+      await updateProject(draggedId, { position: newPosition });
+    } catch (err) {
+      console.error('[sidebar] drag-reorder failed:', err);
+    }
+  };
+
+  const handleDragEnd = () => {
+    draggedIdRef.current = null;
+    setDragOverIndex(null);
+  };
 
   const handleCreateLabel = async () => {
     if (labelCreatingRef.current) return;
@@ -308,11 +358,7 @@ export function ProjectSidebar() {
             </p>
           ) : (
             <ul className="space-y-0.5">
-              {/* Filter out Vikunja's virtual "Favorites" container project.
-                  The server returns it as a real project when any project is
-                  favorited. We identify it by title since its server_id isn't
-                  predictable. */}
-              {projects.filter((p) => p.title !== 'Favorites').map((p) => (
+              {visibleProjects.map((p, i) => (
                 <ProjectRow
                   key={p.localId}
                   project={p}
@@ -323,6 +369,7 @@ export function ProjectSidebar() {
                   }
                   isEditing={editingId === p.localId}
                   editingTitle={editingTitle}
+                  isDragOver={dragOverIndex === i}
                   onSelect={() =>
                     setActiveView({
                       kind: 'project',
@@ -354,6 +401,10 @@ export function ProjectSidebar() {
                       );
                     }
                   }}
+                  onDragStart={() => handleDragStart(p.localId)}
+                  onDragOver={(e) => handleDragOver(e, i)}
+                  onDrop={(e) => void handleDrop(e, i)}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </ul>
@@ -414,24 +465,34 @@ function ProjectRow({
   isSelected,
   isEditing,
   editingTitle,
+  isDragOver,
   onSelect,
   onStartRename,
   onChangeRename,
   onSaveRename,
   onCancelRename,
   onDelete,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   project: Project;
   taskCount: number;
   isSelected: boolean;
   isEditing: boolean;
   editingTitle: string;
+  isDragOver: boolean;
   onSelect: () => void;
   onStartRename: () => void;
   onChangeRename: (v: string) => void;
   onSaveRename: () => void;
   onCancelRename: () => void;
   onDelete: () => Promise<void> | void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -460,16 +521,30 @@ function ProjectRow({
   }
 
   return (
-    <li className="group relative">
+    <li
+      draggable={!isEditing}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={cn(
+        'group relative',
+        isDragOver && 'border-t-2 border-[var(--color-primary)]',
+      )}
+    >
       <button
         type="button"
         onClick={onSelect}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
+          'flex w-full items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
           'hover:bg-[var(--color-muted)]',
           isSelected && 'bg-[var(--color-muted)] font-medium',
         )}
       >
+        <GripVertical
+          aria-hidden="true"
+          className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+        />
         <span
           aria-hidden="true"
           className="h-2 w-2 shrink-0 rounded-full"

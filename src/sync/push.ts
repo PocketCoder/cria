@@ -540,6 +540,7 @@ interface ProjectRow {
   parent_local_id: string | null;
   hex_color: string | null;
   is_archived: number;
+  position: number | null;
   deleted: number;
 }
 
@@ -551,7 +552,7 @@ async function executeProjectOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
-            hex_color, is_archived, deleted
+            hex_color, is_archived, position, deleted
        FROM projects WHERE local_id = ? LIMIT 1`,
     [localId],
   );
@@ -662,6 +663,7 @@ function projectBody(row: ProjectRow): Record<string, unknown> {
     description: row.description ?? undefined,
     hex_color: row.hex_color ? row.hex_color.replace(/^#/, '') : undefined,
     is_archived: row.is_archived === 1,
+    position: row.position ?? undefined,
     parent_project_id: undefined as number | undefined,
   };
 }

@@ -18,6 +18,7 @@ export type ProjectUpdate = Partial<{
   parentLocalId: string | null;
   isArchived: boolean;
   isFavorite: boolean;
+  position: number;
 }>;
 
 interface ProjectRow {
@@ -204,23 +205,29 @@ export async function upsertProjectFromServer(
 export async function createProject(input: ProjectInput): Promise<Project> {
   const localId = nanoid();
   const now = new Date().toISOString();
+  const db = await getDb();
+  const [maxRow] = await db.select<{ max_pos: number | null }[]>(
+    `SELECT MAX(position) AS max_pos FROM projects WHERE deleted = 0`,
+  );
+  const nextPosition = (maxRow?.max_pos ?? 0) + 1024;
 
-  await withTx(async (db) => {
-    await db.execute(
+  await withTx(async (tx) => {
+    await tx.execute(
       `INSERT INTO projects (
          local_id, server_id, title, description, parent_local_id,
          hex_color, is_archived, is_favorite, position, updated_at, dirty, deleted
-       ) VALUES (?, NULL, ?, ?, ?, ?, 0, 0, NULL, ?, 1, 0)`,
+       ) VALUES (?, NULL, ?, ?, ?, ?, 0, 0, ?, ?, 1, 0)`,
       [
         localId,
         input.title,
         input.description ?? null,
         input.parentLocalId ?? null,
         input.hexColor ?? null,
+        nextPosition,
         now,
       ],
     );
-    await db.execute(
+    await tx.execute(
       `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
        VALUES ('project', ?, 'create', ?, ?)`,
       [localId, JSON.stringify(input), now],
@@ -271,6 +278,10 @@ export async function updateProject(
   if (input.isFavorite !== undefined) {
     sets.push('is_favorite = ?');
     params.push(input.isFavorite ? 1 : 0);
+  }
+  if (input.position !== undefined) {
+    sets.push('position = ?');
+    params.push(input.position);
   }
 
   if (sets.length > 0) {
