@@ -40,6 +40,10 @@ export async function reconcileDeletions(api: ApiClient = createApiClient()) {
   const localTaskRows = await db.select<any[]>(`SELECT local_id, server_id FROM tasks WHERE server_id IS NOT NULL`);
   for (const row of localTaskRows) {
     if (!serverTaskIds.has(row.server_id)) {
+      await exec(
+        `DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?`,
+        [row.local_id, row.local_id],
+      );
       await exec(`DELETE FROM tasks WHERE local_id = ?`, [row.local_id]);
     }
   }

@@ -342,6 +342,10 @@ async function executeOp(
   if (op.op === 'create') {
     if (task.deleted === 1) {
       await withTx(async (tx) => {
+        await tx.execute(
+          'DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?',
+          [localId, localId],
+        );
         await tx.execute('DELETE FROM tasks WHERE local_id = ?', [localId]);
       });
       notify('tasks');
@@ -446,6 +450,10 @@ async function executeOp(
     if (task.server_id === null) {
       // never synced — just drop locally
       await withTx(async (tx) => {
+        await tx.execute(
+          'DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?',
+          [localId, localId],
+        );
         await tx.execute('DELETE FROM tasks WHERE local_id = ?', [localId]);
       });
       notify('tasks');
@@ -457,6 +465,10 @@ async function executeOp(
       }),
     );
     await withTx(async (tx) => {
+      await tx.execute(
+        'DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?',
+        [localId, localId],
+      );
       await tx.execute('DELETE FROM tasks WHERE local_id = ?', [localId]);
     });
     notify('tasks');
@@ -616,6 +628,14 @@ async function executeProjectOp(
       }),
     );
     await withTx(async (tx) => {
+      // Prune relations for the project's tasks BEFORE deleting them —
+      // the subquery needs those task rows to still exist.
+      await tx.execute(
+        `DELETE FROM task_relations
+          WHERE task_local_id IN (SELECT local_id FROM tasks WHERE project_local_id = ?)
+             OR other_task_local_id IN (SELECT local_id FROM tasks WHERE project_local_id = ?)`,
+        [localId, localId],
+      );
       await tx.execute('DELETE FROM tasks WHERE project_local_id = ?', [localId]);
       await tx.execute('DELETE FROM projects WHERE local_id = ?', [localId]);
     });

@@ -225,8 +225,15 @@ interface TaskTreeNode {
 
 function buildTaskTree(tasks: Task[], parentMap: Map<string, string[]>): TaskTreeNode[] {
   const taskMap = new Map(tasks.map((t) => [t.localId, t]));
+  // Only treat a task as "nested" (and exclude it from the top level)
+  // when its parent is actually present in the visible set. Otherwise a
+  // child whose parent is filtered out (e.g. a done parent hidden by the
+  // current view) — or a stale relation row whose parent task no longer
+  // exists locally — would be dropped from roots but never rendered as a
+  // child, making it vanish entirely.
   const childSet = new Set<string>();
-  for (const [, children] of parentMap) {
+  for (const [parentId, children] of parentMap) {
+    if (!taskMap.has(parentId)) continue;
     for (const c of children) childSet.add(c);
   }
 

@@ -40,6 +40,17 @@ export function TaskDetail() {
     });
   }, [queryClient]);
 
+  // Reset title-edit state whenever the selected task changes. Without
+  // this, switching from task A (mid-title-edit) to task B leaves the
+  // header in edit mode showing A's draft; the subsequent blur-save
+  // then writes A's text onto B (handleTitleSave reads the *current*
+  // task, which is now B). Discarding the in-progress draft on
+  // navigation is the safe, predictable behaviour.
+  useEffect(() => {
+    setTitleEditing(false);
+    setTitleDraft('');
+  }, [selectedId]);
+
   // Escape closes the card while it's open.
   useEffect(() => {
     if (!selectedId) return;
