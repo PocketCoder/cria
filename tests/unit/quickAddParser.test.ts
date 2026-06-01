@@ -12,23 +12,24 @@ describe('parseQuickAdd', () => {
     expect(r.priority).toBeNull();
     expect(r.labelTitles).toEqual([]);
     expect(r.assigneeUsernames).toEqual([]);
+    expect(r.projectTitle).toBeNull();
   });
 
   it('strips a label token', () => {
-    const r = parseQuickAdd('Buy milk #shopping', NOW);
+    const r = parseQuickAdd('Buy milk *shopping', NOW);
     expect(r.title).toBe('Buy milk');
     expect(r.labelTitles).toEqual(['shopping']);
   });
 
   it('supports quoted multi-word labels', () => {
-    const r = parseQuickAdd('Plan trip #"south africa" tomorrow', NOW);
+    const r = parseQuickAdd('Plan trip *"south africa" tomorrow', NOW);
     expect(r.title).toBe('Plan trip');
     expect(r.labelTitles).toEqual(['south africa']);
     expect(r.dueDate).not.toBeNull();
   });
 
   it('accumulates multiple labels', () => {
-    const r = parseQuickAdd('#a Bake bread #b', NOW);
+    const r = parseQuickAdd('*a Bake bread *b', NOW);
     expect(r.title).toBe('Bake bread');
     expect(r.labelTitles).toEqual(['a', 'b']);
   });
@@ -51,6 +52,25 @@ describe('parseQuickAdd', () => {
     expect(r.assigneeUsernames).toEqual(['alice']);
   });
 
+  it('strips a project token', () => {
+    const r = parseQuickAdd('Fix bugs +Personal', NOW);
+    expect(r.title).toBe('Fix bugs');
+    expect(r.projectTitle).toBe('Personal');
+  });
+
+  it('supports quoted multi-word project names', () => {
+    const r = parseQuickAdd('Plan trip +"Work Projects" tomorrow', NOW);
+    expect(r.title).toBe('Plan trip');
+    expect(r.projectTitle).toBe('Work Projects');
+    expect(r.dueDate).not.toBeNull();
+  });
+
+  it('takes the last project token if multiple are present', () => {
+    const r = parseQuickAdd('+Dev Write tests +Personal', NOW);
+    expect(r.title).toBe('Write tests');
+    expect(r.projectTitle).toBe('Personal');
+  });
+
   it('parses a date phrase and removes it from the title', () => {
     const r = parseQuickAdd('Submit invoice next friday', NOW);
     expect(r.title.toLowerCase()).toBe('submit invoice');
@@ -67,7 +87,7 @@ describe('parseQuickAdd', () => {
 
   it('handles everything in one go', () => {
     const r = parseQuickAdd(
-      'Buy milk tomorrow #shopping !2 @alice',
+      'Buy milk tomorrow *shopping !2 @alice +Personal',
       NOW,
     );
     expect(r.title).toBe('Buy milk');
@@ -75,23 +95,23 @@ describe('parseQuickAdd', () => {
     expect(r.priority).toBe(2);
     expect(r.labelTitles).toEqual(['shopping']);
     expect(r.assigneeUsernames).toEqual(['alice']);
+    expect(r.projectTitle).toBe('Personal');
   });
 
-  it('leaves stray symbols (mid-word #, !, @) inside the title', () => {
-    const r = parseQuickAdd('Email me at jake@example.com about C#', NOW);
-    // `@example` is a valid assignee match in our regex (we require a
-    // leading space). `email me at jake` has no leading space, so it
-    // shouldn't claim. `C#` likewise — no whitespace boundary before #.
-    expect(r.assigneeUsernames).toEqual([]);
+  it('leaves stray symbols inside the title', () => {
+    const r = parseQuickAdd('email@home.com loves u+2764 and C#', NOW);
     expect(r.labelTitles).toEqual([]);
-    expect(r.title).toBe('Email me at jake@example.com about C#');
+    expect(r.assigneeUsernames).toEqual([]);
+    expect(r.projectTitle).toBeNull();
+    expect(r.title).toBe('email@home.com loves u+2764 and C#');
   });
 
   it('produces interleaved tokens for live preview', () => {
-    const r = parseQuickAdd('Ship #v2 tomorrow', NOW);
+    const r = parseQuickAdd('Ship *v2 tomorrow @bob', NOW);
     const kinds = r.tokens.map((t) => t.kind);
     expect(kinds).toContain('text');
     expect(kinds).toContain('label');
     expect(kinds).toContain('date');
+    expect(kinds).toContain('assignee');
   });
 });

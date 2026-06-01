@@ -118,7 +118,8 @@ function SmartView({
         }
       }
 
-      // Apply parsed #labels (creating any that don't exist yet)
+      // Apply parsed labels (the *label token), creating any that don't
+      // exist yet.
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
           await applyLabelsByTitle(created.localId, parsed.labelTitles);
@@ -164,7 +165,7 @@ function SmartView({
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Add a task… e.g. Buy milk tomorrow #label !2"
+                placeholder="Add a task… e.g. Buy milk tomorrow *groceries !2"
                 disabled={isSubmitting}
                 className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
               />

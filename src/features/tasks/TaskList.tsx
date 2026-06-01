@@ -80,10 +80,9 @@ export function TaskList({ project }: TaskListProps) {
 
       const created = await createTask(input);
 
-      // Apply parsed #labels. We look up by case-insensitive title in
-      // the local catalogue (case-insensitive); a #label that doesn't
-      // exist yet is created on the fly, then applied — so `Buy milk
-      // #newlabel` both creates the label and tags the task.
+      // Apply parsed labels (the *label token): look up case-insensitively,
+      // create any that don't exist yet, then apply. Prefix per Vikunja
+      // default Quick Add Magic ('*' = label).
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
           await applyLabelsByTitle(created.localId, parsed.labelTitles);
@@ -92,13 +91,10 @@ export function TaskList({ project }: TaskListProps) {
         }
       }
 
-      // Assignee resolution requires a local users table we don't keep
-      // yet. Surface a warning instead of dropping silently so the user
-      // knows why @alice didn't stick. M8 wires assignee creation
-      // properly.
+      // +assignee tokens are not yet applied (no local users table)
       if (parsed.assigneeUsernames.length > 0) {
         console.info(
-          '[quick-add] @assignee tokens are parsed but not yet applied:',
+          '[quick-add] +assignee tokens are parsed but not yet applied:',
           parsed.assigneeUsernames,
         );
       }
@@ -126,8 +122,8 @@ export function TaskList({ project }: TaskListProps) {
       </div>
 
       {/* Inline create — natural-language parsing on the title field
-          (tomorrow / #label / !priority / @assignee). Explicit date +
-          priority controls stay for users who'd rather not type the
+          (dates / @label / !priority / +assignee / #project). Explicit date
+          + priority controls stay for users who'd rather not type the
           syntax; they override the parsed values when set. */}
       <form
         onSubmit={handleSubmit}
@@ -145,7 +141,7 @@ export function TaskList({ project }: TaskListProps) {
             type="text"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Add a task… e.g. Buy milk tomorrow #shopping !2"
+            placeholder="Add a task… e.g. Buy milk tomorrow *groceries !2"
             disabled={isSubmitting}
             className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
           />
