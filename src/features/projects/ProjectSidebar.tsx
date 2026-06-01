@@ -14,6 +14,7 @@ import {
   Calendar,
   CalendarDays,
   Star,
+  Palette,
 } from 'lucide-react';
 import {
   Popover,
@@ -383,6 +384,11 @@ export function ProjectSidebar() {
   );
 }
 
+const PROJECT_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
+  '#3b82f6', '#8b5cf6', '#ec4899', '#78716c', '#000000',
+];
+
 function ProjectRow({
   project,
   isSelected,
@@ -408,6 +414,7 @@ function ProjectRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [colorOpen, setColorOpen] = useState(false);
 
   if (isEditing) {
     return (
@@ -515,6 +522,50 @@ function ProjectRow({
                   <Pencil className="h-3.5 w-3.5" />
                   Rename
                 </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                  onClick={() => setColorOpen(!colorOpen)}
+                >
+                  <Palette className="h-3.5 w-3.5" />
+                  Color
+                </button>
+                {colorOpen && (
+                  <div className="flex flex-wrap gap-1 px-2 py-1.5">
+                    {PROJECT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={async () => {
+                          await updateProject(project.localId, {
+                            hexColor: c === project.hexColor ? null : c,
+                          });
+                          setMenuOpen(false);
+                          setColorOpen(false);
+                        }}
+                        className={cn(
+                          'h-5 w-5 rounded-full border-2 transition-all',
+                          c === project.hexColor
+                            ? 'border-[var(--color-foreground)] scale-110'
+                            : 'border-transparent hover:scale-110',
+                        )}
+                        style={{ background: c }}
+                      />
+                    ))}
+                    <button
+                      onClick={async () => {
+                        await updateProject(project.localId, { hexColor: null });
+                        setMenuOpen(false);
+                        setColorOpen(false);
+                      }}
+                      className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
+                      title="Remove color"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
               </li>
               <li>
                 <button
