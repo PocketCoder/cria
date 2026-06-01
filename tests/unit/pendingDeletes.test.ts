@@ -38,6 +38,7 @@ function makeTask(localId: string, title = 'A task'): Task {
     isSubscribed: false,
     repeatAfter: 0,
     repeatMode: 0,
+    identifier: null,
     updatedAt: new Date().toISOString(),
   };
 }

@@ -20,6 +20,7 @@ export interface Task {
   repeatAfter: number;
   repeatMode: number;
   updatedAt: string;
+  identifier: string | null;
 }
 
 export const taskResponseSchema = z
@@ -42,6 +43,7 @@ export const taskResponseSchema = z
     is_favorite: z.boolean().nullable().optional(),
     repeat_after: z.number().nullable().optional(),
     repeat_mode: z.number().nullable().optional(),
+    identifier: z.string().nullable().optional(),
     // Vikunja's GET /tasks embeds the task's labels inline. We don't
     // validate the inner shape here — labelResponseSchema will do that
     // when the sync layer routes each label through upsertLabelFromServer.

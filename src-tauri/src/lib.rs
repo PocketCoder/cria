@@ -10,6 +10,7 @@ const MIGRATION_5_SQL: &str = include_str!("../../src/db/migrations/005_task_att
 const MIGRATION_6_SQL: &str = include_str!("../../src/db/migrations/006_task_reminders.sql");
 const MIGRATION_7_SQL: &str = include_str!("../../src/db/migrations/007_task_relations.sql");
 const MIGRATION_8_SQL: &str = include_str!("../../src/db/migrations/008_task_reminders_relative.sql");
+const MIGRATION_9_SQL: &str = include_str!("../../src/db/migrations/009_task_identifier.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -59,6 +60,12 @@ fn migrations() -> Vec<Migration> {
             version: 8,
             description: "task reminders: relative form",
             sql: MIGRATION_8_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 9,
+            description: "task identifier column",
+            sql: MIGRATION_9_SQL,
             kind: MigrationKind::Up,
         },
     ]

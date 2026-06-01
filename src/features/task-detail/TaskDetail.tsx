@@ -165,6 +165,11 @@ export function TaskDetail() {
       onClick={handleTitleEdit}
       title="Click to edit"
     >
+      {task.identifier ? (
+        <span className="mr-1.5 text-[10px] font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          {task.identifier}
+        </span>
+      ) : null}
       {task.title}
     </h2>
   );
