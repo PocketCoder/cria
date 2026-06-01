@@ -4,7 +4,7 @@ import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
 import { createTask, updateTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
 import { useProjects } from '@/queries/projects';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -117,15 +117,10 @@ function SmartView({
         }
       }
 
-      // Apply parsed #labels
+      // Apply parsed #labels (creating any that don't exist yet)
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
-          const all = await listLabels();
-          const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
-          for (const t of parsed.labelTitles) {
-            const id = lookup.get(t.toLowerCase());
-            if (id) await toggleTaskLabel(created.localId, id);
-          }
+          await applyLabelsByTitle(created.localId, parsed.labelTitles);
         } catch (err) {
           console.warn('[smart-view] label application failed:', err);
         }

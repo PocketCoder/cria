@@ -7,7 +7,7 @@ import type { Project } from '@/domain/project';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
 import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square } from 'lucide-react';
@@ -81,16 +81,12 @@ export function TaskList({ project }: TaskListProps) {
       const created = await createTask(input);
 
       // Apply parsed #labels. We look up by case-insensitive title in
-      // the local catalogue; labels that don't exist yet are silently
-      // skipped (M5+ will offer create-as-you-type via the picker).
+      // the local catalogue (case-insensitive); a #label that doesn't
+      // exist yet is created on the fly, then applied — so `Buy milk
+      // #newlabel` both creates the label and tags the task.
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
-          const all = await listLabels();
-          const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
-          for (const t of parsed.labelTitles) {
-            const id = lookup.get(t.toLowerCase());
-            if (id) await toggleTaskLabel(created.localId, id);
-          }
+          await applyLabelsByTitle(created.localId, parsed.labelTitles);
         } catch (err) {
           console.warn('[quick-add] label application failed:', err);
         }

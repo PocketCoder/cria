@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { applyLabelsByTitle } from '@/db/labels';
 import { useUi } from '@/stores/ui';
 import { useProjects } from '@/queries/projects';
 import { parseQuickAdd } from '@/lib/quickAddParser';
@@ -75,12 +75,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
 
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
-          const all = await listLabels();
-          const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
-          for (const t of parsed.labelTitles) {
-            const id = lookup.get(t.toLowerCase());
-            if (id) await toggleTaskLabel(created.localId, id);
-          }
+          await applyLabelsByTitle(created.localId, parsed.labelTitles);
         } catch (err) {
           console.warn('[quick-add] label application failed:', err);
         }

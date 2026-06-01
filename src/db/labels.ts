@@ -267,6 +267,47 @@ export async function createLabel(input: LabelInput): Promise<Label> {
   return created;
 }
 
+/**
+ * Apply a set of label *titles* to a task. Existing labels match
+ * case-insensitively; a title with no match is created on the fly and
+ * then applied. Used by the quick-add entry points so `Buy milk
+ * #newlabel` both creates the label and tags the task — matching the
+ * detail-card "Create label" flow.
+ *
+ * Titles are de-duplicated case-insensitively first so a repeated
+ * `#tag #tag` doesn't toggle the label off again (toggleTaskLabel
+ * flips state). Throws on the first failure; callers wrap in try/catch
+ * so a bad label never fails the surrounding task creation.
+ */
+export async function applyLabelsByTitle(
+  taskLocalId: string,
+  titles: string[],
+): Promise<void> {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const raw of titles) {
+    const title = raw.trim();
+    if (!title) continue;
+    const key = title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ordered.push(title);
+  }
+  if (ordered.length === 0) return;
+
+  const all = await listLabels();
+  const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
+  for (const title of ordered) {
+    let id = lookup.get(title.toLowerCase());
+    if (!id) {
+      const label = await createLabel({ title });
+      id = label.localId;
+      lookup.set(title.toLowerCase(), id);
+    }
+    await toggleTaskLabel(taskLocalId, id);
+  }
+}
+
 export async function updateLabel(localId: string, input: LabelUpdate): Promise<Label> {
   const now = new Date().toISOString();
   const sets: string[] = [];
