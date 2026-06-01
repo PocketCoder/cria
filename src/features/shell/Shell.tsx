@@ -20,6 +20,7 @@ import {
   TodayView,
   UpcomingView,
   LabelView,
+  InboxView,
   FavoritesView,
 } from '@/features/smart-views/SmartViews';
 import { SearchView } from '@/features/search/SearchView';
@@ -224,6 +225,8 @@ export function Shell() {
         return <LabelView labelLocalId={activeView.localId} />;
       case 'favorites':
         return <FavoritesView />;
+      case 'inbox':
+        return <InboxView />;
       case 'search':
         return <SearchView query={searchQuery} />;
       case 'project': {

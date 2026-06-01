@@ -14,6 +14,7 @@ import {
   Calendar,
   CalendarDays,
   Star,
+  Inbox,
 } from 'lucide-react';
 import {
   Popover,
@@ -168,6 +169,12 @@ export function ProjectSidebar() {
               label="Favorites"
               isSelected={activeView?.kind === 'favorites'}
               onClick={() => setActiveView({ kind: 'favorites' })}
+            />
+            <NavItem
+              icon={Inbox}
+              label="Inbox"
+              isSelected={activeView?.kind === 'inbox'}
+              onClick={() => setActiveView({ kind: 'inbox' })}
             />
             <>
               <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">

@@ -17,13 +17,16 @@ export async function getCachedUser(): Promise<User | null> {
   const rows = await db.select<UserRow[]>(`SELECT * FROM user WHERE id = 1`);
   const row = rows[0];
   if (!row) return null;
+  const raw = JSON.parse(row.raw) as Record<string, unknown>;
+  const settings = raw.settings as Record<string, unknown> | undefined;
   return {
     serverId: row.server_id,
     username: row.username,
     email: row.email,
     name: row.name,
-    raw: JSON.parse(row.raw) as unknown,
+    raw,
     fetchedAt: row.fetched_at,
+    defaultProjectId: (settings?.default_project_id as number | undefined) ?? null,
   };
 }
 
