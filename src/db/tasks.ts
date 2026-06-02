@@ -49,7 +49,7 @@ function rowToTask(row: TaskRow): Task {
     percentDone: row.percent_done <= 1
       ? Math.round(row.percent_done * 100)
       : Math.round(row.percent_done),
-    hexColor: row.hex_color,
+    hexColor: row.hex_color ? (row.hex_color.startsWith('#') ? row.hex_color : `#${row.hex_color}`) : null,
     position: row.position,
     isFavorite: row.is_favorite === 1,
     isSubscribed: row.is_subscribed === 1,
