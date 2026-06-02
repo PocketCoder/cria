@@ -59,9 +59,17 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
 
     setSubmitting(true);
     try {
+      // Resolve +project at submit time too — not only via the
+      // dropdown-syncing effect — so a type-then-Enter race can't route
+      // the task to the wrong (previously-selected) project.
+      const matchedProject = parsed.projectTitle
+        ? projects.find(
+            (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+          )
+        : undefined;
       const input: TaskInput = {
         title: parsed.title,
-        projectLocalId: projectId,
+        projectLocalId: matchedProject?.localId ?? projectId,
         ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
       };

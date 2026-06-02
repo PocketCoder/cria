@@ -85,7 +85,14 @@ function SmartView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pid = projectLocalId || projects[0]?.localId;
+    // A parsed `+project` token routes the task to that project
+    // (case-insensitive title match), overriding the dropdown default.
+    const matchedProject = parsed.projectTitle
+      ? projects.find(
+          (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+        )
+      : undefined;
+    const pid = matchedProject?.localId || projectLocalId || projects[0]?.localId;
     if (!pid) return;
     if (!parsed.title && !metadata.dueDate && !metadata.priority && !datePicker) return;
     if (submittingRef.current) return;
