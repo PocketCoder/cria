@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/cn';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { openNotificationSettings } from '@/utils/notify';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { X, ExternalLink, Settings } from 'lucide-react';
 import pkg from '../../package.json';
 
@@ -269,15 +270,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>CalDAV Documentation</Label>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                    }}
+                  <button
+                    type="button"
+                    onClick={() => void openUrl('https://vikunja.io/help/caldav/')}
                     className="flex items-center gap-1 text-xs text-[var(--color-primary)] underline"
                   >
                     Open <ExternalLink className="h-3 w-3" />
-                  </a>
+                  </button>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Updates</Label>
