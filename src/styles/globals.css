@@ -86,6 +86,41 @@ body {
   }
 }
 
+/* Override for user-selected light/dark (class on <html>). These
+   have higher specificity than @theme inside @media so they win
+   over the system preference when explicitly set. */
+.light {
+  --color-background: oklch(99% 0 0);
+  --color-foreground: oklch(20% 0.02 240);
+  --color-muted: oklch(96% 0.005 240);
+  --color-muted-foreground: oklch(45% 0.02 240);
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(20% 0.02 240);
+  --color-border: oklch(90% 0.005 240);
+  --color-input: oklch(94% 0.005 240);
+  --color-ring: oklch(58% 0.18 250);
+  --color-primary: oklch(55% 0.2 250);
+  --color-primary-foreground: oklch(99% 0 0);
+  --color-accent: oklch(55% 0.2 250);
+  --color-accent-foreground: oklch(99% 0 0);
+}
+
+.dark {
+  --color-background: oklch(18% 0.015 250);
+  --color-foreground: oklch(96% 0.005 240);
+  --color-muted: oklch(24% 0.015 250);
+  --color-muted-foreground: oklch(70% 0.02 240);
+  --color-card: oklch(22% 0.015 250);
+  --color-card-foreground: oklch(96% 0.005 240);
+  --color-border: oklch(30% 0.015 250);
+  --color-input: oklch(28% 0.015 250);
+  --color-ring: oklch(72% 0.18 250);
+  --color-primary: oklch(72% 0.18 250);
+  --color-primary-foreground: oklch(18% 0.015 250);
+  --color-accent: oklch(72% 0.18 250);
+  --color-accent-foreground: oklch(18% 0.015 250);
+}
+
 /* TipTap task-list — zero the inner <p> margins so each checked item
    sits flush with its checkbox row. The editor wrapper has
    `[&_p]:my-1` for everything *outside* task lists; the equivalent
