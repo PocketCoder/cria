@@ -58,8 +58,11 @@ export type QuickAddToken =
 // (Vikunja's Todoist mode swaps these to @ / # / + — see issue tracking
 // making the mode user-selectable + synced with the user's Vikunja-web
 // setting.)
-const LABEL_RE = /(?:^|\s)(\*"[^"]+"|\*[A-Za-z0-9_-]+)(?=\s|$)/g;
-const PROJECT_RE = /(?:^|\s)(\+"[^"]+"|\+[A-Za-z0-9_-]+)(?=\s|$)/g;
+// Quote class accepts straight (") and macOS "smart" curly quotes
+// (“ ”), which text inputs substitute by default — otherwise
+// `*"two words"` typed in the app wouldn't match.
+const LABEL_RE = /(?:^|\s)(\*["“”][^"“”]+["“”]|\*[A-Za-z0-9_-]+)(?=\s|$)/g;
+const PROJECT_RE = /(?:^|\s)(\+["“”][^"“”]+["“”]|\+[A-Za-z0-9_-]+)(?=\s|$)/g;
 const ASSIGNEE_RE = /(?:^|\s)(@[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
 
@@ -73,10 +76,13 @@ interface RawToken {
 }
 
 function parseQuoted(raw: string, prefix: string): string {
-  if (raw.startsWith(prefix + '"') && raw.endsWith('"')) {
-    return raw.slice(2, -1).trim();
+  const afterPrefix = raw.slice(prefix.length);
+  // Strip a surrounding double-quote pair — straight or smart, in any
+  // open/close combination (e.g. “…”, "…", “…").
+  if (afterPrefix.length >= 2 && /^["“”].*["“”]$/.test(afterPrefix)) {
+    return afterPrefix.slice(1, -1).trim();
   }
-  return raw.slice(1);
+  return afterPrefix;
 }
 
 export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddResult {

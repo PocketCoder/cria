@@ -65,6 +65,14 @@ describe('parseQuickAdd', () => {
     expect(r.dueDate).not.toBeNull();
   });
 
+  it('accepts smart/curly quotes (macOS auto-substitution)', () => {
+    // “ ” are U+201C / U+201D, which text inputs insert by default.
+    const r = parseQuickAdd('hello +“Hello you” *“two words”', NOW);
+    expect(r.title).toBe('hello');
+    expect(r.projectTitle).toBe('Hello you');
+    expect(r.labelTitles).toEqual(['two words']);
+  });
+
   it('takes the last project token if multiple are present', () => {
     const r = parseQuickAdd('+Dev Write tests +Personal', NOW);
     expect(r.title).toBe('Write tests');
