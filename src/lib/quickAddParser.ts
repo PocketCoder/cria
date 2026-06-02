@@ -127,6 +127,32 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     }
   }
 
+  // --- Unterminated quoted token at end-of-input (live preview) ---
+  // While the user is mid-typing `*"two words` (no closing quote yet) the
+  // balanced-pair regexes above can't match, so the chip wouldn't appear
+  // until the final quote. Recognise an opening quote that runs to the end
+  // of the string so the chip shows as they type; once they add the closing
+  // quote the balanced form takes over with the same payload.
+  {
+    const m = /(?:^|\s)([*+])(["“”])([^"“”]*)$/.exec(raw);
+    if (m) {
+      const prefix = m[1]!;
+      const tokenText = prefix + m[2]! + m[3]!;
+      const start = m.index + (m[0]!.length - tokenText.length);
+      const end = raw.length;
+      const title = m[3]!.trim();
+      if (title.length > 0 && !overlaps(start, end, claimed)) {
+        claimed.push({
+          kind: prefix === '*' ? 'label' : 'project',
+          start,
+          end,
+          text: tokenText,
+          payload: title,
+        });
+      }
+    }
+  }
+
   // --- Date (chrono-node) — skip ranges already claimed by symbol tokens ---
 
   const chronoResults = chrono.parse(raw, now, { forwardDate: true });

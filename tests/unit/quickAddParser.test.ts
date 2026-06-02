@@ -73,6 +73,24 @@ describe('parseQuickAdd', () => {
     expect(r.labelTitles).toEqual(['two words']);
   });
 
+  it('previews an unterminated quoted label (no closing quote yet)', () => {
+    const r = parseQuickAdd('*"hello you', NOW);
+    expect(r.title).toBe('');
+    expect(r.labelTitles).toEqual(['hello you']);
+  });
+
+  it('previews an unterminated quoted project (smart open quote)', () => {
+    const r = parseQuickAdd('Plan trip +“Work St', NOW);
+    expect(r.title).toBe('Plan trip');
+    expect(r.projectTitle).toBe('Work St');
+  });
+
+  it('does not chip an empty open quote', () => {
+    const r = parseQuickAdd('todo *"', NOW);
+    expect(r.labelTitles).toEqual([]);
+    expect(r.title).toBe('todo *"');
+  });
+
   it('takes the last project token if multiple are present', () => {
     const r = parseQuickAdd('+Dev Write tests +Personal', NOW);
     expect(r.title).toBe('Write tests');
