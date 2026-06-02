@@ -40,7 +40,7 @@ function rowToProject(row: ProjectRow): Project {
     title: row.title,
     description: row.description,
     parentLocalId: row.parent_local_id,
-    hexColor: row.hex_color,
+    hexColor: row.hex_color ? (row.hex_color.startsWith('#') ? row.hex_color : `#${row.hex_color}`) : null,
     isArchived: row.is_archived === 1,
     isFavorite: row.is_favorite === 1,
     position: row.position,

@@ -19,7 +19,7 @@ function rowToLabel(row: LabelRow): Label {
     serverId: row.server_id,
     title: row.title,
     description: row.description,
-    hexColor: row.hex_color,
+    hexColor: row.hex_color ? (row.hex_color.startsWith('#') ? row.hex_color : `#${row.hex_color}`) : null,
     updatedAt: row.updated_at,
   };
 }

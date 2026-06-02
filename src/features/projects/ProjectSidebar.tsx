@@ -553,6 +553,17 @@ function ProjectRow({
                         style={{ background: c }}
                       />
                     ))}
+                    <input
+                      type="color"
+                      value={project.hexColor ?? '#000000'}
+                      onChange={(e) => {
+                        updateProject(project.localId, { hexColor: e.target.value });
+                        setMenuOpen(false);
+                        setColorOpen(false);
+                      }}
+                      className="h-5 w-5 cursor-pointer rounded-full border-0 overflow-hidden"
+                      title="Custom color"
+                    />
                     <button
                       onClick={async () => {
                         await updateProject(project.localId, { hexColor: null });
