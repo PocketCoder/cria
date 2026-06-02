@@ -7,11 +7,12 @@ import type { Project } from '@/domain/project';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
 import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
+import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { LabelChips } from './LabelChips';
@@ -39,6 +40,9 @@ export function TaskList({ project }: TaskListProps) {
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const visibleTasks = tasks.filter((t) => !pendingDeletes[t.localId]);
   const { data: attachmentIds } = useTasksWithAttachments();
+  // Full project list so a parsed `+project` token can route the task to
+  // a different project than the one currently open.
+  const { data: allProjects = [] } = useProjects();
   const qc = useQueryClient();
 
   const { data: subtaskMap = new Map() } = useQuery({
@@ -70,39 +74,40 @@ export function TaskList({ project }: TaskListProps) {
 
       // Merge: the explicit date/priority pickers win over the parser if
       // the user touched them; otherwise we lift from the parsed values.
+      // A parsed `+project` token (case-insensitive title match) routes
+      // the task to that project; otherwise it stays in the open one.
+      const matchedProject = parsed.projectTitle
+        ? allProjects.find(
+            (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+          )
+        : undefined;
       const input: TaskInput = {
         title: parsed.title || newTitle.trim(),
-        projectLocalId: project.localId,
+        projectLocalId: matchedProject?.localId ?? project.localId,
         ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter !== null ? { repeatAfter: parsed.repeatAfter } : {}),
+        ...(parsed.repeatMode !== null ? { repeatMode: parsed.repeatMode } : {}),
         ...metadata,
       };
 
       const created = await createTask(input);
 
-      // Apply parsed #labels. We look up by case-insensitive title in
-      // the local catalogue; labels that don't exist yet are silently
-      // skipped (M5+ will offer create-as-you-type via the picker).
+      // Apply parsed labels (the *label token): look up case-insensitively,
+      // create any that don't exist yet, then apply. Prefix per Vikunja
+      // default Quick Add Magic ('*' = label).
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
-          const all = await listLabels();
-          const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
-          for (const t of parsed.labelTitles) {
-            const id = lookup.get(t.toLowerCase());
-            if (id) await toggleTaskLabel(created.localId, id);
-          }
+          await applyLabelsByTitle(created.localId, parsed.labelTitles);
         } catch (err) {
           console.warn('[quick-add] label application failed:', err);
         }
       }
 
-      // Assignee resolution requires a local users table we don't keep
-      // yet. Surface a warning instead of dropping silently so the user
-      // knows why @alice didn't stick. M8 wires assignee creation
-      // properly.
+      // +assignee tokens are not yet applied (no local users table)
       if (parsed.assigneeUsernames.length > 0) {
         console.info(
-          '[quick-add] @assignee tokens are parsed but not yet applied:',
+          '[quick-add] +assignee tokens are parsed but not yet applied:',
           parsed.assigneeUsernames,
         );
       }
@@ -130,8 +135,8 @@ export function TaskList({ project }: TaskListProps) {
       </div>
 
       {/* Inline create — natural-language parsing on the title field
-          (tomorrow / #label / !priority / @assignee). Explicit date +
-          priority controls stay for users who'd rather not type the
+          (dates / @label / !priority / +assignee / #project). Explicit date
+          + priority controls stay for users who'd rather not type the
           syntax; they override the parsed values when set. */}
       <form
         onSubmit={handleSubmit}
@@ -149,7 +154,7 @@ export function TaskList({ project }: TaskListProps) {
             type="text"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Add a task… e.g. Buy milk tomorrow #shopping !2"
+            placeholder="Add a task… e.g. Buy milk tomorrow *groceries !2"
             disabled={isSubmitting}
             className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
           />

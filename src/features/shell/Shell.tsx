@@ -20,12 +20,14 @@ import {
   TodayView,
   UpcomingView,
   LabelView,
+  InboxView,
   FavoritesView,
 } from '@/features/smart-views/SmartViews';
 import { SearchView } from '@/features/search/SearchView';
 import { QuickAddModal } from '@/components/QuickAddModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
+import { useServerVersion } from '@/queries/server';
 import { cn } from '@/lib/cn';
 import { Search, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -44,6 +46,7 @@ export function Shell() {
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
+  const { data: serverVersion } = useServerVersion();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -224,6 +227,8 @@ export function Shell() {
         return <LabelView labelLocalId={activeView.localId} />;
       case 'favorites':
         return <FavoritesView />;
+      case 'inbox':
+        return <InboxView />;
       case 'search':
         return <SearchView query={searchQuery} />;
       case 'project': {
@@ -368,7 +373,10 @@ export function Shell() {
           {/* Update banner moved to App.tsx so it's visible pre-auth
               too — see the comment there. Keeping just the version
               label here. */}
-          <span>Cria {pkg.version}</span>
+          <span>
+            Cria {pkg.version}
+            {serverVersion ? <span className="ml-2 text-[var(--color-muted-foreground)]">· {serverVersion}</span> : null}
+          </span>
         </div>
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}

@@ -5,17 +5,26 @@ import { subscribe } from '@/db/bus';
 import type { Label } from '@/domain/label';
 
 /**
- * Returns the labels currently attached to a task. Re-runs whenever
- * the `tasks` topic notifies (pulls upsert tasks AND their labels in
- * one go).
+ * Returns the labels currently attached to a task. Re-runs on:
+ *  - `tasks` — a pull upserts tasks AND their labels in one go;
+ *  - `task_labels` — local add/remove via toggleTaskLabel notifies this
+ *    topic, so the chips refresh immediately after a mutation (the
+ *    detail-card label × and the actions-dropdown toggle both rely on
+ *    this). Previously only `tasks` was observed, so a local toggle
+ *    didn't refresh the chips until the next pull.
  */
 export function useTaskLabels(taskLocalId: string | null) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    return subscribe('tasks', () => {
+    const inval = () =>
       void queryClient.invalidateQueries({ queryKey: ['task-labels'] });
-    });
+    const unsubTasks = subscribe('tasks', inval);
+    const unsubLabels = subscribe('task_labels', inval);
+    return () => {
+      unsubTasks();
+      unsubLabels();
+    };
   }, [queryClient]);
 
   return useQuery<Label[]>({

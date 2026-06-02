@@ -4,7 +4,7 @@ import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
 import { createTask, updateTask } from '@/db/tasks';
-import { listLabels, toggleTaskLabel } from '@/db/labels';
+import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
 import { useProjects } from '@/queries/projects';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -12,6 +12,7 @@ import {
   useTodayTasks,
   useUpcomingTasks,
   useLabelTasks,
+  useInboxTasks,
   useFavoriteTasks,
   groupTotal,
   type TaskGroup,
@@ -84,7 +85,14 @@ function SmartView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pid = projectLocalId || projects[0]?.localId;
+    // A parsed `+project` token routes the task to that project
+    // (case-insensitive title match), overriding the dropdown default.
+    const matchedProject = parsed.projectTitle
+      ? projects.find(
+          (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+        )
+      : undefined;
+    const pid = matchedProject?.localId || projectLocalId || projects[0]?.localId;
     if (!pid) return;
     if (!parsed.title && !metadata.dueDate && !metadata.priority && !datePicker) return;
     if (submittingRef.current) return;
@@ -103,6 +111,8 @@ function SmartView({
         projectLocalId: pid,
         ...(effectiveDueDate ? { dueDate: effectiveDueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter !== null ? { repeatAfter: parsed.repeatAfter } : {}),
+        ...(parsed.repeatMode !== null ? { repeatMode: parsed.repeatMode } : {}),
         ...metadata,
       };
 
@@ -117,15 +127,11 @@ function SmartView({
         }
       }
 
-      // Apply parsed #labels
+      // Apply parsed labels (the *label token), creating any that don't
+      // exist yet.
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
-          const all = await listLabels();
-          const lookup = new Map(all.map((l) => [l.title.toLowerCase(), l.localId]));
-          for (const t of parsed.labelTitles) {
-            const id = lookup.get(t.toLowerCase());
-            if (id) await toggleTaskLabel(created.localId, id);
-          }
+          await applyLabelsByTitle(created.localId, parsed.labelTitles);
         } catch (err) {
           console.warn('[smart-view] label application failed:', err);
         }
@@ -168,7 +174,7 @@ function SmartView({
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Add a task… e.g. Buy milk tomorrow #label !2"
+                placeholder="Add a task… e.g. Buy milk tomorrow *groceries !2"
                 disabled={isSubmitting}
                 className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
               />
@@ -391,6 +397,21 @@ export function FavoritesView() {
       isLoading={isLoading}
       emptyMessage="No favorited tasks."
       showProject
+      defaultDueDate={todayISO()}
+    />
+  );
+}
+
+export function InboxView() {
+  const { data: groups = [], isLoading } = useInboxTasks();
+  const title = groups[0]?.label ?? 'Inbox';
+  return (
+    <SmartView
+      title={title}
+      groups={groups}
+      isLoading={isLoading}
+      emptyMessage="No inbox project set. Configure it in your Vikunja server settings."
+      showProject={false}
       defaultDueDate={todayISO()}
     />
   );
