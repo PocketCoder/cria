@@ -8,15 +8,6 @@ import { QuickAddPreview } from '@/features/tasks/QuickAddPreview';
 import { X } from 'lucide-react';
 import type { TaskInput } from '@/domain/task';
 
-/**
- * Global quick-add modal (Cmd+Shift+A). Same natural-language parser as
- * the inline TaskList input. Adds a project picker because there's no
- * implicit project context when summoned via the global shortcut.
- *
- * Default project: the one currently selected in the sidebar; falling
- * back to the first available project. The user can change it inline
- * via the dropdown.
- */
 export function QuickAddModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -28,8 +19,6 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     selectedProjectId ?? null,
   );
 
-  // Sync the picker with the sidebar selection if it changes while the
-  // modal is open (unlikely but cheap).
   useEffect(() => {
     if (!projectId && selectedProjectId) setProjectId(selectedProjectId);
   }, [selectedProjectId, projectId]);
@@ -40,11 +29,18 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     }
   }, [projects, projectId]);
 
-  // Close on Escape. Listening on `window` rather than the dialog root
-  // means focus inside the <input> (which has its own keyboard handling)
-  // still surfaces Escape — input-level keydown doesn't stop propagation
-  // by default, but a stray library handler could; window-level is the
-  // belt-and-braces option for a one-off modal.
+  // Resolve #project token — match case-insensitive against project titles
+  const parsed = useMemo(() => parseQuickAdd(text), [text]);
+
+  useEffect(() => {
+    if (parsed.projectTitle && projects.length > 0) {
+      const match = projects.find(
+        (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+      );
+      if (match) setProjectId(match.localId);
+    }
+  }, [parsed.projectTitle, projects]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -56,8 +52,6 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const parsed = useMemo(() => parseQuickAdd(text), [text]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || submitting) return;
@@ -65,14 +59,25 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
 
     setSubmitting(true);
     try {
+      // Resolve +project at submit time too — not only via the
+      // dropdown-syncing effect — so a type-then-Enter race can't route
+      // the task to the wrong (previously-selected) project.
+      const matchedProject = parsed.projectTitle
+        ? projects.find(
+            (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+          )
+        : undefined;
       const input: TaskInput = {
         title: parsed.title,
-        projectLocalId: projectId,
+        projectLocalId: matchedProject?.localId ?? projectId,
         ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter !== null ? { repeatAfter: parsed.repeatAfter } : {}),
+        ...(parsed.repeatMode !== null ? { repeatMode: parsed.repeatMode } : {}),
       };
       const created = await createTask(input);
 
+      // Apply @label tokens — auto-create labels that don't exist yet
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
           await applyLabelsByTitle(created.localId, parsed.labelTitles);
@@ -80,12 +85,15 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
           console.warn('[quick-add] label application failed:', err);
         }
       }
+
+      // +assignee tokens are not yet applied (no local users table)
       if (parsed.assigneeUsernames.length > 0) {
         console.info(
-          '[quick-add] @assignee tokens parsed but not yet applied:',
+          '[quick-add] +assignee tokens are parsed but not yet applied:',
           parsed.assigneeUsernames,
         );
       }
+
       onClose();
     } catch (err) {
       console.error('Quick add failed', err);
@@ -117,7 +125,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={handleSubmit} className="space-y-2">
           <input
             type="text"
-            placeholder="Buy milk tomorrow #shopping !2 @alice"
+            placeholder="Buy milk tomorrow *groceries !2 @alice +Personal"
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
             value={text}
             onChange={(e) => setText(e.target.value)}

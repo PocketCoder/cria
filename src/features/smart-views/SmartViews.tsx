@@ -85,7 +85,14 @@ function SmartView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pid = projectLocalId || projects[0]?.localId;
+    // A parsed `+project` token routes the task to that project
+    // (case-insensitive title match), overriding the dropdown default.
+    const matchedProject = parsed.projectTitle
+      ? projects.find(
+          (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
+        )
+      : undefined;
+    const pid = matchedProject?.localId || projectLocalId || projects[0]?.localId;
     if (!pid) return;
     if (!parsed.title && !metadata.dueDate && !metadata.priority && !datePicker) return;
     if (submittingRef.current) return;
@@ -104,6 +111,8 @@ function SmartView({
         projectLocalId: pid,
         ...(effectiveDueDate ? { dueDate: effectiveDueDate } : {}),
         ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
+        ...(parsed.repeatAfter !== null ? { repeatAfter: parsed.repeatAfter } : {}),
+        ...(parsed.repeatMode !== null ? { repeatMode: parsed.repeatMode } : {}),
         ...metadata,
       };
 
@@ -118,7 +127,8 @@ function SmartView({
         }
       }
 
-      // Apply parsed #labels (creating any that don't exist yet)
+      // Apply parsed labels (the *label token), creating any that don't
+      // exist yet.
       if (parsed.labelTitles.length > 0 && created.localId) {
         try {
           await applyLabelsByTitle(created.localId, parsed.labelTitles);
@@ -164,7 +174,7 @@ function SmartView({
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Add a task… e.g. Buy milk tomorrow #label !2"
+                placeholder="Add a task… e.g. Buy milk tomorrow *groceries !2"
                 disabled={isSubmitting}
                 className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
               />
