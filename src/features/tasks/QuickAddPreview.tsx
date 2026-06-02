@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { CalendarDays, AtSign, UserPlus, Hash, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Tag, UserPlus, Folder, AlertTriangle } from 'lucide-react';
 import type { QuickAddResult } from '@/lib/quickAddParser';
 
 interface Props {
@@ -35,7 +35,7 @@ export function QuickAddPreview({ parsed }: Props) {
       {labelTitles.map((t) => (
         <Chip
           key={`l-${t}`}
-          icon={<AtSign className="h-3 w-3" />}
+          icon={<Tag className="h-3 w-3" />}
           tone="violet"
           label={t}
         />
@@ -50,7 +50,7 @@ export function QuickAddPreview({ parsed }: Props) {
       ))}
       {projectTitle ? (
         <Chip
-          icon={<Hash className="h-3 w-3" />}
+          icon={<Folder className="h-3 w-3" />}
           tone="teal"
           label={projectTitle}
         />
