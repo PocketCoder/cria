@@ -14,6 +14,10 @@ export interface User {
   fetchedAt: string;
   /** The project new tasks default to (per user settings on the server). */
   defaultProjectId: number | null;
+  /** BCP 47 language tag from server settings (e.g. 'en', 'de'). */
+  language: string;
+  /** IANA timezone identifier from server settings (e.g. 'UTC', 'Europe/Berlin'). */
+  timezone: string;
 }
 
 /**
@@ -43,5 +47,7 @@ export function userFromResponse(payload: unknown): User {
     raw: payload,
     fetchedAt: new Date().toISOString(),
     defaultProjectId: (settings?.default_project_id as number | undefined) ?? null,
+    language: (settings?.language as string | undefined) ?? 'en',
+    timezone: (settings?.timezone as string | undefined) ?? 'UTC',
   };
 }

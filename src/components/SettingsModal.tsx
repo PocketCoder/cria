@@ -3,7 +3,8 @@ import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useServerVersion } from '@/queries/server';
 import { useUpdater } from '@/queries/updater';
-import { useSettings } from '@/stores/settings';
+import { useSettings, type DateFormat } from '@/stores/settings';
+import { pushUserSettings } from '@/api/userSettings';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/cn';
@@ -27,9 +28,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const serverUrl = status.kind === 'authenticated' ? status.credentials.serverUrl : null;
 
-  const [language, setLanguage] = useState('en');
-  const [timezone, setTimezone] = useState('UTC');
-  const [dateFormat, setDateFormat] = useState('YYYY-MM-DD');
   const [trayIconEnabled, setTrayIconEnabled] = useState(true);
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [osPermissionGranted, setOsPermissionGranted] = useState<boolean | null>(null);
@@ -38,6 +36,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setNotificationsEnabled = useSettings((s) => s.setNotificationsEnabled);
   const colorScheme = useSettings((s) => s.colorScheme);
   const setColorScheme = useSettings((s) => s.setColorScheme);
+  const language = useSettings((s) => s.language);
+  const setLanguage = useSettings((s) => s.setLanguage);
+  const timezone = useSettings((s) => s.timezone);
+  const setTimezone = useSettings((s) => s.setTimezone);
+  const dateFormat = useSettings((s) => s.dateFormat);
+  const setDateFormat = useSettings((s) => s.setDateFormat);
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
@@ -46,6 +50,36 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   useEffect(() => {
     isPermissionGranted().then(setOsPermissionGranted).catch(() => setOsPermissionGranted(false));
   }, []);
+
+  // Seed language/timezone from server if the store still has defaults.
+  // This runs once per modal open; after the user changes a value the store
+  // persists it and the guard below won't overwrite.
+  useEffect(() => {
+    if (language === 'en' && user?.language && user.language !== 'en') {
+      setLanguage(user.language);
+    }
+    if (timezone === 'UTC' && user?.timezone && user.timezone !== 'UTC') {
+      setTimezone(user.timezone);
+    }
+  }, []);
+
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang);
+    void pushUserSettings({ language: lang }).catch((e) =>
+      console.error('Failed to sync language to server', e),
+    );
+  };
+
+  const handleTimezoneChange = (tz: string) => {
+    setTimezone(tz);
+    void pushUserSettings({ timezone: tz }).catch((e) =>
+      console.error('Failed to sync timezone to server', e),
+    );
+  };
+
+  const handleDateFormatChange = (fmt: string) => {
+    setDateFormat(fmt as DateFormat);
+  };
 
   const handleAutostartToggle = async () => {
     try {
@@ -114,34 +148,66 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <Label>Language</Label>
                   <select
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                    onChange={(e) => handleLanguageChange(e.target.value)}
+                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
                   >
                     <option value="en">English</option>
                     <option value="de">Deutsch</option>
                     <option value="fr">Français</option>
+                    <option value="es">Español</option>
+                    <option value="nl">Nederlands</option>
+                    <option value="pl">Polski</option>
+                    <option value="pt-BR">Português (Brasil)</option>
+                    <option value="ru">Русский</option>
+                    <option value="zh">简体中文</option>
                     <option value="ja">日本語</option>
+                    <option value="ko">한국어</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Timezone</Label>
                   <select
                     value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                    onChange={(e) => handleTimezoneChange(e.target.value)}
+                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
                   >
                     <option value="UTC">UTC</option>
-                    <option value="America/New_York">America/New_York</option>
-                    <option value="Europe/London">Europe/London</option>
-                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                    <option value="America/New_York">Eastern (US)</option>
+                    <option value="America/Chicago">Central (US)</option>
+                    <option value="America/Denver">Mountain (US)</option>
+                    <option value="America/Los_Angeles">Pacific (US)</option>
+                    <option value="America/Anchorage">Alaska</option>
+                    <option value="Pacific/Honolulu">Hawaii</option>
+                    <option value="America/Toronto">Eastern (CA)</option>
+                    <option value="America/Vancouver">Pacific (CA)</option>
+                    <option value="America/Mexico_City">Mexico City</option>
+                    <option value="America/Sao_Paulo">Brasília</option>
+                    <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+                    <option value="Europe/London">London</option>
+                    <option value="Europe/Paris">Paris</option>
+                    <option value="Europe/Berlin">Berlin</option>
+                    <option value="Europe/Madrid">Madrid</option>
+                    <option value="Europe/Rome">Rome</option>
+                    <option value="Europe/Amsterdam">Amsterdam</option>
+                    <option value="Europe/Stockholm">Stockholm</option>
+                    <option value="Europe/Moscow">Moscow</option>
+                    <option value="Europe/Istanbul">Istanbul</option>
+                    <option value="Asia/Dubai">Dubai</option>
+                    <option value="Asia/Kolkata">India</option>
+                    <option value="Asia/Bangkok">Bangkok</option>
+                    <option value="Asia/Shanghai">Shanghai</option>
+                    <option value="Asia/Tokyo">Tokyo</option>
+                    <option value="Asia/Seoul">Seoul</option>
+                    <option value="Australia/Sydney">Sydney</option>
+                    <option value="Australia/Auckland">Auckland</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Date Format</Label>
                   <select
                     value={dateFormat}
-                    onChange={(e) => setDateFormat(e.target.value)}
-                    className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                    onChange={(e) => handleDateFormatChange(e.target.value)}
+                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
                   >
                     <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                     <option value="MM/DD/YYYY">MM/DD/YYYY</option>
