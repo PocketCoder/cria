@@ -1,5 +1,10 @@
 mod tx;
 
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::TrayIconBuilder,
+    Emitter, Manager,
+};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 const INITIAL_MIGRATION_SQL: &str = include_str!("../../src/db/migrations/001_initial.sql");
@@ -110,6 +115,58 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            let show = MenuItemBuilder::with_id("show", "Show Cria").build(app)?;
+            let quick_add = MenuItemBuilder::with_id("quick_add", "Quick Add...").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Quit Cria").build(app)?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&show)
+                .item(&quick_add)
+                .separator()
+                .item(&quit)
+                .build()?;
+
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().cloned().expect("default window icon"))
+                .menu(&menu)
+                .tooltip("Cria")
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.unminimize();
+                            }
+                        }
+                        "quick_add" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.emit("tray-quick-add", ());
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.unminimize();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![tx::execute_tx])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

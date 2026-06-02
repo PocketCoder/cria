@@ -69,6 +69,16 @@ export function Shell() {
     prevConflicts.current = conflictCount;
   }, [outboxCount, conflictCount]);
 
+  // Tray icon quick-add
+  useEffect(() => {
+    const unlisten = listen('tray-quick-add', () => {
+      setShowQuickAdd(true);
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
+  }, []);
+
   // Deep‑link handling (vikunja://task/<id> or project)
   useEffect(() => {
     const unlisten = listen<string>('tauri://url', async (event) => {
