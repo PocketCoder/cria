@@ -3,9 +3,11 @@ import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useServerVersion } from '@/queries/server';
 import { useUpdater } from '@/queries/updater';
+import { useSettings } from '@/stores/settings';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/cn';
+import { isPermissionGranted, requestPermission } from '@/tauri/notification';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { openNotificationSettings } from '@/utils/notify';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -31,12 +33,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [timezone, setTimezone] = useState('UTC');
   const [dateFormat, setDateFormat] = useState('YYYY-MM-DD');
   const [colorScheme, setColorScheme] = useState<ColorScheme>('system');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [trayIconEnabled, setTrayIconEnabled] = useState(true);
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
+  const [osPermissionGranted, setOsPermissionGranted] = useState<boolean | null>(null);
+
+  const notificationsEnabled = useSettings((s) => s.notificationsEnabled);
+  const setNotificationsEnabled = useSettings((s) => s.setNotificationsEnabled);
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    isPermissionGranted().then(setOsPermissionGranted).catch(() => setOsPermissionGranted(false));
   }, []);
 
   const handleAutostartToggle = async () => {
@@ -199,7 +208,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     type="button"
                     role="switch"
                     aria-checked={notificationsEnabled}
-                    onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                    onClick={async () => {
+                      if (notificationsEnabled) {
+                        setNotificationsEnabled(false);
+                      } else {
+                        const granted = osPermissionGranted
+                          ?? await requestPermission().then((r) => r === 'granted');
+                        if (granted) {
+                          setNotificationsEnabled(true);
+                        } else {
+                          const requested = await requestPermission();
+                          setNotificationsEnabled(requested === 'granted');
+                          setOsPermissionGranted(requested === 'granted');
+                        }
+                      }
+                    }}
                     className={cn(
                       'relative h-5 w-9 rounded-full transition-colors',
                       notificationsEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
@@ -213,6 +236,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     />
                   </button>
                 </div>
+                {!osPermissionGranted && notificationsEnabled && (
+                  <p className="text-xs text-amber-500">
+                    Notifications are disabled in System Settings. Turn them on below.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => void openNotificationSettings()}

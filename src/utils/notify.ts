@@ -1,11 +1,13 @@
 import { isPermissionGranted, requestPermission, sendNotification } from '@/tauri/notification';
 import { getIdentifier } from '@tauri-apps/api/app';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { useSettings } from '@/stores/settings';
 
 /**
- * Send a desktop notification. Requests permission the first time (when
- * the OS hasn't yet asked the user) but does NOT retry on subsequent
- * calls — once the user has answered, macOS turns requestPermission
+ * Send a desktop notification. Checks the user's preference first (from the
+ * settings store), then checks OS-level permission. Requests permission the
+ * first time (when the OS hasn't yet asked the user) but does NOT retry on
+ * subsequent calls — once the user has answered, macOS turns requestPermission
  * into a silent read, so re-prompting is impossible. Direct the user to
  * System Settings instead (see openNotificationSettings).
  *
@@ -15,6 +17,8 @@ import { openUrl } from '@tauri-apps/plugin-opener';
  * burns reminders that the user expected to see.
  */
 export async function nativeNotify(title: string, body: string): Promise<boolean> {
+  const prefs = useSettings.getState();
+  if (!prefs.notificationsEnabled) return false;
   let granted = await isPermissionGranted();
   if (!granted) {
     const res = await requestPermission();
