@@ -18,8 +18,6 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type ColorScheme = 'light' | 'dark' | 'system';
-
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const status = useAuth((s) => s.status);
   const signOut = useAuth((s) => s.signOut);
@@ -32,13 +30,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [language, setLanguage] = useState('en');
   const [timezone, setTimezone] = useState('UTC');
   const [dateFormat, setDateFormat] = useState('YYYY-MM-DD');
-  const [colorScheme, setColorScheme] = useState<ColorScheme>('system');
   const [trayIconEnabled, setTrayIconEnabled] = useState(true);
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [osPermissionGranted, setOsPermissionGranted] = useState<boolean | null>(null);
 
   const notificationsEnabled = useSettings((s) => s.notificationsEnabled);
   const setNotificationsEnabled = useSettings((s) => s.setNotificationsEnabled);
+  const colorScheme = useSettings((s) => s.colorScheme);
+  const setColorScheme = useSettings((s) => s.setColorScheme);
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
