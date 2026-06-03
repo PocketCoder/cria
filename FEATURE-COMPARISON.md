@@ -1,11 +1,12 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: Sun May 31 2026
+Last updated: Tue Jun 2 2026
 
 ## Legend
 | Icon | Meaning |
 |---|---|
 | ✅ | Shipped (in `dev`) |
+| 🟡 | Partial (UI present / persisted, but behavior not yet wired) |
 | ⏳ | Pending PR (created, awaiting merge into `dev`) |
 | ❌ | Not started |
 
@@ -159,7 +160,7 @@ Last updated: Sun May 31 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Native | SQLite with migrations (8 migrations) | ✅ | 001–008, forward-only |
+| Native | SQLite with migrations (9 migrations) | ✅ | 001–009, forward-only |
 | Native | Single instance (Tauri plugin) | ✅ | plugin-single-instance |
 | Native | macOS Dock badge (reminder count) | ✅ | In queries/badge.ts |
 | Native | Global shortcut (Cmd+Shift+A → quick add) | ✅ | tauri/globalShortcut.ts |
@@ -168,7 +169,7 @@ Last updated: Sun May 31 2026
 | Native | Deep links (vikunja://task|project) | ✅ | Shell.tsx handles `tauri://url` |
 | Native | Dev/release side-by-side (identifier isolation) | ✅ | tauri.dev.conf.json |
 | Native | Notifications (plugin-notification) | ✅ | tauri/notification.ts |
-| Native | Tray icon | ❌ | SPEC §10.1; not started |
+| Native | Tray icon | ✅ | Show window / Quick Add / Quit menu; toggle in settings |
 | Native | Global shortcuts configuration UI | ❌ | Hardcoded only |
 | Native | macOS notarisation | ❌ | V1.0.0 gate |
 | Native | Windows/Linux builds | ❌ | macOS-only matrix in CI |
@@ -194,7 +195,7 @@ Last updated: Sun May 31 2026
 | UI | Cmd+K command palette | ❌ | Not started (M7) |
 | UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ❌ | Not started (M7) |
 | UI | Rebindable shortcuts in settings | ❌ | Not started (M7) |
-| UI | Settings page (language, timezone, date format, color scheme) | ❌ | Not started |
+| UI | Settings page (language, timezone, date format, time format, week start, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; date/time format + week-start-local + completion sound persist but aren't applied yet (see Settings rows) |
 | UI | Inbox view (no-project tasks) | ❌ | Not started |
 | UI | Kanban view | ❌ | Not started (M9) |
 | UI | Table view (dense, sortable) | ❌ | Not started (M9) |
@@ -208,12 +209,21 @@ Last updated: Sun May 31 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Settings | User preferences (language, timezone, date format) | ❌ | Not started |
+| Settings | User preferences (language, timezone, week start) | ✅ | SettingsModal General section, server-synced; language/timezone also applied locally |
+| Settings | Date format / time format preference | 🟡 | Persisted in settings store but not yet used to render dates/times anywhere |
+| Settings | Week start (local rendering) | 🟡 | Synced to server; local "this week" logic still hardcodes Monday |
 | Settings | Account info display | ✅ | Shows name in header |
-| Settings | Autostart toggle | ✅ | Footer |
-| Settings | Sign out | ✅ | Header button |
-| Settings | Global shortcuts config | ❌ | Not started |
-| Settings | Appearance (color scheme) | ❌ | Not started |
+| Settings | Display name editing | ✅ | Account section input, synced to server |
+| Settings | Autostart toggle | ✅ | SettingsModal Advanced section |
+| Settings | Sign out | ✅ | SettingsModal Account section |
+| Settings | Global shortcuts config | ❌ | Read-only display; rebindable TBD (M7) |
+| Settings | Appearance (color scheme) | ✅ | SettingsModal Appearance, light/dark/system |
+| Settings | Play sound on task completion | ✅ | SettingsModal Appearance toggle; Web Audio chime on user-initiated completion |
+| Settings | Tray icon toggle | ✅ | SettingsModal Advanced, invokes `set_tray_visible` |
+| Settings | Notification toggle (desktop) | ✅ | SettingsModal Notifications, with OS permission gate |
+| Settings | Email reminders (server) | ✅ | SettingsModal General toggle, server-synced |
+| Settings | Overdue task email reminders | ✅ | SettingsModal General toggle + time picker, server-synced |
+| Settings | CalDAV link | ✅ | SettingsModal Advanced, opens docs URL |
 
 ### Export/Import
 

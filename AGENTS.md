@@ -198,6 +198,28 @@ Every Vikunja server-side body quirk lives in `taskToBody()` in
 (omitting breaks un-favorite), `repeat_after`/`repeat_mode` sent explicit `0`,
 `project_id` included on move. Covered by `tests/unit/taskToBody.test.ts`.
 
+### Vikunja settings POSTs are full-object replaces (silent data loss)
+
+`POST /user/settings/general` does **not** patch. Its handler copies *every*
+field of the request body onto the user record and saves with
+`forceOverride=true`, so any field you omit is written back as its Go zero
+value (`""`, `0`, `false`, `nil`) — silently wiping the server's stored `name`,
+`default_project_id`, `week_start`, language/timezone, and reminder flags. The
+generated `schema.ts` only shows the body *shape* (a complete `v1.UserSettings`);
+the Go handler is the ground truth (`pkg/routes/api/v1/user_settings.go`,
+`UpdateGeneralUserSettings`). When upstream runtime behaviour is in doubt, read
+the handler — a local clone of the Vikunja source makes this checkable in
+seconds and beats inferring from the schema.
+
+**Rule:** never send a partial settings object. Seed the complete current
+settings (`user.raw.settings`), merge your one change on top, then POST the
+whole thing. [`SettingsModal`](src/components/SettingsModal.tsx)'s `settingsRef`
++ `pushSettings()` wrapper is the reference pattern; `UserSettingsInput` carries
+even the non-UI fields (`default_project_id`, discoverability,
+`frontend_settings`) purely so they round-trip untouched. Assume any other
+"update the whole entity" POST behaves the same — read the handler before
+sending a subset.
+
 ### pnpm 11 build-script approvals
 
 `esbuild` + `better-sqlite3` need build approval. Allowlisted in
@@ -252,6 +274,24 @@ outbox row. `last_synced` (JSON snapshot) feeds conflict detection.
 Matches SPEC §11. Feature folders under `src/features/`, repositories under
 `src/db/`, sync engine under `src/sync/`, domain types/zod under
 `src/domain/`. Don't restructure without reason.
+
+### Settings & preferences
+
+All client preferences live in one Zustand `persist` store
+([src/stores/settings.ts](src/stores/settings.ts), key `cria:settings/v2`).
+Bump that key only alongside a migration — a bare rename silently resets every
+persisted preference to its default. Server-backed prefs (language, timezone,
+week start, name, reminders) also sync through `pushUserSettings` — which is
+full-object, see the gotcha above.
+
+**A setting isn't done until something reads it.** A persisted/synced toggle
+with no consumer looks like it works but does nothing — that's a bug, not a
+half-feature. Before adding a control to `SettingsModal`, grep for a reader of
+the new `useSettings` field and wire the value into the code that should honour
+it. Seed effects that read async query data (e.g. the server `user`) must
+depend on that data, not run once on `[]` mount — otherwise they fire before
+the data loads and never re-run. If wiring is genuinely out of scope, ship the
+control as 🟡 in FEATURE-COMPARISON.md, never ✅.
 
 ## Running a dev build side-by-side with the release
 
