@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { DatePicker } from '@/components/DatePicker';
 import { useUi } from '@/stores/ui';
 import { createTask, updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
@@ -195,14 +196,13 @@ function SmartView({
                   </option>
                 ))}
               </select>
-              <input
-                type="date"
-                value={datePicker}
-                onChange={(e) => {
-                  setDatePicker(e.target.value);
-                  setMetadata({ ...metadata, dueDate: e.target.value || null });
+              <DatePicker
+                value={metadata.dueDate !== undefined ? metadata.dueDate : datePicker || null}
+                onChange={(iso) => {
+                  setDatePicker(iso ? iso.slice(0, 10) : '');
+                  setMetadata({ ...metadata, dueDate: iso });
                 }}
-                className="text-xs"
+                placeholder="Due date"
                 disabled={isSubmitting}
               />
             </div>

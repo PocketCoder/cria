@@ -19,6 +19,7 @@ import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import { TaskHoverPreview } from './TaskHoverPreview';
+import { DatePicker } from '@/components/DatePicker';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 
@@ -166,12 +167,11 @@ export function TaskList({ project }: TaskListProps) {
             they don't crowd the primary input (issue #19). `pl-7` aligns
             them under the title input, past the plus-icon column. */}
         <div className="mt-2 flex items-center gap-3 pl-7 text-[var(--color-muted-foreground)]">
-          <input
-            type="date"
-            onChange={(e) =>
-              setMetadata({ ...metadata, dueDate: e.target.value || null })
-            }
-            className="text-xs"
+          <DatePicker
+            value={metadata.dueDate ?? null}
+            onChange={(iso) => setMetadata({ ...metadata, dueDate: iso })}
+            placeholder="Due date"
+            disabled={isSubmitting}
           />
           <select
             onChange={(e) =>
