@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useServerVersion } from '@/queries/server';
 import { useUpdater } from '@/queries/updater';
-import { useSettings, type DateFormat } from '@/stores/settings';
-import { pushUserSettings } from '@/api/userSettings';
+import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
+import { pushUserSettings, type UserSettingsInput } from '@/api/userSettings';
+import { notify } from '@/db/bus';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/cn';
@@ -12,6 +13,7 @@ import { isPermissionGranted, requestPermission } from '@/tauri/notification';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { openNotificationSettings } from '@/utils/notify';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { invoke } from '@tauri-apps/api/core';
 import { X, ExternalLink, Settings } from 'lucide-react';
 import pkg from '../../package.json';
 
@@ -28,9 +30,38 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const serverUrl = status.kind === 'authenticated' ? status.credentials.serverUrl : null;
 
-  const [trayIconEnabled, setTrayIconEnabled] = useState(true);
+  // The full settings object last known from the server. Every change we
+  // POST is merged on top of this so the request carries the complete
+  // object — the server overwrites all columns from the body, so a partial
+  // payload would blank the fields we leave out (see pushSettings).
+  const settingsRef = useRef<UserSettingsInput>({});
+
+  // Seed local state + the server snapshot from the user object.
+  useEffect(() => {
+    if (!user) return;
+    const raw = user.raw as Record<string, unknown> | undefined;
+    const settings = (raw?.settings as UserSettingsInput | undefined) ?? {};
+    // Server values as the base; anything already changed in this session
+    // (held in settingsRef) wins so a background user refetch can't clobber
+    // an unsaved edit. `name` lives at the top level of the user payload,
+    // not inside settings.
+    settingsRef.current = {
+      ...settings,
+      name: settings.name ?? user.name ?? undefined,
+      ...settingsRef.current,
+    };
+    if (user.name) setDisplayName(user.name);
+    if (settings.email_reminders_enabled === false) setEmailRemindersEnabled(false);
+    if (settings.overdue_tasks_reminders_enabled === false) setOverdueRemindersEnabled(false);
+    if (typeof settings.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(settings.overdue_tasks_reminders_time);
+  }, [user]);
+
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [osPermissionGranted, setOsPermissionGranted] = useState<boolean | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(true);
+  const [overdueRemindersEnabled, setOverdueRemindersEnabled] = useState(true);
+  const [overdueRemindersTime, setOverdueRemindersTime] = useState('08:00');
 
   const notificationsEnabled = useSettings((s) => s.notificationsEnabled);
   const setNotificationsEnabled = useSettings((s) => s.setNotificationsEnabled);
@@ -42,6 +73,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setTimezone = useSettings((s) => s.setTimezone);
   const dateFormat = useSettings((s) => s.dateFormat);
   const setDateFormat = useSettings((s) => s.setDateFormat);
+  const trayIconEnabled = useSettings((s) => s.trayIconEnabled);
+  const setTrayIconEnabledInStore = useSettings((s) => s.setTrayIconEnabled);
+  const weekStart = useSettings((s) => s.weekStart);
+  const setWeekStartInStore = useSettings((s) => s.setWeekStart);
+  const timeFormat = useSettings((s) => s.timeFormat);
+  const setTimeFormat = useSettings((s) => s.setTimeFormat);
+  const playSoundWhenDone = useSettings((s) => s.playSoundWhenDone);
+  const setPlaySoundWhenDone = useSettings((s) => s.setPlaySoundWhenDone);
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
@@ -51,9 +90,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     isPermissionGranted().then(setOsPermissionGranted).catch(() => setOsPermissionGranted(false));
   }, []);
 
-  // Seed language/timezone from server if the store still has defaults.
-  // This runs once per modal open; after the user changes a value the store
-  // persists it and the guard below won't overwrite.
+  // Seed language/timezone from the server when the user loads. The query
+  // resolves asynchronously, so this depends on `user` rather than running
+  // once on mount (when `user` is usually still undefined). The default
+  // guard means a value the user has already changed in-session is left
+  // alone if a later refetch arrives.
   useEffect(() => {
     if (language === 'en' && user?.language && user.language !== 'en') {
       setLanguage(user.language);
@@ -61,24 +102,85 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     if (timezone === 'UTC' && user?.timezone && user.timezone !== 'UTC') {
       setTimezone(user.timezone);
     }
-  }, []);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Merge a single change into the server snapshot and POST the whole
+  // object. Vikunja's /user/settings/general overwrites every column from
+  // the body, so we must always send the complete settings.
+  const pushSettings = (patch: UserSettingsInput) => {
+    settingsRef.current = { ...settingsRef.current, ...patch };
+    return pushUserSettings(settingsRef.current);
+  };
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    void pushUserSettings({ language: lang }).catch((e) =>
+    void pushSettings({ language: lang }).catch((e) =>
       console.error('Failed to sync language to server', e),
     );
   };
 
   const handleTimezoneChange = (tz: string) => {
     setTimezone(tz);
-    void pushUserSettings({ timezone: tz }).catch((e) =>
+    void pushSettings({ timezone: tz }).catch((e) =>
       console.error('Failed to sync timezone to server', e),
     );
   };
 
   const handleDateFormatChange = (fmt: string) => {
     setDateFormat(fmt as DateFormat);
+  };
+
+  const handleTimeFormatChange = (fmt: string) => {
+    setTimeFormat(fmt as TimeFormat);
+  };
+
+  const handleWeekStartChange = (day: string) => {
+    const num = Number(day) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    setWeekStartInStore(num);
+    void pushSettings({ week_start: num }).catch((e) =>
+      console.error('Failed to sync week start to server', e),
+    );
+  };
+
+  const handleNameSave = () => {
+    const trimmed = displayName.trim();
+    if (!trimmed || trimmed === user?.name) return;
+    void pushSettings({ name: trimmed })
+      // Refresh the cached user so the header reflects the new name now,
+      // rather than after the 60s staleTime. The bus invalidates ['user'],
+      // which refetches from the server (where the name was just saved).
+      .then(() => notify('user'))
+      .catch((e) => console.error('Failed to sync name to server', e));
+  };
+
+  const handleEmailRemindersToggle = (enabled: boolean) => {
+    setEmailRemindersEnabled(enabled);
+    void pushSettings({ email_reminders_enabled: enabled }).catch((e) =>
+      console.error('Failed to sync email reminders setting', e),
+    );
+  };
+
+  const handleOverdueRemindersToggle = (enabled: boolean) => {
+    setOverdueRemindersEnabled(enabled);
+    if (!enabled) {
+      void pushSettings({
+        overdue_tasks_reminders_enabled: false,
+      }).catch((e) => console.error('Failed to sync overdue reminders setting', e));
+    } else {
+      void pushSettings({
+        overdue_tasks_reminders_enabled: true,
+        overdue_tasks_reminders_time: overdueRemindersTime,
+      }).catch((e) => console.error('Failed to sync overdue reminders setting', e));
+    }
+  };
+
+  const handleOverdueRemindersTimeChange = (time: string) => {
+    setOverdueRemindersTime(time);
+    if (overdueRemindersEnabled) {
+      void pushSettings({ overdue_tasks_reminders_time: time }).catch((e) =>
+        console.error('Failed to sync overdue reminders time', e),
+      );
+    }
   };
 
   const handleAutostartToggle = async () => {
@@ -132,9 +234,20 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[var(--color-muted-foreground)]">User</span>
-                  <span className="text-[var(--color-foreground)]">{user?.name || user?.username || '—'}</span>
+                  <span className="max-w-[60%] truncate text-[var(--color-foreground)]">{user?.name || user?.username || '—'}</span>
                 </div>
-                <Button variant="destructive" size="sm" className="mt-2 w-full" onClick={() => void signOut()}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    onBlur={handleNameSave}
+                    placeholder="Display name"
+                    className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleNameSave}>Save</Button>
+                </div>
+                <Button variant="destructive" size="sm" className="mt-1 w-full" onClick={() => void signOut()}>
                   Sign Out
                 </Button>
               </div>
@@ -214,6 +327,84 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                   </select>
                 </div>
+                <div className="flex items-center justify-between">
+                  <Label>Time Format</Label>
+                  <select
+                    value={timeFormat}
+                    onChange={(e) => handleTimeFormatChange(e.target.value)}
+                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                  >
+                    <option value="24h">24-hour</option>
+                    <option value="12h">12-hour</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Week Start</Label>
+                  <select
+                    value={weekStart}
+                    onChange={(e) => handleWeekStartChange(e.target.value)}
+                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                  >
+                    <option value={0}>Sunday</option>
+                    <option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option>
+                    <option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option>
+                    <option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Email reminders</Label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={emailRemindersEnabled}
+                    onClick={() => handleEmailRemindersToggle(!emailRemindersEnabled)}
+                    className={cn(
+                      'relative h-5 w-9 rounded-full transition-colors',
+                      emailRemindersEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                        emailRemindersEnabled && 'translate-x-4',
+                      )}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Overdue reminder email</Label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={overdueRemindersEnabled}
+                    onClick={() => handleOverdueRemindersToggle(!overdueRemindersEnabled)}
+                    className={cn(
+                      'relative h-5 w-9 rounded-full transition-colors',
+                      overdueRemindersEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                        overdueRemindersEnabled && 'translate-x-4',
+                      )}
+                    />
+                  </button>
+                </div>
+                {overdueRemindersEnabled && (
+                  <div className="flex items-center justify-between">
+                    <Label>Overdue reminder time</Label>
+                    <input
+                      type="time"
+                      value={overdueRemindersTime}
+                      onChange={(e) => handleOverdueRemindersTimeChange(e.target.value)}
+                      className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                    />
+                  </div>
+                )}
               </div>
             </section>
 
@@ -237,6 +428,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       {scheme === 'system' ? 'Auto' : scheme}
                     </button>
                   ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Play sound when task is completed</Label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={playSoundWhenDone}
+                    onClick={() => setPlaySoundWhenDone(!playSoundWhenDone)}
+                    className={cn(
+                      'relative h-5 w-9 rounded-full transition-colors',
+                      playSoundWhenDone ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                        playSoundWhenDone && 'translate-x-4',
+                      )}
+                    />
+                  </button>
                 </div>
               </div>
             </section>
@@ -276,17 +487,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     onClick={async () => {
                       if (notificationsEnabled) {
                         setNotificationsEnabled(false);
-                      } else {
-                        const granted = osPermissionGranted
-                          ?? await requestPermission().then((r) => r === 'granted');
-                        if (granted) {
-                          setNotificationsEnabled(true);
-                        } else {
-                          const requested = await requestPermission();
-                          setNotificationsEnabled(requested === 'granted');
-                          setOsPermissionGranted(requested === 'granted');
-                        }
+                        return;
                       }
+                      // Enabling: make sure the OS will allow it. A single
+                      // requestPermission() covers every case — it shows the
+                      // dialog the first time and is a silent read afterwards
+                      // (granted or denied), so there's no need to call it
+                      // twice. If permission is already known-granted, skip it.
+                      const granted =
+                        osPermissionGranted ?? (await requestPermission()) === 'granted';
+                      setOsPermissionGranted(granted);
+                      setNotificationsEnabled(granted);
                     }}
                     className={cn(
                       'relative h-5 w-9 rounded-full transition-colors',
@@ -301,7 +512,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     />
                   </button>
                 </div>
-                {!osPermissionGranted && notificationsEnabled && (
+                {osPermissionGranted === false && notificationsEnabled && (
                   <p className="text-xs text-amber-500">
                     Notifications are disabled in System Settings. Turn them on below.
                   </p>
@@ -347,7 +558,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     type="button"
                     role="switch"
                     aria-checked={trayIconEnabled}
-                    onClick={() => setTrayIconEnabled(!trayIconEnabled)}
+                    onClick={() => {
+                      const newVal = !trayIconEnabled;
+                      setTrayIconEnabledInStore(newVal);
+                      void invoke('set_tray_visible', { visible: newVal });
+                    }}
                     className={cn(
                       'relative h-5 w-9 rounded-full transition-colors',
                       trayIconEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
