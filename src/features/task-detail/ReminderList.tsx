@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { useDateFormatter, type DateFormatters } from '@/lib/dateFormat';
 import { AlertTriangle, Bell, ChevronDown, Plus, X } from 'lucide-react';
 import {
   listRemindersForTask,
@@ -40,6 +40,7 @@ import {
 export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
   const qc = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const dateFmt = useDateFormatter();
 
   useEffect(
     () =>
@@ -97,7 +98,7 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
               className="group flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
             >
               <Bell className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
-              <span className="flex-1">{formatReminder(r)}</span>
+              <span className="flex-1">{formatReminder(r, dateFmt)}</span>
               <button
                 type="button"
                 onClick={() => void handleRemove(r)}
@@ -458,7 +459,7 @@ function Select<T extends string>({
  * (task missing the matching date) shows the relative form plus a hint
  * suffix so the user knows it's parked.
  */
-function formatReminder(r: TaskReminder): string {
+function formatReminder(r: TaskReminder, fmt: DateFormatters): string {
   if (r.relativePeriod != null && r.relativeTo) {
     const label = formatRelativeReminder(
       r.relativePeriod,
@@ -471,7 +472,7 @@ function formatReminder(r: TaskReminder): string {
   }
   if (!r.reminderAt) return '(invalid reminder)';
   try {
-    return format(new Date(r.reminderAt), 'd MMM yyyy, HH:mm');
+    return fmt.formatDateTime(r.reminderAt);
   } catch {
     return r.reminderAt;
   }

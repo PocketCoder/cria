@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { formatDateTime } from '@/lib/dateFormat';
 import { getDb, exec, withTx } from './index';
 import { notify } from './bus';
 import { normaliseDate } from '@/domain/task';
@@ -189,7 +189,7 @@ function renderValue(v: unknown): string {
   if (typeof v === 'string') {
     if (ISO_DATETIME.test(v)) {
       const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) return format(d, 'd MMM yyyy, HH:mm');
+      if (!Number.isNaN(d.getTime())) return formatDateTime(d);
     }
     return v;
   }

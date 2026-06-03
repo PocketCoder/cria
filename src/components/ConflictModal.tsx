@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { useDateFormatter } from '@/lib/dateFormat';
 import { useConflicts } from '@/queries/conflicts';
 import {
   resolveConflictKeepMine,
@@ -131,11 +131,18 @@ function ConflictItem({
   onKeepMine: () => void;
   onUseTheirs: () => void;
 }) {
+  const { formatDateTime } = useDateFormatter();
   const diffs = diffConflict(
     conflict.fields,
     conflict.local_snapshot,
     conflict.remote_snapshot,
   );
+  let detected = conflict.detected_at;
+  try {
+    detected = formatDateTime(conflict.detected_at);
+  } catch {
+    // keep the raw ISO if it doesn't parse
+  }
 
   return (
     <li className="space-y-3 p-4">
@@ -145,7 +152,7 @@ function ConflictItem({
             {conflict.entity_type}
           </p>
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            Detected {formatRelative(conflict.detected_at)}
+            Detected {detected}
           </p>
         </div>
         <div className="flex gap-2">
@@ -201,14 +208,4 @@ function ConflictItem({
       )}
     </li>
   );
-}
-
-function formatRelative(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const sameYear = d.getFullYear() === new Date().getFullYear();
-    return format(d, sameYear ? 'd MMM HH:mm' : 'd MMM yyyy HH:mm');
-  } catch {
-    return iso;
-  }
 }

@@ -210,7 +210,7 @@ Last updated: Tue Jun 2 2026
 | Category | Feature | Status | Notes |
 |---|---|---|---|
 | Settings | User preferences (language, timezone, week start) | ✅ | SettingsModal General section, server-synced; language/timezone also applied locally |
-| Settings | Date format / time format preference | 🟡 | Persisted in settings store but not yet used to render dates/times anywhere |
+| Settings | Date format / time format preference | ✅ | Drives full date/time displays (reminders, conflict timestamps, date picker) via lib/dateFormat; dense list rows keep the compact 'd MMM' style; timezone TBD |
 | Settings | Week start (local rendering) | 🟡 | Synced to server; local "this week" logic still hardcodes Monday |
 | Settings | Account info display | ✅ | Shows name in header |
 | Settings | Display name editing | ✅ | Account section input, synced to server |
