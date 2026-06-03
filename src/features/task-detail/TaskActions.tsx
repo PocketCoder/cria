@@ -18,6 +18,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
+import { playCompletionSound } from '@/utils/sound';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
@@ -62,7 +63,9 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleToggleDone = async () => {
-    await updateTask(task.localId, { done: !task.done });
+    const nowDone = !task.done;
+    await updateTask(task.localId, { done: nowDone });
+    if (nowDone) playCompletionSound();
   };
 
   const handleDuplicate = async () => {

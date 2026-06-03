@@ -7,6 +7,7 @@ import type { Project } from '@/domain/project';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask } from '@/db/tasks';
+import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
@@ -309,8 +310,10 @@ function TaskRow({
   const checklist = countChecklistItems(task.description);
 
   const handleToggle = async () => {
+    const nowDone = !task.done;
     try {
-      await updateTask(task.localId, { done: !task.done });
+      await updateTask(task.localId, { done: nowDone });
+      if (nowDone) playCompletionSound();
     } catch (err) {
       console.error('Failed to update task:', err);
     }

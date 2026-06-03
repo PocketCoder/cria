@@ -4,6 +4,7 @@ import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
 import { createTask, updateTask } from '@/db/tasks';
+import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
 import { useProjects } from '@/queries/projects';
@@ -257,8 +258,10 @@ export function SmartTaskRow({
   const hasAttachments = attachmentIds?.has(task.localId) ?? false;
 
   const handleToggle = async () => {
+    const nowDone = !task.done;
     try {
-      await updateTask(task.localId, { done: !task.done });
+      await updateTask(task.localId, { done: nowDone });
+      if (nowDone) playCompletionSound();
     } catch (err) {
       console.error('Failed to toggle task:', err);
     }
