@@ -5,12 +5,16 @@
 
 import { describe, it, expect } from 'vitest';
 import { diffConflict } from '@/db/conflicts';
+import { useSettings } from '@/stores/settings';
 
 const fields = (...f: string[]) => JSON.stringify(f);
 const snap = (o: Record<string, unknown>) => JSON.stringify(o);
 
 describe('diffConflict', () => {
   it('formats ISO datetimes instead of dumping the raw string (#34)', () => {
+    // Rendered through the date-format preference now; pin it so the
+    // assertion doesn't depend on the store default.
+    useSettings.setState({ dateFormat: 'YYYY-MM-DD', timeFormat: '24h' });
     const diffs = diffConflict(
       fields('due_date'),
       snap({ due_date: '2026-05-21T01:00:00+01:00' }),
@@ -18,11 +22,11 @@ describe('diffConflict', () => {
     );
     const d = diffs[0]!;
     expect(d.label).toBe('Due date');
-    // No raw ISO marker, and the human month/year survives (TZ-stable
-    // for these values — the day may shift by zone but May 2026 won't).
+    // No raw ISO marker, and the formatted year-month survives (TZ-stable
+    // for these values — the day may shift by zone but 2026-05 won't).
     expect(d.local).not.toContain('T01:00:00');
-    expect(d.local).toContain('May 2026');
-    expect(d.remote).toContain('May 2026');
+    expect(d.local).toContain('2026-05');
+    expect(d.remote).toContain('2026-05');
   });
 
   it('maps the Vikunja "no date" sentinel to —', () => {

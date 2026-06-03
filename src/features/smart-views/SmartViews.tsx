@@ -2,8 +2,10 @@ import { useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { DatePicker } from '@/components/DatePicker';
 import { useUi } from '@/stores/ui';
 import { createTask, updateTask } from '@/db/tasks';
+import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
 import { useProjects } from '@/queries/projects';
@@ -194,14 +196,13 @@ function SmartView({
                   </option>
                 ))}
               </select>
-              <input
-                type="date"
-                value={datePicker}
-                onChange={(e) => {
-                  setDatePicker(e.target.value);
-                  setMetadata({ ...metadata, dueDate: e.target.value || null });
+              <DatePicker
+                value={metadata.dueDate !== undefined ? metadata.dueDate : datePicker || null}
+                onChange={(iso) => {
+                  setDatePicker(iso ? iso.slice(0, 10) : '');
+                  setMetadata({ ...metadata, dueDate: iso });
                 }}
-                className="text-xs"
+                placeholder="Due date"
                 disabled={isSubmitting}
               />
             </div>
@@ -257,8 +258,10 @@ export function SmartTaskRow({
   const hasAttachments = attachmentIds?.has(task.localId) ?? false;
 
   const handleToggle = async () => {
+    const nowDone = !task.done;
     try {
-      await updateTask(task.localId, { done: !task.done });
+      await updateTask(task.localId, { done: nowDone });
+      if (nowDone) playCompletionSound();
     } catch (err) {
       console.error('Failed to toggle task:', err);
     }

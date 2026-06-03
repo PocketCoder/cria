@@ -6,6 +6,8 @@ import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
 import { Button } from '@/components/ui/button';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { useSettings } from '@/stores/settings';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
 import { useAuth } from '@/auth/store';
@@ -25,11 +27,12 @@ import {
 } from '@/features/smart-views/SmartViews';
 import { SearchView } from '@/features/search/SearchView';
 import { QuickAddModal } from '@/components/QuickAddModal';
+import { SettingsModal } from '@/components/SettingsModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { cn } from '@/lib/cn';
-import { Search, X } from 'lucide-react';
+import { Search, Settings, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -68,6 +71,22 @@ export function Shell() {
     prevConflicts.current = conflictCount;
   }, [outboxCount, conflictCount]);
 
+  // Tray icon quick-add
+  useEffect(() => {
+    const unlisten = listen('tray-quick-add', () => {
+      setShowQuickAdd(true);
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
+  }, []);
+
+  // Sync tray visibility from persisted store on startup
+  useEffect(() => {
+    const visible = useSettings.getState().trayIconEnabled;
+    invoke('set_tray_visible', { visible }).catch(() => {});
+  }, []);
+
   // Deep‑link handling (vikunja://task/<id> or project)
   useEffect(() => {
     const unlisten = listen<string>('tauri://url', async (event) => {
@@ -102,6 +121,7 @@ export function Shell() {
     const [showOutbox, setShowOutbox] = useState(false);
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   /* ── search ───────────────────────────────────────────── */
   const [searchQuery, setSearchQuery] = useState('');
@@ -370,6 +390,14 @@ export function Shell() {
            </button>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            aria-label="Settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
           {/* Update banner moved to App.tsx so it's visible pre-auth
               too — see the comment there. Keeping just the version
               label here. */}
@@ -382,6 +410,7 @@ export function Shell() {
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
       {showQuickAdd && <QuickAddModal onClose={() => setShowQuickAdd(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       <UndoToasts />
       </div>
   );

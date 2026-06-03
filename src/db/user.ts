@@ -27,6 +27,8 @@ export async function getCachedUser(): Promise<User | null> {
     raw,
     fetchedAt: row.fetched_at,
     defaultProjectId: (settings?.default_project_id as number | undefined) ?? null,
+    language: (settings?.language as string | undefined) ?? 'en',
+    timezone: (settings?.timezone as string | undefined) ?? 'UTC',
   };
 }
 

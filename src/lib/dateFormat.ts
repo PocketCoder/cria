@@ -1,0 +1,82 @@
+import { useMemo } from 'react';
+import { format } from 'date-fns';
+import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
+
+/**
+ * Preference-aware date/time formatting.
+ *
+ * The user's `dateFormat` preference is a numeric full-date pattern
+ * (YYYY-MM-DD / MM/DD/YYYY / DD/MM/YYYY); `timeFormat` chooses 12h vs 24h.
+ * These map to date-fns tokens below and drive every *full* date/time the
+ * UI shows (reminders, conflict timestamps, the date-picker label). Dense
+ * list rows deliberately keep their own compact "d MMM" style and don't go
+ * through here.
+ *
+ * Timezone is intentionally not applied yet — dates render in the OS local
+ * zone, same as before. Wiring the `timezone` preference (via date-fns-tz)
+ * is a separate follow-up.
+ */
+
+function dateToken(fmt: DateFormat): string {
+  switch (fmt) {
+    case 'MM/DD/YYYY':
+      return 'MM/dd/yyyy';
+    case 'DD/MM/YYYY':
+      return 'dd/MM/yyyy';
+    case 'YYYY-MM-DD':
+    default:
+      return 'yyyy-MM-dd';
+  }
+}
+
+function timeToken(fmt: TimeFormat): string {
+  return fmt === '12h' ? 'h:mm a' : 'HH:mm';
+}
+
+function toDate(value: string | number | Date): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+export interface DateFormatters {
+  /** Full numeric date per the user's `dateFormat` preference. */
+  formatDate: (value: string | number | Date) => string;
+  /** Full date + time, honouring `dateFormat` and `timeFormat`. */
+  formatDateTime: (value: string | number | Date) => string;
+  /** Time only, honouring `timeFormat`. */
+  formatTime: (value: string | number | Date) => string;
+}
+
+function build(dateFormat: DateFormat, timeFormat: TimeFormat): DateFormatters {
+  const dt = dateToken(dateFormat);
+  const tt = timeToken(timeFormat);
+  return {
+    formatDate: (v) => format(toDate(v), dt),
+    formatDateTime: (v) => format(toDate(v), `${dt}, ${tt}`),
+    formatTime: (v) => format(toDate(v), tt),
+  };
+}
+
+/**
+ * Reactive formatters for use inside components — subscribes to the format
+ * preferences so the view re-renders the moment the user changes them.
+ */
+export function useDateFormatter(): DateFormatters {
+  const dateFormat = useSettings((s) => s.dateFormat);
+  const timeFormat = useSettings((s) => s.timeFormat);
+  return useMemo(() => build(dateFormat, timeFormat), [dateFormat, timeFormat]);
+}
+
+// Non-reactive variants for use outside React (data layer, plain helpers).
+// They read the current preference at call time.
+export const formatDate: DateFormatters['formatDate'] = (v) => {
+  const s = useSettings.getState();
+  return build(s.dateFormat, s.timeFormat).formatDate(v);
+};
+export const formatDateTime: DateFormatters['formatDateTime'] = (v) => {
+  const s = useSettings.getState();
+  return build(s.dateFormat, s.timeFormat).formatDateTime(v);
+};
+export const formatTime: DateFormatters['formatTime'] = (v) => {
+  const s = useSettings.getState();
+  return build(s.dateFormat, s.timeFormat).formatTime(v);
+};

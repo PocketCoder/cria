@@ -18,6 +18,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
+import { playCompletionSound } from '@/utils/sound';
+import { useDateFormatter } from '@/lib/dateFormat';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
@@ -62,7 +64,9 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleToggleDone = async () => {
-    await updateTask(task.localId, { done: !task.done });
+    const nowDone = !task.done;
+    await updateTask(task.localId, { done: nowDone });
+    if (nowDone) playCompletionSound();
   };
 
   const handleDuplicate = async () => {
@@ -591,7 +595,15 @@ function InlineDate({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const display = value ? formatDateShort(value) : null;
+  const { formatDate } = useDateFormatter();
+  let display: string | null = null;
+  if (value) {
+    try {
+      display = formatDate(value);
+    } catch {
+      display = value;
+    }
+  }
   const selectedDate = value ? new Date(value) : undefined;
 
   return (
@@ -854,11 +866,3 @@ function formatDuration(seconds: number): string {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
-function formatDateShort(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-  } catch {
-    return iso;
-  }
-}
