@@ -6,6 +6,8 @@ import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
 import { Button } from '@/components/ui/button';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { useSettings } from '@/stores/settings';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
 import { useAuth } from '@/auth/store';
@@ -77,6 +79,12 @@ export function Shell() {
     return () => {
       unlisten.then((fn) => fn()).catch(() => {});
     };
+  }, []);
+
+  // Sync tray visibility from persisted store on startup
+  useEffect(() => {
+    const visible = useSettings.getState().trayIconEnabled;
+    invoke('set_tray_visible', { visible }).catch(() => {});
   }, []);
 
   // Deep‑link handling (vikunja://task/<id> or project)

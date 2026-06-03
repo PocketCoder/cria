@@ -2,7 +2,7 @@ mod tx;
 
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{TrayIconBuilder, TrayIconId},
     Emitter, Manager,
 };
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -76,6 +76,14 @@ fn migrations() -> Vec<Migration> {
     ]
 }
 
+#[tauri::command]
+fn set_tray_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id(&TrayIconId::new("main")) {
+        tray.set_visible(visible).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -127,7 +135,7 @@ pub fn run() {
                 .item(&quit)
                 .build()?;
 
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id(TrayIconId::new("main"))
                 .icon(app.default_window_icon().cloned().expect("default window icon"))
                 .menu(&menu)
                 .tooltip("Cria")
@@ -167,7 +175,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![tx::execute_tx])
+        .invoke_handler(tauri::generate_handler![tx::execute_tx, set_tray_visible])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
