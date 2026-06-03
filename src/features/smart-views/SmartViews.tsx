@@ -20,6 +20,7 @@ import {
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { QuickAddPreview } from '@/features/tasks/QuickAddPreview';
 import { LabelChips } from '@/features/tasks/LabelChips';
+import { TaskHoverPreview } from '@/features/tasks/TaskHoverPreview';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { parseQuickAdd } from '@/lib/quickAddParser';
@@ -287,14 +288,16 @@ export function SmartTaskRow({
         className="mt-1 h-4 w-4 cursor-pointer rounded accent-[var(--color-primary)]"
       />
       <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            'truncate text-sm',
-            task.done && 'text-[var(--color-muted-foreground)] line-through',
-          )}
-        >
-          {task.title}
-        </p>
+        <TaskHoverPreview task={task}>
+          <p
+            className={cn(
+              'truncate text-sm',
+              task.done && 'text-[var(--color-muted-foreground)] line-through',
+            )}
+          >
+            {task.title}
+          </p>
+        </TaskHoverPreview>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
           {showProject ? <span>{task.projectTitle}</span> : null}
           {task.dueDate ? <span>{formatDue(task.dueDate)}</span> : null}
