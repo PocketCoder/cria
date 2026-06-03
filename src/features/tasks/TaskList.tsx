@@ -17,6 +17,7 @@ import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
+import { TaskHoverPreview } from './TaskHoverPreview';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 
@@ -378,16 +379,18 @@ function TaskRow({
             className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
           />
         ) : (
-          <p
-            className={cn(
-              'truncate rounded px-1 py-0.5 text-sm transition-all',
-              task.done && 'line-through text-[var(--color-muted-foreground)]',
-            )}
-            onDoubleClick={handleTitleEdit}
-            title={task.title}
-          >
-            {task.title}
-          </p>
+            <TaskHoverPreview task={task}>
+              <p
+                className={cn(
+                  'truncate rounded px-1 py-0.5 text-sm transition-all',
+                  task.done && 'line-through text-[var(--color-muted-foreground)]',
+                )}
+                onDoubleClick={handleTitleEdit}
+                title={task.title}
+              >
+                {task.title}
+              </p>
+            </TaskHoverPreview>
         )}
         {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
