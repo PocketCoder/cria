@@ -195,7 +195,7 @@ Last updated: Tue Jun 2 2026
 | UI | Cmd+K command palette | ❌ | Not started (M7) |
 | UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ❌ | Not started (M7) |
 | UI | Rebindable shortcuts in settings | ❌ | Not started (M7) |
-| UI | Settings page (language, timezone, date format, time format, week start, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; date/time format + week-start-local + completion sound persist but aren't applied yet (see Settings rows) |
+| UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
 | UI | Inbox view (no-project tasks) | ❌ | Not started |
 | UI | Kanban view | ❌ | Not started (M9) |
 | UI | Table view (dense, sortable) | ❌ | Not started (M9) |
@@ -209,9 +209,9 @@ Last updated: Tue Jun 2 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Settings | User preferences (language, timezone, week start) | ✅ | SettingsModal General section, server-synced; language/timezone also applied locally |
-| Settings | Date format / time format preference | ✅ | Drives full date/time displays (reminders, conflict timestamps, task add + detail date pickers) via lib/dateFormat; dense list rows keep the compact 'd MMM' style; timezone TBD |
-| Settings | Week start (local rendering) | 🟡 | Synced to server; local "this week" logic still hardcodes Monday |
+| Settings | User preferences (language, timezone, week start) | ❌ | Controls removed from the pane — synced to server but had no local effect; tracked in #76 (timezone), #77 (week start), #78 (language/i18n) |
+| Settings | Date format / time format preference | ✅ | Drives full date/time displays (reminders, conflict timestamps, task add + detail date pickers) via lib/dateFormat; dense list rows keep the compact 'd MMM' style; timezone tracked in #76 |
+| Settings | Week start (local rendering) | ❌ | Control removed; "this week" logic still hardcodes Monday — tracked in #77 |
 | Settings | Account info display | ✅ | Shows name in header |
 | Settings | Display name editing | ✅ | Account section input, synced to server |
 | Settings | Autostart toggle | ✅ | SettingsModal Advanced section |

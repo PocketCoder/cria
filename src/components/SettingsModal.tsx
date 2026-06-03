@@ -67,16 +67,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setNotificationsEnabled = useSettings((s) => s.setNotificationsEnabled);
   const colorScheme = useSettings((s) => s.colorScheme);
   const setColorScheme = useSettings((s) => s.setColorScheme);
-  const language = useSettings((s) => s.language);
-  const setLanguage = useSettings((s) => s.setLanguage);
-  const timezone = useSettings((s) => s.timezone);
-  const setTimezone = useSettings((s) => s.setTimezone);
   const dateFormat = useSettings((s) => s.dateFormat);
   const setDateFormat = useSettings((s) => s.setDateFormat);
   const trayIconEnabled = useSettings((s) => s.trayIconEnabled);
   const setTrayIconEnabledInStore = useSettings((s) => s.setTrayIconEnabled);
-  const weekStart = useSettings((s) => s.weekStart);
-  const setWeekStartInStore = useSettings((s) => s.setWeekStart);
   const timeFormat = useSettings((s) => s.timeFormat);
   const setTimeFormat = useSettings((s) => s.setTimeFormat);
   const playSoundWhenDone = useSettings((s) => s.playSoundWhenDone);
@@ -90,20 +84,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     isPermissionGranted().then(setOsPermissionGranted).catch(() => setOsPermissionGranted(false));
   }, []);
 
-  // Seed language/timezone from the server when the user loads. The query
-  // resolves asynchronously, so this depends on `user` rather than running
-  // once on mount (when `user` is usually still undefined). The default
-  // guard means a value the user has already changed in-session is left
-  // alone if a later refetch arrives.
-  useEffect(() => {
-    if (language === 'en' && user?.language && user.language !== 'en') {
-      setLanguage(user.language);
-    }
-    if (timezone === 'UTC' && user?.timezone && user.timezone !== 'UTC') {
-      setTimezone(user.timezone);
-    }
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Merge a single change into the server snapshot and POST the whole
   // object. Vikunja's /user/settings/general overwrites every column from
   // the body, so we must always send the complete settings.
@@ -112,34 +92,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     return pushUserSettings(settingsRef.current);
   };
 
-  const handleLanguageChange = (lang: string) => {
-    setLanguage(lang);
-    void pushSettings({ language: lang }).catch((e) =>
-      console.error('Failed to sync language to server', e),
-    );
-  };
-
-  const handleTimezoneChange = (tz: string) => {
-    setTimezone(tz);
-    void pushSettings({ timezone: tz }).catch((e) =>
-      console.error('Failed to sync timezone to server', e),
-    );
-  };
-
   const handleDateFormatChange = (fmt: string) => {
     setDateFormat(fmt as DateFormat);
   };
 
   const handleTimeFormatChange = (fmt: string) => {
     setTimeFormat(fmt as TimeFormat);
-  };
-
-  const handleWeekStartChange = (day: string) => {
-    const num = Number(day) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-    setWeekStartInStore(num);
-    void pushSettings({ week_start: num }).catch((e) =>
-      console.error('Failed to sync week start to server', e),
-    );
   };
 
   const handleNameSave = () => {
@@ -258,64 +216,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">General</h3>
               <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
                 <div className="flex items-center justify-between">
-                  <Label>Language</Label>
-                  <select
-                    value={language}
-                    onChange={(e) => handleLanguageChange(e.target.value)}
-                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-                  >
-                    <option value="en">English</option>
-                    <option value="de">Deutsch</option>
-                    <option value="fr">Français</option>
-                    <option value="es">Español</option>
-                    <option value="nl">Nederlands</option>
-                    <option value="pl">Polski</option>
-                    <option value="pt-BR">Português (Brasil)</option>
-                    <option value="ru">Русский</option>
-                    <option value="zh">简体中文</option>
-                    <option value="ja">日本語</option>
-                    <option value="ko">한국어</option>
-                  </select>
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label>Timezone</Label>
-                  <select
-                    value={timezone}
-                    onChange={(e) => handleTimezoneChange(e.target.value)}
-                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-                  >
-                    <option value="UTC">UTC</option>
-                    <option value="America/New_York">Eastern (US)</option>
-                    <option value="America/Chicago">Central (US)</option>
-                    <option value="America/Denver">Mountain (US)</option>
-                    <option value="America/Los_Angeles">Pacific (US)</option>
-                    <option value="America/Anchorage">Alaska</option>
-                    <option value="Pacific/Honolulu">Hawaii</option>
-                    <option value="America/Toronto">Eastern (CA)</option>
-                    <option value="America/Vancouver">Pacific (CA)</option>
-                    <option value="America/Mexico_City">Mexico City</option>
-                    <option value="America/Sao_Paulo">Brasília</option>
-                    <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
-                    <option value="Europe/London">London</option>
-                    <option value="Europe/Paris">Paris</option>
-                    <option value="Europe/Berlin">Berlin</option>
-                    <option value="Europe/Madrid">Madrid</option>
-                    <option value="Europe/Rome">Rome</option>
-                    <option value="Europe/Amsterdam">Amsterdam</option>
-                    <option value="Europe/Stockholm">Stockholm</option>
-                    <option value="Europe/Moscow">Moscow</option>
-                    <option value="Europe/Istanbul">Istanbul</option>
-                    <option value="Asia/Dubai">Dubai</option>
-                    <option value="Asia/Kolkata">India</option>
-                    <option value="Asia/Bangkok">Bangkok</option>
-                    <option value="Asia/Shanghai">Shanghai</option>
-                    <option value="Asia/Tokyo">Tokyo</option>
-                    <option value="Asia/Seoul">Seoul</option>
-                    <option value="Australia/Sydney">Sydney</option>
-                    <option value="Australia/Auckland">Auckland</option>
-                  </select>
-                </div>
-                <div className="flex items-center justify-between">
                   <Label>Date Format</Label>
                   <select
                     value={dateFormat}
@@ -336,22 +236,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   >
                     <option value="24h">24-hour</option>
                     <option value="12h">12-hour</option>
-                  </select>
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label>Week Start</Label>
-                  <select
-                    value={weekStart}
-                    onChange={(e) => handleWeekStartChange(e.target.value)}
-                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-                  >
-                    <option value={0}>Sunday</option>
-                    <option value={1}>Monday</option>
-                    <option value={2}>Tuesday</option>
-                    <option value={3}>Wednesday</option>
-                    <option value={4}>Thursday</option>
-                    <option value={5}>Friday</option>
-                    <option value={6}>Saturday</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between">

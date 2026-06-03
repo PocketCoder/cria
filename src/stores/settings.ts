@@ -4,23 +4,21 @@ import { persist } from 'zustand/middleware';
 export type ColorScheme = 'light' | 'dark' | 'system';
 export type DateFormat = 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY';
 export type TimeFormat = '12h' | '24h';
-export type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+// NOTE: language, timezone and week-start preferences were removed from the
+// settings pane — they synced to the server but had no local effect, so the
+// controls misled users. They live as GitHub issues until they're wired into
+// local rendering (timezone, week start) or i18n (language). The server values
+// still round-trip untouched via SettingsModal's settingsRef snapshot.
 interface SettingsState {
   notificationsEnabled: boolean;
   setNotificationsEnabled: (enabled: boolean) => void;
   colorScheme: ColorScheme;
   setColorScheme: (scheme: ColorScheme) => void;
-  language: string;
-  setLanguage: (lang: string) => void;
-  timezone: string;
-  setTimezone: (tz: string) => void;
   dateFormat: DateFormat;
   setDateFormat: (fmt: DateFormat) => void;
   timeFormat: TimeFormat;
   setTimeFormat: (fmt: TimeFormat) => void;
-  weekStart: WeekStart;
-  setWeekStart: (day: WeekStart) => void;
   trayIconEnabled: boolean;
   setTrayIconEnabled: (enabled: boolean) => void;
   playSoundWhenDone: boolean;
@@ -34,16 +32,10 @@ export const useSettings = create<SettingsState>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       colorScheme: 'system',
       setColorScheme: (scheme) => set({ colorScheme: scheme }),
-      language: 'en',
-      setLanguage: (lang) => set({ language: lang }),
-      timezone: 'UTC',
-      setTimezone: (tz) => set({ timezone: tz }),
       dateFormat: 'YYYY-MM-DD',
       setDateFormat: (fmt) => set({ dateFormat: fmt }),
       timeFormat: '24h',
       setTimeFormat: (fmt) => set({ timeFormat: fmt }),
-      weekStart: 0,
-      setWeekStart: (day) => set({ weekStart: day }),
       trayIconEnabled: true,
       setTrayIconEnabled: (enabled) => set({ trayIconEnabled: enabled }),
       playSoundWhenDone: false,
