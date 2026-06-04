@@ -3,7 +3,7 @@ import { startOfDay, endOfDay, endOfWeek, addDays } from 'date-fns';
 
 const LABEL_RE = /(?:^|\s)(#"[^"]+"|#[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
-const SOON_RE = /(?:^|\s)(soon)(?=\s|$)/i;
+const SOON_RE = /(?:^|\s)(soon)(?=\s|$)/gi;
 
 export interface SearchQuery {
   /** Plain text to feed to FTS5 (everything after stripping filters). */
@@ -137,8 +137,8 @@ export function parseSearchQuery(input: string, now: Date = new Date()): SearchQ
   let priority: number | null = null;
 
   for (const t of claimed) {
-    if (t.kind === 'date' && t.startIso) {
-      dueDateStart = t.startIso;
+    if (t.kind === 'date') {
+      dueDateStart = t.startIso ?? null;
       dueDateEnd = t.endIso ?? null;
     } else if (t.kind === 'label') {
       labelTitle = t.payload as string;

@@ -33,17 +33,60 @@ import {
 } from '@/sync/attachments';
 
 /**
- * One blob URL per `(taskId, attId)` pair. Lives at module scope so
- * navigating between tasks doesn't refetch the same image, and the
- * editor doesn't double-fetch when React re-renders the description.
+ * LRU cache for blob URLs. Evicts the least-recently-accessed entry
+ * when at capacity, revoking its object URL to free the underlying
+ * blob memory. Entries are re-ordered on every `get` / `set`.
  *
- * Object URLs are never revoked here — they're cheap (a few bytes of
- * mapping plus a Blob reference) and the alternative (revoking on
- * unmount) breaks the next mount that expects the same image to be
- * already-cached. Worst case the user signs out and the references
- * become unreachable on the next page reload.
+ * Capacity chosen so the most-recently-viewed ~50 inline images stay
+ * hot (typical session: ~10–20 across open tasks), while memory is
+ * bounded. An evicted image re-fetches transparently on next view
+ * (same `resolveBlobUrl` path, inflight-deduped).
  */
-const blobCache = new Map<string, string>();
+export class LRUMap<K, V extends string> {
+  private capacity: number;
+  private map: Map<K, V>;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.map = new Map();
+  }
+
+  get(key: K): V | undefined {
+    const val = this.map.get(key);
+    if (val !== undefined) {
+      this.map.delete(key);
+      this.map.set(key, val);
+    }
+    return val;
+  }
+
+  set(key: K, value: V): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.capacity) {
+      const oldestKey = this.map.keys().next().value;
+      if (oldestKey !== undefined) {
+        const oldestVal = this.map.get(oldestKey)!;
+        URL.revokeObjectURL(oldestVal);
+        this.map.delete(oldestKey);
+      }
+    }
+    this.map.set(key, value);
+  }
+
+  clear(): void {
+    for (const val of this.map.values()) {
+      URL.revokeObjectURL(val);
+    }
+    this.map.clear();
+  }
+
+  get size(): number {
+    return this.map.size;
+  }
+}
+
+const blobCache = new LRUMap<string, string>(50);
 /** Pending fetches keyed the same way, so two concurrent renders of
  * the same image don't both go to the network. */
 const inflight = new Map<string, Promise<string>>();
