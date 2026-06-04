@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getDb, withTx } from './index';
+import { getDb, withTx, exec } from './index';
 import { mergeFromServer } from './syncMerge';
 import {
   normaliseDate,
@@ -339,7 +339,7 @@ export async function upsertTaskFromServer(
     payload.created_by?.id ?? null,
   ];
 
-  return mergeFromServer({
+  const localId = await mergeFromServer({
     entity: 'task',
     serverId,
     remotePayload: payload as unknown as Record<string, unknown>,
@@ -385,6 +385,22 @@ export async function upsertTaskFromServer(
       params: [...colParams, lastSyncedJson, localId],
     }),
   });
+
+  // Backfill created_at / created_by_id even on dirty rows. These are
+  // server-authoritative and never edited locally, so the dirty-guard (which
+  // protects pending local edits to user-editable fields) shouldn't keep them
+  // empty. COALESCE only fills nulls — it never overwrites or clobbers.
+  if (localId && (payload.created || payload.created_by?.id != null)) {
+    await exec(
+      `UPDATE tasks
+          SET created_at    = COALESCE(created_at, ?),
+              created_by_id = COALESCE(created_by_id, ?)
+        WHERE local_id = ?`,
+      [payload.created ?? null, payload.created_by?.id ?? null, localId],
+    );
+  }
+
+  return localId;
   // Intentionally no notify() — see the matching note in src/db/projects.ts.
 }
 

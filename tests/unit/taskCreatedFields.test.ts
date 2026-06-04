@@ -3,8 +3,11 @@
 // are easy to misalign).
 
 import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
+import { getDb } from '@/db';
 import { initSchema, clearTables, seedProject } from './_helpers';
 import { upsertTaskFromServer, createTask, listTasksForProject } from '@/db/tasks';
+
+const NOW = '2024-01-01T00:00:00Z';
 
 describe('task created/createdBy fields', () => {
   beforeAll(async () => {
@@ -40,6 +43,32 @@ describe('task created/createdBy fields', () => {
     expect(t.title).toBe('T2');
     expect(t.createdAt).toBe('2024-01-05T00:00:00Z');
     expect(t.createdById).toBe(7);
+  });
+
+  it('backfills created fields on a dirty row even though the merge UPDATE is skipped', async () => {
+    const proj = await seedProject(4);
+    const db = await getDb();
+    // A synced-but-dirty task (pending local edit) with no created info yet.
+    await db.execute(
+      `INSERT INTO tasks (local_id, server_id, project_local_id, title, updated_at, created_at, created_by_id, dirty, deleted)
+       VALUES ('dt', 300, ?, 'Edited locally', ?, NULL, NULL, 1, 0)`,
+      [proj, NOW],
+    );
+
+    await upsertTaskFromServer({
+      id: 300,
+      project_id: 4,
+      title: 'Server title',
+      created: '2024-03-09T00:00:00Z',
+      created_by: { id: 11 },
+    } as never);
+
+    const t = (await listTasksForProject(proj)).find((x) => x.serverId === 300)!;
+    // Dirty-guard preserved the local title…
+    expect(t.title).toBe('Edited locally');
+    // …but the immutable created fields were backfilled.
+    expect(t.createdAt).toBe('2024-03-09T00:00:00Z');
+    expect(t.createdById).toBe(11);
   });
 
   it('createTask stamps createdAt locally', async () => {

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pencil, Check } from 'lucide-react';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
@@ -6,10 +7,9 @@ import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useUi } from '@/stores/ui';
 import { updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
-import { DatePicker } from '@/components/DatePicker';
 import { cn } from '@/lib/cn';
 import type { Project } from '@/domain/project';
-import type { Task } from '@/domain/task';
+import type { Task, TaskUpdate } from '@/domain/task';
 import {
   useTableConfig,
   sortTasks,
@@ -19,6 +19,7 @@ import { SortHeader } from './SortHeader';
 import { TableColumnPopup } from './TableColumnPopup';
 import { DateCell } from './DateCell';
 import { LabelCell } from './LabelCell';
+import { LabelEditCell } from './LabelEditCell';
 import { AssigneeCell } from './AssigneeCell';
 
 interface TableViewProps {
@@ -41,9 +42,49 @@ export function TableView({ project }: TableViewProps) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const { data: currentUser } = useCurrentUser();
 
-  // Inline editing: double-click an editable cell. One cell at a time.
-  const [editing, setEditing] = useState<{ taskLocalId: string; column: ColumnKey } | null>(null);
-  const stopEditing = () => setEditing(null);
+  // Table-wide edit mode: a single toggle turns every editable cell into an
+  // input. Edits accumulate in `drafts` (keyed by task) and are written on
+  // Save — or auto-saved when leaving the table (view/project switch, unmount).
+  const [editMode, setEditMode] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, DraftFields>>({});
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+
+  const flush = useCallback((pending: Record<string, DraftFields>) => {
+    for (const [localId, patch] of Object.entries(pending)) {
+      if (patch && Object.keys(patch).length > 0) {
+        void updateTask(localId, patch).catch((err) =>
+          console.error('[table] failed to save edit:', err),
+        );
+      }
+    }
+  }, []);
+
+  const setDraft = useCallback(
+    (localId: string, field: keyof DraftFields, value: unknown) => {
+      setDrafts((prev) => ({
+        ...prev,
+        [localId]: { ...prev[localId], [field]: value } as DraftFields,
+      }));
+    },
+    [],
+  );
+
+  const saveAndExit = useCallback(() => {
+    flush(draftsRef.current);
+    setDrafts({});
+    setEditMode(false);
+  }, [flush]);
+
+  // Leaving the table (project switch or unmount) flushes pending drafts and
+  // resets edit state, so nothing is silently lost.
+  useEffect(() => {
+    setDrafts({});
+    setEditMode(false);
+    return () => {
+      flush(draftsRef.current);
+    };
+  }, [project.localId, flush]);
 
   const projectTitle = useMemo(() => {
     const map = new Map(allProjects.map((p) => [p.localId, p.title]));
@@ -83,7 +124,33 @@ export function TableView({ project }: TableViewProps) {
             : `${visibleTasks.length} task${visibleTasks.length === 1 ? '' : 's'}`}
           {isFetching ? <span className="ml-2">syncing…</span> : null}
         </span>
-        <TableColumnPopup visible={visible} onToggle={toggleColumn} />
+        <div className="flex items-center gap-2">
+          {editMode ? (
+            <button
+              type="button"
+              onClick={saveAndExit}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs font-medium text-white hover:opacity-90"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Save
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => (editMode ? saveAndExit() : setEditMode(true))}
+            className={cn(
+              'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
+              editMode
+                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
+            )}
+            aria-pressed={editMode}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            {editMode ? 'Editing' : 'Edit'}
+          </button>
+          <TableColumnPopup visible={visible} onToggle={toggleColumn} />
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
@@ -105,35 +172,28 @@ export function TableView({ project }: TableViewProps) {
             {sorted.map((task) => (
               <tr
                 key={task.localId}
-                onClick={() => setSelectedTask(task.localId)}
+                onClick={editMode ? undefined : () => setSelectedTask(task.localId)}
                 className={cn(
-                  'cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
+                  'border-b border-[var(--color-border)] transition-colors',
+                  !editMode && 'cursor-pointer hover:bg-[var(--color-accent)]/5',
                   task.done && 'opacity-60',
                   selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
                 )}
               >
                 {shownColumns.map((c) => {
-                  const editable = EDITABLE_COLUMNS.has(c.key);
-                  const isEditing =
-                    editing?.taskLocalId === task.localId && editing.column === c.key;
+                  const editable = editMode && EDITABLE_COLUMNS.has(c.key);
                   return (
                     <td
                       key={c.key}
-                      onDoubleClick={
-                        editable && !isEditing
-                          ? (e) => {
-                              e.stopPropagation();
-                              setEditing({ taskLocalId: task.localId, column: c.key });
-                            }
-                          : undefined
-                      }
-                      className={cn(
-                        'px-3 py-2 align-middle text-[var(--color-foreground)]',
-                        editable && 'cursor-text',
-                      )}
+                      className="px-3 py-2 align-middle text-[var(--color-foreground)]"
                     >
-                      {isEditing ? (
-                        <CellEditor task={task} columnKey={c.key} onDone={stopEditing} />
+                      {editable ? (
+                        <EditField
+                          task={task}
+                          columnKey={c.key}
+                          draft={drafts[task.localId]}
+                          onChange={(field, value) => setDraft(task.localId, field, value)}
+                        />
                       ) : (
                         <Cell
                           task={task}
@@ -175,6 +235,8 @@ const EDITABLE_COLUMNS = new Set<ColumnKey>([
   'dueDate',
   'startDate',
   'endDate',
+  'percentDone',
+  'labels',
 ]);
 
 function Cell({
@@ -252,101 +314,107 @@ function Cell({
   }
 }
 
-/* ───────────────────────── inline editors ───────────────────────── */
+/* ───────────────────────── inline edit fields ───────────────────────── */
 
-function CellEditor({
+type DraftFields = Partial<
+  Pick<TaskUpdate, 'title' | 'priority' | 'dueDate' | 'startDate' | 'endDate' | 'percentDone'>
+>;
+
+const EDIT_INPUT_CLS =
+  'w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]';
+
+/** ISO (midnight UTC) → `YYYY-MM-DD` for a native date input. */
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+/** `YYYY-MM-DD` → midnight-UTC ISO, or null when cleared. */
+function fromDateInputValue(v: string): string | null {
+  return v ? `${v}T00:00:00.000Z` : null;
+}
+
+/**
+ * The editable form control for one cell while the table is in edit mode.
+ * Reads its value from the row's draft (falling back to the task) and reports
+ * changes up to the table's draft state. Native `<input type="date">` avoids a
+ * custom popover.
+ */
+function EditField({
   task,
   columnKey,
-  onDone,
+  draft,
+  onChange,
 }: {
   task: Task;
   columnKey: ColumnKey;
-  onDone: () => void;
+  draft: DraftFields | undefined;
+  onChange: (field: keyof DraftFields, value: unknown) => void;
 }) {
-  if (columnKey === 'title') return <TitleEditor task={task} onDone={onDone} />;
-  if (columnKey === 'priority') return <PriorityEditor task={task} onDone={onDone} />;
-  // date columns
-  const value =
-    columnKey === 'dueDate'
-      ? task.dueDate
-      : columnKey === 'startDate'
-        ? task.startDate
-        : task.endDate;
-  const save = (iso: string | null) => {
-    const patch =
-      columnKey === 'dueDate'
-        ? { dueDate: iso }
-        : columnKey === 'startDate'
-          ? { startDate: iso }
-          : { endDate: iso };
-    void updateTask(task.localId, patch).catch((err) =>
-      console.error('[table] failed to update date:', err),
-    );
-    onDone();
-  };
-  return (
-    <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onDone()}>
-      <DatePicker value={value} onChange={save} />
-    </span>
-  );
-}
-
-function TitleEditor({ task, onDone }: { task: Task; onDone: () => void }) {
-  const [draft, setDraft] = useState(task.title);
-  const save = () => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== task.title) {
-      void updateTask(task.localId, { title: trimmed }).catch((err) =>
-        console.error('[table] failed to rename:', err),
+  switch (columnKey) {
+    case 'labels':
+      // Labels are a relation, not a draft field — toggled immediately.
+      return <LabelEditCell taskLocalId={task.localId} />;
+    case 'title':
+      return (
+        <input
+          type="text"
+          value={draft?.title ?? task.title}
+          onChange={(e) => onChange('title', e.target.value)}
+          className={EDIT_INPUT_CLS}
+        />
+      );
+    case 'priority':
+      return (
+        <select
+          value={String(draft?.priority ?? task.priority)}
+          onChange={(e) => onChange('priority', Number(e.target.value))}
+          className={EDIT_INPUT_CLS}
+        >
+          {[0, 1, 2, 3, 4, 5].map((p) => (
+            <option key={p} value={p}>
+              {p === 0 ? 'None' : '!'.repeat(p)}
+            </option>
+          ))}
+        </select>
+      );
+    case 'percentDone':
+      return (
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={5}
+          value={draft?.percentDone ?? task.percentDone}
+          onChange={(e) =>
+            onChange('percentDone', Math.max(0, Math.min(100, Number(e.target.value))))
+          }
+          className={EDIT_INPUT_CLS}
+        />
+      );
+    case 'dueDate':
+    case 'startDate':
+    case 'endDate': {
+      const current =
+        columnKey === 'dueDate'
+          ? task.dueDate
+          : columnKey === 'startDate'
+            ? task.startDate
+            : task.endDate;
+      const draftVal = draft?.[columnKey];
+      const value = draftVal !== undefined ? draftVal : current;
+      return (
+        <input
+          type="date"
+          value={toDateInputValue(value)}
+          onChange={(e) => onChange(columnKey, fromDateInputValue(e.target.value))}
+          className={EDIT_INPUT_CLS}
+        />
       );
     }
-    onDone();
-  };
-  return (
-    <input
-      autoFocus
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      onBlur={save}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          save();
-        } else if (e.key === 'Escape') {
-          onDone();
-        }
-      }}
-      className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-    />
-  );
-}
-
-function PriorityEditor({ task, onDone }: { task: Task; onDone: () => void }) {
-  return (
-    <select
-      autoFocus
-      defaultValue={String(task.priority)}
-      onClick={(e) => e.stopPropagation()}
-      onBlur={onDone}
-      onChange={(e) => {
-        const next = Number(e.target.value);
-        if (next !== task.priority) {
-          void updateTask(task.localId, { priority: next }).catch((err) =>
-            console.error('[table] failed to set priority:', err),
-          );
-        }
-        onDone();
-      }}
-      className="rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-    >
-      {[0, 1, 2, 3, 4, 5].map((p) => (
-        <option key={p} value={p}>
-          {p === 0 ? 'None' : '!'.repeat(p)}
-        </option>
-      ))}
-    </select>
-  );
+    default:
+      return null;
+  }
 }
 
 function DoneCheckbox({ task }: { task: Task }) {
