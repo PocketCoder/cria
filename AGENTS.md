@@ -32,7 +32,7 @@ done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.4.2` (in `package.json`,
+shipped in `v0.4.0`. Current version is `0.6.0` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **`v0.4.0`/`v0.4.1` were tagged without bumping
 these files, leaving them stuck at `0.3.1` → running builds reported
@@ -51,9 +51,9 @@ release").**
 | M5 input parity (TipTap WYSIWYG, NL quick-add, inline pickers, label mutations) | ✅ |
 | M6 smart views (Today / Upcoming / Inbox) + saved filters + FTS5 search | ✅ |
 | M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
-| M8 hierarchy, recurrence, reminders | ✅ sub-tasks tree (indent + collapse in project view), recurrence already shipped |
+| M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ⏳ |
-| M10 stretch — attachments, comments, Gantt, notes | 🟡 attachments (list / upload / delete / inline images / preview) in PR #41 stacked on #39; comments / Gantt / notes pending |
+| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments (list / upload / delete / download / inline images / lightbox); 🟡 comments / Gantt / notes pending |
 
 **Next up:** M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable).
 After that, M9 reorder/DnD/Kanban/table view and M10 stretch goals.
@@ -67,8 +67,6 @@ See [SPEC.md §14](SPEC.md).
 - **Delta-aware pull** — `src/sync/pull.ts` still does a full per-project
   reload each tick (filters by `project_id`, not `updated > lastSyncAt`).
   Fine for a few projects; revisit if it gets slow.
-- **FTS5 search** — lands in M6 as migration `003_fts.sql` (first schema
-  change since 002).
 
 ## Stack
 
