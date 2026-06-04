@@ -35,6 +35,8 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
+import { useUpdater } from '@/queries/updater';
+import { UpdateBanner } from '@/features/shell/UpdateBanner';
 import { cn } from '@/lib/cn';
 import { Search, Settings, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -76,6 +78,7 @@ export function Shell() {
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
   const { data: serverVersion } = useServerVersion();
+  const updater = useUpdater();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -406,9 +409,10 @@ export function Shell() {
           >
             <Settings className="h-3.5 w-3.5" />
           </button>
-          {/* Update banner moved to App.tsx so it's visible pre-auth
-              too — see the comment there. Keeping just the version
-              label here. */}
+          <UpdateBanner
+            state={updater.state}
+            onInstall={() => void updater.install()}
+          />
           <span>
             Cria {pkg.version}
             {serverVersion ? <span className="ml-2 text-[var(--color-muted-foreground)]">· {serverVersion}</span> : null}
