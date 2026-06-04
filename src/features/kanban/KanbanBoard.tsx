@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -6,16 +6,11 @@ import {
   useSensors,
   PointerSensor,
   useDroppable,
+  useDraggable,
   closestCorners,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
 import { createTask } from '@/db/tasks';
 import { setTaskBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
@@ -169,8 +164,6 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
     id: bucket.localId,
   });
 
-  const taskIds = useMemo(() => tasks.map((t) => t.localId), [tasks]);
-
   // Close menu on click outside
   useEffect(() => {
     if (!showMenu) return;
@@ -306,16 +299,14 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
         <>
           {/* Task list */}
           <div className="flex-1 overflow-y-auto px-2 py-2">
-            <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-              {tasks.map((task) => (
-                <KanbanCard key={task.localId} task={task} />
-              ))}
-              {tasks.length === 0 && (
-                <p className="py-4 text-center text-[11px] text-[var(--color-muted-foreground)]">
-                  No tasks
-                </p>
-              )}
-            </SortableContext>
+            {tasks.map((task) => (
+              <KanbanCard key={task.localId} task={task} />
+            ))}
+            {tasks.length === 0 && (
+              <p className="py-4 text-center text-[11px] text-[var(--color-muted-foreground)]">
+                No tasks
+              </p>
+            )}
           </div>
 
           {/* Add task input */}
@@ -370,31 +361,25 @@ interface CardProps {
 
 function KanbanCard({ task }: CardProps) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.localId });
-
-  const style = useMemo(() => ({
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  }), [transform, transition, isDragging]);
+  // Plain draggable (not sortable): cards are not themselves drop targets,
+  // so the only droppables are the bucket columns — `over.id` in
+  // onDragEnd is therefore always a bucket id, which makes cross-bucket
+  // moves unambiguous. The floating card is rendered via <DragOverlay>;
+  // the original is just dimmed while dragging.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.localId,
+  });
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...attributes}
       {...listeners}
       onClick={() => setSelectedTask(task.localId)}
       className={cn(
         'group mb-2 cursor-grab rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm transition-shadow hover:shadow-sm active:cursor-grabbing',
         task.done && 'opacity-60',
+        isDragging && 'opacity-40',
       )}
     >
       <div className="flex items-start gap-1.5">
