@@ -1,7 +1,7 @@
 {
   "name": "cria",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "scripts": {
     "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
+    "bump": "./scripts/bump.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "generate:api": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v1/docs.json -o /tmp/vikunja-swagger.json && npx -y swagger2openapi@7 /tmp/vikunja-swagger.json -o /tmp/vikunja-openapi.json && openapi-typescript /tmp/vikunja-openapi.json -o src/api/schema.ts'"
