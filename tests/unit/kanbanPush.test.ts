@@ -7,7 +7,13 @@
 import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { getDb } from '@/db';
 import { initSchema, clearTables, seedProject } from './_helpers';
-import { createBucket, setTaskBucket, replaceBucketsForViewFromServer, listBucketsForView } from '@/db/buckets';
+import {
+  createBucket,
+  setTaskBucket,
+  replaceBucketsForViewFromServer,
+  listBucketsForView,
+  listBucketAssignmentsForView,
+} from '@/db/buckets';
 import { drainOutbox } from '@/sync/push';
 import type { ApiClient } from '@/api/client';
 
@@ -141,6 +147,32 @@ describe('kanban outbox push', () => {
     );
     expect(row?.server_id).toBeNull();
     expect(row?.deleted).toBe(0);
+  });
+
+  it('reads task-bucket assignments back with mapped camelCase fields', async () => {
+    const projectLocalId = await seedProject(5);
+    await seedKanbanView({ localId: 'v5', serverId: 50, projectLocalId });
+    const db = await getDb();
+    await db.execute(
+      `INSERT INTO buckets (local_id, server_id, view_local_id, title, position, task_limit, updated_at, dirty, deleted)
+       VALUES ('b5', 500, 'v5', 'Doing', 0, 0, ?, 0, 0)`,
+      [NOW],
+    );
+    await db.execute(
+      `INSERT INTO tasks (local_id, server_id, project_local_id, title, updated_at, dirty, deleted)
+       VALUES ('t5', 55, ?, 'Task', ?, 0, 0)`,
+      [projectLocalId, NOW],
+    );
+
+    await setTaskBucket('t5', 'v5', 'b5');
+
+    // Regression: the repo must map snake_case columns to the camelCase
+    // domain shape — otherwise taskLocalId/bucketLocalId read back undefined
+    // and the board can never place a moved card in its bucket.
+    const assignments = await listBucketAssignmentsForView('v5');
+    expect(assignments).toEqual([
+      { taskLocalId: 't5', viewLocalId: 'v5', bucketLocalId: 'b5' },
+    ]);
   });
 
   it('a pull keeps a dirty (unsynced) bucket while replacing synced ones', async () => {

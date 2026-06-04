@@ -71,10 +71,7 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
 
     const taskId = String(active.id);
     // Find which column the task was dropped into
-    const targetBucketId = findBucketForDroppable(
-      String(over.id),
-      columns,
-    );
+    const targetBucketId = findBucketForDroppable(String(over.id), columns);
     if (!targetBucketId) return;
 
     // Find the task's current bucket in the column data

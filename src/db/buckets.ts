@@ -172,12 +172,23 @@ export async function listBucketAssignmentsForView(
   viewLocalId: string,
 ): Promise<TaskBucket[]> {
   const db = await getDb();
-  return db.select<TaskBucket[]>(
+  const rows = await db.select<
+    { task_local_id: string; view_local_id: string; bucket_local_id: string }[]
+  >(
     `SELECT task_local_id, view_local_id, bucket_local_id
        FROM task_buckets
       WHERE view_local_id = ?`,
     [viewLocalId],
   );
+  // Map snake_case DB columns to the camelCase domain shape. Without this,
+  // every assignment's taskLocalId/bucketLocalId read back undefined, so the
+  // board could never place a task in its bucket (cards snapped back to the
+  // fallback bucket on every refetch).
+  return rows.map((r) => ({
+    taskLocalId: r.task_local_id,
+    viewLocalId: r.view_local_id,
+    bucketLocalId: r.bucket_local_id,
+  }));
 }
 
 /**
