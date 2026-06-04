@@ -17,6 +17,8 @@ const MIGRATION_6_SQL: &str = include_str!("../../src/db/migrations/006_task_rem
 const MIGRATION_7_SQL: &str = include_str!("../../src/db/migrations/007_task_relations.sql");
 const MIGRATION_8_SQL: &str = include_str!("../../src/db/migrations/008_task_reminders_relative.sql");
 const MIGRATION_9_SQL: &str = include_str!("../../src/db/migrations/009_task_identifier.sql");
+const MIGRATION_10_SQL: &str = include_str!("../../src/db/migrations/010_views.sql");
+const MIGRATION_11_SQL: &str = include_str!("../../src/db/migrations/011_kanban.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -72,6 +74,18 @@ fn migrations() -> Vec<Migration> {
             version: 9,
             description: "task identifier column",
             sql: MIGRATION_9_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "project views mirror",
+            sql: MIGRATION_10_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "kanban buckets and task-bucket assignments",
+            sql: MIGRATION_11_SQL,
             kind: MigrationKind::Up,
         },
     ]

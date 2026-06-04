@@ -15,8 +15,11 @@ import { useCurrentUser } from '@/queries/user';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { getDb } from '@/db';
 import { useProjects } from '@/queries/projects';
+import { useProjectViews } from '@/queries/views';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
+import { ProjectHeader } from '@/features/projects/ProjectHeader';
 import { TaskList } from '@/features/tasks/TaskList';
+import { KanbanBoard } from '@/features/kanban/KanbanBoard';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import {
   TodayView,
@@ -46,6 +49,28 @@ export function Shell() {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const displayName =
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
+
+  const projectLocalId = activeView?.kind === 'project' ? activeView.localId : '';
+  const { data: projectViews = [] } = useProjectViews(projectLocalId);
+
+  const handleSelectView = (viewLocalId: string) => {
+    if (activeView?.kind === 'project') {
+      setActiveView({ kind: 'project', localId: activeView.localId, viewLocalId });
+      localStorage.setItem(`cria:projectView:${activeView.localId}`, viewLocalId);
+    }
+  };
+
+  // Resolve the initial view when opening a project without a viewLocalId
+  useEffect(() => {
+    const av = activeView;
+    if (av?.kind === 'project' && !av.viewLocalId && projectViews.length > 0) {
+      const stored = localStorage.getItem(`cria:projectView:${av.localId}`);
+      const targetId = stored && projectViews.some((v) => v.localId === stored)
+        ? stored
+        : projectViews[0]!.localId;
+      setActiveView({ kind: 'project', localId: av.localId, viewLocalId: targetId });
+    }
+  }, [activeView?.kind === 'project' ? activeView?.localId : null, projectViews.length]);
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
@@ -264,23 +289,33 @@ export function Shell() {
             </section>
           );
         }
+        const currentViewLocalId =
+          activeView.viewLocalId ?? projectViews[0]?.localId;
+        const currentView = currentViewLocalId
+          ? projectViews.find((v) => v.localId === currentViewLocalId)
+          : undefined;
         return (
           <>
-            <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
-              <span
-                aria-hidden="true"
-                className="h-2.5 w-2.5 rounded-full"
-                style={{
-                  background:
-                    project.hexColor || 'var(--color-muted-foreground)',
-                }}
-              />
-              <h1 className="text-base font-semibold tracking-tight">
-                {project.title}
-              </h1>
-            </header>
+            <ProjectHeader
+              project={project}
+              views={projectViews}
+              activeViewLocalId={currentViewLocalId}
+              onSelectView={handleSelectView}
+            />
             <div className="flex min-h-0 min-w-0 flex-1">
-              <TaskList project={project} />
+              {currentView ? (
+                currentView.viewKind === 'kanban' ? (
+                  <KanbanBoard view={currentView} />
+                ) : (
+                  <TaskList project={project} />
+                )
+              ) : (
+                <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+                  <p className="text-sm text-[var(--color-muted-foreground)]">
+                    No views available for this project.
+                  </p>
+                </section>
+              )}
               <TaskDetail />
             </div>
           </>

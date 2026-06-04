@@ -30,6 +30,8 @@ export async function initSchema(): Promise<void> {
     '007_task_relations.sql',
     '008_task_reminders_relative.sql',
     '009_task_identifier.sql',
+    '010_views.sql',
+    '011_kanban.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),
@@ -67,8 +69,11 @@ export async function clearTables(): Promise<void> {
     'task_attachments',
     'task_assignees',
     'task_labels',
+    'task_buckets',
     'tasks',
+    'buckets',
     'labels',
+    'project_views',
     'projects',
     'sync_state',
   ];

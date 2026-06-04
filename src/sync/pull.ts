@@ -9,6 +9,8 @@ import { upsertTaskAssigneesFromServer } from '@/db/task-assignees';
 import { replaceTaskAttachmentsFromServer } from '@/db/attachments';
 import { replaceTaskRemindersFromServer } from '@/db/reminders';
 import { replaceTaskRelationsFromServer } from '@/db/relations';
+import { replaceViewsForProjectFromServer } from '@/db/views';
+import { replaceBucketsForViewFromServer } from '@/db/buckets';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import {
   taskResponseSchema,
@@ -22,7 +24,9 @@ import {
 } from '@/domain/task';
 import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
-import { exec } from '@/db';
+import { viewResponseSchema, type ViewResponse } from '@/domain/view';
+import { bucketResponseSchema, type BucketResponse } from '@/domain/bucket';
+import { exec, getDb } from '@/db';
 import { notify } from '@/db/bus';
 
 const PER_PAGE = 50;
@@ -30,6 +34,8 @@ const MAX_PAGES = 200; // safety bound
 
 interface PullResult {
   projects: number;
+  views: number;
+  buckets: number;
 }
 
 /**
@@ -53,7 +59,9 @@ export async function pullAll(
   client: ApiClient = createApiClient(),
 ): Promise<PullResult> {
   const projects = await pullProjects(client);
-  return { projects };
+  const views = await pullAllViews(client);
+  const buckets = await pullAllBuckets(client);
+  return { projects, views, buckets };
 }
 
 export async function pullProjects(
@@ -334,8 +342,163 @@ export async function pullLabels(
   return collected.length;
 }
 
+/**
+ * Pull all views for every project that has a server_id.
+ * Called after pullProjects so the project table is populated.
+ */
+export async function pullAllViews(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const db = await getDb();
+  const projectRows = await db.select<{ local_id: string; server_id: number | null }[]>(
+    `SELECT local_id, server_id FROM projects WHERE server_id IS NOT NULL AND deleted = 0`,
+  );
+  let total = 0;
+  for (const p of projectRows) {
+    if (p.server_id == null) continue;
+    total += await pullViewsForProject(p.server_id, p.local_id, client);
+  }
+  await stampSyncState('views_synced_at');
+  return total;
+}
+
+/**
+ * Pull views + (kanban) buckets for one project, resolving the server id
+ * from the local id. Used as the on-open refresh in `useProjectViews`
+ * (mirrors how `useProjectTasks` calls `pullTasksForProject`). Returns the
+ * number of views pulled; 0 for a local-only project (no server id yet).
+ */
+export async function pullViewsForProjectLocal(
+  projectLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ server_id: number | null }[]>(
+    `SELECT server_id FROM projects WHERE local_id = ? AND deleted = 0 LIMIT 1`,
+    [projectLocalId],
+  );
+  const projectServerId = rows[0]?.server_id;
+  if (projectServerId == null) return 0;
+
+  const count = await pullViewsForProject(projectServerId, projectLocalId, client);
+
+  // Pull buckets for any kanban views we just synced, so the board has its
+  // columns the moment the user switches to it.
+  const kanbanViews = await db.select<{ local_id: string; server_id: number | null }[]>(
+    `SELECT local_id, server_id FROM project_views
+      WHERE project_local_id = ? AND view_kind = 'kanban'
+        AND deleted = 0 AND server_id IS NOT NULL`,
+    [projectLocalId],
+  );
+  for (const v of kanbanViews) {
+    if (v.server_id == null) continue;
+    try {
+      await pullBucketsForView(projectServerId, v.server_id, v.local_id, client);
+    } catch (err) {
+      console.warn('[pullViewsForProjectLocal] bucket pull failed:', err);
+    }
+  }
+
+  return count;
+}
+
+/**
+ * Pull views for a single project from the server and replace the local
+ * view list.
+ */
+export async function pullViewsForProject(
+  projectServerId: number,
+  projectLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const { data, response } = await client.GET(
+    '/projects/{project}/views',
+    { params: { path: { project: projectServerId } } },
+  );
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(
+      `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+    );
+  }
+  const batch = data ?? [];
+  const valid: ViewResponse[] = [];
+  for (const raw of batch) {
+    const parsed = viewResponseSchema.safeParse(raw);
+    if (parsed.success) valid.push(parsed.data);
+    else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
+  }
+  await replaceViewsForProjectFromServer(projectLocalId, valid);
+  return valid.length;
+}
+
+/**
+ * Pull buckets for every kanban view across all projects.
+ */
+export async function pullAllBuckets(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const db = await getDb();
+  const views = await db.select<{ local_id: string; server_id: number | null }[]>(
+    `SELECT pv.local_id, pv.server_id
+       FROM project_views pv
+       JOIN projects p ON p.local_id = pv.project_local_id
+      WHERE pv.view_kind = 'kanban'
+        AND pv.deleted = 0
+        AND pv.server_id IS NOT NULL
+        AND p.server_id IS NOT NULL`,
+  );
+  let total = 0;
+  for (const v of views) {
+    if (v.server_id == null) continue;
+    const projectRows = await db.select<{ server_id: number | null }[]>(
+      `SELECT p.server_id
+         FROM project_views pv
+         JOIN projects p ON p.local_id = pv.project_local_id
+        WHERE pv.local_id = ?`,
+      [v.local_id],
+    );
+    const projectServerId = projectRows[0]?.server_id;
+    if (projectServerId == null) continue;
+    total += await pullBucketsForView(projectServerId, v.server_id, v.local_id, client);
+  }
+  await stampSyncState('buckets_synced_at');
+  return total;
+}
+
+/**
+ * Fetch buckets for a kanban view from the server and replace the local
+ * bucket list. Silent — no notify().
+ */
+async function pullBucketsForView(
+  projectServerId: number,
+  viewServerId: number,
+  viewLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  const { data, response } = await client.GET(
+    '/projects/{id}/views/{view}/buckets',
+    { params: { path: { id: projectServerId, view: viewServerId } } },
+  );
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(
+      `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+    );
+  }
+  const batch = data ?? [];
+  const valid: BucketResponse[] = [];
+  for (const raw of batch) {
+    const parsed = bucketResponseSchema.safeParse(raw);
+    if (parsed.success) valid.push(parsed.data);
+    else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
+  }
+  await replaceBucketsForViewFromServer(viewLocalId, valid);
+  return valid.length;
+}
+
 async function stampSyncState(
-  column: 'projects_synced_at' | 'tasks_synced_at' | 'labels_synced_at',
+  column: 'projects_synced_at' | 'tasks_synced_at' | 'labels_synced_at' | 'views_synced_at' | 'buckets_synced_at',
 ): Promise<void> {
   const now = new Date().toISOString();
   await exec(`UPDATE sync_state SET ${column} = ? WHERE id = 1`, [now]);

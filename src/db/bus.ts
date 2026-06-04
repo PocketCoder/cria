@@ -17,6 +17,8 @@ export type Topic =
   | 'user'
   | 'tasks'
   | 'projects'
+  | 'views'
+  | 'buckets'
   | 'labels'
   | 'task_labels'
   | 'task_assignees'

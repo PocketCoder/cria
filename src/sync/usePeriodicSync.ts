@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
-import { pullProjects, pullLabels, pullAllTasks } from './pull';
+import { pullProjects, pullLabels, pullAllTasks, pullAllViews, pullAllBuckets } from './pull';
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
+import { notify } from '@/db/bus';
 
 const INTERVAL_MS = 60_000;
 
@@ -46,6 +47,15 @@ export function usePeriodicSync() {
         await pullAllTasks();
       } catch (err) {
         console.warn('[periodic-sync] all-tasks pull failed:', err);
+      }
+      try {
+        // Views + kanban buckets. Silent upserts, so notify('views')
+        // afterwards to refresh any open ViewSwitcher / board.
+        await pullAllViews();
+        await pullAllBuckets();
+        notify('views');
+      } catch (err) {
+        console.warn('[periodic-sync] views/buckets pull failed:', err);
       }
     };
 

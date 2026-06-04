@@ -7,7 +7,7 @@ import { persist } from 'zustand/middleware';
  * switch exhaustively.
  */
 export type ActiveView =
-  | { kind: 'project'; localId: string }
+  | { kind: 'project'; localId: string; viewLocalId?: string }
   | { kind: 'today' }
   | { kind: 'upcoming' }
   | { kind: 'label'; localId: string }

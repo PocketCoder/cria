@@ -33,7 +33,7 @@ import { getDb, exec, type Database } from './index';
 
 /** Which top-level entity is being merged. Drives the table name +
  * the value stored in `conflicts.entity_type`. */
-export type SyncEntity = 'project' | 'task' | 'label';
+export type SyncEntity = 'project' | 'task' | 'label' | 'view' | 'bucket';
 
 /** Builds the SQL + params for the INSERT/UPDATE statements. Called
  * with the resolved `localId` and the JSON-stringified remote payload
@@ -63,6 +63,8 @@ const TABLE: Record<SyncEntity, string> = {
   project: 'projects',
   task: 'tasks',
   label: 'labels',
+  view: 'project_views',
+  bucket: 'buckets',
 };
 
 const DEFAULT_CONFLICT_FIELDS: readonly string[] = ['title', 'description'];

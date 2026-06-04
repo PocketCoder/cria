@@ -19,6 +19,9 @@
     "generate:api": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v1/docs.json -o /tmp/vikunja-swagger.json && npx -y swagger2openapi@7 /tmp/vikunja-swagger.json -o /tmp/vikunja-openapi.json && openapi-typescript /tmp/vikunja-openapi.json -o src/api/schema.ts'"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-dialog": "^1.1.2",
     "@radix-ui/react-label": "^2.1.0",
