@@ -811,6 +811,8 @@ interface ViewRow {
   view_kind: string;
   position: number | null;
   bucket_configuration_mode: string;
+  done_bucket_server_id: number | null;
+  default_bucket_server_id: number | null;
   deleted: number;
 }
 
@@ -823,6 +825,9 @@ function viewBody(row: ViewRow): Record<string, unknown> {
     view_kind: row.view_kind as ViewKindLiteral,
     ...(row.position != null ? { position: row.position } : {}),
     bucket_configuration_mode: row.bucket_configuration_mode as BucketModeLiteral,
+    // Vikunja uses 0 for "no done/default bucket".
+    done_bucket_id: row.done_bucket_server_id ?? 0,
+    default_bucket_id: row.default_bucket_server_id ?? 0,
   };
 }
 
@@ -834,7 +839,8 @@ async function executeViewOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ViewRow[]>(
     `SELECT local_id, server_id, project_local_id, title, view_kind,
-            position, bucket_configuration_mode, deleted
+            position, bucket_configuration_mode,
+            done_bucket_server_id, default_bucket_server_id, deleted
        FROM project_views WHERE local_id = ? LIMIT 1`,
     [localId],
   );

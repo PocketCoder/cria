@@ -19,6 +19,10 @@ export type ViewUpdate = Partial<{
   filter: string | null;
   bucketConfigurationMode: BucketConfigMode;
   bucketConfiguration: string | null;
+  /** Server id of the bucket tasks are marked done in (null = none). */
+  doneBucketServerId: number | null;
+  /** Server id of the bucket new/unbucketed tasks land in (null = leftmost). */
+  defaultBucketServerId: number | null;
 }>;
 
 interface ViewRow {
@@ -381,6 +385,14 @@ export async function updateView(
   if (input.bucketConfiguration !== undefined) {
     sets.push('bucket_configuration = ?');
     params.push(input.bucketConfiguration);
+  }
+  if (input.doneBucketServerId !== undefined) {
+    sets.push('done_bucket_server_id = ?');
+    params.push(input.doneBucketServerId);
+  }
+  if (input.defaultBucketServerId !== undefined) {
+    sets.push('default_bucket_server_id = ?');
+    params.push(input.defaultBucketServerId);
   }
 
   if (sets.length > 0) {

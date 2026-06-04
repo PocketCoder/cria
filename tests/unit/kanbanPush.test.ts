@@ -14,6 +14,7 @@ import {
   listBucketsForView,
   listBucketAssignmentsForView,
 } from '@/db/buckets';
+import { updateView, listViewsForProject } from '@/db/views';
 import { drainOutbox } from '@/sync/push';
 import type { ApiClient } from '@/api/client';
 
@@ -192,5 +193,31 @@ describe('kanban outbox push', () => {
     expect(titles).toEqual(['Local', 'Server']);
     // The dirty local bucket is untouched.
     expect(buckets.find((b) => b.localId === local.localId)?.title).toBe('Local');
+  });
+
+  it('updateView sets the done bucket and pushes done_bucket_id', async () => {
+    const projectLocalId = await seedProject(8);
+    await seedKanbanView({ localId: 'v8', serverId: 80, projectLocalId });
+    const db = await getDb();
+    await db.execute(
+      `INSERT INTO buckets (local_id, server_id, view_local_id, title, position, task_limit, updated_at, dirty, deleted)
+       VALUES ('b8', 808, 'v8', 'Done', 0, 0, ?, 0, 0)`,
+      [NOW],
+    );
+
+    await updateView('v8', { doneBucketServerId: 808 });
+
+    // Persisted locally…
+    const view = (await listViewsForProject(projectLocalId)).find((v) => v.localId === 'v8');
+    expect(view?.doneBucketServerId).toBe(808);
+
+    // …and pushed to the view-update endpoint with the Vikunja field names.
+    const records: Recorded[] = [];
+    await drainOutbox(recordingClient(records));
+    const post = records.find(
+      (r) => r.method === 'POST' && r.url === '/projects/{project}/views/{id}',
+    );
+    expect(post?.params?.path).toEqual({ project: 8, id: 80 });
+    expect(post?.body).toMatchObject({ done_bucket_id: 808, default_bucket_id: 0 });
   });
 });

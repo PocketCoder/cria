@@ -15,11 +15,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
 import { createTask } from '@/db/tasks';
 import { setTaskBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
+import { updateView } from '@/db/views';
 import { useUi } from '@/stores/ui';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import { applyLabelsByTitle } from '@/db/labels';
 import { cn } from '@/lib/cn';
-import { Plus, Trash2, ChevronDown, ChevronRight, MoreHorizontal, Pencil, X, Check } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, MoreHorizontal, Pencil, X, Check, Gauge, Flag } from 'lucide-react';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import type { Project } from '@/domain/project';
@@ -145,7 +146,7 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
               column={col}
               collapsed={collapsed.has(col.bucket.localId)}
               onToggleCollapse={() => handleCollapse(col.bucket.localId)}
-              viewLocalId={view.localId}
+              view={view}
               projectLocalId={view.projectLocalId}
             />
           ))}
@@ -169,19 +170,28 @@ interface ColumnProps {
   column: KanbanColumn;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  viewLocalId: string;
+  view: ProjectView;
   projectLocalId: string;
 }
 
-function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projectLocalId }: ColumnProps) {
+function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalId }: ColumnProps) {
   const { bucket, tasks } = column;
+  const viewLocalId = view.localId;
   const [showNewInput, setShowNewInput] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState(bucket.title);
   const [showMenu, setShowMenu] = useState(false);
+  const [showLimitInput, setShowLimitInput] = useState(false);
+  const [limitDraft, setLimitDraft] = useState(String(bucket.limit || 0));
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const isDoneBucket =
+    bucket.serverId != null && view.doneBucketServerId === bucket.serverId;
+  const isDefaultBucket =
+    bucket.serverId != null && view.defaultBucketServerId === bucket.serverId;
+  const atLimit = bucket.limit > 0 && tasks.length >= bucket.limit;
 
   const { setNodeRef, isOver } = useDroppable({
     id: bucket.localId,
@@ -200,6 +210,7 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
   }, [showMenu]);
 
   const handleAddTask = async () => {
+    if (atLimit) return;
     const trimmed = newTitle.trim();
     if (!trimmed) return;
     const parsed = parseQuickAdd(trimmed);
@@ -229,6 +240,45 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
       await deleteBucket(bucket.localId);
     } catch (err) {
       console.error('[kanban] failed to delete bucket:', err);
+    }
+    setShowMenu(false);
+  };
+
+  const handleSetLimit = async () => {
+    const n = Math.max(0, parseInt(limitDraft, 10) || 0);
+    if (n !== bucket.limit) {
+      try {
+        await updateBucket(bucket.localId, { limit: n });
+      } catch (err) {
+        console.error('[kanban] failed to set bucket limit:', err);
+      }
+    }
+    setShowLimitInput(false);
+    setShowMenu(false);
+  };
+
+  // Done / default bucket are stored on the *view* (by bucket server id), so
+  // an unsynced bucket (no server id yet) can't be set until it syncs.
+  const toggleDoneBucket = async () => {
+    if (bucket.serverId == null) return;
+    try {
+      await updateView(view.localId, {
+        doneBucketServerId: isDoneBucket ? null : bucket.serverId,
+      });
+    } catch (err) {
+      console.error('[kanban] failed to toggle done bucket:', err);
+    }
+    setShowMenu(false);
+  };
+
+  const toggleDefaultBucket = async () => {
+    if (bucket.serverId == null) return;
+    try {
+      await updateView(view.localId, {
+        defaultBucketServerId: isDefaultBucket ? null : bucket.serverId,
+      });
+    } catch (err) {
+      console.error('[kanban] failed to toggle default bucket:', err);
     }
     setShowMenu(false);
   };
@@ -285,8 +335,21 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
           ) : (
             <span className="truncate text-xs font-medium">{bucket.title}</span>
           )}
-          <span className="ml-auto text-[10px] text-[var(--color-muted-foreground)] tabular-nums">
-            {tasks.length}
+          {isDoneBucket ? (
+            <Check className="h-3 w-3 shrink-0 text-[var(--color-primary)]" aria-label="Done bucket" />
+          ) : null}
+          {isDefaultBucket ? (
+            <Flag className="h-3 w-3 shrink-0 text-[var(--color-primary)]" aria-label="Default bucket" />
+          ) : null}
+          <span
+            className={cn(
+              'ml-auto shrink-0 text-[10px] tabular-nums',
+              atLimit
+                ? 'font-medium text-[var(--color-warning)]'
+                : 'text-[var(--color-muted-foreground)]',
+            )}
+          >
+            {bucket.limit > 0 ? `${tasks.length}/${bucket.limit}` : tasks.length}
           </span>
         </div>
         <div className="relative">
@@ -299,7 +362,7 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
           {showMenu && (
             <div
               ref={menuRef}
-              className="absolute right-0 top-6 z-10 w-36 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] py-1 shadow-lg"
+              className="absolute right-0 top-6 z-10 w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] py-1 shadow-lg"
             >
               <button
                 onClick={() => { setRenaming(true); setShowMenu(false); }}
@@ -307,6 +370,58 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
               >
                 <Pencil className="h-3 w-3" /> Rename
               </button>
+
+              {showLimitInput ? (
+                <div className="flex items-center gap-1 px-3 py-1.5">
+                  <Gauge className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
+                  <input
+                    type="number"
+                    min={0}
+                    autoFocus
+                    value={limitDraft}
+                    onChange={(e) => setLimitDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); void handleSetLimit(); }
+                      else if (e.key === 'Escape') setShowLimitInput(false);
+                    }}
+                    className="w-14 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                  />
+                  <button
+                    onClick={() => void handleSetLimit()}
+                    className="cursor-pointer rounded p-0.5 text-[var(--color-primary)]"
+                    aria-label="Save limit"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setLimitDraft(String(bucket.limit || 0)); setShowLimitInput(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--color-accent)]/10 cursor-pointer"
+                >
+                  <Gauge className="h-3 w-3" /> {bucket.limit > 0 ? `Limit: ${bucket.limit}` : 'Set limit'}
+                </button>
+              )}
+
+              <button
+                onClick={toggleDoneBucket}
+                disabled={bucket.serverId == null}
+                title={bucket.serverId == null ? 'Sync the bucket first' : undefined}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--color-accent)]/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Check className={cn('h-3 w-3', isDoneBucket ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]')} />
+                {isDoneBucket ? 'Done bucket ✓' : 'Set as done bucket'}
+              </button>
+              <button
+                onClick={toggleDefaultBucket}
+                disabled={bucket.serverId == null}
+                title={bucket.serverId == null ? 'Sync the bucket first' : undefined}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--color-accent)]/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Flag className={cn('h-3 w-3', isDefaultBucket ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]')} />
+                {isDefaultBucket ? 'Default bucket ✓' : 'Set as default bucket'}
+              </button>
+
               <button
                 onClick={handleDeleteBucket}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--color-warning)] hover:bg-[var(--color-accent)]/10 cursor-pointer"
@@ -334,7 +449,11 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projec
 
           {/* Add task input */}
           <div className="border-t border-[var(--color-border)] px-2 py-2">
-            {showNewInput ? (
+            {atLimit ? (
+              <p className="px-2 py-1 text-center text-[11px] text-[var(--color-muted-foreground)]">
+                Bucket full ({tasks.length}/{bucket.limit})
+              </p>
+            ) : showNewInput ? (
               <div className="flex items-center gap-1">
                 <input
                   value={newTitle}
