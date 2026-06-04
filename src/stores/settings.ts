@@ -21,6 +21,10 @@ interface SettingsState {
   setTimeFormat: (fmt: TimeFormat) => void;
   trayIconEnabled: boolean;
   setTrayIconEnabled: (enabled: boolean) => void;
+  closeToTray: boolean;
+  setCloseToTray: (enabled: boolean) => void;
+  hideDockOnTray: boolean;
+  setHideDockOnTray: (enabled: boolean) => void;
   playSoundWhenDone: boolean;
   setPlaySoundWhenDone: (enabled: boolean) => void;
 }
@@ -38,6 +42,10 @@ export const useSettings = create<SettingsState>()(
       setTimeFormat: (fmt) => set({ timeFormat: fmt }),
       trayIconEnabled: true,
       setTrayIconEnabled: (enabled) => set({ trayIconEnabled: enabled }),
+      closeToTray: true,
+      setCloseToTray: (enabled) => set({ closeToTray: enabled }),
+      hideDockOnTray: false,
+      setHideDockOnTray: (enabled) => set({ hideDockOnTray: enabled }),
       playSoundWhenDone: false,
       setPlaySoundWhenDone: (enabled) => set({ playSoundWhenDone: enabled }),
     }),

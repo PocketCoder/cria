@@ -71,6 +71,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setDateFormat = useSettings((s) => s.setDateFormat);
   const trayIconEnabled = useSettings((s) => s.trayIconEnabled);
   const setTrayIconEnabledInStore = useSettings((s) => s.setTrayIconEnabled);
+  const closeToTray = useSettings((s) => s.closeToTray);
+  const setCloseToTrayInStore = useSettings((s) => s.setCloseToTray);
+  const hideDockOnTray = useSettings((s) => s.hideDockOnTray);
+  const setHideDockOnTrayInStore = useSettings((s) => s.setHideDockOnTray);
   const timeFormat = useSettings((s) => s.timeFormat);
   const setTimeFormat = useSettings((s) => s.setTimeFormat);
   const playSoundWhenDone = useSettings((s) => s.playSoundWhenDone);
@@ -460,6 +464,60 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     />
                   </button>
                 </div>
+                {trayIconEnabled && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <Label>Close to tray</Label>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={closeToTray}
+                        onClick={() => {
+                          const newVal = !closeToTray;
+                          setCloseToTrayInStore(newVal);
+                          void invoke('set_close_to_tray', { enabled: newVal });
+                        }}
+                        className={cn(
+                          'relative h-5 w-9 rounded-full transition-colors',
+                          closeToTray ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                            closeToTray && 'translate-x-4',
+                          )}
+                        />
+                      </button>
+                    </div>
+                    {closeToTray && (
+                      <div className="flex items-center justify-between">
+                        <Label>Hide dock icon when closed</Label>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={hideDockOnTray}
+                          onClick={() => {
+                            const newVal = !hideDockOnTray;
+                            setHideDockOnTrayInStore(newVal);
+                            void invoke('set_hide_dock_on_tray', { enabled: newVal });
+                          }}
+                          className={cn(
+                            'relative h-5 w-9 rounded-full transition-colors',
+                            hideDockOnTray ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                              hideDockOnTray && 'translate-x-4',
+                            )}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="flex items-center justify-between">
                   <Label>CalDAV Documentation</Label>
                   <button

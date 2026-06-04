@@ -1,9 +1,10 @@
 mod tx;
 
+use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{TrayIconBuilder, TrayIconId},
-    Emitter, Manager,
+    Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -84,10 +85,39 @@ fn set_tray_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> 
     Ok(())
 }
 
+struct AppState {
+    close_to_tray: Mutex<bool>,
+    hide_dock_on_tray: Mutex<bool>,
+}
+
+#[tauri::command]
+fn set_close_to_tray(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    *state.close_to_tray.lock().map_err(|e| e.to_string())? = enabled;
+    Ok(())
+}
+
+#[tauri::command]
+fn set_hide_dock_on_tray(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    *state.hide_dock_on_tray.lock().map_err(|e| e.to_string())? = enabled;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn restore_dock() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+    let mtm = MainThreadMarker::new()
+        .expect("restore_dock must be called on the main thread");
+    NSApplication::sharedApplication(mtm)
+        .setActivationPolicy(NSApplicationActivationPolicy::Regular);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            #[cfg(target_os = "macos")]
+            restore_dock();
             use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
@@ -123,7 +153,30 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let state = window.state::<AppState>();
+                if *state.close_to_tray.lock().unwrap() {
+                    #[cfg(target_os = "macos")]
+                    if *state.hide_dock_on_tray.lock().unwrap() {
+                        let mtm = objc2::MainThreadMarker::new()
+                            .expect("on_window_event runs on the main thread");
+                        objc2_app_kit::NSApplication::sharedApplication(mtm)
+                            .setActivationPolicy(
+                                objc2_app_kit::NSApplicationActivationPolicy::Accessory,
+                            );
+                    }
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|app| {
+            app.manage(AppState {
+                close_to_tray: Mutex::new(true),
+                hide_dock_on_tray: Mutex::new(false),
+            });
+
             let show = MenuItemBuilder::with_id("show", "Show Cria").build(app)?;
             let quick_add = MenuItemBuilder::with_id("quick_add", "Quick Add...").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Cria").build(app)?;
@@ -142,6 +195,8 @@ pub fn run() {
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "show" => {
+                            #[cfg(target_os = "macos")]
+                            restore_dock();
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -149,6 +204,8 @@ pub fn run() {
                             }
                         }
                         "quick_add" => {
+                            #[cfg(target_os = "macos")]
+                            restore_dock();
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -163,6 +220,8 @@ pub fn run() {
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                        #[cfg(target_os = "macos")]
+                        restore_dock();
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
@@ -175,7 +234,12 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![tx::execute_tx, set_tray_visible])
+        .invoke_handler(tauri::generate_handler![
+            tx::execute_tx,
+            set_tray_visible,
+            set_close_to_tray,
+            set_hide_dock_on_tray,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
