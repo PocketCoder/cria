@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -13,6 +13,15 @@ import {
 } from '@dnd-kit/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
+import { useProjectTaskLabels } from '@/queries/taskLabels';
+import { KanbanFilterPopup } from './KanbanFilterPopup';
+import {
+  type BoardFilter,
+  isBoardFilterActive,
+  taskMatchesBoardFilter,
+  loadBoardFilter,
+  saveBoardFilter,
+} from './boardFilter';
 import { createTask } from '@/db/tasks';
 import { setTaskBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
 import { updateView } from '@/db/views';
@@ -27,6 +36,9 @@ import type { Project } from '@/domain/project';
 import type { TaskBucket } from '@/domain/bucket';
 
 const COLLAPSED_KEY = 'cria:kanbanCollapsed';
+/** Stable empty map so the default from useProjectTaskLabels doesn't change
+ * identity each render (which would bust the filter memo). */
+const EMPTY_LABEL_MAP: Map<string, string[]> = new Map();
 
 interface KanbanBoardProps {
   view: ProjectView;
@@ -34,10 +46,31 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ view, project }: KanbanBoardProps) {
-  const { columns, isLoading, isError, error } = useKanbanBoard(view, project);
+  const { columns: rawColumns, isLoading, isError, error } = useKanbanBoard(view, project);
+  const { data: labelMap = EMPTY_LABEL_MAP } = useProjectTaskLabels(view.projectLocalId);
   const queryClient = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<BoardFilter>(() => loadBoardFilter(view.localId));
+  const updateFilter = useCallback(
+    (next: BoardFilter) => {
+      setFilter(next);
+      saveBoardFilter(view.localId, next);
+    },
+    [view.localId],
+  );
+
+  // Apply the board filter client-side to each column's tasks.
+  const columns = useMemo(() => {
+    if (!isBoardFilterActive(filter)) return rawColumns;
+    return rawColumns.map((c) => ({
+      ...c,
+      tasks: c.tasks.filter((t) =>
+        taskMatchesBoardFilter(t, filter, labelMap.get(t.localId) ?? []),
+      ),
+    }));
+  }, [rawColumns, filter, labelMap]);
+
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem(`${COLLAPSED_KEY}:${view.localId}`);
@@ -132,34 +165,39 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
   const activeTask = activeId ? findTaskInColumns(activeId, columns) : null;
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 overflow-x-auto">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex h-full gap-4 px-6 py-4">
-          {columns.map((col) => (
-            <KanbanColumn
-              key={col.bucket.localId}
-              column={col}
-              collapsed={collapsed.has(col.bucket.localId)}
-              onToggleCollapse={() => handleCollapse(col.bucket.localId)}
-              view={view}
-              projectLocalId={view.projectLocalId}
-            />
-          ))}
-          <AddBucketColumn viewLocalId={view.localId} />
-        </div>
-        <DragOverlay>
-          {activeTask ? (
-            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 shadow-lg opacity-90 max-w-60">
-              <p className="text-sm font-medium truncate">{activeTask.title}</p>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex items-center justify-end border-b border-[var(--color-border)] px-6 py-1.5">
+        <KanbanFilterPopup filter={filter} onChange={updateFilter} />
+      </div>
+      <div className="flex min-h-0 flex-1 overflow-x-auto">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex h-full gap-4 px-6 py-4">
+            {columns.map((col) => (
+              <KanbanColumn
+                key={col.bucket.localId}
+                column={col}
+                collapsed={collapsed.has(col.bucket.localId)}
+                onToggleCollapse={() => handleCollapse(col.bucket.localId)}
+                view={view}
+                projectLocalId={view.projectLocalId}
+              />
+            ))}
+            <AddBucketColumn viewLocalId={view.localId} />
+          </div>
+          <DragOverlay>
+            {activeTask ? (
+              <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 shadow-lg opacity-90 max-w-60">
+                <p className="text-sm font-medium truncate">{activeTask.title}</p>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
     </section>
   );
 }

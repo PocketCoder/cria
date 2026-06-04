@@ -1,8 +1,36 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listLabelsForTask } from '@/db/labels';
+import { listLabelsForTask, listTaskLabelLinksForProject } from '@/db/labels';
 import { subscribe } from '@/db/bus';
 import type { Label } from '@/domain/label';
+
+/**
+ * Map of task→label-ids across a whole project, for the kanban filter.
+ * Refreshes on `tasks` (pull mirrors labels inline) and `task_labels`
+ * (local add/remove).
+ */
+export function useProjectTaskLabels(projectLocalId: string) {
+  const queryClient = useQueryClient();
+  const key = ['project-task-labels', projectLocalId] as const;
+
+  useEffect(() => {
+    const inval = () => void queryClient.invalidateQueries({ queryKey: key });
+    const a = subscribe('tasks', inval);
+    const b = subscribe('task_labels', inval);
+    return () => {
+      a();
+      b();
+    };
+  }, [queryClient, projectLocalId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return useQuery<Map<string, string[]>>({
+    queryKey: key,
+    queryFn: () => listTaskLabelLinksForProject(projectLocalId),
+    enabled: projectLocalId !== '',
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+}
 
 /**
  * Returns the labels currently attached to a task. Re-runs on:
