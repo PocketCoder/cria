@@ -15,9 +15,12 @@ import {
   DEFAULT_SPAN_DAYS,
 } from './constants';
 import type { GanttFilters } from './useGanttFilters';
+import { GanttRelationArrows, type BarGeometry } from './GanttRelationArrows';
+import type { GanttRelationEdge } from '@/db/relations';
 
 interface GanttChartProps {
   nodes: GanttTaskNode[];
+  relations: GanttRelationEdge[];
   filters: GanttFilters;
   projectColor: string | null;
   onUpdateDates: (taskLocalId: string, startIso: string, endIso: string) => void;
@@ -51,6 +54,7 @@ function normalizeColor(hex: string | null): string | null {
 
 export function GanttChart({
   nodes,
+  relations,
   filters,
   projectColor,
   onUpdateDates,
@@ -203,12 +207,76 @@ export function GanttChart({
     return groups;
   }, [lo, totalDays]);
 
+  // Keyboard nudging on a focused bar: ←/→ move a day, Shift+←/→ resize the
+  // end, Ctrl/⌘+←/→ resize the start. Skipped for dateless placeholders.
+  const handleKeyNudge = (node: GanttTaskNode, e: React.KeyboardEvent) => {
+    const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (dir === 0) return;
+    const r = resolveBarDays(node);
+    if (r.dateless) return;
+    e.preventDefault();
+    let ns = r.start;
+    let ne = r.end;
+    if (e.shiftKey) ne = Math.max(r.start, r.end + dir);
+    else if (e.metaKey || e.ctrlKey) ns = Math.min(r.end, r.start + dir);
+    else {
+      ns = r.start + dir;
+      ne = r.end + dir;
+    }
+    if (ns !== r.start || ne !== r.end) {
+      onUpdateDates(node.task.localId, dayToIso(ns), dayToIso(ne));
+    }
+  };
+
   const gridBackground = `repeating-linear-gradient(to right, transparent 0, transparent ${
     DAY_WIDTH_PIXELS - 1
   }px, var(--color-border) ${DAY_WIDTH_PIXELS - 1}px, var(--color-border) ${DAY_WIDTH_PIXELS}px)`;
 
   const todayInRange = today >= lo && today <= hi;
   const baseColor = normalizeColor(projectColor) ?? 'var(--color-primary)';
+
+  // Resolve each visible row's bar geometry once, so the bars and the
+  // relation-arrow overlay share the same coordinates (and arrows follow a
+  // bar while it's being dragged).
+  const placements = visible.map((node, index) => {
+    const resolved = resolveBarDays(node);
+    let s = resolved.start;
+    let e = resolved.end;
+    if (drag && drag.taskLocalId === node.task.localId) {
+      const p = applyDrag(drag);
+      s = p.start;
+      e = p.end;
+    }
+    const rawX = (s - lo) * DAY_WIDTH_PIXELS;
+    const rawW = (e - s + 1) * DAY_WIDTH_PIXELS;
+    const left = Math.max(0, rawX);
+    const right = Math.min(chartWidth, rawX + rawW);
+    const width = Math.max(4, right - left);
+    const top = index * ROW_HEIGHT + 8;
+    const height = ROW_HEIGHT - 16;
+    return {
+      node,
+      resolved,
+      left,
+      width,
+      top,
+      height,
+      color: normalizeColor(node.task.hexColor) ?? baseColor,
+      isPlaceholder: resolved.dateless || node.hasDerivedDates,
+      label: `${dayToUtcDate(s).toISOString().slice(0, 10)} → ${dayToUtcDate(e)
+        .toISOString()
+        .slice(0, 10)}`,
+    };
+  });
+
+  const geometry = new Map<string, BarGeometry>();
+  for (const p of placements) {
+    geometry.set(p.node.task.localId, {
+      left: p.left,
+      right: p.left + p.width,
+      cy: p.top + p.height / 2,
+    });
+  }
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -320,74 +388,61 @@ export function GanttChart({
               />
             ) : null}
 
-            {visible.map((node, index) => {
-              const resolved = resolveBarDays(node);
-              let s = resolved.start;
-              let e = resolved.end;
-              if (drag && drag.taskLocalId === node.task.localId) {
-                const p = applyDrag(drag);
-                s = p.start;
-                e = p.end;
-              }
-              const rawX = (s - lo) * DAY_WIDTH_PIXELS;
-              const rawW = (e - s + 1) * DAY_WIDTH_PIXELS;
-              const left = Math.max(0, rawX);
-              const right = Math.min(chartWidth, rawX + rawW);
-              const width = Math.max(4, right - left);
-              const top = index * ROW_HEIGHT + 8;
-              const height = ROW_HEIGHT - 16;
-              const color = normalizeColor(node.task.hexColor) ?? baseColor;
-              const isPlaceholder = resolved.dateless || node.hasDerivedDates;
+            {/* Dependency arrows sit under the bars so bar drags stay hittable. */}
+            <GanttRelationArrows
+              relations={relations}
+              geometry={geometry}
+              width={chartWidth}
+              height={bodyHeight}
+            />
 
-              return (
+            {placements.map(({ node, resolved, left, width, top, height, color, isPlaceholder, label }) => (
+              <div
+                key={node.task.localId}
+                role="button"
+                tabIndex={0}
+                onPointerDown={(ev) => startDrag(node, 'move', ev)}
+                onKeyDown={(ev) => handleKeyNudge(node, ev)}
+                style={{ left, width, top, height }}
+                className={cn(
+                  'group absolute flex items-center rounded-md',
+                  node.task.done && 'opacity-50',
+                  drag?.taskLocalId === node.task.localId ? 'cursor-grabbing' : 'cursor-grab',
+                )}
+              >
+                {/* Bar fill */}
                 <div
-                  key={node.task.localId}
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={(ev) => startDrag(node, 'move', ev)}
-                  style={{ left, width, top, height }}
                   className={cn(
-                    'group absolute flex items-center rounded-md',
-                    node.task.done && 'opacity-50',
-                    drag?.taskLocalId === node.task.localId ? 'cursor-grabbing' : 'cursor-grab',
+                    'h-full w-full rounded-md',
+                    isPlaceholder && 'border border-dashed',
                   )}
-                >
-                  {/* Bar fill */}
-                  <div
-                    className={cn(
-                      'h-full w-full rounded-md',
-                      isPlaceholder && 'border border-dashed',
-                    )}
-                    style={
-                      isPlaceholder
-                        ? {
-                            borderColor: color,
-                            background: `color-mix(in srgb, ${color} 18%, transparent)`,
-                          }
-                        : { background: color }
-                    }
-                    title={`${dayToUtcDate(s).toISOString().slice(0, 10)} → ${dayToUtcDate(e)
-                      .toISOString()
-                      .slice(0, 10)}`}
-                  />
-                  {/* Resize handles (not for dateless placeholders) */}
-                  {!resolved.dateless ? (
-                    <>
-                      <span
-                        onPointerDown={(ev) => startDrag(node, 'resize-start', ev)}
-                        className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md opacity-0 group-hover:opacity-100"
-                        style={{ background: 'rgba(0,0,0,0.25)' }}
-                      />
-                      <span
-                        onPointerDown={(ev) => startDrag(node, 'resize-end', ev)}
-                        className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md opacity-0 group-hover:opacity-100"
-                        style={{ background: 'rgba(0,0,0,0.25)' }}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              );
-            })}
+                  style={
+                    isPlaceholder
+                      ? {
+                          borderColor: color,
+                          background: `color-mix(in srgb, ${color} 18%, transparent)`,
+                        }
+                      : { background: color }
+                  }
+                  title={label}
+                />
+                {/* Resize handles (not for dateless placeholders) */}
+                {!resolved.dateless ? (
+                  <>
+                    <span
+                      onPointerDown={(ev) => startDrag(node, 'resize-start', ev)}
+                      className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md opacity-0 group-hover:opacity-100"
+                      style={{ background: 'rgba(0,0,0,0.25)' }}
+                    />
+                    <span
+                      onPointerDown={(ev) => startDrag(node, 'resize-end', ev)}
+                      className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md opacity-0 group-hover:opacity-100"
+                      style={{ background: 'rgba(0,0,0,0.25)' }}
+                    />
+                  </>
+                ) : null}
+              </div>
+            ))}
           </div>
         </div>
       </div>

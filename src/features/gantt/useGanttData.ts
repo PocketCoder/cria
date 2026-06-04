@@ -2,7 +2,11 @@ import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProjectTasks } from '@/queries/tasks';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
-import { listSubtaskRelationsForProject } from '@/db/relations';
+import {
+  listSubtaskRelationsForProject,
+  listGanttRelationsForProject,
+  type GanttRelationEdge,
+} from '@/db/relations';
 import { subscribe } from '@/db/bus';
 import { buildGanttTaskTree, type GanttTaskNode } from './buildGanttTaskTree';
 import type { Project } from '@/domain/project';
@@ -14,6 +18,7 @@ import type { Project } from '@/domain/project';
  */
 export function useGanttData(project: Project): {
   nodes: GanttTaskNode[];
+  relations: GanttRelationEdge[];
   isLoading: boolean;
   isFetching: boolean;
   isError: boolean;
@@ -30,12 +35,17 @@ export function useGanttData(project: Project): {
     staleTime: 30_000,
   });
 
+  const { data: relations = [] } = useQuery({
+    queryKey: ['gantt-relations', project.localId],
+    queryFn: () => listGanttRelationsForProject(project.localId),
+    staleTime: 30_000,
+  });
+
   useEffect(
     () =>
       subscribe('tasks', () => {
-        void queryClient.invalidateQueries({
-          queryKey: ['subtasks', project.localId],
-        });
+        void queryClient.invalidateQueries({ queryKey: ['subtasks', project.localId] });
+        void queryClient.invalidateQueries({ queryKey: ['gantt-relations', project.localId] });
       }),
     [queryClient, project.localId],
   );
@@ -45,5 +55,5 @@ export function useGanttData(project: Project): {
     return buildGanttTaskTree(visible, childMap);
   }, [tasks, childMap, pendingDeletes]);
 
-  return { nodes, isLoading, isFetching, isError, error };
+  return { nodes, relations, isLoading, isFetching, isError, error };
 }

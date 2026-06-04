@@ -13,15 +13,16 @@ interface GanttViewProps {
 }
 
 /**
- * Gantt view: date-range controls over an SVG-free, CSS-positioned timeline
- * chart. Reads the same local tasks as the list view; dragging a bar (or its
- * edges) writes start/end back through `updateTask`.
+ * Gantt view: date-range controls over a CSS-positioned timeline chart with
+ * an SVG dependency-arrow overlay. Reads the same local tasks as the list
+ * view; dragging a bar (or its edges), or nudging it with the arrow keys,
+ * writes start/end back through `updateTask`.
  *
- * Deferred from Vikunja's gantt (tracked for a follow-up): dependency
- * relation arrows and keyboard nudging.
+ * Remaining gap vs Vikunja: arrows whose endpoint is hidden under a collapsed
+ * parent are skipped rather than re-routed to the nearest visible ancestor.
  */
 export function GanttView({ project }: GanttViewProps) {
-  const { nodes, isLoading, isFetching, isError, error } = useGanttData(project);
+  const { nodes, relations, isLoading, isFetching, isError, error } = useGanttData(project);
   const { filters, setDateFrom, setDateTo, toggleDateless, reset } = useGanttFilters();
   const setSelectedTask = useUi((s) => s.setSelectedTask);
 
@@ -71,6 +72,7 @@ export function GanttView({ project }: GanttViewProps) {
       ) : (
         <GanttChart
           nodes={nodes}
+          relations={relations}
           filters={filters}
           projectColor={project.hexColor}
           onUpdateDates={handleUpdateDates}

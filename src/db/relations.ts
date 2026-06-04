@@ -219,6 +219,44 @@ export async function removeRelation(
   notify('outbox');
 }
 
+/** A dependency edge between two tasks, in canonical (source→target)
+ * direction, for drawing Gantt relation arrows. */
+export interface GanttRelationEdge {
+  fromLocalId: string;
+  toLocalId: string;
+  kind: 'blocking' | 'precedes';
+}
+
+/**
+ * Load the dependency edges within a project for the Gantt chart.
+ *
+ * Only the canonical kinds `blocking` and `precedes` are returned — their
+ * inverses (`blocked` / `follows`) are stored too but would draw the same
+ * edge backwards, so we skip them. `task_local_id` is the source (blocker /
+ * predecessor); `other_task_local_id` is the target.
+ */
+export async function listGanttRelationsForProject(
+  projectLocalId: string,
+): Promise<GanttRelationEdge[]> {
+  const db = await getDb();
+  const rows = await db.select<
+    { task_local_id: string; other_task_local_id: string; relation_kind: string }[]
+  >(
+    `SELECT r.task_local_id, r.other_task_local_id, r.relation_kind
+       FROM task_relations r
+       JOIN tasks t ON t.local_id = r.task_local_id
+      WHERE r.relation_kind IN ('blocking', 'precedes')
+        AND t.project_local_id = ?
+        AND t.deleted = 0`,
+    [projectLocalId],
+  );
+  return rows.map((r) => ({
+    fromLocalId: r.task_local_id,
+    toLocalId: r.other_task_local_id,
+    kind: r.relation_kind as 'blocking' | 'precedes',
+  }));
+}
+
 /** Load all subtask parent→child mappings within a project. */
 export async function listSubtaskRelationsForProject(
   projectLocalId: string,
