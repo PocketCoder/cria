@@ -11,6 +11,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
 import { createTask } from '@/db/tasks';
 import { setTaskBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
@@ -22,6 +23,7 @@ import { Plus, Trash2, ChevronDown, ChevronRight, MoreHorizontal, Pencil, X, Che
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import type { Project } from '@/domain/project';
+import type { TaskBucket } from '@/domain/bucket';
 
 const COLLAPSED_KEY = 'cria:kanbanCollapsed';
 
@@ -32,6 +34,7 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ view, project }: KanbanBoardProps) {
   const { columns, isLoading, isError, error } = useKanbanBoard(view, project);
+  const queryClient = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
@@ -77,15 +80,36 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
     // Find the task's current bucket in the column data
     const sourceColumn = findSourceColumn(taskId, columns);
     const sourceBucketId = sourceColumn?.bucket.localId;
+    if (sourceBucketId === targetBucketId) return;
 
-    if (sourceBucketId !== targetBucketId) {
-      try {
-        await setTaskBucket(taskId, view.localId, targetBucketId);
-      } catch (err) {
-        console.error('[kanban] failed to set task bucket:', err);
-      }
+    // Optimistically move the card in the cached board so it lands the
+    // instant you drop, rather than waiting on the DB write + refetch
+    // round-trip. setTaskBucket then persists; its notify('tasks')
+    // refetch reconciles (idempotent — same assignment).
+    queryClient.setQueryData(
+      ['kanban-buckets', view.localId],
+      (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
+        if (!old) return old;
+        const assignments = old.assignments.filter((a) => a.taskLocalId !== taskId);
+        assignments.push({
+          taskLocalId: taskId,
+          viewLocalId: view.localId,
+          bucketLocalId: targetBucketId,
+        });
+        return { ...old, assignments };
+      },
+    );
+
+    try {
+      await setTaskBucket(taskId, view.localId, targetBucketId);
+    } catch (err) {
+      console.error('[kanban] failed to set task bucket:', err);
+      // Roll back the optimistic move by re-reading the DB.
+      void queryClient.invalidateQueries({
+        queryKey: ['kanban-buckets', view.localId],
+      });
     }
-  }, [columns, view.localId]);
+  }, [columns, view.localId, queryClient]);
 
   if (!view || view.viewKind !== 'kanban') return null;
 
