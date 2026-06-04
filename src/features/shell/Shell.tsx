@@ -307,7 +307,7 @@ export function Shell() {
             <div className="flex min-h-0 min-w-0 flex-1">
               {currentView ? (
                 currentView.viewKind === 'kanban' ? (
-                  <KanbanBoard view={currentView} />
+                  <KanbanBoard view={currentView} project={project} />
                 ) : currentView.viewKind === 'table' ? (
                   <TableView project={project} />
                 ) : currentView.viewKind === 'gantt' ? (

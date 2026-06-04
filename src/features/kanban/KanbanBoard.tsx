@@ -21,15 +21,17 @@ import { cn } from '@/lib/cn';
 import { Plus, Trash2, ChevronDown, ChevronRight, MoreHorizontal, Pencil, X, Check } from 'lucide-react';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
+import type { Project } from '@/domain/project';
 
 const COLLAPSED_KEY = 'cria:kanbanCollapsed';
 
 interface KanbanBoardProps {
   view: ProjectView;
+  project: Project;
 }
 
-export function KanbanBoard({ view }: KanbanBoardProps) {
-  const { data: columns = [], isLoading, isError, error } = useKanbanBoard(view);
+export function KanbanBoard({ view, project }: KanbanBoardProps) {
+  const { columns, isLoading, isError, error } = useKanbanBoard(view, project);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
