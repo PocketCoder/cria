@@ -20,6 +20,7 @@ import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 import { ProjectHeader } from '@/features/projects/ProjectHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { KanbanBoard } from '@/features/kanban/KanbanBoard';
+import { TableView } from '@/features/table/TableView';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import {
   TodayView,
@@ -306,6 +307,8 @@ export function Shell() {
               {currentView ? (
                 currentView.viewKind === 'kanban' ? (
                   <KanbanBoard view={currentView} />
+                ) : currentView.viewKind === 'table' ? (
+                  <TableView project={project} />
                 ) : (
                   <TaskList project={project} />
                 )
