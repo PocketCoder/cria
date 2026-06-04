@@ -21,6 +21,7 @@ import { ProjectHeader } from '@/features/projects/ProjectHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { KanbanBoard } from '@/features/kanban/KanbanBoard';
 import { TableView } from '@/features/table/TableView';
+import { GanttView } from '@/features/gantt/GanttView';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import {
   TodayView,
@@ -309,6 +310,8 @@ export function Shell() {
                   <KanbanBoard view={currentView} />
                 ) : currentView.viewKind === 'table' ? (
                   <TableView project={project} />
+                ) : currentView.viewKind === 'gantt' ? (
+                  <GanttView project={project} />
                 ) : (
                   <TaskList project={project} />
                 )
