@@ -19,7 +19,7 @@ import type { Task } from '@/domain/task';
  * already hit the server and undo would have to re-create it. Deferring
  * the commit makes undo 100% reliable with no server round-trip.
  */
-const UNDO_WINDOW_MS = 20_000;
+const UNDO_WINDOW_MS = 15_000;
 
 // Timers aren't render state, so they live outside the store. Pinned to
 // globalThis so a Vite HMR reload of this module mid-window doesn't
@@ -34,8 +34,8 @@ declare global {
 const timers = (globalThis.__cria_pendingDeleteTimers__ ??= new Map());
 
 interface PendingDeletesState {
-  /** Tasks queued for deletion, keyed by localId. */
-  pending: Record<string, Task>;
+  /** Tasks queued for deletion, keyed by localId, with enqueuedAt timestamp. */
+  pending: Record<string, { task: Task; enqueuedAt: number }>;
   /** Stash a task and start its undo countdown. */
   enqueue: (task: Task) => void;
   /** Cancel a pending delete — the task reappears, DB untouched. */
@@ -49,7 +49,9 @@ export const usePendingDeletes = create<PendingDeletesState>((set, get) => ({
 
   enqueue: (task) => {
     if (get().pending[task.localId]) return; // already queued
-    set((s) => ({ pending: { ...s.pending, [task.localId]: task } }));
+    set((s) => ({
+      pending: { ...s.pending, [task.localId]: { task, enqueuedAt: Date.now() } },
+    }));
     const t = setTimeout(() => get().commit(task.localId), UNDO_WINDOW_MS);
     timers.set(task.localId, t);
   },
@@ -66,8 +68,8 @@ export const usePendingDeletes = create<PendingDeletesState>((set, get) => ({
 
   commit: async (localId) => {
     timers.delete(localId);
-    const task = get().pending[localId];
-    if (!task) return;
+    const entry = get().pending[localId];
+    if (!entry) return;
     try {
       await deleteTask(localId);
     } catch (err) {
