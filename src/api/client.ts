@@ -1,6 +1,14 @@
 import createClient, { type Client } from 'openapi-fetch';
 import type { paths } from './schema';
 import { buildApiError, NetworkError } from './errors';
+import {
+  REQUEST_TIMEOUT_MS,
+  canAttemptRequest,
+  circuitCooldownRemaining,
+  recordRequestFailure,
+  recordRequestSuccess,
+  withTimeout,
+} from './resilience';
 import { getAuthSnapshot } from '@/auth/store';
 
 export type ApiClient = Client<paths>;
@@ -37,14 +45,38 @@ let cachedTauriFetch:
   | null = null;
 
 async function platformFetch(request: Request): Promise<Response> {
-  if (isTauri) {
-    if (!cachedTauriFetch) {
+  // Fail fast while the circuit is open, instead of starting a request that
+  // will only hang and time out.
+  if (!canAttemptRequest()) {
+    throw new NetworkError(
+      `Server unavailable — backing off for ${Math.ceil(circuitCooldownRemaining() / 1000)}s`,
+    );
+  }
+
+  // Bound every request: abort the underlying call and race a timeout so a
+  // hung origin (e.g. a Cloudflare 524) fails in ~20s, not ~100s.
+  const controller = new AbortController();
+  const signalled = new Request(request, { signal: controller.signal });
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    if (isTauri && !cachedTauriFetch) {
       const mod = await import('@tauri-apps/plugin-http');
       cachedTauriFetch = mod.fetch as (input: Request) => Promise<Response>;
     }
-    return cachedTauriFetch(request);
+    const doFetch = isTauri
+      ? cachedTauriFetch!(signalled)
+      : globalThis.fetch(signalled);
+    const response = await withTimeout(doFetch, REQUEST_TIMEOUT_MS);
+    // A 5xx means the server is unhealthy; 2xx/4xx mean it's responding.
+    if (response.status >= 500) recordRequestFailure();
+    else recordRequestSuccess();
+    return response;
+  } catch (err) {
+    recordRequestFailure();
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return globalThis.fetch(request);
 }
 
 /**

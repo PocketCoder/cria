@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
+import { throttledWarn } from '@/api/resilience';
 import { pullProjects, pullLabels, pullAllTasks, pullAllViews, pullAllBuckets } from './pull';
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
@@ -34,19 +35,19 @@ export function usePeriodicSync() {
       try {
         await pullProjects();
       } catch (err) {
-        console.warn('[periodic-sync] project pull failed:', err);
+        throttledWarn('periodic-sync/projects', '[periodic-sync] project pull failed:', err);
       }
       try {
         await pullLabels();
       } catch (err) {
-        console.warn('[periodic-sync] label pull failed:', err);
+        throttledWarn('periodic-sync/labels', '[periodic-sync] label pull failed:', err);
       }
       try {
         // Pull every task (not just the open project) so the smart views
         // have cross-project data and project lists stay warm (#33).
         await pullAllTasks();
       } catch (err) {
-        console.warn('[periodic-sync] all-tasks pull failed:', err);
+        throttledWarn('periodic-sync/all-tasks', '[periodic-sync] all-tasks pull failed:', err);
       }
       try {
         // Views + kanban buckets. Silent upserts, so notify('views')
@@ -55,7 +56,7 @@ export function usePeriodicSync() {
         await pullAllBuckets();
         notify('views');
       } catch (err) {
-        console.warn('[periodic-sync] views/buckets pull failed:', err);
+        throttledWarn('periodic-sync/views', '[periodic-sync] views/buckets pull failed:', err);
       }
     };
 

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listProjects } from '@/db/projects';
 import { subscribe } from '@/db/bus';
+import { throttledWarn } from '@/api/resilience';
 import { useAuth } from '@/auth/store';
 import { pullProjects } from '@/sync/pull';
 import type { Project } from '@/domain/project';
@@ -33,7 +34,7 @@ export function useProjects() {
       try {
         await pullProjects();
       } catch (err) {
-        console.warn('[queries/projects] pull failed, using cache:', err);
+        throttledWarn('queries/projects', '[queries/projects] pull failed, using cache:', err);
       }
       return listProjects();
     },

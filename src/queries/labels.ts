@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listLabels } from '@/db/labels';
 import { subscribe } from '@/db/bus';
+import { throttledWarn } from '@/api/resilience';
 import { useAuth } from '@/auth/store';
 import { pullLabels } from '@/sync/pull';
 import type { Label } from '@/domain/label';
@@ -26,7 +27,7 @@ export function useLabels() {
       try {
         await pullLabels();
       } catch (err) {
-        console.warn('[queries/labels] pull failed, using cache:', err);
+        throttledWarn('queries/labels', '[queries/labels] pull failed, using cache:', err);
       }
       return listLabels();
     },
