@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: Tue Jun 2 2026
+Last updated: Thu Jun 4 2026
 
 ## Legend
 | Icon | Meaning |
@@ -24,11 +24,11 @@ Last updated: Tue Jun 2 2026
 | Tasks | Inline field editing (dates, priority, color) | ✅ | Popover pickers in TaskActions |
 | Tasks | Percent done slider | ✅ | 0–100 slider in TaskActions |
 | Tasks | Natural-language quick-add (date, #label, !priority, @assignee) | ✅ | `quickAddParser` + QuickAddPreview |
-| Tasks | **+ProjectName in quick-add** | ⏳ | PR #50 (`feat/nl-project-syntax`), stacked on `feat/quick-features` |
-| Tasks | **NL recurrence in quick-add (every day/week etc.)** | ⏳ | PR #51 (`feat/nl-recurrence`), stacked on `feat/quick-features` |
-| Tasks | **Task identifier (PROJ-42) in detail card** | ⏳ | PR #46 (`feat/task-identifier`), stacked on `feat/quick-features` |
-| Tasks | **Checklist progress bar on rows** | ⏳ | PR on `feat/quick-features` (455096c), not yet in `dev` |
-| Tasks | **Task-list checkbox alignment + persistence in TipTap** | ⏳ | PR on `feat/quick-features` (246a1eb), not yet in `dev` |
+| Tasks | **+ProjectName in quick-add** | ✅ | Shipped via feat/quick-features merge |
+| Tasks | **NL recurrence in quick-add (every day/week etc.)** | ✅ | Shipped via feat/quick-features merge |
+| Tasks | **Task identifier (PROJ-42) in detail card** | ✅ | Shipped via feat/quick-features merge |
+| Tasks | **Checklist progress bar on rows** | ✅ | Shipped (countChecklistItems + tabular display in TaskList) |
+| Tasks | **Task-list checkbox alignment + persistence in TipTap** | ✅ | Shipped (TaskList extension + inline checkbox persistence in RichTextEditor) |
 | Tasks | Sub-tasks tree (indented + collapsible) | ✅ | M8 (#45), via task relations `subtask` kind |
 | Tasks | Sub-task promote/demote | ✅ | M8 (#45) |
 | Tasks | Related tasks panel (11 relation kinds) | ✅ | M8 (#45), RelatedTasks in detail card |
@@ -36,12 +36,12 @@ Last updated: Tue Jun 2 2026
 | Tasks | Task detail floating card | ✅ | Right-docked card, Escape to close |
 | Tasks | Assignees (add/remove) | ✅ | Via TaskActions + user picker |
 | Tasks | Labels (apply/remove) | ✅ | Via TaskActions + LabelChips |
-| Tasks | **Inline label creation when adding labels** | ⏳ | PR #49 (`feat/inline-label-creation`), stacked on `feat/quick-features` |
+| Tasks | **Inline label creation when adding labels** | ✅ | Shipped (createLabel + toggleTaskLabel in TaskActions) |
 | Tasks | Favorites (is_favorite) | ✅ | Star toggle in TaskActions |
 | Tasks | Description WYSIWYG editor (TipTap) | ✅ | Full TipTap with slash commands, images, links |
 | Tasks | Copy task link/identifier | ✅ | Copy icon in detail header — copies server URL or falls back to title |
 | Tasks | Bulk operations (multi-select, batch actions) | ❌ | Not started |
-| Tasks | Hover preview popup | ❌ | Not started |
+| Tasks | Hover preview popup | ✅ | Shipped (TaskHoverPreview component, 800ms delay, shows description/labels/due/priority) |
 
 ### Projects
 
@@ -63,7 +63,7 @@ Last updated: Tue Jun 2 2026
 | Labels | CRUD | ✅ | Sidebar create/rename/delete |
 | Labels | Toggle on task (multi-select) | ✅ | LabelChips + LabelManagerModal |
 | Labels | Label chips on task rows | ✅ | Inline display |
-| Labels | **Inline label creation when adding to task** | ⏳ | PR #49, stacked on `feat/quick-features` |
+| Labels | **Inline label creation when adding to task** | ✅ | Shipped (TaskActions inline create) |
 | Labels | Label manager modal | ✅ | Full create-as-you-type |
 
 ### Smart Views
@@ -74,7 +74,7 @@ Last updated: Tue Jun 2 2026
 | Smart Views | Upcoming (next 7 days, grouped by day) | ✅ | `UpcomingView` in SmartViews |
 | Smart Views | Favorites (favorited tasks) | ✅ | `FavoritesView` in SmartViews |
 | Smart Views | Label tasks (per-label) | ✅ | `LabelView` in SmartViews |
-| Smart Views | Inbox (tasks without a project) | ❌ | SPEC mentions it; not implemented |
+| Smart Views | Inbox (tasks without a project) | ✅ | Shipped (InboxView component, defaultProjectId from user settings — #52) |
 | Smart Views | Saved filters (Vikunja filter DSL) | ❌ | Not started |
 
 ### Search
@@ -102,7 +102,7 @@ Last updated: Tue Jun 2 2026
 | Category | Feature | Status | Notes |
 |---|---|---|---|
 | Reminders | In-app set/clear (date+time) | ✅ | PR #39, ReminderList component |
-| Reminders | **Relative reminders ("1h before due")** | ⏳ | PR #51 stacked on `feat/quick-features` (b1eb723) |
+| Reminders | **Relative reminders ("1h before due")** | ✅ | Shipped (ReminderList with presets, custom relative, and absolute modes — RELATIVE_REMINDER_PRESETS) |
 | Reminders | Desktop notifications (plugin-notification) | ✅ | Shipped |
 | Reminders | macOS Dock badge | ✅ | Shipped |
 | Reminders | Reminder scheduler | ✅ | Shipped |
@@ -196,14 +196,14 @@ Last updated: Tue Jun 2 2026
 | UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ❌ | Not started (M7) |
 | UI | Rebindable shortcuts in settings | ❌ | Not started (M7) |
 | UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
-| UI | Inbox view (no-project tasks) | ❌ | Not started |
+| UI | Inbox view (no-project tasks) | ✅ | Shipped |
 | UI | Kanban view | ❌ | Not started (M9) |
 | UI | Table view (dense, sortable) | ❌ | Not started (M9) |
 | UI | Gantt view | ❌ | Not started (M10) |
 | UI | Drag-to-reorder tasks | ❌ | Not started (M9) |
 | UI | Drag-to-reorder projects in sidebar | ❌ | Not started |
 | UI | Recent projects in sidebar | ❌ | Not started |
-| UI | Task hover preview popup | ❌ | Not started |
+| UI | Task hover preview popup | ✅ | Shipped |
 
 ### Settings & Configuration
 
@@ -238,40 +238,34 @@ Last updated: Tue Jun 2 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Misc | CalDAV docs link in settings | ❌ | Not started |
+| Misc | CalDAV docs link in settings | ✅ | Link shown in SettingsModal Advanced section |
 | Misc | Webhook management UI | ❌ | Server endpoints exist, no UI |
 | Misc | External-link handling (opens in OS browser) | ✅ | openExternal.ts |
 | Misc | Dev-only keyboard shortcuts | ✅ | Cmd+F for search, Cmd+Shift+A dev fallback |
-| Misc | Server-side Vikunja version in footer | ❌ | Not implemented |
+| Misc | Server-side Vikunja version in footer | ✅ | Shown in footer via useServerVersion |
 | Misc | In-app notification inbox | ❌ | `GET /notifications` not wired |
 
 ## Easiest next features (quickest to ship)
 
 Ranked by effort × impact, with rationale.
 
-### 1. Inbox view (no-project tasks) — ~0.5 day
+### 1. Saved filters (Vikunja filter DSL) — ~1 day
 
-Already have the SmartViews scaffold (`TodayView`, `UpcomingView`). An "Inbox" view is a query for tasks where `project_local_id IS NULL`. Add sidebar item, wire through `ActiveView`, reuse `SmartTaskRow`. Zero server changes, pure client-side query. This was promised in SPEC M6 but never shipped.
+SmartViews scaffold exists (TodayView, UpcomingView, InboxView). Saved filters require:
+- Fetching saved filters from server (`GET /filters`)
+- A sidebar item listing them
+- Wiring each filter's query through to the task list
+- A save-current-view-as-filter button
+Server endpoints exist. Pure client-side UI work.
 
-### 2. Merge the `feat/quick-features` branch into `dev` — ~1 hour
+### 2. Comments (read-only) — ~0.5 day
 
-Three commits with real user value already sitting on `feat/quick-features`:
-- Checklist progress bar on rows (455096c)
-- TipTap checkbox alignment fix (246a1eb)  
-- Relative reminders picker (b1eb723)
+Vikunja supports comments on tasks via `GET /tasks/{id}/comments`. Read-only display in the detail card is a simple list component. No write/mentions needed for V1.
 
-These are tested, stacked, and conflict-free with `dev`. Merge them now to unblock the stacked PRs (#49, #50, #51, #46).
+### 3. Bulk operations (multi-select, batch actions) — ~1.5 days
 
-### 3. Task hover preview popup — ~1 day
+Multi-select via Cmd+click / Shift+click on task rows, then batch actions (delete, move, set labels). Leverages existing mutation functions in db/tasks.ts.
 
-A simple tooltip/popover on task rows showing title, due date, assignees, and first few labels. Use an existing Radix tooltip or popover primitive. Low effort, high polish — matches how Linear/Todoist show task peek without opening the detail pane.
+### 4. Kanban view — ~3 days
 
-### 4. Merge stacked PRs (#49, #50, #51, #46) — ~2 hours each for review + ~1 day total
-
-The four open PRs targeting `feat/quick-features` are small and well-defined:
-- **#49**: Inline label creation in the task label picker
-- **#50**: `+ProjectName` quick-add syntax + auto-select
-- **#51**: NL recurrence parsing (`every day`, `weekly`, `every 3 days`)
-- **#46**: Task identifier (PROJ-42) in detail card
-
-Once `feat/quick-features` merges to `dev`, these can rebase and merge quickly. Net gain: 4 features shipped for ~1 day of review + merge effort.
+Requires server's position/board endpoint integration. Significant but well-understood work. See SPEC M9.
