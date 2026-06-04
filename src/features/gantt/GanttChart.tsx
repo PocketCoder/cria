@@ -228,10 +228,6 @@ export function GanttChart({
     }
   };
 
-  const gridBackground = `repeating-linear-gradient(to right, transparent 0, transparent ${
-    DAY_WIDTH_PIXELS - 1
-  }px, var(--color-border) ${DAY_WIDTH_PIXELS - 1}px, var(--color-border) ${DAY_WIDTH_PIXELS}px)`;
-
   const todayInRange = today >= lo && today <= hi;
   const baseColor = normalizeColor(projectColor) ?? 'var(--color-primary)';
 
@@ -380,7 +376,27 @@ export function GanttChart({
           </div>
 
           {/* Body: grid + today + bars */}
-          <div className="relative" style={{ height: bodyHeight, background: gridBackground }}>
+          <div className="relative" style={{ height: bodyHeight }}>
+            {/* Day grid: explicit per-day cells (a repeating-gradient drops
+                lines on fractional device pixels). Weekends shaded to match
+                the header. */}
+            <div className="pointer-events-none absolute inset-0">
+              {Array.from({ length: totalDays }, (_, i) => {
+                const wd = dayToUtcDate(lo + i).getUTCDay();
+                const weekend = wd === 0 || wd === 6;
+                return (
+                  <div
+                    key={i}
+                    style={{ left: i * DAY_WIDTH_PIXELS, width: DAY_WIDTH_PIXELS }}
+                    className={cn(
+                      'absolute top-0 bottom-0 border-r border-[var(--color-border)]',
+                      weekend && 'bg-[var(--color-muted)]/20',
+                    )}
+                  />
+                );
+              })}
+            </div>
+
             {todayInRange ? (
               <div
                 style={{ left: (today - lo) * DAY_WIDTH_PIXELS, width: DAY_WIDTH_PIXELS }}
