@@ -40,6 +40,8 @@ function makeTask(localId: string, title = 'A task'): Task {
     repeatMode: 0,
     identifier: null,
     updatedAt: new Date().toISOString(),
+    createdAt: null,
+    createdById: null,
   };
 }
 

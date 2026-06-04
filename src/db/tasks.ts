@@ -31,6 +31,8 @@ interface TaskRow {
   repeat_after: number;
   repeat_mode: number;
   updated_at: string;
+  created_at: string | null;
+  created_by_id: number | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -56,6 +58,8 @@ function rowToTask(row: TaskRow): Task {
     repeatAfter: row.repeat_after,
     repeatMode: row.repeat_mode,
     updatedAt: row.updated_at,
+    createdAt: row.created_at,
+    createdById: row.created_by_id,
     identifier: row.identifier,
   };
 }
@@ -64,7 +68,7 @@ const SELECT_TASK_COLS = `
   local_id, server_id, project_local_id, title, description, done, done_at,
   due_date, start_date, end_date, priority, percent_done, hex_color,
   position, is_favorite, is_subscribed, repeat_after, repeat_mode,
-  updated_at, identifier`;
+  updated_at, created_at, created_by_id, identifier`;
 
 export async function listTasksForProject(
   projectLocalId: string,
@@ -331,6 +335,8 @@ export async function upsertTaskFromServer(
     payload.identifier ?? null,
     updatedAt,
     now,
+    payload.created ?? null,
+    payload.created_by?.id ?? null,
   ];
 
   return mergeFromServer({
@@ -343,9 +349,10 @@ export async function upsertTaskFromServer(
               local_id, server_id, project_local_id, title, description, done,
               done_at, due_date, start_date, end_date, priority, percent_done,
               hex_color, position, is_favorite, is_subscribed, repeat_after,
-              repeat_mode, identifier, updated_at, synced_at, last_synced,
+              repeat_mode, identifier, updated_at, synced_at,
+              created_at, created_by_id, last_synced,
               dirty, deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       params: [localId, serverId, ...colParams, lastSyncedJson],
     }),
     update: (localId, lastSyncedJson) => ({
@@ -369,6 +376,8 @@ export async function upsertTaskFromServer(
               identifier        = ?,
               updated_at        = ?,
               synced_at         = ?,
+              created_at        = ?,
+              created_by_id     = ?,
               last_synced       = ?,
               dirty             = 0,
               deleted           = 0
@@ -392,8 +401,8 @@ export async function createTask(input: TaskInput): Promise<Task> {
          local_id, server_id, project_local_id, title, description, done,
          done_at, due_date, start_date, end_date, priority, percent_done,
          hex_color, position, is_favorite, is_subscribed, repeat_after,
-         repeat_mode, identifier, updated_at, dirty, deleted
-       ) VALUES (?, NULL, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, 1, 0)`,
+         repeat_mode, identifier, updated_at, created_at, dirty, deleted
+       ) VALUES (?, NULL, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?, 1, 0)`,
       [
         localId,
         input.projectLocalId,
@@ -409,6 +418,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
         input.isFavorite === true ? 1 : 0,
         input.repeatAfter ?? 0,
         input.repeatMode ?? 0,
+        now,
         now,
       ]
     );

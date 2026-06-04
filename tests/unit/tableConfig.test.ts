@@ -31,6 +31,8 @@ function mkTask(partial: Partial<Task>): Task {
     repeatAfter: 0,
     repeatMode: 0,
     updatedAt: partial.updatedAt ?? '2024-01-01T00:00:00Z',
+    createdAt: partial.createdAt ?? null,
+    createdById: partial.createdById ?? null,
     identifier: partial.identifier ?? null,
   };
 }
@@ -97,6 +99,13 @@ describe('sortTasks', () => {
     const sorted = sortTasks([c, a, b], { title: 'asc' }, { visible: { title: false } as any });
     // title hidden → no active sort → original order preserved
     expect(sorted.map((t) => t.localId)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('sorts by created (date) and createdBy (id)', () => {
+    const p = mkTask({ localId: 'p', createdAt: '2024-01-03T00:00:00Z', createdById: 5 });
+    const q = mkTask({ localId: 'q', createdAt: '2024-01-01T00:00:00Z', createdById: 9 });
+    expect(sortTasks([p, q], { created: 'asc' }).map((t) => t.localId)).toEqual(['q', 'p']);
+    expect(sortTasks([p, q], { createdBy: 'desc' }).map((t) => t.localId)).toEqual(['q', 'p']);
   });
 
   it('ignores non-sortable columns (labels)', () => {

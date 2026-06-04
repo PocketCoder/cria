@@ -9,9 +9,9 @@ import type { Task } from '@/domain/task';
  * persisted to *global* localStorage keys (`tableViewColumns` /
  * `tableViewSortBy`) — shared across every project, not scoped per view.
  *
- * Columns Vikunja also offers but which we have no local data for yet
- * (`created`, `createdBy`, `commentCount`) are intentionally omitted; add
- * them here once the task model carries those fields.
+ * `commentCount` (a Vikunja column) is omitted: comments aren't synced or
+ * stored locally, so there's no count to show. `createdBy` has no local
+ * users table, so it renders as "You" (current user) or `#id`.
  */
 export type ColumnKey =
   | 'index'
@@ -26,6 +26,8 @@ export type ColumnKey =
   | 'endDate'
   | 'percentDone'
   | 'updated'
+  | 'created'
+  | 'createdBy'
   | 'doneAt';
 
 export type SortDir = 'asc' | 'desc';
@@ -53,6 +55,8 @@ export const COLUMNS: readonly ColumnDef[] = [
   { key: 'endDate', label: 'End Date', sortable: true },
   { key: 'percentDone', label: '% Done', sortable: true },
   { key: 'updated', label: 'Updated', sortable: true },
+  { key: 'created', label: 'Created', sortable: true },
+  { key: 'createdBy', label: 'Created By', sortable: true },
   { key: 'doneAt', label: 'Done At', sortable: true },
 ];
 
@@ -74,6 +78,8 @@ export const DEFAULT_VISIBLE: VisibleState = {
   endDate: false,
   percentDone: false,
   updated: false,
+  created: false,
+  createdBy: false,
   doneAt: false,
 };
 
@@ -156,6 +162,10 @@ function sortValue(
       return task.doneAt ? Date.parse(task.doneAt) : null;
     case 'updated':
       return task.updatedAt ? Date.parse(task.updatedAt) : null;
+    case 'created':
+      return task.createdAt ? Date.parse(task.createdAt) : null;
+    case 'createdBy':
+      return task.createdById;
     default:
       return null;
   }

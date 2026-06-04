@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
+import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useUi } from '@/stores/ui';
 import { updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
+import { DatePicker } from '@/components/DatePicker';
 import { cn } from '@/lib/cn';
 import type { Project } from '@/domain/project';
 import type { Task } from '@/domain/task';
@@ -37,6 +39,11 @@ export function TableView({ project }: TableViewProps) {
   const { columns, visible, sortBy, toggleColumn, onSort } = useTableConfig();
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
+  const { data: currentUser } = useCurrentUser();
+
+  // Inline editing: double-click an editable cell. One cell at a time.
+  const [editing, setEditing] = useState<{ taskLocalId: string; column: ColumnKey } | null>(null);
+  const stopEditing = () => setEditing(null);
 
   const projectTitle = useMemo(() => {
     const map = new Map(allProjects.map((p) => [p.localId, p.title]));
@@ -105,14 +112,39 @@ export function TableView({ project }: TableViewProps) {
                   selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
                 )}
               >
-                {shownColumns.map((c) => (
-                  <td
-                    key={c.key}
-                    className="px-3 py-2 align-middle text-[var(--color-foreground)]"
-                  >
-                    <Cell task={task} columnKey={c.key} projectTitle={projectTitle} />
-                  </td>
-                ))}
+                {shownColumns.map((c) => {
+                  const editable = EDITABLE_COLUMNS.has(c.key);
+                  const isEditing =
+                    editing?.taskLocalId === task.localId && editing.column === c.key;
+                  return (
+                    <td
+                      key={c.key}
+                      onDoubleClick={
+                        editable && !isEditing
+                          ? (e) => {
+                              e.stopPropagation();
+                              setEditing({ taskLocalId: task.localId, column: c.key });
+                            }
+                          : undefined
+                      }
+                      className={cn(
+                        'px-3 py-2 align-middle text-[var(--color-foreground)]',
+                        editable && 'cursor-text',
+                      )}
+                    >
+                      {isEditing ? (
+                        <CellEditor task={task} columnKey={c.key} onDone={stopEditing} />
+                      ) : (
+                        <Cell
+                          task={task}
+                          columnKey={c.key}
+                          projectTitle={projectTitle}
+                          currentUserServerId={currentUser?.serverId ?? null}
+                        />
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -136,14 +168,25 @@ export function TableView({ project }: TableViewProps) {
 
 /* ───────────────────────── cells ───────────────────────── */
 
+/** Columns the user can edit inline (double-click). */
+const EDITABLE_COLUMNS = new Set<ColumnKey>([
+  'title',
+  'priority',
+  'dueDate',
+  'startDate',
+  'endDate',
+]);
+
 function Cell({
   task,
   columnKey,
   projectTitle,
+  currentUserServerId,
 }: {
   task: Task;
   columnKey: ColumnKey;
   projectTitle: (id: string) => string;
+  currentUserServerId: number | null;
 }) {
   switch (columnKey) {
     case 'index':
@@ -190,11 +233,120 @@ function Cell({
       return <DateCell value={task.doneAt} />;
     case 'updated':
       return <DateCell value={task.updatedAt} />;
+    case 'created':
+      return <DateCell value={task.createdAt} />;
+    case 'createdBy':
+      return (
+        <span className="text-[var(--color-muted-foreground)]">
+          {task.createdById == null
+            ? '—'
+            : task.createdById === currentUserServerId
+              ? 'You'
+              : `#${task.createdById}`}
+        </span>
+      );
     case 'percentDone':
       return <PercentCell value={task.percentDone} />;
     default:
       return null;
   }
+}
+
+/* ───────────────────────── inline editors ───────────────────────── */
+
+function CellEditor({
+  task,
+  columnKey,
+  onDone,
+}: {
+  task: Task;
+  columnKey: ColumnKey;
+  onDone: () => void;
+}) {
+  if (columnKey === 'title') return <TitleEditor task={task} onDone={onDone} />;
+  if (columnKey === 'priority') return <PriorityEditor task={task} onDone={onDone} />;
+  // date columns
+  const value =
+    columnKey === 'dueDate'
+      ? task.dueDate
+      : columnKey === 'startDate'
+        ? task.startDate
+        : task.endDate;
+  const save = (iso: string | null) => {
+    const patch =
+      columnKey === 'dueDate'
+        ? { dueDate: iso }
+        : columnKey === 'startDate'
+          ? { startDate: iso }
+          : { endDate: iso };
+    void updateTask(task.localId, patch).catch((err) =>
+      console.error('[table] failed to update date:', err),
+    );
+    onDone();
+  };
+  return (
+    <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onDone()}>
+      <DatePicker value={value} onChange={save} />
+    </span>
+  );
+}
+
+function TitleEditor({ task, onDone }: { task: Task; onDone: () => void }) {
+  const [draft, setDraft] = useState(task.title);
+  const save = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== task.title) {
+      void updateTask(task.localId, { title: trimmed }).catch((err) =>
+        console.error('[table] failed to rename:', err),
+      );
+    }
+    onDone();
+  };
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          save();
+        } else if (e.key === 'Escape') {
+          onDone();
+        }
+      }}
+      className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+    />
+  );
+}
+
+function PriorityEditor({ task, onDone }: { task: Task; onDone: () => void }) {
+  return (
+    <select
+      autoFocus
+      defaultValue={String(task.priority)}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={onDone}
+      onChange={(e) => {
+        const next = Number(e.target.value);
+        if (next !== task.priority) {
+          void updateTask(task.localId, { priority: next }).catch((err) =>
+            console.error('[table] failed to set priority:', err),
+          );
+        }
+        onDone();
+      }}
+      className="rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+    >
+      {[0, 1, 2, 3, 4, 5].map((p) => (
+        <option key={p} value={p}>
+          {p === 0 ? 'None' : '!'.repeat(p)}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function DoneCheckbox({ task }: { task: Task }) {

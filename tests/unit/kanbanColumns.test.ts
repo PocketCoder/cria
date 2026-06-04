@@ -28,6 +28,8 @@ function mkTask(p: Partial<Task>): Task {
     repeatAfter: 0,
     repeatMode: 0,
     updatedAt: '2024-01-01T00:00:00Z',
+    createdAt: null,
+    createdById: null,
     identifier: null,
   };
 }

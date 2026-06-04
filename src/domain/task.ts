@@ -20,6 +20,10 @@ export interface Task {
   repeatAfter: number;
   repeatMode: number;
   updatedAt: string;
+  createdAt: string | null;
+  /** Server user id of the creator. We don't model users locally, so the
+   * table view resolves this to "You" (current user) or `#id`. */
+  createdById: number | null;
   identifier: string | null;
 }
 
@@ -40,6 +44,10 @@ export const taskResponseSchema = z
     position: z.number().nullable().optional(),
     updated: z.string().nullable().optional(),
     created: z.string().nullable().optional(),
+    created_by: z
+      .object({ id: z.number().nullable().optional() })
+      .nullable()
+      .optional(),
     is_favorite: z.boolean().nullable().optional(),
     repeat_after: z.number().nullable().optional(),
     repeat_mode: z.number().nullable().optional(),
