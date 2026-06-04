@@ -326,6 +326,21 @@ async function executeOp(
     return;
   }
 
+  if (op.entity_type === 'view') {
+    await executeViewOp(client, db, op);
+    return;
+  }
+
+  if (op.entity_type === 'bucket') {
+    await executeBucketOp(client, db, op);
+    return;
+  }
+
+  if (op.entity_type === 'task_bucket') {
+    await executeTaskBucketOp(client, db, op);
+    return;
+  }
+
   if (op.entity_type !== 'task') return;
 
   const localId = op.entity_local_id;
@@ -784,4 +799,299 @@ function labelBody(row: LabelRow): Record<string, unknown> {
     description: row.description ?? undefined,
     hex_color: row.hex_color ? row.hex_color.replace(/^#/, '') : undefined,
   };
+}
+
+/* ───────────────────────── view ops ──────────────────────── */
+
+interface ViewRow {
+  local_id: string;
+  server_id: number | null;
+  project_local_id: string;
+  title: string;
+  view_kind: string;
+  position: number | null;
+  bucket_configuration_mode: string;
+  deleted: number;
+}
+
+type ViewKindLiteral = 'list' | 'gantt' | 'table' | 'kanban';
+type BucketModeLiteral = 'none' | 'manual' | 'filter';
+
+function viewBody(row: ViewRow): Record<string, unknown> {
+  return {
+    title: row.title,
+    view_kind: row.view_kind as ViewKindLiteral,
+    ...(row.position != null ? { position: row.position } : {}),
+    bucket_configuration_mode: row.bucket_configuration_mode as BucketModeLiteral,
+  };
+}
+
+async function executeViewOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  const localId = op.entity_local_id;
+  const [row] = await db.select<ViewRow[]>(
+    `SELECT local_id, server_id, project_local_id, title, view_kind,
+            position, bucket_configuration_mode, deleted
+       FROM project_views WHERE local_id = ? LIMIT 1`,
+    [localId],
+  );
+  if (!row) return;
+
+  const [proj] = await db.select<ProjectLookup[]>(
+    `SELECT server_id FROM projects WHERE local_id = ? LIMIT 1`,
+    [row.project_local_id],
+  );
+  const projectServerId = proj?.server_id ?? null;
+
+  if (op.op === 'create') {
+    if (row.deleted === 1) {
+      await exec('DELETE FROM project_views WHERE local_id = ?', [localId]);
+      notify('views');
+      return;
+    }
+    if (row.server_id !== null) return;
+    if (!projectServerId) {
+      throw new ApiError(408, null, 'view: parent project not synced yet', true);
+    }
+    const res = await callApi(
+      client.PUT('/projects/{project}/views', {
+        params: { path: { project: projectServerId } },
+        body: viewBody(row),
+      }),
+    );
+    const newServerId = (res as { id?: number }).id;
+    await exec(
+      `UPDATE project_views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+      [newServerId ?? null, new Date().toISOString(), localId],
+    );
+    notify('views');
+    return;
+  }
+
+  if (op.op === 'update') {
+    if (row.deleted === 1) return;
+    if (row.server_id === null || !projectServerId) {
+      throw new ApiError(408, null, 'view: not synced yet', true);
+    }
+    await callApi(
+      client.POST('/projects/{project}/views/{id}', {
+        params: { path: { project: projectServerId, id: row.server_id } },
+        body: viewBody(row),
+      }),
+    );
+    await exec(
+      `UPDATE project_views SET synced_at = ?, dirty = 0 WHERE local_id = ?`,
+      [new Date().toISOString(), localId],
+    );
+    notify('views');
+    return;
+  }
+
+  if (op.op === 'delete') {
+    if (row.server_id !== null && projectServerId) {
+      await callApi(
+        client.DELETE('/projects/{project}/views/{id}', {
+          params: { path: { project: projectServerId, id: row.server_id } },
+        }),
+      );
+    }
+    await exec('DELETE FROM project_views WHERE local_id = ?', [localId]);
+    notify('views');
+  }
+}
+
+/* ───────────────────────── bucket ops ─────────────────────── */
+
+interface BucketRow {
+  local_id: string;
+  server_id: number | null;
+  view_local_id: string;
+  title: string;
+  position: number | null;
+  task_limit: number;
+  deleted: number;
+}
+
+interface ViewContext {
+  view_server_id: number | null;
+  project_server_id: number | null;
+}
+
+/** Resolve the server ids of a view and its parent project from a view
+ * local id. Either may be null if not yet synced. */
+async function resolveViewContext(
+  db: Database,
+  viewLocalId: string,
+): Promise<ViewContext> {
+  const [row] = await db.select<ViewContext[]>(
+    `SELECT pv.server_id AS view_server_id, p.server_id AS project_server_id
+       FROM project_views pv
+       JOIN projects p ON p.local_id = pv.project_local_id
+      WHERE pv.local_id = ? LIMIT 1`,
+    [viewLocalId],
+  );
+  return {
+    view_server_id: row?.view_server_id ?? null,
+    project_server_id: row?.project_server_id ?? null,
+  };
+}
+
+function bucketBody(row: BucketRow): Record<string, unknown> {
+  return {
+    title: row.title,
+    limit: row.task_limit ?? 0,
+    ...(row.position != null ? { position: row.position } : {}),
+  };
+}
+
+async function executeBucketOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  const localId = op.entity_local_id;
+  const [row] = await db.select<BucketRow[]>(
+    `SELECT local_id, server_id, view_local_id, title, position, task_limit, deleted
+       FROM buckets WHERE local_id = ? LIMIT 1`,
+    [localId],
+  );
+  if (!row) return;
+
+  const { view_server_id: viewServerId, project_server_id: projectServerId } =
+    await resolveViewContext(db, row.view_local_id);
+
+  if (op.op === 'create') {
+    if (row.deleted === 1) {
+      await dropBucketLocally(localId);
+      return;
+    }
+    if (row.server_id !== null) return;
+    if (!projectServerId || !viewServerId) {
+      throw new ApiError(408, null, 'bucket: parent view not synced yet', true);
+    }
+    const res = await callApi(
+      client.PUT('/projects/{id}/views/{view}/buckets', {
+        params: { path: { id: projectServerId, view: viewServerId } },
+        body: bucketBody(row),
+      }),
+    );
+    const newServerId = (res as { id?: number }).id;
+    await exec(
+      `UPDATE buckets SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+      [newServerId ?? null, new Date().toISOString(), localId],
+    );
+    notify('views');
+    return;
+  }
+
+  if (op.op === 'update') {
+    if (row.deleted === 1) return;
+    if (row.server_id === null || !projectServerId || !viewServerId) {
+      throw new ApiError(408, null, 'bucket: not synced yet', true);
+    }
+    await callApi(
+      client.POST('/projects/{projectID}/views/{view}/buckets/{bucketID}', {
+        params: {
+          path: {
+            projectID: projectServerId,
+            view: viewServerId,
+            bucketID: row.server_id,
+          },
+        },
+        body: bucketBody(row),
+      }),
+    );
+    await exec(
+      `UPDATE buckets SET synced_at = ?, dirty = 0 WHERE local_id = ?`,
+      [new Date().toISOString(), localId],
+    );
+    notify('views');
+    return;
+  }
+
+  if (op.op === 'delete') {
+    if (row.server_id === null) {
+      await dropBucketLocally(localId);
+      return;
+    }
+    if (!projectServerId || !viewServerId) {
+      throw new ApiError(408, null, 'bucket: parent view not synced yet', true);
+    }
+    await callApi(
+      client.DELETE('/projects/{projectID}/views/{view}/buckets/{bucketID}', {
+        params: {
+          path: {
+            projectID: projectServerId,
+            view: viewServerId,
+            bucketID: row.server_id,
+          },
+        },
+      }),
+    );
+    await dropBucketLocally(localId);
+  }
+}
+
+async function dropBucketLocally(localId: string): Promise<void> {
+  await withTx(async (tx) => {
+    await tx.execute('DELETE FROM task_buckets WHERE bucket_local_id = ?', [localId]);
+    await tx.execute('DELETE FROM buckets WHERE local_id = ?', [localId]);
+  });
+  notify('views');
+}
+
+/* ──────────────────────── task-bucket ops ─────────────────── */
+
+async function executeTaskBucketOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  // Payload: { view_local_id, bucket_local_id }; entity is the task.
+  const payload = JSON.parse(op.payload) as {
+    view_local_id: string;
+    bucket_local_id: string;
+  };
+  const taskLocalId = op.entity_local_id;
+
+  const [taskRow] = await db.select<{ server_id: number | null }[]>(
+    `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+    [taskLocalId],
+  );
+  const [bucketRow] = await db.select<{ server_id: number | null }[]>(
+    `SELECT server_id FROM buckets WHERE local_id = ? LIMIT 1`,
+    [payload.bucket_local_id],
+  );
+  const { view_server_id: viewServerId, project_server_id: projectServerId } =
+    await resolveViewContext(db, payload.view_local_id);
+
+  const taskServerId = taskRow?.server_id ?? null;
+  const bucketServerId = bucketRow?.server_id ?? null;
+
+  if (!taskServerId || !bucketServerId || !viewServerId || !projectServerId) {
+    // The task or its target bucket hasn't synced yet — retry after their
+    // create ops land (FIFO keeps those ahead of this assignment).
+    throw new ApiError(408, null, 'task_bucket: task/bucket not synced yet', true);
+  }
+
+  await callApi(
+    client.POST('/projects/{project}/views/{view}/buckets/{bucket}/tasks', {
+      params: {
+        path: {
+          project: projectServerId,
+          view: viewServerId,
+          bucket: bucketServerId,
+        },
+      },
+      body: {
+        task_id: taskServerId,
+        bucket_id: bucketServerId,
+        project_view_id: viewServerId,
+      },
+    }),
+  );
+  // Nothing to reconcile locally — the assignment row is already written.
 }

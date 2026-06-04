@@ -128,6 +128,7 @@ export function KanbanBoard({ view }: KanbanBoardProps) {
               collapsed={collapsed.has(col.bucket.localId)}
               onToggleCollapse={() => handleCollapse(col.bucket.localId)}
               viewLocalId={view.localId}
+              projectLocalId={view.projectLocalId}
             />
           ))}
           <AddBucketColumn viewLocalId={view.localId} />
@@ -151,9 +152,10 @@ interface ColumnProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   viewLocalId: string;
+  projectLocalId: string;
 }
 
-function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId }: ColumnProps) {
+function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId, projectLocalId }: ColumnProps) {
   const { bucket, tasks } = column;
   const [showNewInput, setShowNewInput] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -188,7 +190,7 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, viewLocalId }: Colu
     try {
       const task = await createTask({
         title: parsed.title || trimmed,
-        projectLocalId: '',
+        projectLocalId,
         dueDate: parsed.dueDate ?? undefined,
         priority: parsed.priority ?? undefined,
       });

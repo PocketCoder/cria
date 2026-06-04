@@ -148,6 +148,10 @@ export async function replaceBucketsForViewFromServer(
     upserted.add(localId);
   }
 
+  // Spare dirty rows: a locally-created bucket that hasn't pushed yet has
+  // no server_id, so it'd never be in `upserted` — without this guard a
+  // pull racing ahead of the outbox push would wipe a brand-new bucket
+  // (the "new buckets disappear on poll" bug).
   if (upserted.size > 0) {
     const db = await getDb();
     const placeholders = [...upserted].map(() => '?').join(', ');
@@ -155,7 +159,8 @@ export async function replaceBucketsForViewFromServer(
       `UPDATE buckets SET deleted = 1, updated_at = ?
         WHERE view_local_id = ?
           AND local_id NOT IN (${placeholders})
-          AND deleted = 0`,
+          AND deleted = 0
+          AND dirty = 0`,
       [new Date().toISOString(), viewLocalId, ...upserted],
     );
   }

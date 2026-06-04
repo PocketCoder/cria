@@ -218,7 +218,10 @@ export async function replaceViewsForProjectFromServer(
   }
 
   // Soft-delete views the server didn't return (user deleted them
-  // on another client or the default views have changed).
+  // on another client or the default views have changed). Dirty rows are
+  // spared: a locally-created view that hasn't pushed yet is authoritative
+  // until the outbox drains, so a pull mustn't wipe it (it has no server_id
+  // and would never be in `upserted`).
   if (upserted.size > 0) {
     const db = await getDb();
     const placeholders = [...upserted].map(() => '?').join(', ');
@@ -226,7 +229,8 @@ export async function replaceViewsForProjectFromServer(
       `UPDATE project_views SET deleted = 1, updated_at = ?
         WHERE project_local_id = ?
           AND local_id NOT IN (${placeholders})
-          AND deleted = 0`,
+          AND deleted = 0
+          AND dirty = 0`,
       [new Date().toISOString(), projectLocalId, ...upserted],
     );
   }
