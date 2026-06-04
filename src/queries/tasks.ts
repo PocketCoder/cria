@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listTasksForProject } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
+import { throttledWarn } from '@/api/resilience';
 import { pullTasksForProject } from '@/sync/pull';
 import type { Task } from '@/domain/task';
 import type { Project } from '@/domain/project';
@@ -23,7 +24,7 @@ export function useProjectTasks(project: Project | null) {
         try {
           await pullTasksForProject(project.serverId);
         } catch (err) {
-          console.warn('[queries/tasks] pull failed, using cache:', err);
+          throttledWarn('queries/tasks', '[queries/tasks] pull failed, using cache:', err);
         }
       }
       return listTasksForProject(project.localId);

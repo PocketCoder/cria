@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { fetchCurrentUser } from '@/api/user';
 import { getCachedUser, upsertUser } from '@/db/user';
+import { throttledWarn } from '@/api/resilience';
 import { subscribe } from '@/db/bus';
 import type { User } from '@/domain/user';
 import { useAuth } from '@/auth/store';
@@ -34,7 +35,7 @@ export function useCurrentUser() {
         await upsertUser(fresh);
         return fresh;
       } catch (err) {
-        console.warn('[queries/user] refresh failed:', err);
+        throttledWarn('queries/user', '[queries/user] refresh failed:', err);
         return cached;
       }
     },
