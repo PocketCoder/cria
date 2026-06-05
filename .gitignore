@@ -26,3 +26,5 @@ src-tauri/gen/
 
 # Test
 coverage/
+.aider*
+PROJECT-VIEWS-REMAINING.md
