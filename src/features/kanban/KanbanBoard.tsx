@@ -6,11 +6,17 @@ import {
   useSensors,
   PointerSensor,
   useDroppable,
-  useDraggable,
   closestCorners,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
 import { useProjectTaskLabels } from '@/queries/taskLabels';
@@ -23,11 +29,12 @@ import {
   saveBoardFilter,
 } from './boardFilter';
 import { createTask } from '@/db/tasks';
-import { setTaskBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
+import { setTaskBucket, updateTaskPosition, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
 import { updateView } from '@/db/views';
 import { useUi } from '@/stores/ui';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import { applyLabelsByTitle } from '@/db/labels';
+import { calculatePosition } from '@/lib/position';
 import { cn } from '@/lib/cn';
 import { Plus, Trash2, ChevronDown, ChevronRight, MoreHorizontal, Pencil, X, Check, Gauge, Flag } from 'lucide-react';
 import type { ProjectView } from '@/domain/view';
@@ -36,8 +43,6 @@ import type { Project } from '@/domain/project';
 import type { TaskBucket } from '@/domain/bucket';
 
 const COLLAPSED_KEY = 'cria:kanbanCollapsed';
-/** Stable empty map so the default from useProjectTaskLabels doesn't change
- * identity each render (which would bust the filter memo). */
 const EMPTY_LABEL_MAP: Map<string, string[]> = new Map();
 
 interface KanbanBoardProps {
@@ -60,7 +65,6 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
     [view.localId],
   );
 
-  // Apply the board filter client-side to each column's tasks.
   const columns = useMemo(() => {
     if (!isBoardFilterActive(filter)) return rawColumns;
     return rawColumns.map((c) => ({
@@ -104,41 +108,94 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
     if (!over || !active) return;
 
     const taskId = String(active.id);
-    // Find which column the task was dropped into
-    const targetBucketId = findBucketForDroppable(String(over.id), columns);
-    if (!targetBucketId) return;
+    const overId = String(over.id);
 
-    // Find the task's current bucket in the column data
-    const sourceColumn = findSourceColumn(taskId, columns);
-    const sourceBucketId = sourceColumn?.bucket.localId;
-    if (sourceBucketId === targetBucketId) return;
+    const sourceCol = findSourceColumn(taskId, columns);
+    if (!sourceCol) return;
 
-    // Optimistically move the card in the cached board so it lands the
-    // instant you drop, rather than waiting on the DB write + refetch
-    // round-trip. setTaskBucket then persists; its notify('tasks')
-    // refetch reconciles (idempotent — same assignment).
-    queryClient.setQueryData(
-      ['kanban-buckets', view.localId],
-      (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
-        if (!old) return old;
-        const assignments = old.assignments.filter((a) => a.taskLocalId !== taskId);
-        assignments.push({
-          taskLocalId: taskId,
-          viewLocalId: view.localId,
-          bucketLocalId: targetBucketId,
-        });
-        return { ...old, assignments };
-      },
-    );
+    let targetCol = columns.find((c) => c.bucket.localId === overId);
+    if (!targetCol) {
+      targetCol = columns.find((c) => c.tasks.some((t) => t.localId === overId));
+    }
+    if (!targetCol) return;
 
-    try {
-      await setTaskBucket(taskId, view.localId, targetBucketId);
-    } catch (err) {
-      console.error('[kanban] failed to set task bucket:', err);
-      // Roll back the optimistic move by re-reading the DB.
-      void queryClient.invalidateQueries({
-        queryKey: ['kanban-buckets', view.localId],
-      });
+    const sourceBucketId = sourceCol.bucket.localId;
+    const targetBucketId = targetCol.bucket.localId;
+    const targetTasks = targetCol.tasks.map((t) => t.localId);
+
+    if (sourceBucketId === targetBucketId) {
+      // Intra-bucket reorder
+      const oldIdx = targetTasks.indexOf(taskId);
+      const newIdx = targetTasks.indexOf(overId);
+      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+
+      const reordered = arrayMove(targetTasks, oldIdx, newIdx);
+      const idx = reordered.indexOf(taskId);
+      const beforeId = idx > 0 ? reordered[idx - 1] : null;
+      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
+      const beforePos = beforeId ? targetCol.taskPositions[beforeId] ?? null : null;
+      const afterPos = afterId ? targetCol.taskPositions[afterId] ?? null : null;
+      const position = calculatePosition(beforePos, afterPos);
+
+      queryClient.setQueryData(
+        ['kanban-buckets', view.localId],
+        (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
+          if (!old) return old;
+          const withoutMoved = old.assignments.filter((a) => a.taskLocalId !== taskId);
+          return {
+            ...old,
+            assignments: insertAssignmentSorted(withoutMoved, {
+              taskLocalId: taskId,
+              viewLocalId: view.localId,
+              bucketLocalId: targetBucketId,
+              position,
+            }),
+          };
+        },
+      );
+
+      try {
+        await updateTaskPosition(taskId, view.localId, position);
+      } catch (err) {
+        console.error('[kanban] failed to update task position:', err);
+        void queryClient.invalidateQueries({ queryKey: ['kanban-buckets', view.localId] });
+      }
+    } else {
+      // Cross-bucket move
+      let insertIdx = overId === targetBucketId
+        ? targetTasks.length
+        : targetTasks.indexOf(overId);
+      if (insertIdx < 0) insertIdx = targetTasks.length;
+
+      const beforeId = insertIdx > 0 ? targetTasks[insertIdx - 1] : null;
+      const afterId = insertIdx < targetTasks.length ? targetTasks[insertIdx] : null;
+      const beforePos = beforeId ? targetCol.taskPositions[beforeId] ?? null : null;
+      const afterPos = afterId ? targetCol.taskPositions[afterId] ?? null : null;
+      const position = calculatePosition(beforePos, afterPos);
+
+      queryClient.setQueryData(
+        ['kanban-buckets', view.localId],
+        (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
+          if (!old) return old;
+          const withoutMoved = old.assignments.filter((a) => a.taskLocalId !== taskId);
+          return {
+            ...old,
+            assignments: insertAssignmentSorted(withoutMoved, {
+              taskLocalId: taskId,
+              viewLocalId: view.localId,
+              bucketLocalId: targetBucketId,
+              position,
+            }),
+          };
+        },
+      );
+
+      try {
+        await setTaskBucket(taskId, view.localId, targetBucketId, position);
+      } catch (err) {
+        console.error('[kanban] failed to set task bucket:', err);
+        void queryClient.invalidateQueries({ queryKey: ['kanban-buckets', view.localId] });
+      }
     }
   }, [columns, view.localId, queryClient]);
 
@@ -235,7 +292,8 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
     id: bucket.localId,
   });
 
-  // Close menu on click outside
+  const taskIds = useMemo(() => tasks.map((t) => t.localId), [tasks]);
+
   useEffect(() => {
     if (!showMenu) return;
     const handler = (e: MouseEvent) => {
@@ -259,7 +317,6 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
         dueDate: parsed.dueDate ?? undefined,
         priority: parsed.priority ?? undefined,
       });
-      // Move task to this bucket
       if (task.localId) {
         await setTaskBucket(task.localId, viewLocalId, bucket.localId);
       }
@@ -295,8 +352,6 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
     setShowMenu(false);
   };
 
-  // Done / default bucket are stored on the *view* (by bucket server id), so
-  // an unsynced bucket (no server id yet) can't be set until it syncs.
   const toggleDoneBucket = async () => {
     if (bucket.serverId == null) return;
     try {
@@ -475,9 +530,11 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
         <>
           {/* Task list */}
           <div className="flex-1 overflow-y-auto px-2 py-2">
-            {tasks.map((task) => (
-              <KanbanCard key={task.localId} task={task} />
-            ))}
+            <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+              {tasks.map((task) => (
+                <KanbanCard key={task.localId} task={task} />
+              ))}
+            </SortableContext>
             {tasks.length === 0 && (
               <p className="py-4 text-center text-[11px] text-[var(--color-muted-foreground)]">
                 No tasks
@@ -541,18 +598,26 @@ interface CardProps {
 
 function KanbanCard({ task }: CardProps) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
-  // Plain draggable (not sortable): cards are not themselves drop targets,
-  // so the only droppables are the bucket columns — `over.id` in
-  // onDragEnd is therefore always a bucket id, which makes cross-bucket
-  // moves unambiguous. The floating card is rendered via <DragOverlay>;
-  // the original is just dimmed while dragging.
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: task.localId,
   });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   return (
     <div
       ref={setNodeRef}
+      style={style}
       {...attributes}
       {...listeners}
       onClick={() => setSelectedTask(task.localId)}
@@ -642,17 +707,43 @@ function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
 
 /* ─── Helpers ─── */
 
-function findBucketForDroppable(
-  overId: string,
-  columns: KanbanColumn[],
-): string | null {
-  // If the over is a bucket, return it
-  if (columns.some((c) => c.bucket.localId === overId)) return overId;
-  // If the over is a task, find its bucket
-  for (const col of columns) {
-    if (col.tasks.some((t) => t.localId === overId)) return col.bucket.localId;
+/**
+ * Insert a new assignment into the assignments array at the correct position
+ * within its bucket's section (sorted by position value), so the optimistic
+ * cache update immediately reflects the correct visual order in SortableContext.
+ * Without this, dnd-kit sees no items change and restores the original position.
+ */
+function insertAssignmentSorted(
+  assignments: TaskBucket[],
+  entry: TaskBucket,
+): TaskBucket[] {
+  const targetBucketId = entry.bucketLocalId;
+  const position = entry.position ?? 0;
+
+  const bucketStart = assignments.findIndex((a) => a.bucketLocalId === targetBucketId);
+  if (bucketStart === -1) {
+    return [...assignments, entry];
   }
-  return null;
+
+  let bucketEnd = assignments.length;
+  for (let i = bucketStart + 1; i < assignments.length; i++) {
+    if (assignments[i]!.bucketLocalId !== targetBucketId) {
+      bucketEnd = i;
+      break;
+    }
+  }
+
+  let insertAt = bucketEnd;
+  for (let i = bucketStart; i < bucketEnd; i++) {
+    if ((assignments[i]!.position ?? 0) > position) {
+      insertAt = i;
+      break;
+    }
+  }
+
+  const result = [...assignments];
+  result.splice(insertAt, 0, entry);
+  return result;
 }
 
 function findSourceColumn(

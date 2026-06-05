@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useSettings } from '@/stores/settings';
-import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { nativeNotify } from '@/utils/notify';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
@@ -80,7 +79,7 @@ export function Shell() {
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
-  const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
+
 
   // Track previous counts to fire notifications only on transition
   const prevOutbox = useRef<number>(outboxCount);
@@ -176,18 +175,6 @@ export function Shell() {
     return () => {
       unregister(shortcut).catch((e) => console.error('Failed to unregister shortcut', e));
     };
-  }, []);
-
-  // Load initial autostart status
-  useEffect(() => {
-    (async () => {
-      try {
-        const enabled = await isEnabled();
-        setAutostartEnabled(enabled);
-      } catch (e) {
-        console.error('Failed to read autostart status', e);
-      }
-    })();
   }, []);
 
   // Dev‑only keyboard shortcut (⌘+Shift+A) — Tauri global shortcut covers
@@ -308,12 +295,12 @@ export function Shell() {
               {currentView ? (
                 currentView.viewKind === 'kanban' ? (
                   <KanbanBoard view={currentView} project={project} />
-                ) : currentView.viewKind === 'table' ? (
-                  <TableView project={project} />
+                ) :                 currentView.viewKind === 'table' ? (
+                  <TableView project={project} view={currentView} />
                 ) : currentView.viewKind === 'gantt' ? (
                   <GanttView project={project} />
                 ) : (
-                  <TaskList project={project} />
+                  <TaskList project={project} view={currentView} />
                 )
               ) : (
                 <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
@@ -409,27 +396,7 @@ export function Shell() {
                  )
                : 'Synced with server'}
            </span>
-          {/* Autostart toggle */}
-<button
-             onClick={async () => {
-               try {
-                 const enabled = await isEnabled();
-                 if (enabled) {
-                   await disable();
-                 } else {
-                   await enable();
-                 }
-                 // Refresh status after toggling
-                 setAutostartEnabled(!(await isEnabled()));
-               } catch (e) {
-                 console.error('Autostart toggle failed', e);
-               }
-             }}
-             className="text-xs text-[var(--color-muted-foreground)] underline"
-           >
-             Autostart: {autostartEnabled ? 'On' : 'Off'}
-           </button>
-        </div>
+         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"

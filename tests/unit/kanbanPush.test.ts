@@ -172,7 +172,7 @@ describe('kanban outbox push', () => {
     // and the board can never place a moved card in its bucket.
     const assignments = await listBucketAssignmentsForView('v5');
     expect(assignments).toEqual([
-      { taskLocalId: 't5', viewLocalId: 'v5', bucketLocalId: 'b5' },
+      { taskLocalId: 't5', viewLocalId: 'v5', bucketLocalId: 'b5', position: 0 },
     ]);
   });
 

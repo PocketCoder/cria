@@ -341,6 +341,11 @@ async function executeOp(
     return;
   }
 
+  if (op.entity_type === 'task_position') {
+    await executeTaskPositionOp(client, db, op);
+    return;
+  }
+
   if (op.entity_type !== 'task') return;
 
   const localId = op.entity_local_id;
@@ -1100,4 +1105,51 @@ async function executeTaskBucketOp(
     }),
   );
   // Nothing to reconcile locally — the assignment row is already written.
+}
+
+/* ──────────────────────── task-position ops ─────────────────── */
+
+async function executeTaskPositionOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  const payload = JSON.parse(op.payload) as {
+    view_local_id: string;
+    position: number;
+  };
+  const taskLocalId = op.entity_local_id;
+
+  const [taskRow] = await db.select<{ server_id: number | null }[]>(
+    `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+    [taskLocalId],
+  );
+  const { view_server_id: viewServerId } = await resolveViewContext(
+    db,
+    payload.view_local_id,
+  );
+
+  const taskServerId = taskRow?.server_id ?? null;
+
+  if (!taskServerId || !viewServerId) {
+    throw new ApiError(
+      408,
+      null,
+      'task_position: task/view not synced yet',
+      true,
+    );
+  }
+
+  await callApi(
+    client.POST('/tasks/{id}/position', {
+      params: {
+        path: { id: taskServerId },
+      },
+      body: {
+        position: payload.position,
+        project_view_id: viewServerId,
+        task_id: taskServerId,
+      },
+    }),
+  );
 }
