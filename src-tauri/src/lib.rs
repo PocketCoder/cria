@@ -19,6 +19,7 @@ const MIGRATION_8_SQL: &str = include_str!("../../src/db/migrations/008_task_rem
 const MIGRATION_9_SQL: &str = include_str!("../../src/db/migrations/009_task_identifier.sql");
 const MIGRATION_10_SQL: &str = include_str!("../../src/db/migrations/010_views.sql");
 const MIGRATION_11_SQL: &str = include_str!("../../src/db/migrations/011_kanban.sql");
+const MIGRATION_12_SQL: &str = include_str!("../../src/db/migrations/012_task_bucket_position.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -30,55 +31,55 @@ fn migrations() -> Vec<Migration> {
         },
         Migration {
             version: 2,
-            description: "task favorites and subscription",
+            description: "task fields (favorite, subscription, repeat)",
             sql: MIGRATION_2_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 3,
-            description: "FTS5 full-text search",
+            description: "full-text search FTS5",
             sql: MIGRATION_3_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 4,
-            description: "project is_favorite column",
+            description: "project favorite",
             sql: MIGRATION_4_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 5,
-            description: "task attachments mirror",
+            description: "task attachments",
             sql: MIGRATION_5_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 6,
-            description: "task reminders mirror",
+            description: "task reminders",
             sql: MIGRATION_6_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 7,
-            description: "task relations mirror",
+            description: "task relations",
             sql: MIGRATION_7_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 8,
-            description: "task reminders: relative form",
+            description: "task reminders relative form",
             sql: MIGRATION_8_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 9,
-            description: "task identifier column",
+            description: "task identifier",
             sql: MIGRATION_9_SQL,
             kind: MigrationKind::Up,
         },
         Migration {
             version: 10,
-            description: "project views mirror",
+            description: "project views (list/gantt/table/kanban)",
             sql: MIGRATION_10_SQL,
             kind: MigrationKind::Up,
         },
@@ -86,6 +87,12 @@ fn migrations() -> Vec<Migration> {
             version: 11,
             description: "kanban buckets and task-bucket assignments",
             sql: MIGRATION_11_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 12,
+            description: "task-bucket position for intra-bucket reorder",
+            sql: MIGRATION_12_SQL,
             kind: MigrationKind::Up,
         },
     ]

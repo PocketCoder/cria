@@ -16,6 +16,7 @@ export interface TaskBucket {
   taskLocalId: string;
   viewLocalId: string;
   bucketLocalId: string;
+  position: number | null;
 }
 
 /** Server response shape for GET …/buckets or the kanban endpoint's buckets. */

@@ -80,7 +80,7 @@ describe('buildKanbanColumns', () => {
     const cols = buildKanbanColumns(
       mkView(),
       [b1, b2],
-      [{ taskLocalId: 't1', bucketLocalId: 'b2' }],
+      [{ taskLocalId: 't1', bucketLocalId: 'b2', position: null }],
       [t1, t2],
     );
     // t1 sits in b2 (its assignment); t2 falls into the leftmost (b1).
@@ -96,7 +96,7 @@ describe('buildKanbanColumns', () => {
     const after = buildKanbanColumns(
       mkView(),
       [b1, b2],
-      [{ taskLocalId: 't1', bucketLocalId: 'b2' }],
+      [{ taskLocalId: 't1', bucketLocalId: 'b2', position: null }],
       [t1],
     );
     expect(byBucket(after)).toEqual({ b1: [], b2: ['t1'] });

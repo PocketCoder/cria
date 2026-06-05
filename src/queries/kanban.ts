@@ -11,6 +11,9 @@ import type { Project } from '@/domain/project';
 export interface KanbanColumn {
   bucket: Bucket;
   tasks: Task[];
+  /** Per-bucket position of each task, keyed by task localId. Used by the
+   *  drag-reorder handler to compute neighbour positions. */
+  taskPositions: Record<string, number>;
 }
 
 /**
@@ -24,13 +27,14 @@ export interface KanbanColumn {
 export function buildKanbanColumns(
   view: ProjectView,
   buckets: Bucket[],
-  assignments: Pick<TaskBucket, 'taskLocalId' | 'bucketLocalId'>[],
+  assignments: Pick<TaskBucket, 'taskLocalId' | 'bucketLocalId' | 'position'>[],
   tasks: Task[],
 ): KanbanColumn[] {
-  const assignMap = new Map<string, string[]>();
+  // Build per-bucket ordered task lists from assignments (sorted by position).
+  const assignMap = new Map<string, Array<{ taskLocalId: string; position: number | null }>>();
   for (const a of assignments) {
     const arr = assignMap.get(a.bucketLocalId) ?? [];
-    arr.push(a.taskLocalId);
+    arr.push({ taskLocalId: a.taskLocalId, position: a.position });
     assignMap.set(a.bucketLocalId, arr);
   }
   const taskMap = new Map(tasks.map((t) => [t.localId, t]));
@@ -39,14 +43,16 @@ export function buildKanbanColumns(
   const placed = new Set<string>();
   for (const b of buckets) {
     const colTasks: Task[] = [];
-    for (const tid of assignMap.get(b.localId) ?? []) {
+    const taskPositions: Record<string, number> = {};
+    for (const { taskLocalId: tid, position } of assignMap.get(b.localId) ?? []) {
       const t = taskMap.get(tid);
       if (t && !t.done) {
         colTasks.push(t);
         placed.add(tid);
+        if (position != null) taskPositions[tid] = position;
       }
     }
-    columns.push({ bucket: b, tasks: colTasks });
+    columns.push({ bucket: b, tasks: colTasks, taskPositions });
   }
 
   // Done tasks → the done bucket (if one is configured).
