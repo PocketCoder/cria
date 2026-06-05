@@ -14,7 +14,6 @@ import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
-  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
@@ -25,7 +24,7 @@ import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask, reorderTask } from '@/db/tasks';
-import { calculatePosition } from '@/lib/position';
+// import { calculatePosition } from '@/lib/position'; // Removed unused import
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
@@ -105,6 +104,27 @@ export function TaskList({ project, view }: TaskListProps) {
     setActiveId(String(event.active.id));
   }, []);
 
+  // Helper: collect the IDs of a task and all of its descendants from the task tree
+  const collectSubtreeIds = (taskId: string, nodes: TaskTreeNode[]): string[] => {
+    const result: string[] = [];
+    const findNode = (list: TaskTreeNode[]): TaskTreeNode | undefined => {
+      for (const n of list) {
+        if (n.task.localId === taskId) return n;
+        const child = findNode(n.children);
+        if (child) return child;
+      }
+      return undefined;
+    };
+    const root = findNode(nodes);
+    if (!root) return result;
+    const dfs = (node: TaskTreeNode) => {
+      result.push(node.task.localId);
+      node.children.forEach(dfs);
+    };
+    dfs(root);
+    return result;
+  };
+
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setActiveId(null);
@@ -115,30 +135,68 @@ export function TaskList({ project, view }: TaskListProps) {
       const overId = String(over.id);
       if (taskId === overId) return;
 
-      const current = tasksRef.current;
+      // Build the block of IDs (parent + its whole subtree)
+      const blockIds = collectSubtreeIds(taskId, taskTree);
+      if (blockIds.length === 0) return;
+
+      const current = tasksRef.current; // flat list of active tasks
+      const flatIds = current.map((t) => t.localId);
+      // Remove block IDs from the flat list
+      const remaining = flatIds.filter((id) => !blockIds.includes(id));
+
+      // Find insertion point based on the overId (a root task)
+      const insertIdx = remaining.findIndex((id) => id === overId);
+      const newOrder = [...remaining];
+      if (insertIdx === -1) {
+        // Append to the end if target not found
+        newOrder.push(...blockIds);
+      } else {
+        newOrder.splice(insertIdx, 0, ...blockIds);
+      }
+
+      // Determine neighb­ors around the inserted block
+      const blockStartIdx = newOrder.findIndex((id) => id === blockIds[0]);
+      const beforeId = blockStartIdx > 0 ? newOrder[blockStartIdx - 1] : null;
+      const afterId = blockStartIdx + blockIds.length < newOrder.length ? newOrder[blockStartIdx + blockIds.length] : null;
       const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
-
-      const oldIdx = current.findIndex((t) => t.localId === taskId);
-      const newIdx = current.findIndex((t) => t.localId === overId);
-      if (oldIdx === -1 || newIdx === -1) return;
-
-      const ids = current.map((t) => t.localId);
-      const reordered = arrayMove(ids, oldIdx, newIdx);
-      const idx = reordered.indexOf(taskId);
-      const beforeId = idx > 0 ? reordered[idx - 1] : null;
-      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
       const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
       const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
-      const position = calculatePosition(beforePos, afterPos);
+
+      // Compute positions for each task in the moved block
+      const positions: number[] = [];
+      if (beforePos != null && afterPos != null) {
+        const gap = afterPos - beforePos;
+        const step = gap / (blockIds.length + 1);
+        for (let i = 1; i <= blockIds.length; i++) {
+          positions.push(beforePos + step * i);
+        }
+      } else if (beforePos != null) {
+        const step = 1024; // fallback step size
+        for (let i = 0; i < blockIds.length; i++) {
+          positions.push(beforePos + (i + 1) * step);
+        }
+      } else if (afterPos != null) {
+        const step = 1024;
+        for (let i = blockIds.length - 1; i >= 0; i--) {
+          positions.push(afterPos - (blockIds.length - i) * step);
+        }
+      } else {
+        // No neighbours – start from zero
+        for (let i = 0; i < blockIds.length; i++) {
+          positions.push(i * 1024);
+        }
+      }
 
       try {
-        await reorderTask(taskId, view.localId, position);
-        } catch (err) {
-          console.error('[tasks] failed to reorder task:', err);
-          setReorderError(true);
+        for (let i = 0; i < blockIds.length; i++) {
+          await reorderTask(blockIds[i], view!.localId, positions[i] as number);
         }
+      } catch (err) {
+        console.error('[tasks] failed to reorder block:', err);
+        setReorderError(true);
+      }
     },
-    [view],
+    [view, taskTree],
   );
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
