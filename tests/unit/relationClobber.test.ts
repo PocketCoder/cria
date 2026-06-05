@@ -10,6 +10,24 @@ import {
   replaceTaskRelationsFromServer,
   listRelationsForTask,
 } from '@/db/relations';
+import { pullTasksForProject } from '@/sync/pull';
+import type { ApiClient } from '@/api/client';
+
+/** Mock client whose GET /tasks returns the given task payloads (one page). */
+function listClient(tasks: unknown[]): ApiClient {
+  const ok = {
+    ok: true,
+    status: 200,
+    headers: { get: (h: string) => (h === 'x-pagination-total-pages' ? '1' : null) },
+    text: async () => '',
+  } as unknown as Response;
+  return {
+    GET: (async (url: string) =>
+      url === '/tasks'
+        ? { data: tasks, response: ok }
+        : { data: [], response: ok }) as never,
+  } as unknown as ApiClient;
+}
 
 const NOW = '2024-01-01T00:00:00Z';
 
@@ -68,5 +86,31 @@ describe('relation pull clobber guard (#87)', () => {
     await replaceTaskRelationsFromServer('A', { blocking: [{ id: 31 }] } as never);
     const a = await listRelationsForTask('A');
     expect(a.some((r) => r.kind === 'blocking' && r.otherTaskLocalId === 'B')).toBe(false);
+  });
+
+  it('a list pull with empty related_tasks does not wipe existing relations', async () => {
+    const proj = await seedProject(4);
+    await seedTask('A', 40, proj);
+    await seedTask('B', 41, proj);
+    // A synced relation already in place (both directions).
+    await addRelation('A', 'B', 'blocking');
+    // (drain the outbox would clear the pending op; simulate "already synced"
+    //  by removing the queued op so the preserve-pending guard can't be what
+    //  saves it — this exercises the list-pull empty guard specifically.)
+    const db = await getDb();
+    await db.execute(`DELETE FROM outbox WHERE entity_type = 'task_relation'`);
+
+    // List pull returns the tasks but with NO related_tasks (the bug trigger).
+    await pullTasksForProject(
+      4,
+      listClient([
+        { id: 40, project_id: 4, title: 'A', related_tasks: {} },
+        { id: 41, project_id: 4, title: 'B', related_tasks: {} },
+      ]),
+    );
+
+    // Both directions survive the poll.
+    expect(keys(await listRelationsForTask('A'))).toContain('blocking:B');
+    expect(keys(await listRelationsForTask('B'))).toContain('blocked:A');
   });
 });

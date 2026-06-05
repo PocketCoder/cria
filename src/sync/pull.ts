@@ -198,7 +198,7 @@ export async function refetchTaskByServerId(
       console.warn('[refetchTaskByServerId] invalid response:', parsed.error);
       return;
     }
-    await upsertTaskWithRelations(parsed.data);
+    await upsertTaskWithRelations(parsed.data, true);
     notify('tasks');
   } catch (err) {
     console.warn('[refetchTaskByServerId] failed:', err);
@@ -210,7 +210,16 @@ export async function refetchTaskByServerId(
  * the per-project and all-tasks pulls. Silent (no notify) — see the
  * sync-upsert rule in src/db.
  */
-async function upsertTaskWithRelations(t: TaskResponse): Promise<void> {
+async function upsertTaskWithRelations(
+  t: TaskResponse,
+  // The list endpoints return relations too, but we've seen them come back
+  // empty/partial for a task whose peer-side (inverse) relation exists —
+  // which would wipe a perfectly good local relation on every poll. So list
+  // pulls only *apply* relations they actually carry (never clear), and only
+  // an authoritative single-task GET (refetchTaskByServerId) clears missing
+  // ones. See #87 and the relation-clobber investigation.
+  clearMissingRelations = false,
+): Promise<void> {
   const taskLocalId = await upsertTaskFromServer(t);
   if (taskLocalId && Array.isArray(t.labels)) {
     const validLabels: LabelResponse[] = [];
@@ -259,7 +268,11 @@ async function upsertTaskWithRelations(t: TaskResponse): Promise<void> {
       }
       if (validPeers.length > 0) validRelated[kind] = validPeers;
     }
-    await replaceTaskRelationsFromServer(taskLocalId, validRelated);
+    // List pulls (clearMissingRelations=false) only apply relations they
+    // actually return; they must not wipe local relations to empty.
+    if (clearMissingRelations || Object.keys(validRelated).length > 0) {
+      await replaceTaskRelationsFromServer(taskLocalId, validRelated);
+    }
   }
 }
 
