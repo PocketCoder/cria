@@ -66,10 +66,53 @@ export async function replaceTaskRelationsFromServer(
   );
   if (dirty === 1) return;
 
+  // Relations the user added/removed locally but hasn't pushed yet must
+  // survive a server pull — the server doesn't know about them, so a blind
+  // delete-and-reinsert would wipe the optimistic relation (incl. the
+  // auto-created inverse on the peer task). The outbox is the source of truth
+  // for "pending". An op can touch this task as the owner (forward kind) or
+  // as the peer (the inverse kind). See issue #87.
+  const ops = await db.select<{ entity_local_id: string; op: string; payload: string }[]>(
+    `SELECT entity_local_id, op, payload FROM outbox
+      WHERE entity_type = 'task_relation' ORDER BY id ASC`,
+  );
+  const preserve = new Map<string, { other: string; kind: TaskRelationKind }>();
+  const exclude = new Set<string>();
+  for (const o of ops) {
+    let payload: { otherTaskLocalId?: string | null; kind?: TaskRelationKind };
+    try {
+      payload = JSON.parse(o.payload);
+    } catch {
+      continue;
+    }
+    if (!payload.kind) continue;
+    let other: string | null = null;
+    let kind: TaskRelationKind | null = null;
+    if (o.entity_local_id === taskLocalId) {
+      other = payload.otherTaskLocalId ?? null;
+      kind = payload.kind;
+    } else if (payload.otherTaskLocalId === taskLocalId) {
+      // The inverse row this op created lives on *this* task.
+      other = o.entity_local_id;
+      kind = inverseRelationKind(payload.kind);
+    }
+    if (!other || !kind) continue;
+    const key = `${other}|${kind}`;
+    // Ops are chronological — last one for a key wins.
+    if (o.op === 'add') {
+      preserve.set(key, { other, kind });
+      exclude.delete(key);
+    } else if (o.op === 'remove') {
+      exclude.add(key);
+      preserve.delete(key);
+    }
+  }
+
   await exec(`DELETE FROM task_relations WHERE task_local_id = ?`, [
     taskLocalId,
   ]);
 
+  const inserted = new Set<string>();
   for (const [kind, peers] of Object.entries(related)) {
     if (!peers) continue;
     for (const peer of peers) {
@@ -82,6 +125,8 @@ export async function replaceTaskRelationsFromServer(
         [peer.id],
       );
       const otherLocalId: string | null = row?.local_id ?? null;
+      // Skip a relation the user removed locally but hasn't pushed yet.
+      if (otherLocalId && exclude.has(`${otherLocalId}|${kind}`)) continue;
       await exec(
         `INSERT OR REPLACE INTO task_relations
            (task_local_id, other_task_local_id, other_task_server_id,
@@ -95,7 +140,20 @@ export async function replaceTaskRelationsFromServer(
           null, // server doesn't return a per-relation created_at in this map
         ],
       );
+      if (otherLocalId) inserted.add(`${otherLocalId}|${kind}`);
     }
+  }
+
+  // Re-add locally-queued (not-yet-pushed) relations the server didn't return.
+  for (const [key, { other, kind }] of preserve) {
+    if (inserted.has(key)) continue;
+    await exec(
+      `INSERT OR REPLACE INTO task_relations
+         (task_local_id, other_task_local_id, other_task_server_id,
+          relation_kind, created_at)
+       VALUES (?, ?, NULL, ?, ?)`,
+      [taskLocalId, other, kind, new Date().toISOString()],
+    );
   }
 }
 
