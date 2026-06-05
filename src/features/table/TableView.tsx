@@ -1,19 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pencil, Check } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Pencil, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useUi } from '@/stores/ui';
-import { updateTask } from '@/db/tasks';
+import { updateTask, reorderTask } from '@/db/tasks';
+import { calculatePosition } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { cn } from '@/lib/cn';
 import type { Project } from '@/domain/project';
+import type { ProjectView } from '@/domain/view';
 import type { Task, TaskUpdate } from '@/domain/task';
 import {
   useTableConfig,
   sortTasks,
   type ColumnKey,
+  type ColumnDef,
 } from './useTableConfig';
 import { SortHeader } from './SortHeader';
 import { TableColumnPopup } from './TableColumnPopup';
@@ -24,6 +42,101 @@ import { AssigneeCell } from './AssigneeCell';
 
 interface TableViewProps {
   project: Project;
+  view?: ProjectView;
+}
+
+interface SortableRowProps {
+  task: Task;
+  shownColumns: ColumnDef[];
+  editMode: boolean;
+  drafts: Record<string, DraftFields>;
+  setDraft: (localId: string, field: keyof DraftFields, value: unknown) => void;
+  projectTitle: (id: string) => string;
+  currentUserServerId: number | null;
+  selectedTaskId: string | null;
+  setSelectedTask: (id: string | null) => void;
+}
+
+const EDITABLE_COLUMNS = new Set<ColumnKey>([
+  'title',
+  'priority',
+  'dueDate',
+  'startDate',
+  'endDate',
+  'percentDone',
+  'labels',
+]);
+
+function SortableTableRow({
+  task,
+  shownColumns,
+  editMode,
+  drafts,
+  setDraft,
+  projectTitle,
+  currentUserServerId,
+  selectedTaskId,
+  setSelectedTask,
+}: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: task.localId,
+    disabled: editMode,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={editMode ? undefined : () => setSelectedTask(task.localId)}
+      className={cn(
+        'border-b border-[var(--color-border)] transition-colors',
+        !editMode && 'cursor-grab hover:bg-[var(--color-accent)]/5 active:cursor-grabbing',
+        task.done && 'opacity-60',
+        selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+        isDragging && 'opacity-40',
+      )}
+    >
+      {shownColumns.map((c) => {
+        const editable = editMode && EDITABLE_COLUMNS.has(c.key);
+        return (
+          <td
+            key={c.key}
+            className="px-3 py-2 align-middle text-[var(--color-foreground)]"
+          >
+            {editable ? (
+              <EditField
+                task={task}
+                columnKey={c.key}
+                draft={drafts[task.localId]}
+                onChange={(field, value) => setDraft(task.localId, field, value)}
+              />
+            ) : (
+              <Cell
+                task={task}
+                columnKey={c.key}
+                projectTitle={projectTitle}
+                currentUserServerId={currentUserServerId}
+              />
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
 }
 
 /**
@@ -32,7 +145,7 @@ interface TableViewProps {
  * driven by `useTableConfig` (global localStorage). Row click opens the
  * task detail card, like the list view.
  */
-export function TableView({ project }: TableViewProps) {
+export function TableView({ project, view }: TableViewProps) {
   const { data: tasks = [], isLoading, isFetching, isError, error } =
     useProjectTasks(project);
   const { data: allProjects = [] } = useProjects();
@@ -41,6 +154,56 @@ export function TableView({ project }: TableViewProps) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const { data: currentUser } = useCurrentUser();
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const sortedRef = useRef<Task[]>([]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveId(null);
+      const { active, over } = event;
+      if (!over || !active || !view) return;
+
+      const taskId = String(active.id);
+      const overId = String(over.id);
+      if (taskId === overId) return;
+
+      const current = sortedRef.current;
+      const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
+
+      const oldIdx = current.findIndex((t) => t.localId === taskId);
+      const newIdx = current.findIndex((t) => t.localId === overId);
+      if (oldIdx === -1 || newIdx === -1) return;
+
+      const ids = current.map((t) => t.localId);
+      const reordered = [...ids];
+      reordered.splice(oldIdx, 1);
+      reordered.splice(newIdx, 0, taskId);
+      const idx = reordered.indexOf(taskId);
+      const beforeId = idx > 0 ? reordered[idx - 1] : null;
+      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
+      const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
+      const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
+      const position = calculatePosition(beforePos, afterPos);
+
+      try {
+        await reorderTask(taskId, view.localId, position);
+      } catch (err) {
+        console.error('[table] failed to reorder task:', err);
+      }
+    },
+    [view],
+  );
 
   // Table-wide edit mode: a single toggle turns every editable cell into an
   // input. Edits accumulate in `drafts` (keyed by task) and are written on
@@ -95,10 +258,18 @@ export function TableView({ project }: TableViewProps) {
     () => tasks.filter((t) => !pendingDeletes[t.localId]),
     [tasks, pendingDeletes],
   );
+  const [showCompleted, setShowCompleted] = useState(false);
+  const activeTasks = useMemo(() => visibleTasks.filter((t) => !t.done), [visibleTasks]);
+  const completedTasks = useMemo(() => visibleTasks.filter((t) => t.done), [visibleTasks]);
 
   const sorted = useMemo(
-    () => sortTasks(visibleTasks, sortBy, { projectTitle, visible }),
-    [visibleTasks, sortBy, projectTitle, visible],
+    () => sortTasks(activeTasks, sortBy, { projectTitle, visible }),
+    [activeTasks, sortBy, projectTitle, visible],
+  );
+  useEffect(() => { sortedRef.current = sorted; }, [sorted]);
+  const sortedCompleted = useMemo(
+    () => sortTasks(completedTasks, sortBy, { projectTitle, visible }),
+    [completedTasks, sortBy, projectTitle, visible],
   );
 
   const shownColumns = columns.filter((c) => visible[c.key]);
@@ -117,11 +288,11 @@ export function TableView({ project }: TableViewProps) {
     <section className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
         <span>
-          {visibleTasks.length === 0
+          {activeTasks.length === 0 && completedTasks.length === 0
             ? isLoading
               ? 'Loading…'
               : 'No tasks'
-            : `${visibleTasks.length} task${visibleTasks.length === 1 ? '' : 's'}`}
+            : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
           {isFetching ? <span className="ml-2">syncing…</span> : null}
         </span>
         <div className="flex items-center gap-2">
@@ -154,61 +325,124 @@ export function TableView({ project }: TableViewProps) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 z-10 bg-[var(--color-background)] text-xs">
-            <tr className="border-b border-[var(--color-border)]">
-              {shownColumns.map((c) => (
-                <SortHeader
-                  key={c.key}
-                  column={c}
-                  dir={sortBy[c.key]}
-                  order={sortOrder.get(c.key) ?? null}
-                  onSort={(additive) => onSort(c.key, additive)}
-                />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((task) => (
-              <tr
-                key={task.localId}
-                onClick={editMode ? undefined : () => setSelectedTask(task.localId)}
-                className={cn(
-                  'border-b border-[var(--color-border)] transition-colors',
-                  !editMode && 'cursor-pointer hover:bg-[var(--color-accent)]/5',
-                  task.done && 'opacity-60',
-                  selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
-                )}
-              >
-                {shownColumns.map((c) => {
-                  const editable = editMode && EDITABLE_COLUMNS.has(c.key);
-                  return (
-                    <td
-                      key={c.key}
-                      className="px-3 py-2 align-middle text-[var(--color-foreground)]"
-                    >
-                      {editable ? (
-                        <EditField
-                          task={task}
-                          columnKey={c.key}
-                          draft={drafts[task.localId]}
-                          onChange={(field, value) => setDraft(task.localId, field, value)}
-                        />
-                      ) : (
-                        <Cell
-                          task={task}
-                          columnKey={c.key}
-                          projectTitle={projectTitle}
-                          currentUserServerId={currentUser?.serverId ?? null}
-                        />
-                      )}
-                    </td>
-                  );
-                })}
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <table className="w-full border-collapse text-sm">
+            <thead className="sticky top-0 z-10 bg-[var(--color-background)] text-xs">
+              <tr className="border-b border-[var(--color-border)]">
+                {shownColumns.map((c) => (
+                  <SortHeader
+                    key={c.key}
+                    column={c}
+                    dir={sortBy[c.key]}
+                    order={sortOrder.get(c.key) ?? null}
+                    onSort={(additive) => onSort(c.key, additive)}
+                  />
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <SortableContext
+              items={sorted.map((t) => t.localId)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody>
+                {sorted.map((task) => (
+                  <SortableTableRow
+                    key={task.localId}
+                    task={task}
+                    shownColumns={shownColumns}
+                    editMode={editMode}
+                    drafts={drafts}
+                    setDraft={setDraft}
+                    projectTitle={projectTitle}
+                    currentUserServerId={currentUser?.serverId ?? null}
+                    selectedTaskId={selectedTaskId}
+                    setSelectedTask={setSelectedTask}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+          <DragOverlay>
+            {activeId ? (
+              <table className="w-full border-collapse text-sm">
+                <tbody>
+                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-card)] shadow-lg opacity-90">
+                    <td className="px-3 py-2 text-sm">
+                      {tasks.find((t) => t.localId === activeId)?.title ?? ''}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            ) : null}
+          </DragOverlay>
+          {completedTasks.length > 0 ? (
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-accent)]/5">
+                  <td
+                    colSpan={shownColumns.length}
+                    className="px-6 py-2 text-xs text-[var(--color-muted-foreground)]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowCompleted((s) => !s)}
+                      className="flex w-full cursor-pointer items-center gap-2 hover:text-[var(--color-foreground)]"
+                    >
+                      {showCompleted ? (
+                        <ChevronDown className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3 shrink-0" />
+                      )}
+                      {showCompleted ? 'Hide' : 'Show'} completed ({completedTasks.length})
+                    </button>
+                  </td>
+                </tr>
+                {showCompleted && sortedCompleted.map((task) => (
+                  <tr
+                    key={task.localId}
+                    onClick={editMode ? undefined : () => setSelectedTask(task.localId)}
+                    className={cn(
+                      'border-b border-[var(--color-border)] transition-colors',
+                      !editMode && 'cursor-pointer hover:bg-[var(--color-accent)]/5',
+                      task.done && 'opacity-60',
+                      selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+                    )}
+                  >
+                    {shownColumns.map((c) => {
+                      const editable = editMode && EDITABLE_COLUMNS.has(c.key);
+                      return (
+                        <td
+                          key={c.key}
+                          className="px-3 py-2 align-middle text-[var(--color-foreground)]"
+                        >
+                          {editable ? (
+                            <EditField
+                              task={task}
+                              columnKey={c.key}
+                              draft={drafts[task.localId]}
+                              onChange={(field, value) => setDraft(task.localId, field, value)}
+                            />
+                          ) : (
+                            <Cell
+                              task={task}
+                              columnKey={c.key}
+                              projectTitle={projectTitle}
+                              currentUserServerId={currentUser?.serverId ?? null}
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </DndContext>
 
         {sorted.length === 0 && !isLoading ? (
           <p className="px-6 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
@@ -227,17 +461,6 @@ export function TableView({ project }: TableViewProps) {
 }
 
 /* ───────────────────────── cells ───────────────────────── */
-
-/** Columns the user can edit inline (double-click). */
-const EDITABLE_COLUMNS = new Set<ColumnKey>([
-  'title',
-  'priority',
-  'dueDate',
-  'startDate',
-  'endDate',
-  'percentDone',
-  'labels',
-]);
 
 function Cell({
   task,

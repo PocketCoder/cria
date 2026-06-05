@@ -12,6 +12,7 @@ export interface GanttFilters {
   /** Inclusive range end, midnight-UTC ISO. */
   dateTo: string;
   showTasksWithoutDates: boolean;
+  showCompleted: boolean;
 }
 
 const KEY = 'cria:ganttFilters';
@@ -28,6 +29,7 @@ function defaults(): GanttFilters {
     // Default on: many local tasks lack start/end, and an empty chart reads
     // as broken. Users can hide them with the toggle.
     showTasksWithoutDates: true,
+    showCompleted: true,
   };
 }
 
@@ -57,6 +59,7 @@ export interface GanttFiltersApi {
   setDateFrom: (iso: string | null) => void;
   setDateTo: (iso: string | null) => void;
   toggleDateless: () => void;
+  toggleCompleted: () => void;
   reset: () => void;
 }
 
@@ -90,11 +93,18 @@ export function useGanttFilters(): GanttFiltersApi {
       return next;
     });
   }, []);
+  const toggleCompleted = useCallback(() => {
+    setFilters((prev) => {
+      const next = { ...prev, showCompleted: !prev.showCompleted };
+      persist(next);
+      return next;
+    });
+  }, []);
   const reset = useCallback(() => {
     const d = defaults();
     persist(d);
     setFilters(d);
   }, []);
 
-  return { filters, setDateFrom, setDateTo, toggleDateless, reset };
+  return { filters, setDateFrom, setDateTo, toggleDateless, toggleCompleted, reset };
 }

@@ -1,17 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
 import { format } from 'date-fns';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
+import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
-import { createTask, updateTask } from '@/db/tasks';
+import { createTask, updateTask, reorderTask } from '@/db/tasks';
+import { calculatePosition } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square } from 'lucide-react';
+import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
@@ -26,9 +44,10 @@ import { parseQuickAdd } from '@/lib/quickAddParser';
 
 interface TaskListProps {
   project: Project;
+  view?: ProjectView;
 }
 
-export function TaskList({ project }: TaskListProps) {
+export function TaskList({ project, view }: TaskListProps) {
   const { data: tasks = [], isLoading, isFetching, isError, error } =
     useProjectTasks(project);
 
@@ -42,6 +61,9 @@ export function TaskList({ project }: TaskListProps) {
   // here rather than touching the query data.
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const visibleTasks = tasks.filter((t) => !pendingDeletes[t.localId]);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const activeTasks = useMemo(() => visibleTasks.filter((t) => !t.done), [visibleTasks]);
+  const completedTasks = useMemo(() => visibleTasks.filter((t) => t.done), [visibleTasks]);
   const { data: attachmentIds } = useTasksWithAttachments();
   // Full project list so a parsed `+project` token can route the task to
   // a different project than the one currently open.
@@ -59,8 +81,61 @@ export function TaskList({ project }: TaskListProps) {
   }), [qc, project.localId]);
 
   const taskTree = useMemo(
-    () => buildTaskTree(visibleTasks, subtaskMap),
-    [visibleTasks, subtaskMap],
+    () => buildTaskTree(activeTasks, subtaskMap),
+    [activeTasks, subtaskMap],
+  );
+  const completedTree = useMemo(
+    () => buildTaskTree(completedTasks, subtaskMap),
+    [completedTasks, subtaskMap],
+  );
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const tasksRef = useRef(activeTasks);
+  tasksRef.current = activeTasks;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveId(null);
+      const { active, over } = event;
+      if (!over || !active || !view) return;
+
+      const taskId = String(active.id);
+      const overId = String(over.id);
+      if (taskId === overId) return;
+
+      const current = tasksRef.current;
+      const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
+
+      const oldIdx = current.findIndex((t) => t.localId === taskId);
+      const newIdx = current.findIndex((t) => t.localId === overId);
+      if (oldIdx === -1 || newIdx === -1) return;
+
+      const ids = current.map((t) => t.localId);
+      const reordered = arrayMove(ids, oldIdx, newIdx);
+      const idx = reordered.indexOf(taskId);
+      const beforeId = idx > 0 ? reordered[idx - 1] : null;
+      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
+      const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
+      const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
+      const position = calculatePosition(beforePos, afterPos);
+
+      try {
+        await reorderTask(taskId, view.localId, position);
+      } catch (err) {
+        console.error('[tasks] failed to reorder task:', err);
+      }
+    },
+    [view],
   );
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
@@ -128,11 +203,11 @@ export function TaskList({ project }: TaskListProps) {
     <section className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
         <span>
-          {visibleTasks.length === 0
+          {activeTasks.length === 0 && completedTasks.length === 0
             ? isLoading
               ? 'Loading…'
               : 'No tasks'
-            : `${visibleTasks.length} task${visibleTasks.length === 1 ? '' : 's'}`}
+            : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
         </span>
         {isFetching ? <span aria-live="polite">syncing…</span> : null}
       </div>
@@ -190,16 +265,67 @@ export function TaskList({ project }: TaskListProps) {
         <QuickAddPreview parsed={parsed} />
       </form>
 
-      <ul className="flex-1 overflow-y-auto">
-        {taskTree.map((node) => (
-          <TreeBranch
-            key={node.task.localId}
-            node={node}
-            depth={0}
-            attachmentIds={attachmentIds}
-          />
-        ))}
-      </ul>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={taskTree.map((n) => n.task.localId)}
+          strategy={verticalListSortingStrategy}
+        >
+          <ul className="flex-1 overflow-y-auto">
+            {taskTree.map((node) => (
+              <TreeBranch
+                key={node.task.localId}
+                node={node}
+                depth={0}
+                attachmentIds={attachmentIds}
+                sortable
+              />
+            ))}
+            {completedTasks.length > 0 ? (
+              <li className="border-t border-[var(--color-border)]">
+                <div className="mx-6 my-2 overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-accent)]/5">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompleted((s) => !s)}
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                  >
+                    {showCompleted ? (
+                      <ChevronDown className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 shrink-0" />
+                    )}
+                    {showCompleted ? 'Hide' : 'Show'} completed ({completedTasks.length})
+                  </button>
+                  {showCompleted ? (
+                    <ul>
+                      {completedTree.map((node) => (
+                        <TreeBranch
+                          key={node.task.localId}
+                          node={node}
+                          depth={0}
+                          attachmentIds={attachmentIds}
+                        />
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </li>
+            ) : null}
+          </ul>
+        </SortableContext>
+        <DragOverlay>
+          {activeId ? (
+            <li className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-6 py-3 shadow-lg opacity-90">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm">{tasks.find((t) => t.localId === activeId)?.title ?? ''}</p>
+              </div>
+            </li>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {isError ? (
         <p className="border-t border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-warning)]">
@@ -251,21 +377,20 @@ function TreeBranch({
   node,
   depth,
   attachmentIds,
+  sortable,
 }: {
   node: TaskTreeNode;
   depth: number;
   attachmentIds: Set<string> | undefined;
+  sortable?: boolean;
 }) {
-  // Sub-tasks are always shown (no collapse), matching Vikunja-web's
-  // list view. Hierarchy is conveyed purely by the child's indent —
-  // the parent row renders flush like any other task, so siblings stay
-  // aligned and nothing looks falsely nested.
   return (
     <>
       <TaskRow
         task={node.task}
         hasAttachments={attachmentIds?.has(node.task.localId) ?? false}
         depth={depth}
+        sortable={sortable}
       />
       {node.children.map((child) => (
         <TreeBranch
@@ -296,10 +421,12 @@ function TaskRow({
   task,
   hasAttachments,
   depth = 0,
+  sortable,
 }: {
   task: Task;
   hasAttachments: boolean;
   depth?: number;
+  sortable?: boolean;
 }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
@@ -308,6 +435,24 @@ function TaskRow({
   const { data: labels = [] } = useTaskLabels(task.localId);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
   const checklist = countChecklistItems(task.description);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: task.localId,
+    disabled: !sortable || editing,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    paddingLeft: `${24 + depth * 28}px`,
+  };
 
   const handleToggle = async () => {
     const nowDone = !task.done;
@@ -352,14 +497,19 @@ function TaskRow({
 
   return (
     <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
       data-task-row=""
       className={cn(
         'group flex items-start gap-3 border-b border-[var(--color-border)] py-3 transition-colors hover:bg-[var(--color-accent)]/5',
         'px-6',
         task.done && 'opacity-60',
-        selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10'
+        selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+        isDragging && 'opacity-40',
+        sortable && 'cursor-grab active:cursor-grabbing',
       )}
-      style={{ paddingLeft: `${24 + depth * 28}px` }}
       onClick={() => { if (!editing) setSelectedTask(task.localId); }}
     >
       <input

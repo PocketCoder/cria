@@ -141,14 +141,16 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
         ['kanban-buckets', view.localId],
         (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
           if (!old) return old;
-          const newAssignments = old.assignments.filter((a) => a.taskLocalId !== taskId);
-          newAssignments.push({
-            taskLocalId: taskId,
-            viewLocalId: view.localId,
-            bucketLocalId: targetBucketId,
-            position,
-          });
-          return { ...old, assignments: newAssignments };
+          const withoutMoved = old.assignments.filter((a) => a.taskLocalId !== taskId);
+          return {
+            ...old,
+            assignments: insertAssignmentSorted(withoutMoved, {
+              taskLocalId: taskId,
+              viewLocalId: view.localId,
+              bucketLocalId: targetBucketId,
+              position,
+            }),
+          };
         },
       );
 
@@ -175,14 +177,16 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
         ['kanban-buckets', view.localId],
         (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
           if (!old) return old;
-          const newAssignments = old.assignments.filter((a) => a.taskLocalId !== taskId);
-          newAssignments.push({
-            taskLocalId: taskId,
-            viewLocalId: view.localId,
-            bucketLocalId: targetBucketId,
-            position,
-          });
-          return { ...old, assignments: newAssignments };
+          const withoutMoved = old.assignments.filter((a) => a.taskLocalId !== taskId);
+          return {
+            ...old,
+            assignments: insertAssignmentSorted(withoutMoved, {
+              taskLocalId: taskId,
+              viewLocalId: view.localId,
+              bucketLocalId: targetBucketId,
+              position,
+            }),
+          };
         },
       );
 
@@ -702,6 +706,45 @@ function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
 }
 
 /* ─── Helpers ─── */
+
+/**
+ * Insert a new assignment into the assignments array at the correct position
+ * within its bucket's section (sorted by position value), so the optimistic
+ * cache update immediately reflects the correct visual order in SortableContext.
+ * Without this, dnd-kit sees no items change and restores the original position.
+ */
+function insertAssignmentSorted(
+  assignments: TaskBucket[],
+  entry: TaskBucket,
+): TaskBucket[] {
+  const targetBucketId = entry.bucketLocalId;
+  const position = entry.position ?? 0;
+
+  const bucketStart = assignments.findIndex((a) => a.bucketLocalId === targetBucketId);
+  if (bucketStart === -1) {
+    return [...assignments, entry];
+  }
+
+  let bucketEnd = assignments.length;
+  for (let i = bucketStart + 1; i < assignments.length; i++) {
+    if (assignments[i]!.bucketLocalId !== targetBucketId) {
+      bucketEnd = i;
+      break;
+    }
+  }
+
+  let insertAt = bucketEnd;
+  for (let i = bucketStart; i < bucketEnd; i++) {
+    if ((assignments[i]!.position ?? 0) > position) {
+      insertAt = i;
+      break;
+    }
+  }
+
+  const result = [...assignments];
+  result.splice(insertAt, 0, entry);
+  return result;
+}
 
 function findSourceColumn(
   taskId: string,

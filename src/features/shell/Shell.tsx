@@ -295,12 +295,12 @@ export function Shell() {
               {currentView ? (
                 currentView.viewKind === 'kanban' ? (
                   <KanbanBoard view={currentView} project={project} />
-                ) : currentView.viewKind === 'table' ? (
-                  <TableView project={project} />
+                ) :                 currentView.viewKind === 'table' ? (
+                  <TableView project={project} view={currentView} />
                 ) : currentView.viewKind === 'gantt' ? (
                   <GanttView project={project} />
                 ) : (
-                  <TaskList project={project} />
+                  <TaskList project={project} view={currentView} />
                 )
               ) : (
                 <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">

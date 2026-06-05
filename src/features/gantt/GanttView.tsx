@@ -22,8 +22,8 @@ interface GanttViewProps {
  * parent are skipped rather than re-routed to the nearest visible ancestor.
  */
 export function GanttView({ project }: GanttViewProps) {
-  const { nodes, relations, isLoading, isFetching, isError, error } = useGanttData(project);
-  const { filters, setDateFrom, setDateTo, toggleDateless, reset } = useGanttFilters();
+  const { filters, setDateFrom, setDateTo, toggleDateless, toggleCompleted, reset } = useGanttFilters();
+  const { nodes, relations, isLoading, isFetching, isError, error } = useGanttData(project, filters.showCompleted);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
 
   const handleUpdateDates = useCallback(
@@ -52,6 +52,15 @@ export function GanttView({ project }: GanttViewProps) {
             className="h-3.5 w-3.5 cursor-pointer accent-[var(--color-primary)]"
           />
           Show tasks without dates
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={filters.showCompleted}
+            onChange={toggleCompleted}
+            className="h-3.5 w-3.5 cursor-pointer accent-[var(--color-primary)]"
+          />
+          Show completed
         </label>
         <button
           onClick={reset}

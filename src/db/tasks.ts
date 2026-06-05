@@ -632,6 +632,32 @@ export async function deleteTask(localId: string): Promise<void> {
   notify('outbox');
 }
 
+/**
+ * Set a task's position within a view for list/table reorder.
+ * Updates `tasks.position` (project-level global position) and creates a
+ * `task_position` outbox entry so the server gets `POST /tasks/{id}/position`.
+ */
+export async function reorderTask(
+  taskLocalId: string,
+  viewLocalId: string,
+  position: number,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await withTx(async (db) => {
+    await db.execute(
+      `UPDATE tasks SET position = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+      [position, now, taskLocalId],
+    );
+    await db.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('task_position', ?, 'update', ?, ?)`,
+      [taskLocalId, JSON.stringify({ view_local_id: viewLocalId, position }), now],
+    );
+  });
+  notify('tasks');
+  notify('outbox');
+}
+
 export async function listActiveTaskCounts(): Promise<Map<string, number>> {
   const db = await getDb();
   const rows = await db.select<{ project_local_id: string; cnt: number }[]>(
