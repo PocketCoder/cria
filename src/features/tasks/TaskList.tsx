@@ -134,6 +134,16 @@ export function TaskList({ project, view }: TaskListProps) {
 
       const taskId = String(active.id);
       const overId = String(over.id);
+      // Resolve the draggable target to its top‑level root task (only roots are sortable)
+      // If the drag lands on a child element, we treat it as dropping onto its root.
+      const targetRootId = (function () {
+        // Find the root whose subtree contains overId; otherwise overId is already a root.
+        for (const root of taskTree) {
+          const ids = collectSubtreeIds(root.task.localId, taskTree);
+          if (ids.includes(overId)) return root.task.localId;
+        }
+        return overId;
+      })();
       if (taskId === overId) return;
 
       // Build the block of IDs (parent + its whole subtree)
@@ -142,28 +152,30 @@ export function TaskList({ project, view }: TaskListProps) {
 
       const current = tasksRef.current; // flat list of active tasks
       const flatIds = current.map((t) => t.localId);
-      // Remove block IDs from the flat list
+
+      // (original indices not needed for the current algorithm)
+      // If dropping onto an item inside the moving block, ignore (no reorder)
+      if (blockIds.includes(targetRootId)) return;
+
+      // Build the new order after moving the block as a unit
       const remaining = flatIds.filter((id) => !blockIds.includes(id));
-
-      // Find insertion point based on the overId (a root task)
-      const insertIdx = remaining.findIndex((id) => id === overId);
-      const newOrder = [...remaining];
+      let insertIdx = remaining.findIndex((id) => id === targetRootId);
       if (insertIdx === -1) {
-        // Append to the end if target not found
-        newOrder.push(...blockIds);
-      } else {
-        newOrder.splice(insertIdx, 0, ...blockIds);
+        // Append to end if target not found among remaining items
+        insertIdx = remaining.length;
       }
+      const newOrder = [...remaining];
+      newOrder.splice(insertIdx, 0, ...blockIds);
 
-      // Determine neighb­ors around the inserted block
-      const blockStartIdx = newOrder.findIndex((id) => id === blockIds[0]);
-      const beforeId = blockStartIdx > 0 ? newOrder[blockStartIdx - 1] : null;
-      const afterId = blockStartIdx + blockIds.length < newOrder.length ? newOrder[blockStartIdx + blockIds.length] : null;
+      // Determine neighbours around the inserted block in the new order
+      const newBlockStartIdx = newOrder.findIndex((id) => id === blockIds[0]);
+      const beforeId = newBlockStartIdx > 0 ? newOrder[newBlockStartIdx - 1] : null;
+      const afterId = newBlockStartIdx + blockIds.length < newOrder.length ? newOrder[newBlockStartIdx + blockIds.length] : null;
       const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
       const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
       const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
 
-      // Compute positions for each task in the moved block
+      // Compute new positions for each task in the moved block
       const positions: number[] = [];
       if (beforePos != null && afterPos != null) {
         const gap = afterPos - beforePos;
@@ -190,7 +202,7 @@ export function TaskList({ project, view }: TaskListProps) {
 
       try {
         for (let i = 0; i < blockIds.length; i++) {
-          await reorderTask(blockIds[i]!, view!.localId, positions[i] as number);
+          await reorderTask(blockIds[i] as string, view.localId, positions[i] as number);
         }
       } catch (err) {
         console.error('[tasks] failed to reorder block:', err);
