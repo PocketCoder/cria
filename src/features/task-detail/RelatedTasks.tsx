@@ -5,6 +5,7 @@ import {
   Plus,
   X,
   ChevronDown,
+  ChevronRight,
   CheckSquare,
   Square,
   Loader2,
@@ -224,6 +225,7 @@ function AddRelationRow({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TaskWithProject[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce the FTS5 query so each keystroke doesn't hit SQLite. 120ms
@@ -239,8 +241,10 @@ function AddRelationRow({
         const found = await searchTasks({ text: query });
         // Don't offer the current task or anything already related to
         // it; let the parent's group sections show the duplicates if
-        // the user really wants to re-pick a kind.
-        setResults(found.filter((t) => t.localId !== taskLocalId).slice(0, 8));
+        // the user really wants to re-pick a kind. Active vs. completed
+        // are split at render time.
+        setResults(found.filter((t) => t.localId !== taskLocalId));
+        setShowCompleted(false);
       } catch (err) {
         console.warn('[relations] search failed:', err);
         setResults([]);
@@ -265,6 +269,39 @@ function AddRelationRow({
       setBusy(false);
     }
   };
+
+  // Completed tasks are demoted: they rarely make sense as a new relation
+  // target, so they're hidden behind a toggle when there are matches.
+  const active = results.filter((t) => !t.done).slice(0, 8);
+  const completed = results.filter((t) => t.done).slice(0, 8);
+
+  const renderItem = (t: TaskWithProject) => (
+    <li key={t.localId}>
+      <button
+        type="button"
+        onClick={() => void handlePick(t)}
+        disabled={busy}
+        className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-[var(--color-muted)] disabled:opacity-50 cursor-pointer"
+      >
+        {t.done ? (
+          <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
+        ) : (
+          <Square className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
+        )}
+        <span
+          className={
+            'min-w-0 flex-1 truncate ' +
+            (t.done ? 'line-through text-[var(--color-muted-foreground)]' : '')
+          }
+        >
+          {t.title}
+        </span>
+        <span className="shrink-0 text-[10px] text-[var(--color-muted-foreground)]">
+          {t.projectTitle}
+        </span>
+      </button>
+    </li>
+  );
 
   return (
     <div className="space-y-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5">
@@ -312,37 +349,33 @@ function AddRelationRow({
           </button>
         )}
       </div>
-      {results.length > 0 ? (
-        <ul className="max-h-48 space-y-0.5 overflow-y-auto">
-          {results.map((t) => (
-            <li key={t.localId}>
-              <button
-                type="button"
-                onClick={() => void handlePick(t)}
-                disabled={busy}
-                className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-[var(--color-muted)] disabled:opacity-50 cursor-pointer"
-              >
-                {t.done ? (
-                  <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
-                ) : (
-                  <Square className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
-                )}
-                <span
-                  className={
-                    'min-w-0 flex-1 truncate ' +
-                    (t.done ? 'line-through text-[var(--color-muted-foreground)]' : '')
-                  }
-                >
-                  {t.title}
-                </span>
-                <span className="shrink-0 text-[10px] text-[var(--color-muted-foreground)]">
-                  {t.projectTitle}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : query.trim() ? (
+      {active.length > 0 ? (
+        <ul className="max-h-48 space-y-0.5 overflow-y-auto">{active.map(renderItem)}</ul>
+      ) : null}
+
+      {completed.length > 0 ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowCompleted((v) => !v)}
+            className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+          >
+            {showCompleted ? (
+              <ChevronDown className="h-3 w-3 shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 shrink-0" />
+            )}
+            {showCompleted ? 'Hide' : 'Show'} completed ({completed.length})
+          </button>
+          {showCompleted ? (
+            <ul className="max-h-32 space-y-0.5 overflow-y-auto">
+              {completed.map(renderItem)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {query.trim() && active.length === 0 && completed.length === 0 ? (
         <div className="px-1 py-0.5 text-[10px] text-[var(--color-muted-foreground)]">
           No matches
         </div>
