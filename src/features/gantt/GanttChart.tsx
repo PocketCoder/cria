@@ -3,6 +3,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   visibleGanttNodes,
+  buildParentMap,
+  resolveVisibleAnchor,
   dayToIso,
   dayToUtcDate,
   type GanttTaskNode,
@@ -15,7 +17,7 @@ import {
   DEFAULT_SPAN_DAYS,
 } from './constants';
 import type { GanttFilters } from './useGanttFilters';
-import { GanttRelationArrows, type BarGeometry } from './GanttRelationArrows';
+import { GanttRelationArrows, type BarGeometry, type ArrowAnchor } from './GanttRelationArrows';
 import type { GanttRelationEdge } from '@/db/relations';
 
 interface GanttChartProps {
@@ -84,6 +86,7 @@ export function GanttChart({
     () => visibleGanttNodes(nodes, collapsed, filters.showTasksWithoutDates),
     [nodes, collapsed, filters.showTasksWithoutDates],
   );
+  const parentMap = useMemo(() => buildParentMap(nodes), [nodes]);
   const bodyHeight = visible.length * ROW_HEIGHT;
 
   /** Resolve a node's drawn day-range, filling partial / dateless bars. */
@@ -274,6 +277,15 @@ export function GanttChart({
     });
   }
 
+  // Anchor a relation endpoint: itself if visible, else its nearest collapsed
+  // ancestor (so arrows point at a collapsed group instead of vanishing).
+  const visibleIds = new Set(geometry.keys());
+  const resolveAnchor = (localId: string): ArrowAnchor | null => {
+    const anchorId = resolveVisibleAnchor(localId, visibleIds, parentMap, collapsed);
+    const geom = anchorId ? geometry.get(anchorId) : undefined;
+    return geom && anchorId ? { id: anchorId, geom } : null;
+  };
+
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Frozen task-name pane */}
@@ -407,7 +419,7 @@ export function GanttChart({
             {/* Dependency arrows sit under the bars so bar drags stay hittable. */}
             <GanttRelationArrows
               relations={relations}
-              geometry={geometry}
+              resolve={resolveAnchor}
               width={chartWidth}
               height={bodyHeight}
             />

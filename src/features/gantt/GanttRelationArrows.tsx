@@ -7,10 +7,19 @@ export interface BarGeometry {
   cy: number;
 }
 
+/** Resolved arrow endpoint: the (possibly re-routed) anchor id + its geometry. */
+export interface ArrowAnchor {
+  id: string;
+  geom: BarGeometry;
+}
+
 interface GanttRelationArrowsProps {
   relations: GanttRelationEdge[];
-  /** localId → drawn bar geometry, for the currently-visible rows only. */
-  geometry: Map<string, BarGeometry>;
+  /**
+   * Resolve a task to where its arrow should anchor: itself if visible, the
+   * nearest collapsed ancestor if hidden under one, or null to drop the arrow.
+   */
+  resolve: (taskLocalId: string) => ArrowAnchor | null;
   width: number;
   height: number;
 }
@@ -28,16 +37,22 @@ const PRECEDES = '#9ca3af'; // grey — ordering
  */
 export function GanttRelationArrows({
   relations,
-  geometry,
+  resolve,
   width,
   height,
 }: GanttRelationArrowsProps) {
+  const seen = new Set<string>();
   const edges = relations
     .map((r) => {
-      const from = geometry.get(r.fromLocalId);
-      const to = geometry.get(r.toLocalId);
-      if (!from || !to) return null;
-      return { from, to, kind: r.kind, key: `${r.fromLocalId}→${r.toLocalId}:${r.kind}` };
+      const from = resolve(r.fromLocalId);
+      const to = resolve(r.toLocalId);
+      // Drop if either end is hidden, or both collapsed onto the same anchor.
+      if (!from || !to || from.id === to.id) return null;
+      // Dedupe edges that re-routed onto the same anchor pair.
+      const key = `${from.id}→${to.id}:${r.kind}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return { from: from.geom, to: to.geom, kind: r.kind, key };
     })
     .filter((e): e is NonNullable<typeof e> => e !== null);
 

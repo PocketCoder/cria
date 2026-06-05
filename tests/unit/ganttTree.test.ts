@@ -4,6 +4,8 @@ import { describe, it, expect } from 'vitest';
 import {
   buildGanttTaskTree,
   visibleGanttNodes,
+  buildParentMap,
+  resolveVisibleAnchor,
   isoToDay,
 } from '@/features/gantt/buildGanttTaskTree';
 import type { Task } from '@/domain/task';
@@ -107,5 +109,52 @@ describe('visibleGanttNodes', () => {
     const v = visibleGanttNodes(withDateless, new Set(), false);
     // 'd' is hidden; 'p' has derived dates so it stays.
     expect(v.map((n) => n.task.localId)).toEqual(['p', 'c1', 'c2']);
+  });
+});
+
+describe('relation-arrow anchor re-routing', () => {
+  // p ► c1 ► gc1 ; p ► c2
+  const p = mkTask({ localId: 'p' });
+  const c1 = mkTask({ localId: 'c1', startDate: '2024-03-02T00:00:00Z' });
+  const gc1 = mkTask({ localId: 'gc1', startDate: '2024-03-03T00:00:00Z' });
+  const c2 = mkTask({ localId: 'c2', startDate: '2024-03-06T00:00:00Z' });
+  const nodes = buildGanttTaskTree(
+    [p, c1, gc1, c2],
+    new Map([
+      ['p', ['c1', 'c2']],
+      ['c1', ['gc1']],
+    ]),
+  );
+
+  it('buildParentMap maps each child to its parent', () => {
+    expect(buildParentMap(nodes)).toEqual(
+      new Map([
+        ['c1', 'p'],
+        ['c2', 'p'],
+        ['gc1', 'c1'],
+      ]),
+    );
+  });
+
+  it('returns the task itself when it is visible', () => {
+    const pm = buildParentMap(nodes);
+    const visibleIds = new Set(['p', 'c1', 'gc1', 'c2']);
+    expect(resolveVisibleAnchor('c1', visibleIds, pm, new Set())).toBe('c1');
+  });
+
+  it('re-routes a hidden descendant to its collapsed ancestor', () => {
+    const pm = buildParentMap(nodes);
+    // p collapsed → only p visible
+    const visibleIds = new Set(['p']);
+    const collapsed = new Set(['p']);
+    expect(resolveVisibleAnchor('c1', visibleIds, pm, collapsed)).toBe('p');
+    expect(resolveVisibleAnchor('gc1', visibleIds, pm, collapsed)).toBe('p'); // nested
+  });
+
+  it('drops the arrow when the endpoint is hidden but not under a collapsed node', () => {
+    const pm = buildParentMap(nodes);
+    // c1 hidden (e.g. dateless filter), p visible but NOT collapsed
+    const visibleIds = new Set(['p', 'c2']);
+    expect(resolveVisibleAnchor('c1', visibleIds, pm, new Set())).toBeNull();
   });
 });

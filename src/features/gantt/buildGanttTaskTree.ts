@@ -148,3 +148,37 @@ export function visibleGanttNodes(
   }
   return result;
 }
+
+/** child localId → parent localId, from the tree's childIds. */
+export function buildParentMap(nodes: GanttTaskNode[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const n of nodes) {
+    for (const c of n.childIds) m.set(c, n.task.localId);
+  }
+  return m;
+}
+
+/**
+ * Resolve where a relation-arrow endpoint should anchor.
+ * - If the task's own row is visible → itself.
+ * - If it's hidden under a *collapsed* ancestor → that nearest visible
+ *   (collapsed) ancestor, so the arrow points at the collapsed group.
+ * - If it's hidden for any other reason (e.g. the dateless filter) → null,
+ *   so the arrow is simply dropped.
+ */
+export function resolveVisibleAnchor(
+  localId: string,
+  visibleIds: Set<string>,
+  parentMap: Map<string, string>,
+  collapsed: Set<string>,
+): string | null {
+  if (visibleIds.has(localId)) return localId;
+  const seen = new Set<string>();
+  let cur = parentMap.get(localId);
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    if (visibleIds.has(cur)) return collapsed.has(cur) ? cur : null;
+    cur = parentMap.get(cur);
+  }
+  return null;
+}
