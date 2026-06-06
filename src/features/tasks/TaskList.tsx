@@ -115,6 +115,16 @@ export function TaskList({ project, view }: TaskListProps) {
   const tasksRef = useRef(activeTasks);
   tasksRef.current = activeTasks;
 
+  // DnD Kit's SortableContext must see the items change synchronously in
+  // onDragEnd, otherwise it reverts the CSS transform (snap-back). We keep
+  // a state array that we update directly, separate from the query cache.
+  const [sortableItems, setSortableItems] = useState<string[]>(() =>
+    taskTree.map((n) => n.task.localId),
+  );
+  useEffect(() => {
+    setSortableItems(taskTree.map((n) => n.task.localId));
+  }, [taskTree]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -145,9 +155,9 @@ export function TaskList({ project, view }: TaskListProps) {
         }
       }
 
+      // 1. Compute the new position for the dragged task
       const current = tasksRef.current;
       const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
-
       const oldIdx = current.findIndex((t) => t.localId === taskId);
       const newIdx = current.findIndex((t) => t.localId === targetId);
       if (oldIdx === -1 || newIdx === -1) return;
@@ -161,25 +171,15 @@ export function TaskList({ project, view }: TaskListProps) {
       const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
       const position = calculatePosition(beforePos, afterPos);
 
-      // Optimistic cache update so the UI doesn't snap back while DB writes
-      qc.setQueryData<Task[]>(['tasks', project.localId], (old) => {
-        if (!old) return old;
-        const t = old.find((x) => x.localId === taskId);
-        if (!t) return old;
-        const updated = { ...t, position };
-        const result = old.map((x) => (x.localId === taskId ? updated : x));
-        result.sort((a, b) => {
-          const pa = a.position ?? 0;
-          const pb = b.position ?? 0;
-          if (pa !== pb) return pa - pb;
-          if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-          if (a.dueDate) return -1;
-          if (b.dueDate) return 1;
-          return a.title.localeCompare(b.title);
-        });
-        return result;
+      // 2. Update sortable items synchronously – this prevents DnD Kit snap-back
+      setSortableItems((prev) => {
+        const oi = prev.indexOf(taskId);
+        const ni = prev.indexOf(targetId);
+        if (oi === -1 || ni === -1) return prev;
+        return arrayMove(prev, oi, ni);
       });
 
+      // 3. Persist the new position
       try {
         await reorderTask(taskId, view.localId, position);
       } catch (err) {
@@ -187,7 +187,7 @@ export function TaskList({ project, view }: TaskListProps) {
         setReorderError(true);
       }
     },
-    [view, taskTree, qc, project.localId],
+    [view, taskTree],
   );
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
@@ -324,7 +324,7 @@ export function TaskList({ project, view }: TaskListProps) {
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={taskTree.map((n) => n.task.localId)}
+          items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
           <ul className="flex-1 overflow-y-auto">
