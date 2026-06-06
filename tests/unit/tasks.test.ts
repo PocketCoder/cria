@@ -13,6 +13,8 @@ import {
   listActiveTaskCounts,
   createTask,
   deleteTask,
+  reorderTask,
+  reindexTasks,
 } from '@/db/tasks';
 
 const now = () => new Date().toISOString();
@@ -377,6 +379,81 @@ describe('db/tasks', () => {
       const t = await getTaskByLocalId('t_bool');
       expect(t!.isFavorite).toBe(true);
       expect(t!.isSubscribed).toBe(true);
+    });
+  });
+
+  describe('reindexTasks', () => {
+    // Three tasks with null positions (the locally-created default), so they
+    // sort by title: Alpha, Beta, Gamma.
+    async function seedNullPositionTasks() {
+      const db = await getDb();
+      for (const [id, title] of [
+        ['ta', 'Alpha'],
+        ['tb', 'Beta'],
+        ['tc', 'Gamma'],
+      ]) {
+        await db.execute(
+          `INSERT INTO tasks (local_id, project_local_id, title, done, position, updated_at, dirty, deleted) VALUES (?, ?, ?, 0, NULL, ?, 0, 0)`,
+          [id, projectId, title, now()],
+        );
+      }
+    }
+
+    it('rewrites positions into a strictly-increasing spread in the given order', async () => {
+      await seedNullPositionTasks();
+      // Drag Gamma to the top: new order tc, ta, tb.
+      await reindexTasks(['tc', 'ta', 'tb'], 'view-1');
+
+      const tasks = await listTasksForProject(projectId);
+      expect(tasks.map((t) => t.localId)).toEqual(['tc', 'ta', 'tb']);
+      expect(tasks.map((t) => t.position)).toEqual([1024, 2048, 3072]);
+    });
+
+    it('marks rows dirty and emits one task_position outbox entry per task', async () => {
+      await seedNullPositionTasks();
+      await reindexTasks(['tc', 'ta', 'tb'], 'view-1');
+
+      const db = await getDb();
+      const outbox = await db.select<{ entity_local_id: string; entity_type: string; payload: string }[]>(
+        `SELECT entity_local_id, entity_type, payload FROM outbox WHERE entity_type = 'task_position'`,
+      );
+      expect(outbox).toHaveLength(3);
+      const byId = new Map(outbox.map((o) => [o.entity_local_id, o]));
+      expect(JSON.parse(byId.get('tc')!.payload)).toMatchObject({ view_local_id: 'view-1', position: 1024 });
+      expect(JSON.parse(byId.get('tb')!.payload)).toMatchObject({ view_local_id: 'view-1', position: 3072 });
+
+      const dirty = await db.select<{ cnt: number }[]>(
+        `SELECT COUNT(*) AS cnt FROM tasks WHERE project_local_id = ? AND dirty = 1`,
+        [projectId],
+      );
+      expect(dirty[0]!.cnt).toBe(3);
+    });
+
+    it('is a no-op for an empty ordering', async () => {
+      await reindexTasks([], 'view-1');
+      const db = await getDb();
+      const outbox = await db.select<unknown[]>(`SELECT 1 FROM outbox`);
+      expect(outbox).toHaveLength(0);
+    });
+  });
+
+  describe('reorderTask', () => {
+    it('writes a single position and one task_position outbox entry', async () => {
+      const db = await getDb();
+      await db.execute(
+        `INSERT INTO tasks (local_id, project_local_id, title, done, position, updated_at, dirty, deleted) VALUES (?, ?, ?, 0, ?, ?, 0, 0)`,
+        ['t1', projectId, 'One', 1024, now()],
+      );
+      await reorderTask('t1', 'view-1', 1536);
+
+      const t = await getTaskByLocalId('t1');
+      expect(t!.position).toBe(1536);
+
+      const outbox = await db.select<{ payload: string }[]>(
+        `SELECT payload FROM outbox WHERE entity_type = 'task_position' AND entity_local_id = 't1'`,
+      );
+      expect(outbox).toHaveLength(1);
+      expect(JSON.parse(outbox[0]!.payload)).toMatchObject({ view_local_id: 'view-1', position: 1536 });
     });
   });
 });

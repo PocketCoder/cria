@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReorderErrorPill } from '@/components/ReorderErrorPill';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -25,8 +25,8 @@ import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
-import { createTask, updateTask, reorderTask } from '@/db/tasks';
-import { calculatePosition } from '@/lib/position';
+import { createTask, updateTask, reorderTask, reindexTasks } from '@/db/tasks';
+import { calculatePosition, canMidpoint } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
@@ -112,12 +112,12 @@ export function TaskList({ project, view }: TaskListProps) {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState(false);
-  const tasksRef = useRef(activeTasks);
-  tasksRef.current = activeTasks;
 
   // DnD Kit's SortableContext must see the items change synchronously in
   // onDragEnd, otherwise it reverts the CSS transform (snap-back). We keep
-  // a state array that we update directly, separate from the query cache.
+  // a state array that we update directly, separate from the query cache,
+  // AND drive the rendered root order from it (see `orderedRoots`) so the
+  // DOM and the SortableContext never disagree about where a row sits.
   const [sortableItems, setSortableItems] = useState<string[]>(() =>
     taskTree.map((n) => n.task.localId),
   );
@@ -132,6 +132,28 @@ export function TaskList({ project, view }: TaskListProps) {
       return next;
     });
   }, [taskTree]);
+
+  // Render the active roots in `sortableItems` order so an optimistic reorder
+  // shows up in the DOM in the same commit that updates the SortableContext —
+  // the row stays where it was dropped instead of snapping back to the old
+  // query order. Roots not yet reflected in `sortableItems` (e.g. a just-added
+  // task, before the sync effect runs) are appended so nothing flashes out.
+  const orderedRoots = useMemo(() => {
+    const byId = new Map(taskTree.map((n) => [n.task.localId, n]));
+    const seen = new Set<string>();
+    const ordered: TaskTreeNode[] = [];
+    for (const id of sortableItems) {
+      const node = byId.get(id);
+      if (node) {
+        ordered.push(node);
+        seen.add(id);
+      }
+    }
+    for (const node of taskTree) {
+      if (!seen.has(node.task.localId)) ordered.push(node);
+    }
+    return ordered;
+  }, [taskTree, sortableItems]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -162,34 +184,40 @@ export function TaskList({ project, view }: TaskListProps) {
           break;
         }
       }
+      if (taskId === targetId) return;
 
-      // 1. Compute the new position for the dragged task
-      const current = tasksRef.current;
-      const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
-      const oldIdx = current.findIndex((t) => t.localId === taskId);
-      const newIdx = current.findIndex((t) => t.localId === targetId);
+      // Reordering happens among the ROOT tasks only — subtasks ride along
+      // with their parent — so compute against the root list, not the flat
+      // activeTasks list (which interleaves children and would yield the
+      // wrong neighbours / positions).
+      const roots = taskTree.map((n) => n.task);
+      const oldIdx = roots.findIndex((t) => t.localId === taskId);
+      const newIdx = roots.findIndex((t) => t.localId === targetId);
       if (oldIdx === -1 || newIdx === -1) return;
 
-      const ids = current.map((t) => t.localId);
-      const reordered = arrayMove(ids, oldIdx, newIdx);
-      const idx = reordered.indexOf(taskId);
-      const beforeId = idx > 0 ? reordered[idx - 1] : null;
-      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
-      const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
-      const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
-      const position = calculatePosition(beforePos, afterPos);
+      const reordered = arrayMove(roots, oldIdx, newIdx);
 
-      // 2. Update sortable items synchronously – this prevents DnD Kit snap-back
-      setSortableItems((prev) => {
-        const oi = prev.indexOf(taskId);
-        const ni = prev.indexOf(targetId);
-        if (oi === -1 || ni === -1) return prev;
-        return arrayMove(prev, oi, ni);
-      });
+      // Update sortable items synchronously. The rendered list is driven by
+      // this same array (see `orderedRoots`), so the row stays exactly where
+      // it was dropped — no snap-back — until the query refetch confirms it.
+      setSortableItems(reordered.map((t) => t.localId));
 
-      // 3. Persist the new position
+      // Compute the dragged task's new position from its new neighbours.
+      const idx = reordered.findIndex((t) => t.localId === taskId);
+      const beforePos = idx > 0 ? reordered[idx - 1]?.position ?? null : null;
+      const afterPos =
+        idx < reordered.length - 1 ? reordered[idx + 1]?.position ?? null : null;
+
       try {
-        await reorderTask(taskId, view.localId, position);
+        // Midpoint only works when the neighbours have distinct, non-null
+        // positions. Locally-created tasks start at position=null, so the
+        // first reorder (or a collision) re-indexes the whole list to lay
+        // down a clean spread; steady state stays on the cheap single write.
+        if (canMidpoint(beforePos, afterPos)) {
+          await reorderTask(taskId, view.localId, calculatePosition(beforePos, afterPos));
+        } else {
+          await reindexTasks(reordered.map((t) => t.localId), view.localId);
+        }
       } catch (err) {
         console.error('[tasks] failed to reorder task:', err);
         setReorderError(true);
@@ -336,7 +364,7 @@ export function TaskList({ project, view }: TaskListProps) {
           strategy={verticalListSortingStrategy}
         >
           <ul className="flex-1 overflow-y-auto">
-            {taskTree.map((node) => (
+            {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
                 node={node}

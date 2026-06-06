@@ -661,6 +661,44 @@ export async function reorderTask(
   notify('outbox');
 }
 
+/**
+ * Rewrite positions for an explicit ordering of tasks in one transaction,
+ * giving them a clean, strictly-increasing spread (`baseStep`, `2*baseStep`,
+ * …). Each task gets a `task_position` outbox entry so the server is told
+ * about every change.
+ *
+ * The midpoint strategy in {@link reorderTask} only works once tasks have
+ * distinct numeric positions. Freshly-created tasks start at `position = null`
+ * (they sort by title/date), so the first list/table reorder — and any time a
+ * drop lands between two colliding neighbours — re-indexes the whole list to
+ * establish that spread. After that, single midpoint writes take over again.
+ */
+export async function reindexTasks(
+  orderedLocalIds: string[],
+  viewLocalId: string,
+  baseStep = 1024,
+): Promise<void> {
+  if (orderedLocalIds.length === 0) return;
+  const now = new Date().toISOString();
+  await withTx(async (db) => {
+    for (let i = 0; i < orderedLocalIds.length; i++) {
+      const localId = orderedLocalIds[i];
+      const position = (i + 1) * baseStep;
+      await db.execute(
+        `UPDATE tasks SET position = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+        [position, now, localId],
+      );
+      await db.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('task_position', ?, 'update', ?, ?)`,
+        [localId, JSON.stringify({ view_local_id: viewLocalId, position }), now],
+      );
+    }
+  });
+  notify('tasks');
+  notify('outbox');
+}
+
 export async function listActiveTaskCounts(): Promise<Map<string, number>> {
   const db = await getDb();
   const rows = await db.select<{ project_local_id: string; cnt: number }[]>(
