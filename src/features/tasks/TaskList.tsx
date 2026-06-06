@@ -14,6 +14,7 @@ import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
@@ -25,7 +26,7 @@ import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask, reorderTask } from '@/db/tasks';
-// import { calculatePosition } from '@/lib/position'; // Removed unused import
+import { calculatePosition } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
@@ -41,6 +42,25 @@ import { TaskHoverPreview } from './TaskHoverPreview';
 import { DatePicker } from '@/components/DatePicker';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
+
+// Collect a task and all its descendants from the task tree
+function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {
+  const find = (list: TaskTreeNode[]): TaskTreeNode | undefined => {
+    for (const n of list) {
+      if (n.task.localId === taskId) return n;
+      const child = find(n.children);
+      if (child) return child;
+    }
+    return undefined;
+  };
+  const root = find(nodes);
+  if (!root) return [];
+  const out: string[] = [];
+  const dfs = (n: TaskTreeNode) => { out.push(n.task.localId); n.children.forEach(dfs); };
+  dfs(root);
+  return out;
+}
+
 
 
 interface TaskListProps {
@@ -105,27 +125,6 @@ export function TaskList({ project, view }: TaskListProps) {
     setActiveId(String(event.active.id));
   }, []);
 
-  // Helper: collect the IDs of a task and all of its descendants from the task tree
-  const collectSubtreeIds = (taskId: string, nodes: TaskTreeNode[]): string[] => {
-    const result: string[] = [];
-    const findNode = (list: TaskTreeNode[]): TaskTreeNode | undefined => {
-      for (const n of list) {
-        if (n.task.localId === taskId) return n;
-        const child = findNode(n.children);
-        if (child) return child;
-      }
-      return undefined;
-    };
-    const root = findNode(nodes);
-    if (!root) return result;
-    const dfs = (node: TaskTreeNode) => {
-      result.push(node.task.localId);
-      node.children.forEach(dfs);
-    };
-    dfs(root);
-    return result;
-  };
-
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setActiveId(null);
@@ -134,82 +133,61 @@ export function TaskList({ project, view }: TaskListProps) {
 
       const taskId = String(active.id);
       const overId = String(over.id);
-      // Resolve the draggable target to its top‑level root task (only roots are sortable)
-      // If the drag lands on a child element, we treat it as dropping onto its root.
-      const targetRootId = (function () {
-        // Find the root whose subtree contains overId; otherwise overId is already a root.
-        for (const root of taskTree) {
-          const ids = collectSubtreeIds(root.task.localId, taskTree);
-          if (ids.includes(overId)) return root.task.localId;
-        }
-        return overId;
-      })();
       if (taskId === overId) return;
 
-      // Build the block of IDs (parent + its whole subtree)
-      const blockIds = collectSubtreeIds(taskId, taskTree);
-      if (blockIds.length === 0) return;
-
-      const current = tasksRef.current; // flat list of active tasks
-      const flatIds = current.map((t) => t.localId);
-
-      // (original indices not needed for the current algorithm)
-      // If dropping onto an item inside the moving block, ignore (no reorder)
-      if (blockIds.includes(targetRootId)) return;
-
-      // Build the new order after moving the block as a unit
-      const remaining = flatIds.filter((id) => !blockIds.includes(id));
-      let insertIdx = remaining.findIndex((id) => id === targetRootId);
-      if (insertIdx === -1) {
-        // Append to end if target not found among remaining items
-        insertIdx = remaining.length;
+      // Resolve the drop target to the top‑level root (only roots are sortable).
+      // If the pointer lands on a child we treat it as dropping onto its parent root.
+      let targetId = overId;
+      for (const root of taskTree) {
+        if (collectSubtreeIds(root.task.localId, taskTree).includes(overId)) {
+          targetId = root.task.localId;
+          break;
+        }
       }
-      const newOrder = [...remaining];
-      newOrder.splice(insertIdx, 0, ...blockIds);
 
-      // Determine neighbours around the inserted block in the new order
-      const newBlockStartIdx = newOrder.findIndex((id) => id === blockIds[0]);
-      const beforeId = newBlockStartIdx > 0 ? newOrder[newBlockStartIdx - 1] : null;
-      const afterId = newBlockStartIdx + blockIds.length < newOrder.length ? newOrder[newBlockStartIdx + blockIds.length] : null;
+      const current = tasksRef.current;
       const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
+
+      const oldIdx = current.findIndex((t) => t.localId === taskId);
+      const newIdx = current.findIndex((t) => t.localId === targetId);
+      if (oldIdx === -1 || newIdx === -1) return;
+
+      const ids = current.map((t) => t.localId);
+      const reordered = arrayMove(ids, oldIdx, newIdx);
+      const idx = reordered.indexOf(taskId);
+      const beforeId = idx > 0 ? reordered[idx - 1] : null;
+      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
       const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
       const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
+      const position = calculatePosition(beforePos, afterPos);
 
-      // Compute new positions for each task in the moved block
-      const positions: number[] = [];
-      if (beforePos != null && afterPos != null) {
-        const gap = afterPos - beforePos;
-        const step = gap / (blockIds.length + 1);
-        for (let i = 1; i <= blockIds.length; i++) {
-          positions.push(beforePos + step * i);
-        }
-      } else if (beforePos != null) {
-        const step = 1024; // fallback step size
-        for (let i = 0; i < blockIds.length; i++) {
-          positions.push(beforePos + (i + 1) * step);
-        }
-      } else if (afterPos != null) {
-        const step = 1024;
-        for (let i = blockIds.length - 1; i >= 0; i--) {
-          positions.push(afterPos - (blockIds.length - i) * step);
-        }
-      } else {
-        // No neighbours – start from zero
-        for (let i = 0; i < blockIds.length; i++) {
-          positions.push(i * 1024);
-        }
-      }
+      // Optimistic cache update so the UI doesn't snap back while DB writes
+      qc.setQueryData<Task[]>(['tasks', project.localId], (old) => {
+        if (!old) return old;
+        const t = old.find((x) => x.localId === taskId);
+        if (!t) return old;
+        const updated = { ...t, position };
+        const result = old.map((x) => (x.localId === taskId ? updated : x));
+        result.sort((a, b) => {
+          const pa = a.position ?? 0;
+          const pb = b.position ?? 0;
+          if (pa !== pb) return pa - pb;
+          if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+          if (a.dueDate) return -1;
+          if (b.dueDate) return 1;
+          return a.title.localeCompare(b.title);
+        });
+        return result;
+      });
 
       try {
-        for (let i = 0; i < blockIds.length; i++) {
-          await reorderTask(blockIds[i] as string, view.localId, positions[i] as number);
-        }
+        await reorderTask(taskId, view.localId, position);
       } catch (err) {
-        console.error('[tasks] failed to reorder block:', err);
+        console.error('[tasks] failed to reorder task:', err);
         setReorderError(true);
       }
     },
-    [view, taskTree],
+    [view, taskTree, qc, project.localId],
   );
 
   // Re-parsed on every keystroke. Pure function, cheap; no debounce
