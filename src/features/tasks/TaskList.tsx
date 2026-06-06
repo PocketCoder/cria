@@ -121,8 +121,16 @@ export function TaskList({ project, view }: TaskListProps) {
   const [sortableItems, setSortableItems] = useState<string[]>(() =>
     taskTree.map((n) => n.task.localId),
   );
+  // Sync with taskTree when the query refetches, but avoid infinite loops:
+  // return the same reference from the updater when IDs are unchanged.
   useEffect(() => {
-    setSortableItems(taskTree.map((n) => n.task.localId));
+    setSortableItems((prev) => {
+      const next = taskTree.map((n) => n.task.localId);
+      if (prev.length === next.length && prev.every((id, i) => id === next[i])) {
+        return prev;
+      }
+      return next;
+    });
   }, [taskTree]);
 
   const sensors = useSensors(
