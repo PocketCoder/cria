@@ -30,12 +30,11 @@ import {
   saveBoardFilter,
 } from './boardFilter';
 import { createTask } from '@/db/tasks';
-import { setTaskBucket, updateTaskPosition, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
+import { setTaskBucket, reorderTasksInBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
 import { updateView } from '@/db/views';
 import { useUi } from '@/stores/ui';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import { applyLabelsByTitle } from '@/db/labels';
-import { calculatePosition } from '@/lib/position';
 import { cn } from '@/lib/cn';
 import { Plus, Trash2, ChevronDown, ChevronRight, MoreHorizontal, Pencil, X, Check, Gauge, Flag } from 'lucide-react';
 import type { ProjectView } from '@/domain/view';
@@ -124,41 +123,36 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
     const targetBucketId = targetCol.bucket.localId;
     const targetTasks = targetCol.tasks.map((t) => t.localId);
 
+    // Optimistically reorder the target bucket's assignments *positionally*
+    // (buildKanbanColumns preserves assignment array order), so the card stays
+    // where it was dropped regardless of whether positions are still colliding.
+    const applyOptimistic = (orderedIds: string[]) =>
+      queryClient.setQueryData(
+        ['kanban-buckets', view.localId],
+        (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) =>
+          old
+            ? { ...old, assignments: applyBucketOrder(old.assignments, view.localId, targetBucketId, orderedIds) }
+            : old,
+      );
+
+    // Kanban tasks often have no `task_buckets` row (they're shown via the
+    // "unplaced → default bucket" fallback), so a single midpoint UPDATE would
+    // match no row and the card would snap back. Re-index the whole target
+    // bucket instead — it upserts a row + clean position for every card. The
+    // buckets are small, so the extra writes are cheap.
     if (sourceBucketId === targetBucketId) {
       // Intra-bucket reorder
       const oldIdx = targetTasks.indexOf(taskId);
       const newIdx = targetTasks.indexOf(overId);
       if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
 
-      const reordered = arrayMove(targetTasks, oldIdx, newIdx);
-      const idx = reordered.indexOf(taskId);
-      const beforeId = idx > 0 ? reordered[idx - 1] : null;
-      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
-      const beforePos = beforeId ? targetCol.taskPositions[beforeId] ?? null : null;
-      const afterPos = afterId ? targetCol.taskPositions[afterId] ?? null : null;
-      const position = calculatePosition(beforePos, afterPos);
-
-      queryClient.setQueryData(
-        ['kanban-buckets', view.localId],
-        (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
-          if (!old) return old;
-          const withoutMoved = old.assignments.filter((a) => a.taskLocalId !== taskId);
-          return {
-            ...old,
-            assignments: insertAssignmentSorted(withoutMoved, {
-              taskLocalId: taskId,
-              viewLocalId: view.localId,
-              bucketLocalId: targetBucketId,
-              position,
-            }),
-          };
-        },
-      );
+      const orderedIds = arrayMove(targetTasks, oldIdx, newIdx);
+      applyOptimistic(orderedIds);
 
       try {
-        await updateTaskPosition(taskId, view.localId, position);
+        await reorderTasksInBucket(view.localId, targetBucketId, orderedIds);
       } catch (err) {
-        console.error('[kanban] failed to update task position:', err);
+        console.error('[kanban] failed to reorder tasks in bucket:', err);
         void queryClient.invalidateQueries({ queryKey: ['kanban-buckets', view.localId] });
       }
     } else {
@@ -168,33 +162,18 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
         : targetTasks.indexOf(overId);
       if (insertIdx < 0) insertIdx = targetTasks.length;
 
-      const beforeId = insertIdx > 0 ? targetTasks[insertIdx - 1] : null;
-      const afterId = insertIdx < targetTasks.length ? targetTasks[insertIdx] : null;
-      const beforePos = beforeId ? targetCol.taskPositions[beforeId] ?? null : null;
-      const afterPos = afterId ? targetCol.taskPositions[afterId] ?? null : null;
-      const position = calculatePosition(beforePos, afterPos);
-
-      queryClient.setQueryData(
-        ['kanban-buckets', view.localId],
-        (old: { buckets: unknown[]; assignments: TaskBucket[] } | undefined) => {
-          if (!old) return old;
-          const withoutMoved = old.assignments.filter((a) => a.taskLocalId !== taskId);
-          return {
-            ...old,
-            assignments: insertAssignmentSorted(withoutMoved, {
-              taskLocalId: taskId,
-              viewLocalId: view.localId,
-              bucketLocalId: targetBucketId,
-              position,
-            }),
-          };
-        },
-      );
+      const orderedIds = [...targetTasks];
+      orderedIds.splice(insertIdx, 0, taskId);
+      applyOptimistic(orderedIds);
 
       try {
-        await setTaskBucket(taskId, view.localId, targetBucketId, position);
+        // Record the bucket change (its own outbox entry for server sync),
+        // then re-index the target bucket so the moved card and its new
+        // neighbours all get clean, ordered positions.
+        await setTaskBucket(taskId, view.localId, targetBucketId);
+        await reorderTasksInBucket(view.localId, targetBucketId, orderedIds);
       } catch (err) {
-        console.error('[kanban] failed to set task bucket:', err);
+        console.error('[kanban] failed to move task to bucket:', err);
         void queryClient.invalidateQueries({ queryKey: ['kanban-buckets', view.localId] });
       }
     }
@@ -709,42 +688,34 @@ function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
 /* ─── Helpers ─── */
 
 /**
- * Insert a new assignment into the assignments array at the correct position
- * within its bucket's section (sorted by position value), so the optimistic
- * cache update immediately reflects the correct visual order in SortableContext.
- * Without this, dnd-kit sees no items change and restores the original position.
+ * Optimistically rewrite the kanban assignments so the target bucket's cards
+ * follow `orderedTaskIds` exactly. buildKanbanColumns derives each column's
+ * order from the assignment array order (not the numeric position), so a
+ * positional rewrite reflects the drop immediately in SortableContext — even
+ * when positions are still colliding (all 0) before the DB re-index lands.
+ *
+ * Any prior assignment for the moved/target tasks in this view is dropped and
+ * re-added under `targetBucketId`, so a cross-bucket move also clears the card
+ * from its old column. Index-based positions keep the optimistic entries
+ * self-consistent until the refetch replaces them with the persisted spread.
  */
-function insertAssignmentSorted(
+function applyBucketOrder(
   assignments: TaskBucket[],
-  entry: TaskBucket,
+  viewLocalId: string,
+  targetBucketId: string,
+  orderedTaskIds: string[],
 ): TaskBucket[] {
-  const targetBucketId = entry.bucketLocalId;
-  const position = entry.position ?? 0;
-
-  const bucketStart = assignments.findIndex((a) => a.bucketLocalId === targetBucketId);
-  if (bucketStart === -1) {
-    return [...assignments, entry];
-  }
-
-  let bucketEnd = assignments.length;
-  for (let i = bucketStart + 1; i < assignments.length; i++) {
-    if (assignments[i]!.bucketLocalId !== targetBucketId) {
-      bucketEnd = i;
-      break;
-    }
-  }
-
-  let insertAt = bucketEnd;
-  for (let i = bucketStart; i < bucketEnd; i++) {
-    if ((assignments[i]!.position ?? 0) > position) {
-      insertAt = i;
-      break;
-    }
-  }
-
-  const result = [...assignments];
-  result.splice(insertAt, 0, entry);
-  return result;
+  const moving = new Set(orderedTaskIds);
+  const rest = assignments.filter(
+    (a) => !(a.viewLocalId === viewLocalId && moving.has(a.taskLocalId)),
+  );
+  const reordered: TaskBucket[] = orderedTaskIds.map((taskLocalId, i) => ({
+    taskLocalId,
+    viewLocalId,
+    bucketLocalId: targetBucketId,
+    position: (i + 1) * 1024,
+  }));
+  return [...rest, ...reordered];
 }
 
 function findSourceColumn(

@@ -298,7 +298,7 @@ export function Shell() {
                 ) :                 currentView.viewKind === 'table' ? (
                   <TableView project={project} view={currentView} />
                 ) : currentView.viewKind === 'gantt' ? (
-                  <GanttView project={project} />
+                  <GanttView project={project} view={currentView} />
                 ) : (
                   <TaskList project={project} view={currentView} />
                 )

@@ -16,6 +16,7 @@ import {
   reorderTask,
   reindexTasks,
 } from '@/db/tasks';
+import { calculatePosition, canMidpoint } from '@/lib/position';
 
 const now = () => new Date().toISOString();
 
@@ -454,6 +455,89 @@ describe('db/tasks', () => {
       );
       expect(outbox).toHaveLength(1);
       expect(JSON.parse(outbox[0]!.payload)).toMatchObject({ view_local_id: 'view-1', position: 1536 });
+    });
+  });
+
+  // Regression for the list/table drag-reorder bug. Both TaskList and
+  // TableView read a dragged task's neighbour positions and decide between a
+  // single midpoint write (reorderTask) and a full re-index (reindexTasks).
+  // Locally-created tasks have position=null (createTask inserts NULL), so the
+  // original code — which collapsed every null neighbour to 0 and wrote
+  // calculatePosition(0,0)=0 — gave the moved task position 0, which then
+  // jumped to the TOP under the `position IS NULL, position ASC` sort instead
+  // of landing where it was dropped. The fix reads `position ?? null` and
+  // routes the null/colliding case through reindexTasks.
+  describe('drag-reorder neighbour handling (list/table regression)', () => {
+    it('createTask leaves position null', async () => {
+      const t = await createTask({ projectLocalId: projectId, title: 'Fresh' });
+      expect(t.position).toBeNull();
+    });
+
+    it('a position-0 task sorts above null-position tasks (why collapsing to 0 was wrong)', async () => {
+      const db = await getDb();
+      await db.execute(
+        `INSERT INTO tasks (local_id, project_local_id, title, done, position, updated_at, dirty, deleted) VALUES (?, ?, ?, 0, NULL, ?, 0, 0)`,
+        ['t_null', projectId, 'Null pos', now()],
+      );
+      await db.execute(
+        `INSERT INTO tasks (local_id, project_local_id, title, done, position, updated_at, dirty, deleted) VALUES (?, ?, ?, 0, 0, ?, 0, 0)`,
+        ['t_zero', projectId, 'Zero pos', now()],
+      );
+      // Old code's calculatePosition(0, 0) === 0 is what the dragged task got.
+      expect(calculatePosition(0, 0)).toBe(0);
+      const tasks = await listTasksForProject(projectId);
+      // The position-0 task hoists to the top — the snap-to-top symptom.
+      expect(tasks.map((t) => t.localId)).toEqual(['t_zero', 't_null']);
+    });
+
+    it('a drop between null-position neighbours routes to a full re-index, not a midpoint', async () => {
+      // Three freshly-created tasks → all positions null, sorted by title.
+      const a = await createTask({ projectLocalId: projectId, title: 'Alpha' });
+      const b = await createTask({ projectLocalId: projectId, title: 'Beta' });
+      const c = await createTask({ projectLocalId: projectId, title: 'Gamma' });
+      expect((await listTasksForProject(projectId)).map((t) => t.localId)).toEqual([
+        a.localId,
+        b.localId,
+        c.localId,
+      ]);
+
+      // Drag Gamma to the top. Its new neighbours are: before=none (top),
+      // after=Alpha (position null). With null anchors a midpoint is unsafe.
+      expect(canMidpoint(null, a.position)).toBe(false);
+
+      // …so the whole list is re-indexed in the dropped order.
+      await reindexTasks([c.localId, a.localId, b.localId], 'view-1');
+      const reindexed = await listTasksForProject(projectId);
+      expect(reindexed.map((t) => t.localId)).toEqual([c.localId, a.localId, b.localId]);
+      expect(reindexed.map((t) => t.position)).toEqual([1024, 2048, 3072]);
+    });
+
+    it('after a re-index, a midpoint drop between two distinct positions is a single write', async () => {
+      const a = await createTask({ projectLocalId: projectId, title: 'Alpha' });
+      const b = await createTask({ projectLocalId: projectId, title: 'Beta' });
+      const c = await createTask({ projectLocalId: projectId, title: 'Gamma' });
+      await reindexTasks([a.localId, b.localId, c.localId], 'view-1'); // 1024/2048/3072
+
+      // Drag Gamma between Alpha (1024) and Beta (2048): distinct, increasing
+      // neighbours → a single midpoint write is enough.
+      expect(canMidpoint(1024, 2048)).toBe(true);
+      await reorderTask(c.localId, 'view-1', calculatePosition(1024, 2048)); // 1536
+
+      const after = await listTasksForProject(projectId);
+      expect(after.map((t) => t.localId)).toEqual([a.localId, c.localId, b.localId]);
+      expect(after.find((t) => t.localId === c.localId)!.position).toBe(1536);
+
+      // Exactly one task_position outbox entry for the midpoint move (plus the
+      // three from the re-index) — i.e. no redundant whole-list rewrite.
+      const db = await getDb();
+      const midpointOutbox = await db.select<{ payload: string }[]>(
+        `SELECT payload FROM outbox WHERE entity_type = 'task_position' AND entity_local_id = ?`,
+        [c.localId],
+      );
+      expect(midpointOutbox).toHaveLength(2); // one from reindex, one from the midpoint
+      const positions = midpointOutbox.map((o) => JSON.parse(o.payload).position);
+      expect(positions).toContain(1536); // the midpoint write
+      expect(positions).toContain(3072); // the earlier re-index write
     });
   });
 });

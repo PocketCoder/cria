@@ -54,3 +54,46 @@ export function canMidpoint(
   if (a === null) return true; // inserting at bottom: before + step always fits
   return b < a; // strictly-increasing distinct neighbours
 }
+
+/** How a drag reorder should be persisted: a single midpoint write, or a
+ *  full re-index of the affected list. */
+export type ReorderPlan =
+  | { type: 'midpoint'; position: number }
+  | { type: 'reindex' };
+
+/**
+ * Decide how to persist a drag reorder. Given the *final* ordering of item
+ * ids, the id that moved, and a lookup of each id's current numeric position,
+ * return a single midpoint write when the moved item's new neighbours allow a
+ * safe strictly-between insertion, or `{ type: 'reindex' }` when they don't
+ * (null/colliding positions — e.g. a fresh list where everything is 0/null)
+ * and the whole `orderedIds` list must be re-indexed instead.
+ *
+ * This is the shared decision used by every view (list / table / kanban /
+ * gantt) so drag reorder behaves identically across them.
+ */
+export function planReorder(
+  orderedIds: string[],
+  movedId: string,
+  positionOf: (id: string) => number | null | undefined,
+): ReorderPlan {
+  const idx = orderedIds.indexOf(movedId);
+  if (idx === -1) return { type: 'reindex' };
+
+  const hasBefore = idx > 0;
+  const hasAfter = idx < orderedIds.length - 1;
+  const before = hasBefore ? positionOf(orderedIds[idx - 1]!) ?? null : null;
+  const after = hasAfter ? positionOf(orderedIds[idx + 1]!) ?? null : null;
+
+  // A neighbour that exists but has no stored position means the list isn't
+  // cleanly indexed yet. Midpointing would silently jump over it (and the
+  // `position IS NULL` sort would land the moved item on the wrong side), so
+  // re-index the whole list instead.
+  if (hasBefore && before === null) return { type: 'reindex' };
+  if (hasAfter && after === null) return { type: 'reindex' };
+
+  if (canMidpoint(before, after)) {
+    return { type: 'midpoint', position: calculatePosition(before, after) };
+  }
+  return { type: 'reindex' };
+}

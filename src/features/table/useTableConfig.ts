@@ -260,6 +260,9 @@ export interface TableConfig {
   toggleColumn: (key: ColumnKey) => void;
   /** Cycle a column's sort. `additive` adds it as a secondary sort. */
   onSort: (key: ColumnKey, additive: boolean) => void;
+  /** Drop all sort keys → manual (position) order. Used by drag-reorder,
+   *  which is only meaningful when the table isn't sorted by a column. */
+  clearSort: () => void;
 }
 
 export function useTableConfig(): TableConfig {
@@ -283,5 +286,13 @@ export function useTableConfig(): TableConfig {
     });
   }, []);
 
-  return { columns: COLUMNS, visible, sortBy, toggleColumn, onSort };
+  const clearSort = useCallback(() => {
+    setSortBy((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      persist(SORT_KEY, {});
+      return {};
+    });
+  }, []);
+
+  return { columns: COLUMNS, visible, sortBy, toggleColumn, onSort, clearSort };
 }

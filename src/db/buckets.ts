@@ -260,12 +260,17 @@ export async function updateTaskPosition(
 }
 
 /**
- * Reorder all tasks in a bucket, assigning evenly-spaced positions.
- * Creates task_position outbox entries for each task.
- * User mutation — calls notify('tasks') so the UI refreshes.
+ * Reorder every task in a bucket, assigning evenly-spaced positions in the
+ * given order. Upserts the assignment row (INSERT OR REPLACE on the
+ * (task, view) primary key) so tasks that were only *implicitly* in the bucket
+ * — placed by buildKanbanColumns' "unplaced → default bucket" fallback, with
+ * no `task_buckets` row yet — get a real row instead of a no-op UPDATE that
+ * would let them snap back on the next refetch. Creates a task_position outbox
+ * entry per task. User mutation — calls notify('tasks') so the UI refreshes.
  */
 export async function reorderTasksInBucket(
   viewLocalId: string,
+  bucketLocalId: string,
   orderedTaskIds: string[],
   baseStep = 1024,
 ): Promise<void> {
@@ -274,8 +279,9 @@ export async function reorderTasksInBucket(
     for (let i = 0; i < orderedTaskIds.length; i++) {
       const position = (i + 1) * baseStep;
       await tx.execute(
-        `UPDATE task_buckets SET position = ? WHERE task_local_id = ? AND view_local_id = ?`,
-        [position, orderedTaskIds[i], viewLocalId],
+        `INSERT OR REPLACE INTO task_buckets (task_local_id, view_local_id, bucket_local_id, position)
+         VALUES (?, ?, ?, ?)`,
+        [orderedTaskIds[i], viewLocalId, bucketLocalId, position],
       );
       await tx.execute(
         `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)

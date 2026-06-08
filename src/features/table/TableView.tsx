@@ -12,16 +12,18 @@ import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useUi } from '@/stores/ui';
-import { updateTask, reorderTask } from '@/db/tasks';
-import { calculatePosition } from '@/lib/position';
+import { updateTask, reorderTask, reindexTasks } from '@/db/tasks';
+import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { cn } from '@/lib/cn';
 import type { Project } from '@/domain/project';
@@ -151,14 +153,14 @@ export function TableView({ project, view }: TableViewProps) {
     useProjectTasks(project);
   const { data: allProjects = [] } = useProjects();
   const pendingDeletes = usePendingDeletes((s) => s.pending);
-  const { columns, visible, sortBy, toggleColumn, onSort } = useTableConfig();
+  const { columns, visible, sortBy, toggleColumn, onSort, clearSort } = useTableConfig();
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const { data: currentUser } = useCurrentUser();
+  const qc = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState(false);
-  const sortedRef = useRef<Task[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -169,44 +171,6 @@ export function TableView({ project, view }: TableViewProps) {
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id));
   }, []);
-
-  const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
-      setActiveId(null);
-      const { active, over } = event;
-      if (!over || !active || !view) return;
-
-      const taskId = String(active.id);
-      const overId = String(over.id);
-      if (taskId === overId) return;
-
-      const current = sortedRef.current;
-      const taskPositions = new Map(current.map((t) => [t.localId, t.position ?? 0]));
-
-      const oldIdx = current.findIndex((t) => t.localId === taskId);
-      const newIdx = current.findIndex((t) => t.localId === overId);
-      if (oldIdx === -1 || newIdx === -1) return;
-
-      const ids = current.map((t) => t.localId);
-      const reordered = [...ids];
-      reordered.splice(oldIdx, 1);
-      reordered.splice(newIdx, 0, taskId);
-      const idx = reordered.indexOf(taskId);
-      const beforeId = idx > 0 ? reordered[idx - 1] : null;
-      const afterId = idx < reordered.length - 1 ? reordered[idx + 1] : null;
-      const beforePos = beforeId ? taskPositions.get(beforeId) ?? null : null;
-      const afterPos = afterId ? taskPositions.get(afterId) ?? null : null;
-      const position = calculatePosition(beforePos, afterPos);
-
-      try {
-        await reorderTask(taskId, view.localId, position);
-      } catch (err) {
-        console.error('[table] failed to reorder task:', err);
-        setReorderError(true);
-      }
-    },
-    [view],
-  );
 
   // Table-wide edit mode: a single toggle turns every editable cell into an
   // input. Edits accumulate in `drafts` (keyed by task) and are written on
@@ -269,10 +233,103 @@ export function TableView({ project, view }: TableViewProps) {
     () => sortTasks(activeTasks, sortBy, { projectTitle, visible }),
     [activeTasks, sortBy, projectTitle, visible],
   );
-  useEffect(() => { sortedRef.current = sorted; }, [sorted]);
   const sortedCompleted = useMemo(
     () => sortTasks(completedTasks, sortBy, { projectTitle, visible }),
     [completedTasks, sortBy, projectTitle, visible],
+  );
+
+  // dnd-kit's SortableContext must see the row order change synchronously on
+  // drop, otherwise it reverts the CSS transform (snap-back). We keep an
+  // optimistic id array, update it directly in handleDragEnd, AND drive the
+  // rendered rows from it (see `orderedRows`) so the DOM and the
+  // SortableContext never disagree about where a row sits.
+  const [sortableItems, setSortableItems] = useState<string[]>(() =>
+    sorted.map((t) => t.localId),
+  );
+  // Sync with the sorted query result when it refetches, but avoid infinite
+  // loops: return the same reference from the updater when the ids match.
+  useEffect(() => {
+    setSortableItems((prev) => {
+      const next = sorted.map((t) => t.localId);
+      if (prev.length === next.length && prev.every((id, i) => id === next[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [sorted]);
+
+  // Render rows in `sortableItems` order so an optimistic reorder shows up in
+  // the same commit that updates the SortableContext — the row stays where it
+  // was dropped instead of snapping back to the query order. Rows not yet
+  // reflected in `sortableItems` (e.g. a just-synced task, before the sync
+  // effect runs) are appended so nothing flashes out.
+  const orderedRows = useMemo(() => {
+    const byId = new Map(sorted.map((t) => [t.localId, t]));
+    const seen = new Set<string>();
+    const ordered: Task[] = [];
+    for (const id of sortableItems) {
+      const t = byId.get(id);
+      if (t) {
+        ordered.push(t);
+        seen.add(id);
+      }
+    }
+    for (const t of sorted) {
+      if (!seen.has(t.localId)) ordered.push(t);
+    }
+    return ordered;
+  }, [sorted, sortableItems]);
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveId(null);
+      const { active, over } = event;
+      if (!over || !active || !view) return;
+
+      const taskId = String(active.id);
+      const overId = String(over.id);
+      if (taskId === overId) return;
+
+      // Reorder within the rows the user actually sees (`orderedRows`), so the
+      // dragged/over ids resolve against the displayed order — not a stale
+      // query order that a pending optimistic reorder hasn't caught up to.
+      const oldIdx = orderedRows.findIndex((t) => t.localId === taskId);
+      const newIdx = orderedRows.findIndex((t) => t.localId === overId);
+      if (oldIdx === -1 || newIdx === -1) return;
+
+      const reordered = arrayMove(orderedRows, oldIdx, newIdx);
+      const orderedIds = reordered.map((t) => t.localId);
+
+      // A drag means "I want manual order". Drop any active column sort —
+      // otherwise the refetch would re-sort by that column and snap the row
+      // back, since reorder only writes `position` (manual order is the
+      // no-active-sort case, which renders in position order). Then mirror
+      // the new order into the optimistic state AND the task cache so the
+      // displayed order is consistent from the drop through the refetch.
+      setSortableItems(orderedIds);
+      clearSort();
+      qc.setQueryData<Task[]>(['tasks', project.localId], (old) =>
+        old ? reorderTasksByIds(old, orderedIds) : old,
+      );
+
+      // Midpoint only works when the neighbours have distinct, non-null
+      // positions. Locally-created tasks start at position=null, so the first
+      // reorder (or a collision) re-indexes the whole list to lay down a clean
+      // spread; steady state stays on the cheap single write.
+      const positions = new Map(reordered.map((t) => [t.localId, t.position]));
+      const plan = planReorder(orderedIds, taskId, (id) => positions.get(id));
+      try {
+        if (plan.type === 'midpoint') {
+          await reorderTask(taskId, view.localId, plan.position);
+        } else {
+          await reindexTasks(orderedIds, view.localId);
+        }
+      } catch (err) {
+        console.error('[table] failed to reorder task:', err);
+        setReorderError(true);
+      }
+    },
+    [view, orderedRows, clearSort, qc, project.localId],
   );
 
   const shownColumns = columns.filter((c) => visible[c.key]);
@@ -349,11 +406,11 @@ export function TableView({ project, view }: TableViewProps) {
               </tr>
             </thead>
             <SortableContext
-              items={sorted.map((t) => t.localId)}
+              items={sortableItems}
               strategy={verticalListSortingStrategy}
             >
               <tbody>
-                {sorted.map((task) => (
+                {orderedRows.map((task) => (
                   <SortableTableRow
                     key={task.localId}
                     task={task}
@@ -462,6 +519,22 @@ export function TableView({ project, view }: TableViewProps) {
       ) : null}
     </section>
   );
+}
+
+/**
+ * Reorder a cached task array so the ids in `orderedIds` lead, in that order,
+ * with every other task (completed / filtered-out) kept in its existing
+ * relative order after them. Used for the optimistic drag-reorder update so
+ * the table — once its column sort is cleared — shows the dropped order
+ * immediately, before the position write round-trips through a refetch.
+ */
+function reorderTasksByIds(tasks: Task[], orderedIds: string[]): Task[] {
+  const rank = new Map(orderedIds.map((id, i) => [id, i]));
+  const ranked: Task[] = [];
+  const rest: Task[] = [];
+  for (const t of tasks) (rank.has(t.localId) ? ranked : rest).push(t);
+  ranked.sort((a, b) => rank.get(a.localId)! - rank.get(b.localId)!);
+  return [...ranked, ...rest];
 }
 
 /* ───────────────────────── cells ───────────────────────── */

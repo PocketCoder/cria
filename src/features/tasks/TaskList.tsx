@@ -26,7 +26,7 @@ import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { createTask, updateTask, reorderTask, reindexTasks } from '@/db/tasks';
-import { calculatePosition, canMidpoint } from '@/lib/position';
+import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
@@ -196,27 +196,24 @@ export function TaskList({ project, view }: TaskListProps) {
       if (oldIdx === -1 || newIdx === -1) return;
 
       const reordered = arrayMove(roots, oldIdx, newIdx);
+      const orderedIds = reordered.map((t) => t.localId);
 
       // Update sortable items synchronously. The rendered list is driven by
       // this same array (see `orderedRoots`), so the row stays exactly where
       // it was dropped — no snap-back — until the query refetch confirms it.
-      setSortableItems(reordered.map((t) => t.localId));
+      setSortableItems(orderedIds);
 
-      // Compute the dragged task's new position from its new neighbours.
-      const idx = reordered.findIndex((t) => t.localId === taskId);
-      const beforePos = idx > 0 ? reordered[idx - 1]?.position ?? null : null;
-      const afterPos =
-        idx < reordered.length - 1 ? reordered[idx + 1]?.position ?? null : null;
-
+      // Midpoint only works when the neighbours have distinct, non-null
+      // positions. Locally-created tasks start at position=null, so the first
+      // reorder (or a collision) re-indexes the whole list to lay down a clean
+      // spread; steady state stays on the cheap single write.
+      const positions = new Map(reordered.map((t) => [t.localId, t.position]));
+      const plan = planReorder(orderedIds, taskId, (id) => positions.get(id));
       try {
-        // Midpoint only works when the neighbours have distinct, non-null
-        // positions. Locally-created tasks start at position=null, so the
-        // first reorder (or a collision) re-indexes the whole list to lay
-        // down a clean spread; steady state stays on the cheap single write.
-        if (canMidpoint(beforePos, afterPos)) {
-          await reorderTask(taskId, view.localId, calculatePosition(beforePos, afterPos));
+        if (plan.type === 'midpoint') {
+          await reorderTask(taskId, view.localId, plan.position);
         } else {
-          await reindexTasks(reordered.map((t) => t.localId), view.localId);
+          await reindexTasks(orderedIds, view.localId);
         }
       } catch (err) {
         console.error('[tasks] failed to reorder task:', err);
