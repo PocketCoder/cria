@@ -189,7 +189,7 @@ export function TaskList({ project, view }: TaskListProps) {
 
       try {
         for (let i = 0; i < blockIds.length; i++) {
-          await reorderTask(blockIds[i], view!.localId, positions[i] as number);
+          await reorderTask(blockIds[i]!, view!.localId, positions[i] as number);
         }
       } catch (err) {
         console.error('[tasks] failed to reorder block:', err);
