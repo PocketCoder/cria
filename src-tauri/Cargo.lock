@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "cria"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "objc2",
  "objc2-app-kit",

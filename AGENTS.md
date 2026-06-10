@@ -337,10 +337,9 @@ Ed25519 keypair: public key in `src-tauri/tauri.conf.json`
 GitHub Actions secret. Manifest served at
 `https://pocketcoder.github.io/cria/update.json` (gh-pages branch).
 
-1. Bump `version` in **all three**: `package.json`,
-   `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`.
-2. `cargo check --manifest-path src-tauri/Cargo.toml` so `Cargo.lock` picks up
-   the new line.
+1. `pnpm bump <patch|minor|major|X.Y.Z>` — updates `package.json`,
+   `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and runs `cargo check`
+   to sync `Cargo.lock`. (Script: `scripts/bump.sh`.)
 3. `git tag vX.Y.Z && git push origin vX.Y.Z` — the `v*` tag triggers
    `.github/workflows/release.yml` (macOS aarch64 + x86_64, signs bundles,
    creates the GitHub Release, publishes `update.json`).
