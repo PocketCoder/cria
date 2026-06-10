@@ -32,6 +32,14 @@ export function usePeriodicSync() {
 
     let cancelled = false;
     const tick = async () => {
+      // Drain the outbox before pulling so the circuit breaker is clean,
+      // and so a row that failed its push (e.g. server was down) gets a
+      // retry even without a new user mutation to trigger notify('outbox').
+      try {
+        await drainOutbox();
+      } catch (err) {
+        console.warn('[periodic-sync] outbox drain failed:', err);
+      }
       try {
         await pullProjects();
       } catch (err) {

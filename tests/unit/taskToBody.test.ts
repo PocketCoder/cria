@@ -83,4 +83,35 @@ describe('taskToBody', () => {
   it('passes description through when set', () => {
     expect(taskToBody(row({ description: '<p>hello</p>' })).description).toBe('<p>hello</p>');
   });
+
+  describe('date fields', () => {
+    it('emits due_date as undefined when null', () => {
+      expect(taskToBody(row({ due_date: null })).due_date).toBeUndefined();
+    });
+
+    it('passes full ISO due_date through unchanged', () => {
+      expect(taskToBody(row({ due_date: '2026-06-09T12:00:00+01:00' })).due_date).toBe('2026-06-09T12:00:00+01:00');
+    });
+
+    it('converts date-only due_date to local ISO datetime', () => {
+      const body = taskToBody(row({ due_date: '2026-06-09' }));
+      expect(body.due_date).toMatch(/^2026-06-09T00:00:00[+-]\d{2}:\d{2}$/);
+    });
+
+    it('converts date-only start_date to local ISO datetime', () => {
+      const body = taskToBody(row({ start_date: '2026-07-04' }));
+      expect(body.start_date).toMatch(/^2026-07-04T00:00:00[+-]\d{2}:\d{2}$/);
+    });
+
+    it('converts date-only end_date to local ISO datetime', () => {
+      const body = taskToBody(row({ end_date: '2026-08-15' }));
+      expect(body.end_date).toMatch(/^2026-08-15T00:00:00[+-]\d{2}:\d{2}$/);
+    });
+
+    it('omits start_date and end_date when null', () => {
+      const body = taskToBody(row({ start_date: null, end_date: null }));
+      expect(body.start_date).toBeUndefined();
+      expect(body.end_date).toBeUndefined();
+    });
+  });
 });

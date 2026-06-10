@@ -495,6 +495,24 @@ async function executeOp(
   }
 }
 
+/**
+ * Vikunja requires full ISO 8601 datetime with timezone offset for all
+ * date fields (due_date, start_date, end_date). The local DB may store
+ * date-only strings (e.g. "2026-06-09") when set from a date picker;
+ * normalise to midnight local time so the server accepts the value.
+ */
+function normaliseDateForServer(date: string | null | undefined): string | undefined {
+  if (!date) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}[T ]/.test(date)) return date;
+  // Date-only — append midnight local time as full ISO offset
+  const d = new Date(`${date}T00:00:00`);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const absMin = Math.abs(offset);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sign}${pad(Math.floor(absMin / 60))}:${pad(absMin % 60)}`;
+}
+
 export function taskToBody(
   task: TaskRow,
   projectServerId?: number,
@@ -509,9 +527,9 @@ export function taskToBody(
     ...(projectServerId != null ? { project_id: projectServerId } : {}),
     description: task.description ?? undefined,
     done: task.done === 1,
-    due_date: task.due_date ?? undefined,
-    start_date: task.start_date ?? undefined,
-    end_date: task.end_date ?? undefined,
+    due_date: normaliseDateForServer(task.due_date),
+    start_date: normaliseDateForServer(task.start_date),
+    end_date: normaliseDateForServer(task.end_date),
     priority: task.priority,
     percent_done: task.percent_done <= 1
       ? Math.round(task.percent_done * 100)
