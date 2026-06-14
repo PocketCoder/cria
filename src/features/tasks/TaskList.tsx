@@ -18,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
 import { format } from 'date-fns';
+import { toCalendarDate } from '@/lib/dateFormat';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
@@ -681,7 +682,7 @@ function TaskRow({
 
 function formatDate(iso: string): string {
   try {
-    return format(new Date(iso), 'd MMM');
+    return format(toCalendarDate(iso), 'd MMM');
   } catch {
     return iso;
   }

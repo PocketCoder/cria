@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
-import { useDateFormatter } from '@/lib/dateFormat';
+import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects } from '@/db/projects';
@@ -604,7 +604,7 @@ function InlineDate({
       display = value;
     }
   }
-  const selectedDate = value ? new Date(value) : undefined;
+  const selectedDate = value ? toCalendarDate(value) : undefined;
 
   return (
     <Popover

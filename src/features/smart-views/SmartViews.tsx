@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { format } from 'date-fns';
+import { toCalendarDate } from '@/lib/dateFormat';
 import { Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DatePicker } from '@/components/DatePicker';
@@ -375,7 +376,7 @@ export function SmartTaskRow({
 
 function formatDue(iso: string): string {
   try {
-    return format(new Date(iso), 'd MMM');
+    return format(toCalendarDate(iso), 'd MMM');
   } catch {
     return iso;
   }

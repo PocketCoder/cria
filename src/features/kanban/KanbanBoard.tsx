@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
+import { toCalendarDate } from '@/lib/dateFormat';
 import { useProjectTaskLabels } from '@/queries/taskLabels';
 import { KanbanFilterPopup } from './KanbanFilterPopup';
 import {
@@ -766,7 +767,7 @@ function findTaskInColumns(
 
 function formatShortDate(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = toCalendarDate(iso);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   } catch {
     return iso;
