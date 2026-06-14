@@ -77,8 +77,22 @@ export interface TaskRow {
   is_favorite: number;
   repeat_after: number;
   repeat_mode: number;
+  updated_at: string;
   deleted: number;
 }
+
+const TASK_CONFLICT_FIELDS = [
+  'title',
+  'description',
+  'done',
+  'due_date',
+  'start_date',
+  'end_date',
+  'priority',
+  'percent_done',
+  'hex_color',
+  'position',
+] as const;
 
 const MAX_ATTEMPTS = 10;
 
@@ -120,22 +134,29 @@ async function drainLoop(client: ApiClient): Promise<void> {
   const db = await getDb();
 
   while (true) {
+    // Always pick the oldest row regardless of next_attempt_at. If the head
+    // row is backing off, stop the drain — skipping it would break FIFO.
     const rows = await db.select<OutboxRow[]>(
       `SELECT * FROM outbox
-       WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
        ORDER BY id ASC
        LIMIT 1`,
-      [new Date().toISOString()],
     );
     const op = rows[0];
     if (!op) break;
+
+    // If the head row is backing off, don't skip past it — stop the drain.
+    if (op.next_attempt_at && op.next_attempt_at > new Date().toISOString()) {
+      break;
+    }
 
     try {
       await executeOp(client, db, op);
       await exec('DELETE FROM outbox WHERE id = ?', [op.id]);
       notify('outbox');
     } catch (err) {
-      const attempts = op.attempts + 1;
+      const isDependency =
+        err instanceof ApiError && err.dependency;
+      const attempts = isDependency ? op.attempts : op.attempts + 1;
       const retryable =
         err instanceof ApiError
           ? err.retryable
@@ -143,7 +164,7 @@ async function drainLoop(client: ApiClient): Promise<void> {
           ? err.retryable
           : false;
 
-      if (!retryable || attempts >= MAX_ATTEMPTS) {
+      if (!retryable || (attempts >= MAX_ATTEMPTS && !isDependency)) {
         await withTx(async (tx) => {
           await tx.execute(
             `INSERT INTO outbox_dead_letter
@@ -179,6 +200,10 @@ interface LabelLookup {
   server_id: number | null;
 }
 
+/* ──────── crash-idempotency helpers ──────────── */
+
+/* ──────── entity dispatch ──────────────────── */
+
 async function executeOp(
   client: ApiClient,
   db: Database,
@@ -198,7 +223,10 @@ async function executeOp(
     );
     const taskServerId = taskRow?.server_id;
     const labelServerId = labelRow?.server_id;
-    if (!taskServerId || !labelServerId) return;
+    if (!taskServerId || !labelServerId) {
+      const missing = taskServerId ? 'label' : 'task';
+      throw new ApiError(408, null, `task_label: ${missing} has no server id`, true, true);
+    }
 
     if (op.op === 'add') {
       await callApi(
@@ -226,7 +254,9 @@ async function executeOp(
       [op.entity_local_id],
     );
     const taskServerId = taskRow?.server_id;
-    if (!taskServerId) return;
+    if (!taskServerId) {
+      throw new ApiError(408, null, 'task_assignee: task has no server id', true, true);
+    }
 
     if (op.op === 'add') {
       await callApi(
@@ -261,7 +291,7 @@ async function executeOp(
     const taskServerId = taskRow?.server_id;
     if (!taskServerId) {
       // Owning task isn't synced yet — retry once its 'create' op lands.
-      throw new ApiError(408, null, 'task_relation: owning task has no server id', true);
+      throw new ApiError(408, null, 'task_relation: owning task has no server id', true, true);
     }
 
     // Resolve the peer's server id. Prefer the local lookup; fall back
@@ -279,7 +309,7 @@ async function executeOp(
     if (!otherServerId) {
       // Peer task isn't synced yet — retryable; once it's created the
       // local id resolves to a server id and this op can run.
-      throw new ApiError(408, null, 'task_relation: peer task has no server id', true);
+      throw new ApiError(408, null, 'task_relation: peer task has no server id', true, true);
     }
 
     if (op.op === 'add') {
@@ -341,13 +371,18 @@ async function executeOp(
     return;
   }
 
+  if (op.entity_type === 'task_position') {
+    await executeTaskPositionOp(client, db, op);
+    return;
+  }
+
   if (op.entity_type !== 'task') return;
 
   const localId = op.entity_local_id;
     const taskRows = await db.select<TaskRow[]>(
       `SELECT local_id, server_id, project_local_id, title, description, done,
               done_at, due_date, start_date, end_date, priority, percent_done,
-              hex_color, is_favorite, repeat_after, repeat_mode, deleted
+              hex_color, is_favorite, repeat_after, repeat_mode, updated_at, deleted
          FROM tasks WHERE local_id = ? LIMIT 1`,
       [localId],
     );
@@ -374,7 +409,7 @@ async function executeOp(
     );
     const projectServerId = projectRows[0]?.server_id;
     if (!projectServerId) {
-      throw new ApiError(408, null, 'Project not yet synced', true);
+      throw new ApiError(408, null, 'Project not yet synced', true, true);
     }
 
     const res = await callApi(
@@ -389,12 +424,13 @@ async function executeOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
+         WHERE local_id = ? AND updated_at = ?`,
         [
           newServerId ?? null,
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
+          task.updated_at,
         ],
       );
     });
@@ -405,7 +441,7 @@ async function executeOp(
     if (op.op === 'update') {
       if (task.deleted === 1) return; // delete op will handle it
       if (task.server_id === null) {
-        throw new ApiError(408, null, 'Cannot update a task without server id', true);
+        throw new ApiError(408, null, 'Cannot update a task without server id', true, true);
       }
 
       const [projRow] = await db.select<ProjectLookup[]>(
@@ -438,6 +474,33 @@ async function executeOp(
           | undefined,
       }));
 
+      // Pre-push divergence check: fetch current server state and compare
+      // against our last_synced snapshot to avoid silent overwrites.
+      const [lastSyncedRow] = await db.select<{ last_synced: string | null }[]>(
+        `SELECT last_synced FROM tasks WHERE local_id = ? LIMIT 1`,
+        [localId],
+      );
+      if (lastSyncedRow?.last_synced) {
+        try {
+          const serverPayload = await callApi(
+            client.GET('/tasks/{id}', { params: { path: { id: task.server_id } } }),
+          ) as Record<string, unknown> | undefined;
+          if (serverPayload) {
+            const conflicted = await checkDivergence(
+              lastSyncedRow.last_synced,
+              serverPayload,
+              TASK_CONFLICT_FIELDS as unknown as readonly string[],
+              'task',
+              localId,
+            );
+            if (conflicted) return;
+          }
+        } catch {
+          // GET failed (network, 404, etc.) — skip divergence check and
+          // proceed with push; the push itself may fail and retry.
+        }
+      }
+
       const res = await callApi(
         client.POST('/tasks/{id}', {
           params: { path: { id: task.server_id } },
@@ -449,11 +512,12 @@ async function executeOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
+         WHERE local_id = ? AND updated_at = ?`,
         [
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
+          task.updated_at,
         ],
       );
     });
@@ -490,6 +554,24 @@ async function executeOp(
   }
 }
 
+/**
+ * Vikunja requires full ISO 8601 datetime with timezone offset for all
+ * date fields (due_date, start_date, end_date). The local DB may store
+ * date-only strings (e.g. "2026-06-09") when set from a date picker;
+ * normalise to midnight local time so the server accepts the value.
+ */
+function normaliseDateForServer(date: string | null | undefined): string | undefined {
+  if (!date) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}[T ]/.test(date)) return date;
+  // Date-only — append midnight local time as full ISO offset
+  const d = new Date(`${date}T00:00:00`);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const absMin = Math.abs(offset);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sign}${pad(Math.floor(absMin / 60))}:${pad(absMin % 60)}`;
+}
+
 export function taskToBody(
   task: TaskRow,
   projectServerId?: number,
@@ -504,13 +586,11 @@ export function taskToBody(
     ...(projectServerId != null ? { project_id: projectServerId } : {}),
     description: task.description ?? undefined,
     done: task.done === 1,
-    due_date: task.due_date ?? undefined,
-    start_date: task.start_date ?? undefined,
-    end_date: task.end_date ?? undefined,
+    due_date: normaliseDateForServer(task.due_date),
+    start_date: normaliseDateForServer(task.start_date),
+    end_date: normaliseDateForServer(task.end_date),
     priority: task.priority,
-    percent_done: task.percent_done <= 1
-      ? Math.round(task.percent_done * 100)
-      : Math.round(task.percent_done),
+    percent_done: Math.round(task.percent_done * 100),
     hex_color: (task.hex_color ?? '').replace(/^#/, '') || undefined,
     is_favorite: task.is_favorite === 1 ? true : false,
     repeat_after: task.repeat_after ?? undefined,
@@ -545,6 +625,54 @@ export function startOutboxSync(): () => void {
   };
 }
 
+/* ───────────────────── pre-push divergence check ─────────────────── */
+
+/**
+ * Compare the server's current state against our `last_synced` snapshot.
+ * If they differ on any conflict-relevant field, record a conflict row
+ * and return true — the caller should abort the push so the user can
+ * resolve before we overwrite the server's version.
+ *
+ * Only meaningful for UPDATE ops (create has no prior state, delete is
+ * destructive by nature).
+ */
+async function checkDivergence(
+  lastSynced: string | null,
+  currentServerPayload: Record<string, unknown>,
+  conflictFields: readonly string[],
+  entityType: string,
+  localId: string,
+): Promise<boolean> {
+  if (!lastSynced) return false;
+
+  let before: Record<string, unknown>;
+  try {
+    before = JSON.parse(lastSynced) as Record<string, unknown>;
+  } catch {
+    return false; // garbled snapshot; can't compare
+  }
+
+  const diverged = conflictFields.filter((f) => before[f] !== currentServerPayload[f]);
+  if (diverged.length === 0) return false;
+
+  const now = new Date().toISOString();
+  await exec(
+    `INSERT INTO conflicts
+       (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      entityType,
+      localId,
+      JSON.stringify(diverged),
+      lastSynced,
+      JSON.stringify(currentServerPayload),
+      now,
+    ],
+  );
+  notify('conflicts');
+  return true;
+}
+
 /* ───────────────────────────── project ops ─────────────────────────── */
 
 interface ProjectRow {
@@ -556,6 +684,7 @@ interface ProjectRow {
   hex_color: string | null;
   is_archived: number;
   position: number | null;
+  updated_at: string;
   deleted: number;
 }
 
@@ -567,7 +696,7 @@ async function executeProjectOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
-            hex_color, is_archived, position, deleted
+            hex_color, is_archived, position, updated_at, deleted
        FROM projects WHERE local_id = ? LIMIT 1`,
     [localId],
   );
@@ -590,12 +719,13 @@ async function executeProjectOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE projects SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
+         WHERE local_id = ? AND updated_at = ?`,
         [
           newServerId ?? null,
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
+          row.updated_at,
         ],
       );
     });
@@ -606,8 +736,34 @@ async function executeProjectOp(
   if (op.op === 'update') {
     if (row.deleted === 1) return;
     if (row.server_id === null) {
-      throw new ApiError(408, null, 'Cannot update a project without server id', true);
+      throw new ApiError(408, null, 'Cannot update a project without server id', true, true);
     }
+
+    // Pre-push divergence check
+    const [projLastSynced] = await db.select<{ last_synced: string | null }[]>(
+      `SELECT last_synced FROM projects WHERE local_id = ? LIMIT 1`,
+      [localId],
+    );
+    if (projLastSynced?.last_synced) {
+      try {
+        const serverPayload = await callApi(
+          client.GET('/projects/{id}', { params: { path: { id: row.server_id } } }),
+        ) as Record<string, unknown> | undefined;
+        if (serverPayload) {
+          const conflicted = await checkDivergence(
+            projLastSynced.last_synced,
+            serverPayload,
+            ['title', 'description'],
+            'project',
+            localId,
+          );
+          if (conflicted) return;
+        }
+      } catch {
+        // skip divergence check on fetch failure
+      }
+    }
+
     const res = await callApi(
       client.POST('/projects/{id}', {
         params: { path: { id: row.server_id } },
@@ -618,11 +774,12 @@ async function executeProjectOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE projects SET synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
+         WHERE local_id = ? AND updated_at = ?`,
         [
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
+          row.updated_at,
         ],
       );
     });
@@ -698,6 +855,7 @@ interface LabelRow {
   title: string;
   description: string | null;
   hex_color: string | null;
+  updated_at: string;
   deleted: number;
 }
 
@@ -708,7 +866,7 @@ async function executeLabelOp(
 ): Promise<void> {
   const localId = op.entity_local_id;
   const [row] = await db.select<LabelRow[]>(
-    `SELECT local_id, server_id, title, description, hex_color, deleted
+    `SELECT local_id, server_id, title, description, hex_color, updated_at, deleted
        FROM labels WHERE local_id = ? LIMIT 1`,
     [localId],
   );
@@ -731,12 +889,13 @@ async function executeLabelOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE labels SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
+         WHERE local_id = ? AND updated_at = ?`,
         [
           newServerId ?? null,
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
+          row.updated_at,
         ],
       );
     });
@@ -747,8 +906,34 @@ async function executeLabelOp(
   if (op.op === 'update') {
     if (row.deleted === 1) return;
     if (row.server_id === null) {
-      throw new ApiError(408, null, 'Cannot update a label without server id', true);
+      throw new ApiError(408, null, 'Cannot update a label without server id', true, true);
     }
+
+    // Pre-push divergence check
+    const [labelLastSynced] = await db.select<{ last_synced: string | null }[]>(
+      `SELECT last_synced FROM labels WHERE local_id = ? LIMIT 1`,
+      [localId],
+    );
+    if (labelLastSynced?.last_synced) {
+      try {
+        const serverPayload = await callApi(
+          client.GET('/labels/{id}', { params: { path: { id: row.server_id } } }),
+        ) as Record<string, unknown> | undefined;
+        if (serverPayload) {
+          const conflicted = await checkDivergence(
+            labelLastSynced.last_synced,
+            serverPayload,
+            ['title', 'description'],
+            'label',
+            localId,
+          );
+          if (conflicted) return;
+        }
+      } catch {
+        // skip divergence check on fetch failure
+      }
+    }
+
     const res = await callApi(
       client.PUT('/labels/{id}', {
         params: { path: { id: row.server_id } },
@@ -759,11 +944,12 @@ async function executeLabelOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE labels SET synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
+         WHERE local_id = ? AND updated_at = ?`,
         [
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
+          row.updated_at,
         ],
       );
     });
@@ -860,7 +1046,7 @@ async function executeViewOp(
     }
     if (row.server_id !== null) return;
     if (!projectServerId) {
-      throw new ApiError(408, null, 'view: parent project not synced yet', true);
+      throw new ApiError(408, null, 'view: parent project not synced yet', true, true);
     }
     const res = await callApi(
       client.PUT('/projects/{project}/views', {
@@ -870,7 +1056,7 @@ async function executeViewOp(
     );
     const newServerId = (res as { id?: number }).id;
     await exec(
-      `UPDATE project_views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+      `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
       [newServerId ?? null, new Date().toISOString(), localId],
     );
     notify('views');
@@ -880,7 +1066,7 @@ async function executeViewOp(
   if (op.op === 'update') {
     if (row.deleted === 1) return;
     if (row.server_id === null || !projectServerId) {
-      throw new ApiError(408, null, 'view: not synced yet', true);
+      throw new ApiError(408, null, 'view: not synced yet', true, true);
     }
     await callApi(
       client.POST('/projects/{project}/views/{id}', {
@@ -976,7 +1162,7 @@ async function executeBucketOp(
     }
     if (row.server_id !== null) return;
     if (!projectServerId || !viewServerId) {
-      throw new ApiError(408, null, 'bucket: parent view not synced yet', true);
+      throw new ApiError(408, null, 'bucket: parent view not synced yet', true, true);
     }
     const res = await callApi(
       client.PUT('/projects/{id}/views/{view}/buckets', {
@@ -996,7 +1182,7 @@ async function executeBucketOp(
   if (op.op === 'update') {
     if (row.deleted === 1) return;
     if (row.server_id === null || !projectServerId || !viewServerId) {
-      throw new ApiError(408, null, 'bucket: not synced yet', true);
+      throw new ApiError(408, null, 'bucket: not synced yet', true, true);
     }
     await callApi(
       client.POST('/projects/{projectID}/views/{view}/buckets/{bucketID}', {
@@ -1024,7 +1210,7 @@ async function executeBucketOp(
       return;
     }
     if (!projectServerId || !viewServerId) {
-      throw new ApiError(408, null, 'bucket: parent view not synced yet', true);
+      throw new ApiError(408, null, 'bucket: parent view not synced yet', true, true);
     }
     await callApi(
       client.DELETE('/projects/{projectID}/views/{view}/buckets/{bucketID}', {
@@ -1080,7 +1266,7 @@ async function executeTaskBucketOp(
   if (!taskServerId || !bucketServerId || !viewServerId || !projectServerId) {
     // The task or its target bucket hasn't synced yet — retry after their
     // create ops land (FIFO keeps those ahead of this assignment).
-    throw new ApiError(408, null, 'task_bucket: task/bucket not synced yet', true);
+    throw new ApiError(408, null, 'task_bucket: task/bucket not synced yet', true, true);
   }
 
   await callApi(
@@ -1100,4 +1286,51 @@ async function executeTaskBucketOp(
     }),
   );
   // Nothing to reconcile locally — the assignment row is already written.
+}
+
+/* ──────────────────────── task-position ops ─────────────────── */
+
+async function executeTaskPositionOp(
+  client: ApiClient,
+  db: Database,
+  op: OutboxRow,
+): Promise<void> {
+  const payload = JSON.parse(op.payload) as {
+    view_local_id: string;
+    position: number;
+  };
+  const taskLocalId = op.entity_local_id;
+
+  const [taskRow] = await db.select<{ server_id: number | null }[]>(
+    `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+    [taskLocalId],
+  );
+  const { view_server_id: viewServerId } = await resolveViewContext(
+    db,
+    payload.view_local_id,
+  );
+
+  const taskServerId = taskRow?.server_id ?? null;
+
+  if (!taskServerId || !viewServerId) {
+    throw new ApiError(
+      408,
+      null,
+      'task_position: task/view not synced yet',
+      true,
+    );
+  }
+
+  await callApi(
+    client.POST('/tasks/{id}/position', {
+      params: {
+        path: { id: taskServerId },
+      },
+      body: {
+        position: payload.position,
+        project_view_id: viewServerId,
+        task_id: taskServerId,
+      },
+    }),
+  );
 }

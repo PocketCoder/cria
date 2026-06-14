@@ -131,8 +131,10 @@ describe('sync/reconcile', () => {
           response: { ok: true, status: 200, headers: new Map(), text: vi.fn().mockResolvedValue('') },
         } as any);
       const client = mockClient({ get });
-      await expect(reconcileDeletions(client)).resolves.toBeUndefined();
-      // Project should still exist
+      await expect(reconcileDeletions(client)).rejects.toThrow(
+        'reconcileDeletions: /tasks HTTP 500',
+      );
+      // Project should still exist (no deletions happened before the error)
       const rows = await db.select<unknown[]>(`SELECT * FROM projects WHERE server_id = 1`);
       expect(rows.length).toBe(1);
     });
