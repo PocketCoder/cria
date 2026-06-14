@@ -62,6 +62,15 @@ export async function platformFetch(
   // Bound every request: abort the underlying call and race a timeout so a
   // hung origin (e.g. a Cloudflare 524) fails in ~20s, not ~100s.
   const controller = new AbortController();
+  // Forward the caller's signal — if they abort, we abort too.
+  const callerSignal = init?.signal;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort(callerSignal.reason);
+    } else {
+      callerSignal.addEventListener('abort', () => controller.abort(callerSignal.reason), { once: true });
+    }
+  }
   const signalledInit: RequestInit = { ...init, signal: controller.signal };
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -92,6 +101,24 @@ export async function platformFetch(
  * sync work, call `createApiClient()` once per cycle so token rotation takes
  * effect on the next cycle without restarting the app.
  */
+/** Refuse to send a Bearer token to a non-https, non-loopback origin. */
+function guardTokenDestination(baseUrl: string, token: string): void {
+  if (!token) return;
+  try {
+    const u = new URL(baseUrl);
+    if (u.protocol !== 'https:') {
+      const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
+      if (!loopbacks.includes(u.hostname)) {
+        throw new Error(
+          `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Refusing')) throw err;
+  }
+}
+
 export function createApiClient(opts?: {
   baseUrl?: string;
   token?: string;
@@ -99,6 +126,8 @@ export function createApiClient(opts?: {
   const snap = getAuthSnapshot();
   const baseUrl = `${normalizeBase(opts?.baseUrl ?? snap.serverUrl ?? '')}/api/v1`;
   const token = opts?.token ?? snap.token ?? '';
+
+  guardTokenDestination(baseUrl, token);
 
   return createClient<paths>({
     baseUrl,

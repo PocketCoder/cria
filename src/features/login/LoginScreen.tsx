@@ -10,11 +10,20 @@ import { createApiClient } from '@/api/client';
 import { fetchCurrentUser } from '@/api/user';
 import { ApiError, NetworkError } from '@/api/errors';
 
+const serverUrlSchema = z.string().trim().url().refine(
+  (url) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'https:') return true;
+      // Allow http:// for loopback addresses only
+      return ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+    } catch { return false; }
+  },
+  'Use https:// or a loopback address (localhost/127.0.0.1) for http://',
+);
+
 const schema = z.object({
-  serverUrl: z
-    .string()
-    .trim()
-    .url('Enter a full URL (https://…) to your Vikunja instance'),
+  serverUrl: serverUrlSchema,
   token: z.string().trim().min(8, 'Paste your API token from Vikunja settings'),
 });
 

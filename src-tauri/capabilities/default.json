@@ -19,7 +19,6 @@
     "sql:allow-execute",
     "sql:allow-select",
     "sql:allow-close",
-    "stronghold:default",
     "deep-link:default",
     "notification:default",
     "global-shortcut:default",
@@ -32,7 +31,9 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "http://**" },
+        { "url": "http://localhost:*/**" },
+        { "url": "http://127.0.0.1:*/**" },
+        { "url": "http://[::1]:*/**" },
         { "url": "https://**" }
       ]
     },
@@ -40,7 +41,9 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
-        { "url": "*" }
+        { "url": "https://**" },
+        { "url": "http://**" },
+        { "url": "mailto:**" }
       ]
     },
     "updater:default",

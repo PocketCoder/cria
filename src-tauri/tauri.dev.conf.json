@@ -2,6 +2,11 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Cria Dev",
   "identifier": "io.cria.desktop.dev",
+  "app": {
+    "security": {
+      "csp": "default-src 'self' http://localhost:* ws://localhost:*; script-src 'self' http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost blob: data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:* ws://localhost:*; object-src 'none'; frame-src 'none'; base-uri 'self'"
+    }
+  },
   "bundle": {
     "createUpdaterArtifacts": false,
     "shortDescription": "Cria — dev build",

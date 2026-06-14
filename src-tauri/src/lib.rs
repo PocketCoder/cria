@@ -151,18 +151,6 @@ pub fn run() {
                 .add_migrations("sqlite:cria.db", migrations())
                 .build(),
         )
-        .plugin(tauri_plugin_stronghold::Builder::new(|password| {
-            use std::hash::{DefaultHasher, Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            password.hash(&mut hasher);
-            let hash = hasher.finish().to_be_bytes();
-            let mut key = Vec::with_capacity(32);
-            for _ in 0..4 {
-                key.extend_from_slice(&hash);
-            }
-            key
-        })
-        .build())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
