@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { useServerVersion } from '@/queries/server';
-import { useUpdater } from '@/queries/updater';
+import { useUpdaterStore } from '@/stores/updater';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
 import { pushUserSettings, type UserSettingsInput } from '@/api/userSettings';
 import { notify } from '@/db/bus';
@@ -26,7 +26,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const signOut = useAuth((s) => s.signOut);
   const { data: user } = useCurrentUser();
   const { data: serverVersion } = useServerVersion();
-  const { state: updaterState, runCheck: runUpdaterCheck } = useUpdater();
+  const updaterState = useUpdaterStore((s) => s.state);
+  const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
 
   const serverUrl = status.kind === 'authenticated' ? status.credentials.serverUrl : null;
 

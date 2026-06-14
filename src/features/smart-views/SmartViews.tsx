@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { format } from 'date-fns';
-import { Plus, Loader2, Trash2, Paperclip } from 'lucide-react';
+import { toCalendarDate } from '@/lib/dateFormat';
+import { Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DatePicker } from '@/components/DatePicker';
 import { useUi } from '@/stores/ui';
@@ -56,6 +57,7 @@ function SmartView({
   defaultDueDate?: string;
   defaultLabelLocalId?: string;
 }) {
+  const [showCompleted, setShowCompleted] = useState(false);
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const filtered = groups
     .map((g) => ({
@@ -64,6 +66,10 @@ function SmartView({
     }))
     .filter((g) => g.tasks.length > 0);
   const total = groupTotal(filtered);
+  const activeTotal = filtered.reduce(
+    (n, g) => n + g.tasks.filter((t) => !t.done).length,
+    0,
+  );
 
   /* ── inline create ──────────────────────────────────────── */
   const { data: projects = [] } = useProjects();
@@ -154,9 +160,9 @@ function SmartView({
     <>
       <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
         <h1 className="text-base font-semibold tracking-tight">{title}</h1>
-        {total > 0 ? (
+        {activeTotal > 0 ? (
           <span className="text-xs text-[var(--color-muted-foreground)]">
-            {total}
+            {activeTotal}
           </span>
         ) : null}
       </header>
@@ -218,23 +224,56 @@ function SmartView({
               {emptyMessage}
             </p>
           ) : (
-            filtered.map((g) => (
-              <div key={g.key}>
-                <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-                  {g.label}
-                  <span className="font-normal normal-case">{g.tasks.length}</span>
-                </h2>
-                <ul>
-                  {g.tasks.map((t) => (
-                    <SmartTaskRow
-                      key={t.localId}
-                      task={t}
-                      showProject={showProject}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ))
+            filtered.map((g) => {
+              const active = g.tasks.filter((t) => !t.done);
+              const completed = g.tasks.filter((t) => t.done);
+              return (
+                <div key={g.key}>
+                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                    {g.label}
+                    <span className="font-normal normal-case">{active.length}</span>
+                  </h2>
+                  <ul>
+                    {active.map((t) => (
+                      <SmartTaskRow
+                        key={t.localId}
+                        task={t}
+                        showProject={showProject}
+                      />
+                    ))}
+                    {completed.length > 0 ? (
+                      <li>
+                        <div className="mx-3 my-2 overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-accent)]/5">
+                          <button
+                            type="button"
+                            onClick={() => setShowCompleted((s) => !s)}
+                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                          >
+                            {showCompleted ? (
+                              <ChevronDown className="h-3 w-3 shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3 shrink-0" />
+                            )}
+                            {showCompleted ? 'Hide' : 'Show'} completed ({completed.length})
+                          </button>
+                          {showCompleted ? (
+                            <ul>
+                              {completed.map((t) => (
+                                <SmartTaskRow
+                                  key={t.localId}
+                                  task={t}
+                                  showProject={showProject}
+                                />
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
+              );
+            })
           )}
         </section>
         <TaskDetail />
@@ -337,7 +376,7 @@ export function SmartTaskRow({
 
 function formatDue(iso: string): string {
   try {
-    return format(new Date(iso), 'd MMM');
+    return format(toCalendarDate(iso), 'd MMM');
   } catch {
     return iso;
   }

@@ -32,6 +32,7 @@ export async function initSchema(): Promise<void> {
     '009_task_identifier.sql',
     '010_views.sql',
     '011_kanban.sql',
+    '012_task_bucket_position.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),

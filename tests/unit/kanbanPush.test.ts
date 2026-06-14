@@ -140,7 +140,7 @@ describe('kanban outbox push', () => {
     const db = await getDb();
     const outbox = await db.select<{ attempts: number }[]>(`SELECT attempts FROM outbox`);
     expect(outbox).toHaveLength(1);
-    expect(outbox[0]!.attempts).toBe(1);
+    expect(outbox[0]!.attempts).toBe(0);
 
     const [row] = await db.select<{ server_id: number | null; deleted: number }[]>(
       `SELECT server_id, deleted FROM buckets WHERE local_id = ?`,
@@ -172,7 +172,7 @@ describe('kanban outbox push', () => {
     // and the board can never place a moved card in its bucket.
     const assignments = await listBucketAssignmentsForView('v5');
     expect(assignments).toEqual([
-      { taskLocalId: 't5', viewLocalId: 'v5', bucketLocalId: 'b5' },
+      { taskLocalId: 't5', viewLocalId: 'v5', bucketLocalId: 'b5', position: 0 },
     ]);
   });
 

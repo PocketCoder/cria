@@ -1,5 +1,5 @@
 import * as chrono from 'chrono-node';
-import { startOfDay, endOfDay, endOfWeek, addDays } from 'date-fns';
+import { addDays } from 'date-fns';
 
 const LABEL_RE = /(?:^|\s)(#"[^"]+"|#[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
@@ -29,6 +29,39 @@ interface RawToken {
   payload: string | number;
   startIso?: string;
   endIso?: string;
+}
+
+/**
+ * Convert a local-timezone Date (from chrono) into a midnight-UTC ISO string
+ * of the same calendar day — so it compares correctly with Vikunja's
+ * midnight-UTC due_date values.
+ */
+function toUTCMidnight(d: Date): string {
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
+}
+
+/**
+ * Convert a local-timezone Date into an end-of-day (23:59:59.999) UTC ISO
+ * string of the same calendar day.
+ */
+function toUTCEndOfDay(d: Date): string {
+  return new Date(
+    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999),
+  ).toISOString();
+}
+
+/**
+ * Compute end of the week (23:59:59.999 UTC) for a local-timezone Date,
+ * respecting the given `weekStartsOn` (0=Sunday, 1=Monday, …).
+ */
+function toUTCEndOfWeek(d: Date, weekStartsOn: number): string {
+  const dayOfWeek = d.getDay();
+  // diff to the last day of the week (Saturday if weekStartsOn=0, Sunday if 1)
+  const diff = (6 - dayOfWeek + weekStartsOn) % 7;
+  const end = new Date(
+    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + diff, 23, 59, 59, 999),
+  );
+  return end.toISOString();
 }
 
 function overlaps(start: number, end: number, ranges: RawToken[]): boolean {
@@ -70,7 +103,7 @@ export function parseSearchQuery(input: string, now: Date = new Date()): SearchQ
     const matchText = m[1]!;
     const start = m.index! + (m[0]!.length - matchText.length);
     const end = start + matchText.length;
-    const endDate = endOfDay(addDays(now, 14));
+    const endDate = toUTCEndOfDay(addDays(now, 14));
     claimed.push({
       kind: 'date',
       start,
@@ -78,7 +111,7 @@ export function parseSearchQuery(input: string, now: Date = new Date()): SearchQ
       text: matchText,
       payload: 0,
       startIso: undefined,  // null → includes overdue
-      endIso: endDate.toISOString(),
+      endIso: endDate,
     });
     break; // first wins
   }
@@ -98,12 +131,12 @@ export function parseSearchQuery(input: string, now: Date = new Date()): SearchQ
     const isThisWeek = rawText === 'this week' || rawText === 'this wk';
     const dateStart = isThisWeek
       ? undefined  // null → includes overdue
-      : startOfDay(sd).toISOString();
+      : toUTCMidnight(sd);
     const dateEnd = r.end
-      ? endOfDay(r.end.date()).toISOString()
+      ? toUTCEndOfDay(r.end.date())
       : isThisWeek
-        ? endOfWeek(sd, { weekStartsOn: 1 }).toISOString()
-        : endOfDay(sd).toISOString();
+        ? toUTCEndOfWeek(sd, 1)
+        : toUTCEndOfDay(sd);
 
     claimed.push({
       kind: 'date',

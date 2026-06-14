@@ -4,7 +4,7 @@
 // pulled per-project on open (pullViewsForProjectLocal), and when a project
 // has none (offline / local-only), four local default views are seeded.
 
-import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
+import { describe, it, beforeAll, beforeEach, expect, vi } from 'vitest';
 import { getDb } from '@/db';
 import { initSchema, clearTables, seedProject } from './_helpers';
 import {
@@ -104,6 +104,32 @@ describe('project views: default fallback + per-project pull', () => {
       { id: 501, title: 'Done', project_view_id: 101, position: 1 },
     ];
 
+    // The pagination rework of pullViewsForProject / pullBucketsForView uses
+    // raw fetch (createApiFetch) instead of the openapi-fetch client, so we
+    // need to mock globalThis.fetch for those paths.
+    const origFetch = globalThis.fetch;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/buckets')) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve(bucketPayloads),
+          headers: new Map([['x-pagination-total-pages', '1']]) as any,
+          text: () => Promise.resolve(''),
+        });
+      }
+      if (url.includes('/views')) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve(viewPayloads),
+          headers: new Map([['x-pagination-total-pages', '1']]) as any,
+          text: () => Promise.resolve(''),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
     const count = await pullViewsForProjectLocal(
       projectLocalId,
       mockClient(viewPayloads, bucketPayloads),
@@ -116,6 +142,9 @@ describe('project views: default fallback + per-project pull', () => {
     const kanban = views.find((v) => v.viewKind === 'kanban')!;
     const buckets = await listBucketsForView(kanban.localId);
     expect(buckets.map((b) => b.title)).toEqual(['Backlog', 'Done']);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 
   it('pullViewsForProjectLocal is a no-op for a local-only project (no server id)', async () => {

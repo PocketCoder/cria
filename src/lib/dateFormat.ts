@@ -37,6 +37,20 @@ function toDate(value: string | number | Date): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
+/**
+ * Parse a UTC ISO date string back into a local-timezone Date whose calendar
+ * components (year, month, day) match the UTC originals.
+ *
+ * Due dates are stored at midnight UTC (Vikunja's convention). A naive
+ * `new Date(iso)` followed by `getDate()` / `format()` etc. interprets the
+ * ISO instant in the OS timezone — west of UTC the date shifts back one day.
+ * Calling `getUTC*()` preserves the intended calendar day.
+ */
+export function toCalendarDate(iso: string): Date {
+  const d = new Date(iso);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
 export interface DateFormatters {
   /** Full numeric date per the user's `dateFormat` preference. */
   formatDate: (value: string | number | Date) => string;

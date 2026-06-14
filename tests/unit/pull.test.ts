@@ -243,11 +243,30 @@ describe('sync/pull', () => {
 
   describe('pullAll', () => {
     it('calls pullProjects and returns result', async () => {
-      const client = mockClient({
-        get: mockGet([{ id: 1, title: 'Solo project', updated: now(), is_archived: false }]),
-      });
-      const result = await pullAll(client);
-      expect(result.projects).toBe(1);
+      const emptyResponse = (url: string) => {
+        // Return empty arrays for views/buckets endpoints
+        if (url.includes('/views') || url.includes('/buckets')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve([]),
+            headers: new Map([['x-pagination-total-pages', '1']]) as any,
+            text: () => Promise.resolve(''),
+          });
+        }
+        return Promise.reject(new Error(`unexpected fetch: ${url}`));
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = emptyResponse as typeof fetch;
+      try {
+        const client = mockClient({
+          get: mockGet([{ id: 1, title: 'Solo project', updated: now(), is_archived: false }]),
+        });
+        const result = await pullAll(client);
+        expect(result.projects).toBe(1);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
     });
   });
 });

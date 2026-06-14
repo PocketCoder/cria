@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { toCalendarDate } from '@/lib/dateFormat';
 import { CalendarDays, Tag, UserPlus, Folder, AlertTriangle, Repeat } from 'lucide-react';
 import type { QuickAddResult } from '@/lib/quickAddParser';
 
@@ -142,7 +143,7 @@ function Chip({
 
 function formatDate(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = toCalendarDate(iso);
     const sameYear = d.getFullYear() === new Date().getFullYear();
     return format(d, sameYear ? 'EEE d MMM' : 'd MMM yyyy');
   } catch {

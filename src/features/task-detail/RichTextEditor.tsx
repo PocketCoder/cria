@@ -386,6 +386,7 @@ function EditView({
   taskServerId: number | null;
 }) {
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   // Slash Command Menu State managed via Ref to avoid stale closures in TipTap callbacks,
   // and synced to UI state for React rendering.
@@ -660,6 +661,7 @@ function EditView({
     },
     onUpdate({ editor: editorInstance }) {
       checkSlash(editorInstance);
+      setDirty(true);
     },
     onSelectionUpdate({ editor: editorInstance }) {
       checkSlash(editorInstance);
@@ -681,6 +683,7 @@ function EditView({
       const hasMedia = /<(img|hr|input)\b/i.test(html);
       const looksEmpty = text === '' && !hasMedia;
       await onSave(looksEmpty ? '' : html);
+      setDirty(false);
     } finally {
       setSaving(false);
     }
@@ -696,13 +699,13 @@ function EditView({
         void handleSave();
       } else if (e.key === 'Escape') {
         e.preventDefault();
+        if (dirty && !window.confirm('Discard unsaved changes?')) return;
         onCancel();
       }
     };
     dom.addEventListener('keydown', handler);
     return () => dom.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor]);
+  }, [editor, dirty]);
 
   // Persist task-list checkbox toggles immediately. We can't use
   // editorProps.handleClick — TipTap's TaskItem node view sets

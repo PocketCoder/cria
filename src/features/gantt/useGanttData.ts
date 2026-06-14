@@ -16,7 +16,7 @@ import type { Project } from '@/domain/project';
  * parent/child tree via the project's subtask relations. Pulls on mount
  * through `useProjectTasks`; rebuilds when tasks or relations change.
  */
-export function useGanttData(project: Project): {
+export function useGanttData(project: Project, showCompleted?: boolean): {
   nodes: GanttTaskNode[];
   relations: GanttRelationEdge[];
   isLoading: boolean;
@@ -52,8 +52,9 @@ export function useGanttData(project: Project): {
 
   const nodes = useMemo(() => {
     const visible = tasks.filter((t) => !pendingDeletes[t.localId]);
-    return buildGanttTaskTree(visible, childMap);
-  }, [tasks, childMap, pendingDeletes]);
+    const filtered = showCompleted === false ? visible.filter((t) => !t.done) : visible;
+    return buildGanttTaskTree(filtered, childMap);
+  }, [tasks, childMap, pendingDeletes, showCompleted]);
 
   return { nodes, relations, isLoading, isFetching, isError, error };
 }
