@@ -32,7 +32,7 @@ function mockClient(views: unknown[], buckets: unknown[]): ApiClient {
       if (url === '/projects/{project}/views') {
         return { data: views, response: okResponse() };
       }
-      if (url === '/projects/{id}/views/{view}/buckets') {
+      if (url === '/projects/{project}/views/{view}/buckets') {
         return { data: buckets, response: okResponse() };
       }
       return { data: [], response: okResponse() };

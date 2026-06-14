@@ -220,8 +220,9 @@ function cachedCreateResponse(payload: string): number | null {
 async function cacheCreateResponse(
   opId: number,
   payload: string,
-  serverId: number,
+  serverId: number | undefined,
 ): Promise<void> {
+  if (typeof serverId !== 'number') return;
   try {
     const parsed = JSON.parse(payload);
     parsed._cachedServerId = serverId;
@@ -1449,6 +1450,7 @@ async function executeTaskPositionOp(
       408,
       null,
       'task_position: task/view not synced yet',
+      true,
       true,
     );
   }

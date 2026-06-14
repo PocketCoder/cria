@@ -1,4 +1,4 @@
-import { createApiClient, createApiFetch, type ApiClient } from '@/api/client';
+import { createApiClient, type ApiClient } from '@/api/client';
 import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
 import {
@@ -326,6 +326,7 @@ export async function pullAllTasks(
 
   await stampSyncState('tasks_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -438,12 +439,17 @@ export async function pullViewsForProject(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
-  const apiFetch = createApiFetch();
   const collected: ViewResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const response = await apiFetch(
-      `/projects/${projectServerId}/views?page=${page}&per_page=${PER_PAGE}`,
+    const { data, response } = await (client.GET as any)(
+      '/projects/{project}/views',
+      {
+        params: {
+          path: { project: projectServerId },
+          query: { page, per_page: PER_PAGE },
+        },
+      },
     );
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -451,7 +457,7 @@ export async function pullViewsForProject(
         `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
       );
     }
-    const batch: unknown[] = await response.json();
+    const batch: unknown[] = data ?? [];
     for (const raw of batch) {
       const parsed = viewResponseSchema.safeParse(raw);
       if (parsed.success) collected.push(parsed.data);
@@ -516,12 +522,17 @@ async function pullBucketsForView(
   viewLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
-  const apiFetch = createApiFetch();
   const collected: BucketResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const response = await apiFetch(
-      `/projects/${projectServerId}/views/${viewServerId}/buckets?page=${page}&per_page=${PER_PAGE}`,
+    const { data, response } = await (client.GET as any)(
+      '/projects/{project}/views/{view}/buckets',
+      {
+        params: {
+          path: { project: projectServerId, view: viewServerId },
+          query: { page, per_page: PER_PAGE },
+        },
+      },
     );
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -529,7 +540,7 @@ async function pullBucketsForView(
         `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
       );
     }
-    const batch: unknown[] = await response.json();
+    const batch: unknown[] = data ?? [];
     for (const raw of batch) {
       const parsed = bucketResponseSchema.safeParse(raw);
       if (parsed.success) collected.push(parsed.data);

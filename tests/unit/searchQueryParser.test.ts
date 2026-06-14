@@ -1,9 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { startOfDay, endOfDay, addDays, endOfWeek } from 'date-fns';
+import { addDays } from 'date-fns';
 import { parseSearchQuery } from '@/lib/searchQueryParser';
 
 // Pin "now" for deterministic test results.
 const NOW = new Date(2026, 5, 9, 12, 0, 0); // 9 Jun 2026 12:00 local
+
+// Helpers matching the implementation's UTC-midnight convention.
+function utcMidnight(d: Date): string {
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
+}
+function utcEndOfDay(d: Date): string {
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)).toISOString();
+}
+function utcEndOfWeek(d: Date, weekStartsOn: number): string {
+  const diff = (6 - d.getDay() + weekStartsOn) % 7;
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + diff, 23, 59, 59, 999)).toISOString();
+}
 
 describe('parseSearchQuery', () => {
   it('parses plain text', () => {
@@ -82,8 +94,8 @@ describe('parseSearchQuery', () => {
   describe('dates', () => {
     it('parses "today" to start/end of same calendar day', () => {
       const q = parseSearchQuery('today', NOW);
-      const expectedStart = startOfDay(NOW).toISOString();
-      const expectedEnd = endOfDay(NOW).toISOString();
+      const expectedStart = utcMidnight(NOW);
+      const expectedEnd = utcEndOfDay(NOW);
       expect(q.dueDateStart).toBe(expectedStart);
       expect(q.dueDateEnd).toBe(expectedEnd);
     });
@@ -91,8 +103,8 @@ describe('parseSearchQuery', () => {
     it('parses "tomorrow" to start/end of next calendar day', () => {
       const q = parseSearchQuery('tomorrow', NOW);
       const tomorrow = addDays(NOW, 1);
-      const expectedStart = startOfDay(tomorrow).toISOString();
-      const expectedEnd = endOfDay(tomorrow).toISOString();
+      const expectedStart = utcMidnight(tomorrow);
+      const expectedEnd = utcEndOfDay(tomorrow);
       expect(q.dueDateStart).toBe(expectedStart);
       expect(q.dueDateEnd).toBe(expectedEnd);
     });
@@ -102,20 +114,20 @@ describe('parseSearchQuery', () => {
       // "this week" sets startIso to undefined → dueDateStart stays null
       expect(q.dueDateStart).toBeNull();
       // endOfWeek with weekStartsOn:1 (Monday) = Sunday 14 Jun 2026
-      const expectedEnd = endOfWeek(NOW, { weekStartsOn: 1 }).toISOString();
+      const expectedEnd = utcEndOfWeek(NOW, 1);
       expect(q.dueDateEnd).toBe(expectedEnd);
     });
 
     it('parses "soon" as next 14 days with no lower bound', () => {
       const q = parseSearchQuery('soon', NOW);
       expect(q.dueDateStart).toBeNull();
-      const expectedEnd = endOfDay(addDays(NOW, 14)).toISOString();
+      const expectedEnd = utcEndOfDay(addDays(NOW, 14));
       expect(q.dueDateEnd).toBe(expectedEnd);
     });
 
     it('only the first date phrase wins', () => {
       const q = parseSearchQuery('today tomorrow', NOW);
-      const expectedStart = startOfDay(NOW).toISOString();
+      const expectedStart = utcMidnight(NOW);
       expect(q.dueDateStart).toBe(expectedStart);
     });
   });
@@ -126,7 +138,7 @@ describe('parseSearchQuery', () => {
       expect(q.text).toBe('buy milk');
       expect(q.labelTitle).toBe('groceries');
       expect(q.priority).toBe(1);
-      expect(q.dueDateStart).toBe(startOfDay(addDays(NOW, 1)).toISOString());
+      expect(q.dueDateStart).toBe(utcMidnight(addDays(NOW, 1)));
     });
   });
 });

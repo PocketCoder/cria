@@ -262,7 +262,7 @@ describe('db/tasks', () => {
         startDate: '2026-06-25T00:00:00Z',
         endDate: '2026-07-02T00:00:00Z',
         priority: 3,
-        percentDone: 0.5,
+        percentDone: 50,
         hexColor: '#00ff00',
         isFavorite: true,
         repeatAfter: 86400,
