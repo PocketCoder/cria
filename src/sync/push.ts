@@ -200,6 +200,39 @@ interface LabelLookup {
   server_id: number | null;
 }
 
+/* ──────── crash-idempotency helpers ──────────── */
+
+/**
+ * Read a cached server_id from a create op's payload. When a create API
+ * call succeeds but the app crashes before saving server_id locally,
+ * cacheCreateResponse stores it in the payload so the retry skips the API.
+ */
+function cachedCreateResponse(payload: string): number | null {
+  try {
+    const p = JSON.parse(payload);
+    return typeof p._cachedServerId === 'number' ? p._cachedServerId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a successful create response in the outbox payload. */
+async function cacheCreateResponse(
+  opId: number,
+  payload: string,
+  serverId: number,
+): Promise<void> {
+  try {
+    const parsed = JSON.parse(payload);
+    parsed._cachedServerId = serverId;
+    await exec('UPDATE outbox SET payload = ? WHERE id = ?', [JSON.stringify(parsed), opId]);
+  } catch {
+    // Payload isn't valid JSON — skip caching (best-effort).
+  }
+}
+
+/* ──────── entity dispatch ──────────────────── */
+
 async function executeOp(
   client: ApiClient,
   db: Database,
@@ -397,7 +430,21 @@ async function executeOp(
       notify('tasks');
       return;
     }
-    if (task.server_id !== null) return; // already created
+    if (task.server_id !== null) return;
+
+    // Crash-idempotent: use cached server_id if available
+    const cachedId = cachedCreateResponse(op.payload);
+    if (typeof cachedId === 'number') {
+      await withTx(async (tx) => {
+        await tx.execute(
+          `UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          [cachedId, new Date().toISOString(), localId],
+        );
+        await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+      });
+      notify('tasks');
+      return;
+    }
 
     const projectRows = await db.select<ProjectLookup[]>(
       `SELECT server_id FROM projects WHERE local_id = ? LIMIT 1`,
@@ -417,6 +464,8 @@ async function executeOp(
     const newServerId = (res as { id?: number }).id;
     const newUpdated = (res as { updated?: string }).updated;
 
+    await cacheCreateResponse(op.id, op.payload, newServerId);
+
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
@@ -429,6 +478,7 @@ async function executeOp(
           task.updated_at,
         ],
       );
+      await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
     });
     notify('tasks');
     return;
@@ -707,11 +757,28 @@ async function executeProjectOp(
       return;
     }
     if (row.server_id !== null) return;
+
+    const cachedId = cachedCreateResponse(op.payload);
+    if (typeof cachedId === 'number') {
+      await withTx(async (tx) => {
+        await tx.execute(
+          `UPDATE projects SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          [cachedId, new Date().toISOString(), localId],
+        );
+        await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+      });
+      notify('projects');
+      return;
+    }
+
     const res = await callApi(
       client.PUT('/projects', { body: await projectBodyWithParent(row) }),
     );
     const newServerId = (res as { id?: number }).id;
     const newUpdated = (res as { updated?: string }).updated;
+
+    await cacheCreateResponse(op.id, op.payload, newServerId);
+
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE projects SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
@@ -724,6 +791,7 @@ async function executeProjectOp(
           row.updated_at,
         ],
       );
+      await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
     });
     notify('projects');
     return;
@@ -877,11 +945,28 @@ async function executeLabelOp(
       return;
     }
     if (row.server_id !== null) return;
+
+    const cachedId = cachedCreateResponse(op.payload);
+    if (typeof cachedId === 'number') {
+      await withTx(async (tx) => {
+        await tx.execute(
+          `UPDATE labels SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          [cachedId, new Date().toISOString(), localId],
+        );
+        await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+      });
+      notify('labels');
+      return;
+    }
+
     const res = await callApi(
       client.PUT('/labels', { body: labelBody(row) }),
     );
     const newServerId = (res as { id?: number }).id;
     const newUpdated = (res as { updated?: string }).updated;
+
+    await cacheCreateResponse(op.id, op.payload, newServerId);
+
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE labels SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
@@ -894,6 +979,7 @@ async function executeLabelOp(
           row.updated_at,
         ],
       );
+      await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
     });
     notify('labels');
     return;
@@ -1041,6 +1127,20 @@ async function executeViewOp(
       return;
     }
     if (row.server_id !== null) return;
+
+    const cachedId = cachedCreateResponse(op.payload);
+    if (typeof cachedId === 'number') {
+      await withTx(async (tx) => {
+        await tx.execute(
+          `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          [cachedId, new Date().toISOString(), localId],
+        );
+        await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+      });
+      notify('views');
+      return;
+    }
+
     if (!projectServerId) {
       throw new ApiError(408, null, 'view: parent project not synced yet', true, true);
     }
@@ -1051,10 +1151,16 @@ async function executeViewOp(
       }),
     );
     const newServerId = (res as { id?: number }).id;
-    await exec(
-      `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
-      [newServerId ?? null, new Date().toISOString(), localId],
-    );
+
+    await cacheCreateResponse(op.id, op.payload, newServerId);
+
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+        [newServerId ?? null, new Date().toISOString(), localId],
+      );
+      await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+    });
     notify('views');
     return;
   }
@@ -1157,6 +1263,20 @@ async function executeBucketOp(
       return;
     }
     if (row.server_id !== null) return;
+
+    const cachedId = cachedCreateResponse(op.payload);
+    if (typeof cachedId === 'number') {
+      await withTx(async (tx) => {
+        await tx.execute(
+          `UPDATE buckets SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          [cachedId, new Date().toISOString(), localId],
+        );
+        await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+      });
+      notify('views');
+      return;
+    }
+
     if (!projectServerId || !viewServerId) {
       throw new ApiError(408, null, 'bucket: parent view not synced yet', true, true);
     }
@@ -1167,10 +1287,16 @@ async function executeBucketOp(
       }),
     );
     const newServerId = (res as { id?: number }).id;
-    await exec(
-      `UPDATE buckets SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
-      [newServerId ?? null, new Date().toISOString(), localId],
-    );
+
+    await cacheCreateResponse(op.id, op.payload, newServerId);
+
+    await withTx(async (tx) => {
+      await tx.execute(
+        `UPDATE buckets SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+        [newServerId ?? null, new Date().toISOString(), localId],
+      );
+      await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
+    });
     notify('views');
     return;
   }
