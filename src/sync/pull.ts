@@ -26,7 +26,7 @@ import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
 import { viewResponseSchema, type ViewResponse } from '@/domain/view';
 import { bucketResponseSchema, type BucketResponse } from '@/domain/bucket';
-import { exec, getDb } from '@/db';
+import { exec, getDb, singleFlight } from '@/db';
 import { notify } from '@/db/bus';
 
 const PER_PAGE = 50;
@@ -58,15 +58,18 @@ interface PullResult {
 export async function pullAll(
   client: ApiClient = createApiClient(),
 ): Promise<PullResult> {
+  return singleFlight('pullAll', async () => {
   const projects = await pullProjects(client);
   const views = await pullAllViews(client);
   const buckets = await pullAllBuckets(client);
   return { projects, views, buckets };
+});
 }
 
 export async function pullProjects(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullProjects', async () => {
   const collected: ProjectResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -115,6 +118,7 @@ export async function pullProjects(
 
   await stampSyncState('projects_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -128,6 +132,7 @@ export async function pullTasksForProject(
   projectServerId: number,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullTasksForProject', async () => {
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -171,6 +176,7 @@ export async function pullTasksForProject(
 
   await stampSyncState('tasks_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -288,6 +294,7 @@ async function upsertTaskWithRelations(
 export async function pullAllTasks(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllTasks', async () => {
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -329,6 +336,7 @@ export async function pullAllTasks(
 export async function pullLabels(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullLabels', async () => {
   const collected: LabelResponse[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, response } = await client.GET('/labels', {
@@ -353,6 +361,7 @@ export async function pullLabels(
   for (const l of collected) await upsertLabelFromServer(l);
   await stampSyncState('labels_synced_at');
   return collected.length;
+});
 }
 
 /**
@@ -362,6 +371,7 @@ export async function pullLabels(
 export async function pullAllViews(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllViews', async () => {
   const db = await getDb();
   const projectRows = await db.select<{ local_id: string; server_id: number | null }[]>(
     `SELECT local_id, server_id FROM projects WHERE server_id IS NOT NULL AND deleted = 0`,
@@ -373,6 +383,7 @@ export async function pullAllViews(
   }
   await stampSyncState('views_synced_at');
   return total;
+});
 }
 
 /**
@@ -385,6 +396,7 @@ export async function pullViewsForProjectLocal(
   projectLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight(`pullViewsForProjectLocal:${projectLocalId}`, async () => {
   const db = await getDb();
   const rows = await db.select<{ server_id: number | null }[]>(
     `SELECT server_id FROM projects WHERE local_id = ? AND deleted = 0 LIMIT 1`,
@@ -413,6 +425,7 @@ export async function pullViewsForProjectLocal(
   }
 
   return count;
+});
 }
 
 /**
@@ -424,6 +437,7 @@ export async function pullViewsForProject(
   projectLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
   const apiFetch = createApiFetch();
   const collected: ViewResponse[] = [];
 
@@ -453,6 +467,7 @@ export async function pullViewsForProject(
 
   await replaceViewsForProjectFromServer(projectLocalId, collected);
   return collected.length;
+});
 }
 
 /**
@@ -461,6 +476,7 @@ export async function pullViewsForProject(
 export async function pullAllBuckets(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllBuckets', async () => {
   const db = await getDb();
   const views = await db.select<{ local_id: string; server_id: number | null }[]>(
     `SELECT pv.local_id, pv.server_id
@@ -487,6 +503,7 @@ export async function pullAllBuckets(
   }
   await stampSyncState('buckets_synced_at');
   return total;
+});
 }
 
 /**
