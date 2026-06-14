@@ -1,4 +1,4 @@
-import { createApiClient, type ApiClient } from '@/api/client';
+import { createApiClient, createApiFetch, type ApiClient } from '@/api/client';
 import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
 import {
@@ -424,25 +424,35 @@ export async function pullViewsForProject(
   projectLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
-  const { data, response } = await client.GET(
-    '/projects/{project}/views',
-    { params: { path: { project: projectServerId } } },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(
-      `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+  const apiFetch = createApiFetch();
+  const collected: ViewResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const response = await apiFetch(
+      `/projects/${projectServerId}/views?page=${page}&per_page=${PER_PAGE}`,
     );
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch: unknown[] = await response.json();
+    for (const raw of batch) {
+      const parsed = viewResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
   }
-  const batch = data ?? [];
-  const valid: ViewResponse[] = [];
-  for (const raw of batch) {
-    const parsed = viewResponseSchema.safeParse(raw);
-    if (parsed.success) valid.push(parsed.data);
-    else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
-  }
-  await replaceViewsForProjectFromServer(projectLocalId, valid);
-  return valid.length;
+
+  await replaceViewsForProjectFromServer(projectLocalId, collected);
+  return collected.length;
 }
 
 /**
@@ -489,25 +499,35 @@ async function pullBucketsForView(
   viewLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
-  const { data, response } = await client.GET(
-    '/projects/{id}/views/{view}/buckets',
-    { params: { path: { id: projectServerId, view: viewServerId } } },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(
-      `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+  const apiFetch = createApiFetch();
+  const collected: BucketResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const response = await apiFetch(
+      `/projects/${projectServerId}/views/${viewServerId}/buckets?page=${page}&per_page=${PER_PAGE}`,
     );
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch: unknown[] = await response.json();
+    for (const raw of batch) {
+      const parsed = bucketResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
   }
-  const batch = data ?? [];
-  const valid: BucketResponse[] = [];
-  for (const raw of batch) {
-    const parsed = bucketResponseSchema.safeParse(raw);
-    if (parsed.success) valid.push(parsed.data);
-    else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
-  }
-  await replaceBucketsForViewFromServer(viewLocalId, valid);
-  return valid.length;
+
+  await replaceBucketsForViewFromServer(viewLocalId, collected);
+  return collected.length;
 }
 
 async function stampSyncState(

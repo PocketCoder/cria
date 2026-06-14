@@ -137,6 +137,25 @@ export function createApiClient(opts?: {
 }
 
 /**
+ * Build an authenticated `fetch`-like function bound to the current auth
+ * context.  Use this for endpoints the generated OpenAPI types don't cover
+ * (e.g. views/buckets pagination where `query` is typed `never`).
+ */
+export function createApiFetch(): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  const snap = getAuthSnapshot();
+  const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/v1`;
+  const token = snap.token ?? '';
+  guardTokenDestination(baseUrl, token);
+  return (input, init) => {
+    const url = typeof input === 'string' ? `${baseUrl}${input}` : input;
+    const headers: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}`, ...(init?.headers as Record<string, string> | undefined) }
+      : { ...(init?.headers as Record<string, string> | undefined) };
+    return platformFetch(url, { ...init, headers });
+  };
+}
+
+/**
  * Like fetch, but unwraps openapi-fetch's `{ data, error, response }` envelope:
  * - 2xx with a body → returns parsed data
  * - 4xx/5xx → throws ApiError (with Vikunja's error envelope, if present)

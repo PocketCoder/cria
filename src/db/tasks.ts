@@ -204,10 +204,15 @@ export async function searchTasks(filters: SearchFilters): Promise<TaskWithProje
   const params: unknown[] = [];
 
   if (sanitized) {
+    const FTS5_RESERVED = new Set(['AND', 'OR', 'NOT', 'NEAR']);
     const ftsQuery = sanitized
       .split(/\s+/)
       .filter(Boolean)
-      .map((w) => `${w}*`)
+      .map((w) =>
+        FTS5_RESERVED.has(w.toUpperCase())
+          ? `"${w}"`        // double-quoted literal, not an operator
+          : `${w}*`,
+      )
       .join(' AND ');
     conditions.push('tasks_fts MATCH ?');
     params.push(ftsQuery);
