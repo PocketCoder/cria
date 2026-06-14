@@ -286,7 +286,9 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
   }, [showMenu]);
 
   const handleAddTask = async () => {
-    if (atLimit) return;
+    // WIP limits are advisory: the column highlights when over the limit
+    // (see the count indicator) but never blocks adding — matching drag,
+    // where over-limit drops are already allowed.
     const trimmed = newTitle.trim();
     if (!trimmed) return;
     const parsed = parseQuickAdd(trimmed);
@@ -522,13 +524,10 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
             )}
           </div>
 
-          {/* Add task input */}
+          {/* Add task input — always available; the WIP limit is advisory
+              (shown via the highlighted count) and never blocks adding. */}
           <div className="border-t border-[var(--color-border)] px-2 py-2">
-            {atLimit ? (
-              <p className="px-2 py-1 text-center text-[11px] text-[var(--color-muted-foreground)]">
-                Bucket full ({tasks.length}/{bucket.limit})
-              </p>
-            ) : showNewInput ? (
+            {showNewInput ? (
               <div className="flex items-center gap-1">
                 <input
                   value={newTitle}
