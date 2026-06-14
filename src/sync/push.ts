@@ -490,6 +490,16 @@ async function executeOp(
         throw new ApiError(408, null, 'Cannot update a task without server id', true, true);
       }
 
+      // Don't push updates while a conflict is unresolved — the user is
+      // deciding how to resolve, and pushing now would race their choice.
+      const [pendingConflict] = await db.select<{ id: number }[]>(
+        `SELECT id FROM conflicts WHERE entity_type = 'task' AND entity_local_id = ? AND resolved_at IS NULL LIMIT 1`,
+        [localId],
+      );
+      if (pendingConflict) {
+        throw new ApiError(408, null, 'task has unresolved conflict', true, true);
+      }
+
       const [projRow] = await db.select<ProjectLookup[]>(
         `SELECT server_id FROM projects WHERE local_id = ? LIMIT 1`,
         [task.project_local_id],
