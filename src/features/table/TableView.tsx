@@ -182,8 +182,19 @@ export function TableView({ project, view }: TableViewProps) {
 
   const flush = useCallback((pending: Record<string, DraftFields>) => {
     for (const [localId, patch] of Object.entries(pending)) {
-      if (patch && Object.keys(patch).length > 0) {
-        void updateTask(localId, patch).catch((err) =>
+      if (!patch) continue;
+      // A blank title would wipe the task's name — every other title-edit
+      // path guards on trim(), so drop an empty title from the patch rather
+      // than persist it. Other edited fields in the same draft still save.
+      const clean: DraftFields =
+        typeof patch.title === 'string' && patch.title.trim() === ''
+          ? (() => {
+              const { title: _omit, ...rest } = patch;
+              return rest;
+            })()
+          : patch;
+      if (Object.keys(clean).length > 0) {
+        void updateTask(localId, clean).catch((err) =>
           console.error('[table] failed to save edit:', err),
         );
       }

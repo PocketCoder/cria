@@ -170,12 +170,24 @@ export function withTx<T>(fn: (db: Database) => Promise<T>): Promise<T> {
 async function runTx(
   stmts: Array<{ sql: string; params: unknown[] }>,
 ): Promise<void> {
-  // Node test path: better-sqlite3 honours transactions on its single
-  // synchronous connection, so just run them sequentially via the plain
-  // pool. No Tauri invoke is available outside the renderer.
+  // Node test path: wrap the batch in an explicit transaction so a failure
+  // mid-batch rolls back, matching the atomic Rust `execute_tx` path. Without
+  // BEGIN/COMMIT each statement auto-commits on its own and a partial-batch
+  // bug would silently pass in tests while corrupting state in production.
   if (typeof window === 'undefined') {
     const db = await getDb();
-    for (const s of stmts) await db.execute(s.sql, s.params);
+    await db.execute('BEGIN');
+    try {
+      for (const s of stmts) await db.execute(s.sql, s.params);
+      await db.execute('COMMIT');
+    } catch (e) {
+      try {
+        await db.execute('ROLLBACK');
+      } catch {
+        // ignore rollback failure; surface the original error
+      }
+      throw e;
+    }
     return;
   }
   const { invoke } = await import('@tauri-apps/api/core');

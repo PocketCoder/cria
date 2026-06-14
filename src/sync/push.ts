@@ -629,6 +629,48 @@ function normaliseDateForServer(date: string | null | undefined): string | undef
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sign}${pad(Math.floor(absMin / 60))}:${pad(absMin % 60)}`;
 }
 
+/**
+ * Move a dead-lettered operation back into the live outbox so the next
+ * drain retries it. Attempts and backoff are reset; the original failure
+ * is preserved in `last_error` for context. Returns true if a row was
+ * actually re-queued. Callers should trigger a drain afterwards.
+ */
+export async function retryDeadLetter(id: number): Promise<boolean> {
+  const db = await getDb();
+  // Read the row before opening the transaction: SELECTs inside withTx go to
+  // a separate pooled connection and can't see the in-flight writes.
+  const rows = await db.select<
+    Array<{
+      entity_type: string;
+      entity_local_id: string;
+      op: string;
+      payload: string;
+      last_error: string | null;
+    }>
+  >(`SELECT * FROM outbox_dead_letter WHERE id = ?`, [id]);
+  const dl = rows[0];
+  if (!dl) return false;
+
+  await withTx(async (tx) => {
+    await tx.execute(
+      `INSERT INTO outbox
+         (entity_type, entity_local_id, op, payload, attempts, last_error, next_attempt_at, created_at)
+       VALUES (?, ?, ?, ?, 0, ?, NULL, ?)`,
+      [
+        dl.entity_type,
+        dl.entity_local_id,
+        dl.op,
+        dl.payload,
+        dl.last_error,
+        new Date().toISOString(),
+      ],
+    );
+    await tx.execute('DELETE FROM outbox_dead_letter WHERE id = ?', [id]);
+  });
+  notify('outbox');
+  return true;
+}
+
 export function taskToBody(
   task: TaskRow,
   projectServerId?: number,
