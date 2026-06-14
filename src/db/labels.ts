@@ -143,9 +143,10 @@ export async function upsertLabelFromServer(
  * (identified by their server IDs). Inserts any labels we haven't seen
  * yet using the supplied payloads, then mirrors the join table.
  *
- * Used by the pull loop: each task payload from Vikunja embeds its
- * full label list. We treat the server's view as authoritative for the
- * link set — local mutations on labels aren't supported yet (M5+).
+ * Skipped when the owning task is dirty to avoid wiping out label
+ * mutations the user made locally but haven't pushed yet. Pending
+ * outbox operations (add/remove) are also preserved/replayed so that
+ * a fast toggle → sync → pull sequence doesn't drop the user's intent.
  */
 export async function replaceTaskLabelsFromServer(
   taskLocalId: string,
@@ -158,14 +159,58 @@ export async function replaceTaskLabelsFromServer(
     labelLocalIds.push(id);
   }
 
-  // Wipe the existing links, then insert the new set. Cheap because the
-  // typical task has < 10 labels. Atomic — a concurrent reader between
-  // the DELETE and the first INSERT would otherwise see zero labels.
   await withTx(async (tx) => {
+    const [{ dirty } = { dirty: 0 }] = await tx.select<{ dirty: number }[]>(
+      `SELECT dirty FROM tasks WHERE local_id = ? LIMIT 1`,
+      [taskLocalId],
+    );
+    if (dirty === 1) return;
+
+    // Read pending outbox ops for task_label so we don't wipe
+    // a label the user just toggled before the push lands.
+    const ops = await tx.select<{ entity_local_id: string; op: string; payload: string }[]>(
+      `SELECT entity_local_id, op, payload FROM outbox
+        WHERE entity_type = 'task_label' ORDER BY id ASC`,
+    );
+    const preserve = new Set<string>();
+    const exclude = new Set<string>();
+    for (const o of ops) {
+      if (o.entity_local_id !== taskLocalId) continue;
+      let payload: { labelLocalId?: string };
+      try {
+        payload = JSON.parse(o.payload);
+      } catch {
+        continue;
+      }
+      if (!payload.labelLocalId) continue;
+      if (o.op === 'add') {
+        preserve.add(payload.labelLocalId);
+        exclude.delete(payload.labelLocalId);
+      } else if (o.op === 'remove') {
+        exclude.add(payload.labelLocalId);
+        preserve.delete(payload.labelLocalId);
+      }
+    }
+
     await tx.execute(`DELETE FROM task_labels WHERE task_local_id = ?`, [
       taskLocalId,
     ]);
+
+    const inserted = new Set<string>();
     for (const labelLocalId of labelLocalIds) {
+      if (exclude.has(labelLocalId)) continue;
+      await tx.execute(
+        `INSERT INTO task_labels
+           (task_local_id, label_local_id, updated_at, synced_at, dirty, deleted)
+         VALUES (?, ?, ?, ?, 0, 0)`,
+        [taskLocalId, labelLocalId, now, now],
+      );
+      inserted.add(labelLocalId);
+    }
+
+    // Re-insert preserved pending-add labels the server didn't include.
+    for (const labelLocalId of preserve) {
+      if (inserted.has(labelLocalId)) continue;
       await tx.execute(
         `INSERT INTO task_labels
            (task_local_id, label_local_id, updated_at, synced_at, dirty, deleted)

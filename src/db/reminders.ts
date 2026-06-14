@@ -22,19 +22,45 @@ interface ReminderRow {
  * Wipe-and-reinsert is the safe choice here because both absolute and
  * relative reminders can change shape across pulls (the server may
  * resolve `relative_period+relative_to` into an absolute `reminder` as
- * soon as the related date appears). The earlier "preserve notified
- * across pulls" trick we used for absolute-only reminders is paused
- * for now — the cost is one duplicate desktop notification per pull
- * cycle in the unlucky case where a reminder fired between two pulls.
- * If that becomes a real pain we can re-introduce notified preservation
- * keyed on (relative_period, relative_to) for relatives and reminder_at
- * for absolutes; both keys reliably identify the same logical reminder.
+ * soon as the related date appears). However we preserve the `notified`
+ * flag from the previous row so a reminder that already fired doesn't
+ * fire again after the next pull.
+ *
+ * Skipped entirely when the owning task is dirty — a local write is
+ * pending and the next pull will re-sync the authoritative state.
  */
 export async function replaceTaskRemindersFromServer(
   taskLocalId: string,
   reminders: TaskReminderResponse[],
 ): Promise<void> {
   await withTx(async (tx) => {
+    const [{ dirty } = { dirty: 0 }] = await tx.select<{ dirty: number }[]>(
+      `SELECT dirty FROM tasks WHERE local_id = ? LIMIT 1`,
+      [taskLocalId],
+    );
+    if (dirty === 1) return;
+
+    // Snapshot the notified flag for existing reminders so we can
+    // carry it forward across the wipe-and-reinsert. Keyed on
+    // (reminder_at) for absolute reminders and (relative_period,
+    // relative_to) for relative ones — both reliably identify the
+    // same logical reminder across pulls.
+    const existing = await tx.select<
+      { reminder_at: string | null; relative_period: number | null; relative_to: string | null; notified: number }[]
+    >(
+      `SELECT reminder_at, relative_period, relative_to, notified
+         FROM task_reminders WHERE task_local_id = ?`,
+      [taskLocalId],
+    );
+    const notifiedFor = new Set<string>();
+    for (const r of existing) {
+      if (!r.notified) continue;
+      const key = r.reminder_at
+        ? `abs:${r.reminder_at}`
+        : `rel:${r.relative_period}:${r.relative_to}`;
+      notifiedFor.add(key);
+    }
+
     await tx.execute(
       `DELETE FROM task_reminders WHERE task_local_id = ?`,
       [taskLocalId],
@@ -52,11 +78,17 @@ export async function replaceTaskRemindersFromServer(
       // A row with no resolved time AND no relative spec is meaningless;
       // skip it (defensive against malformed server data).
       if (at == null && period == null && relTo == null) continue;
+
+      const key = at
+        ? `abs:${at}`
+        : `rel:${period}:${relTo}`;
+      const notified = notifiedFor.has(key) ? 1 : 0;
+
       await tx.execute(
         `INSERT OR IGNORE INTO task_reminders
            (task_local_id, reminder_at, relative_period, relative_to, notified)
-         VALUES (?, ?, ?, ?, 0)`,
-        [taskLocalId, at, period, relTo],
+         VALUES (?, ?, ?, ?, ?)`,
+        [taskLocalId, at, period, relTo, notified],
       );
     }
   });

@@ -173,21 +173,19 @@ export async function listBucketAssignmentsForView(
 ): Promise<TaskBucket[]> {
   const db = await getDb();
   const rows = await db.select<
-    { task_local_id: string; view_local_id: string; bucket_local_id: string }[]
+    { task_local_id: string; view_local_id: string; bucket_local_id: string; position: number | null }[]
   >(
-    `SELECT task_local_id, view_local_id, bucket_local_id
+    `SELECT task_local_id, view_local_id, bucket_local_id, position
        FROM task_buckets
-      WHERE view_local_id = ?`,
+      WHERE view_local_id = ?
+   ORDER BY position IS NULL, position ASC`,
     [viewLocalId],
   );
-  // Map snake_case DB columns to the camelCase domain shape. Without this,
-  // every assignment's taskLocalId/bucketLocalId read back undefined, so the
-  // board could never place a task in its bucket (cards snapped back to the
-  // fallback bucket on every refetch).
   return rows.map((r) => ({
     taskLocalId: r.task_local_id,
     viewLocalId: r.view_local_id,
     bucketLocalId: r.bucket_local_id,
+    position: r.position,
   }));
 }
 
@@ -216,18 +214,75 @@ export async function setTaskBucket(
   taskLocalId: string,
   viewLocalId: string,
   bucketLocalId: string,
+  position?: number,
 ): Promise<void> {
+  const now = new Date().toISOString();
   await withTx(async (tx) => {
     await tx.execute(
-      `INSERT OR REPLACE INTO task_buckets (task_local_id, view_local_id, bucket_local_id)
-       VALUES (?, ?, ?)`,
-      [taskLocalId, viewLocalId, bucketLocalId],
+      `INSERT OR REPLACE INTO task_buckets (task_local_id, view_local_id, bucket_local_id, position)
+       VALUES (?, ?, ?, ?)`,
+      [taskLocalId, viewLocalId, bucketLocalId, position ?? 0],
     );
     await tx.execute(
       `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
        VALUES ('task_bucket', ?, 'update', ?, ?)`,
-      [taskLocalId, JSON.stringify({ view_local_id: viewLocalId, bucket_local_id: bucketLocalId }), new Date().toISOString()],
+      [taskLocalId, JSON.stringify({ view_local_id: viewLocalId, bucket_local_id: bucketLocalId }), now],
     );
+  });
+  notify('tasks');
+  notify('outbox');
+}
+
+/**
+ * Update a task's position within its current bucket, creating a task_position
+ * outbox entry that will be pushed to POST /tasks/{id}/position.
+ * User mutation — calls notify('tasks') so the UI refreshes.
+ */
+export async function updateTaskPosition(
+  taskLocalId: string,
+  viewLocalId: string,
+  position: number,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await withTx(async (tx) => {
+    await tx.execute(
+      `UPDATE task_buckets SET position = ? WHERE task_local_id = ? AND view_local_id = ?`,
+      [position, taskLocalId, viewLocalId],
+    );
+    await tx.execute(
+      `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+       VALUES ('task_position', ?, 'update', ?, ?)`,
+      [taskLocalId, JSON.stringify({ view_local_id: viewLocalId, position }), now],
+    );
+  });
+  notify('tasks');
+  notify('outbox');
+}
+
+/**
+ * Reorder all tasks in a bucket, assigning evenly-spaced positions.
+ * Creates task_position outbox entries for each task.
+ * User mutation — calls notify('tasks') so the UI refreshes.
+ */
+export async function reorderTasksInBucket(
+  viewLocalId: string,
+  orderedTaskIds: string[],
+  baseStep = 1024,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await withTx(async (tx) => {
+    for (let i = 0; i < orderedTaskIds.length; i++) {
+      const position = (i + 1) * baseStep;
+      await tx.execute(
+        `UPDATE task_buckets SET position = ? WHERE task_local_id = ? AND view_local_id = ?`,
+        [position, orderedTaskIds[i], viewLocalId],
+      );
+      await tx.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('task_position', ?, 'update', ?, ?)`,
+        [orderedTaskIds[i], JSON.stringify({ view_local_id: viewLocalId, position }), now],
+      );
+    }
   });
   notify('tasks');
   notify('outbox');

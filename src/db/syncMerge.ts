@@ -128,6 +128,19 @@ async function maybeRecordConflict(
   if (!existing.last_synced) return;
   if (existing.last_synced === remoteJson) return;
 
+  // Dedup: if an identical conflict row already exists (same snapshots,
+  // still unresolved), don't create another one on every pull tick.
+  const db = await getDb();
+  const dupe = await db.select<{ id: number }[]>(
+    `SELECT id FROM conflicts
+     WHERE entity_type = ? AND entity_local_id = ?
+       AND local_snapshot = ? AND remote_snapshot = ?
+       AND resolved_at IS NULL
+     LIMIT 1`,
+    [c.entity, existing.local_id, existing.last_synced, remoteJson],
+  );
+  if (dupe.length > 0) return;
+
   let before: Record<string, unknown>;
   try {
     before = JSON.parse(existing.last_synced) as Record<string, unknown>;

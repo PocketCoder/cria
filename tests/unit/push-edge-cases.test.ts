@@ -290,6 +290,7 @@ describe('sync/push edge cases', () => {
         is_favorite: 1,
         repeat_after: 0,
         repeat_mode: 0,
+        updated_at: '2024-01-01T00:00:00Z',
         deleted: 0,
       });
       expect(body.title).toBe('Test');
