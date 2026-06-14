@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarGrid } from '@/components/ui/calendar';
-import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { cn } from '@/lib/cn';
+import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
+
+interface DatePickerProps {
+  value: string | null;
+  onChange: (iso: string | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}
 
 export function DatePicker({
   value,

@@ -63,6 +63,8 @@ function toUTCEndOfWeek(d: Date, weekStartsOn: number): string {
   );
   return end.toISOString();
 }
+
+function overlaps(start: number, end: number, ranges: RawToken[]): boolean {
   for (const r of ranges) {
     if (start < r.end && end > r.start) return true;
   }
