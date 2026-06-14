@@ -199,3 +199,18 @@ export async function exec(
     return db.execute(sql, params);
   });
 }
+
+/**
+ * Ensure an async function is only called once at a time for a given key.
+ * Subsequent calls while one is in-flight return the same promise.
+ */
+const inflight = new Map<string, Promise<unknown>>();
+export function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+  const promise = fn().finally(() => {
+    if (inflight.get(key) === promise) inflight.delete(key);
+  });
+  inflight.set(key, promise);
+  return promise;
+}

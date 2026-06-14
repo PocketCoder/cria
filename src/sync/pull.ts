@@ -1,4 +1,4 @@
-import { createApiClient, type ApiClient } from '@/api/client';
+import { createApiClient, createApiFetch, type ApiClient } from '@/api/client';
 import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
 import {
@@ -26,7 +26,7 @@ import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
 import { viewResponseSchema, type ViewResponse } from '@/domain/view';
 import { bucketResponseSchema, type BucketResponse } from '@/domain/bucket';
-import { exec, getDb } from '@/db';
+import { exec, getDb, singleFlight } from '@/db';
 import { notify } from '@/db/bus';
 
 const PER_PAGE = 50;
@@ -58,15 +58,18 @@ interface PullResult {
 export async function pullAll(
   client: ApiClient = createApiClient(),
 ): Promise<PullResult> {
+  return singleFlight('pullAll', async () => {
   const projects = await pullProjects(client);
   const views = await pullAllViews(client);
   const buckets = await pullAllBuckets(client);
   return { projects, views, buckets };
+});
 }
 
 export async function pullProjects(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullProjects', async () => {
   const collected: ProjectResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -115,6 +118,7 @@ export async function pullProjects(
 
   await stampSyncState('projects_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -128,6 +132,7 @@ export async function pullTasksForProject(
   projectServerId: number,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullTasksForProject', async () => {
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -171,6 +176,7 @@ export async function pullTasksForProject(
 
   await stampSyncState('tasks_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -288,6 +294,7 @@ async function upsertTaskWithRelations(
 export async function pullAllTasks(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllTasks', async () => {
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -319,6 +326,7 @@ export async function pullAllTasks(
 
   await stampSyncState('tasks_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -329,6 +337,7 @@ export async function pullAllTasks(
 export async function pullLabels(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullLabels', async () => {
   const collected: LabelResponse[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, response } = await client.GET('/labels', {
@@ -353,6 +362,7 @@ export async function pullLabels(
   for (const l of collected) await upsertLabelFromServer(l);
   await stampSyncState('labels_synced_at');
   return collected.length;
+});
 }
 
 /**
@@ -361,7 +371,10 @@ export async function pullLabels(
  */
 export async function pullAllViews(
   client: ApiClient = createApiClient(),
+  _apiFetch: ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined = undefined,
 ): Promise<number> {
+  return singleFlight('pullAllViews', async () => {
+  const apiFetch = _apiFetch ?? createApiFetch();
   const db = await getDb();
   const projectRows = await db.select<{ local_id: string; server_id: number | null }[]>(
     `SELECT local_id, server_id FROM projects WHERE server_id IS NOT NULL AND deleted = 0`,
@@ -369,10 +382,11 @@ export async function pullAllViews(
   let total = 0;
   for (const p of projectRows) {
     if (p.server_id == null) continue;
-    total += await pullViewsForProject(p.server_id, p.local_id, client);
+    total += await pullViewsForProject(p.server_id, p.local_id, client, apiFetch);
   }
   await stampSyncState('views_synced_at');
   return total;
+});
 }
 
 /**
@@ -384,7 +398,10 @@ export async function pullAllViews(
 export async function pullViewsForProjectLocal(
   projectLocalId: string,
   client: ApiClient = createApiClient(),
+  _apiFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): Promise<number> {
+  return singleFlight(`pullViewsForProjectLocal:${projectLocalId}`, async () => {
+  const apiFetch = _apiFetch ?? createApiFetch();
   const db = await getDb();
   const rows = await db.select<{ server_id: number | null }[]>(
     `SELECT server_id FROM projects WHERE local_id = ? AND deleted = 0 LIMIT 1`,
@@ -393,7 +410,7 @@ export async function pullViewsForProjectLocal(
   const projectServerId = rows[0]?.server_id;
   if (projectServerId == null) return 0;
 
-  const count = await pullViewsForProject(projectServerId, projectLocalId, client);
+  const count = await pullViewsForProject(projectServerId, projectLocalId, client, apiFetch);
 
   // Pull buckets for any kanban views we just synced, so the board has its
   // columns the moment the user switches to it.
@@ -406,13 +423,14 @@ export async function pullViewsForProjectLocal(
   for (const v of kanbanViews) {
     if (v.server_id == null) continue;
     try {
-      await pullBucketsForView(projectServerId, v.server_id, v.local_id, client);
+      await pullBucketsForView(projectServerId, v.server_id, v.local_id, client, apiFetch);
     } catch (err) {
       console.warn('[pullViewsForProjectLocal] bucket pull failed:', err);
     }
   }
 
   return count;
+});
 }
 
 /**
@@ -422,27 +440,40 @@ export async function pullViewsForProjectLocal(
 export async function pullViewsForProject(
   projectServerId: number,
   projectLocalId: string,
-  client: ApiClient = createApiClient(),
+  _client: ApiClient = createApiClient(),
+  _apiFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): Promise<number> {
-  const { data, response } = await client.GET(
-    '/projects/{project}/views',
-    { params: { path: { project: projectServerId } } },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(
-      `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+  return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
+  const apiFetch = _apiFetch ?? createApiFetch();
+  const collected: ViewResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const response = await apiFetch(
+      `/projects/${projectServerId}/views?page=${page}&per_page=${PER_PAGE}`,
     );
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch: unknown[] = await response.json();
+    for (const raw of batch) {
+      const parsed = viewResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
   }
-  const batch = data ?? [];
-  const valid: ViewResponse[] = [];
-  for (const raw of batch) {
-    const parsed = viewResponseSchema.safeParse(raw);
-    if (parsed.success) valid.push(parsed.data);
-    else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
-  }
-  await replaceViewsForProjectFromServer(projectLocalId, valid);
-  return valid.length;
+
+  await replaceViewsForProjectFromServer(projectLocalId, collected);
+  return collected.length;
+});
 }
 
 /**
@@ -450,7 +481,10 @@ export async function pullViewsForProject(
  */
 export async function pullAllBuckets(
   client: ApiClient = createApiClient(),
+  _apiFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): Promise<number> {
+  return singleFlight('pullAllBuckets', async () => {
+  const apiFetch = _apiFetch ?? createApiFetch();
   const db = await getDb();
   const views = await db.select<{ local_id: string; server_id: number | null }[]>(
     `SELECT pv.local_id, pv.server_id
@@ -473,10 +507,11 @@ export async function pullAllBuckets(
     );
     const projectServerId = projectRows[0]?.server_id;
     if (projectServerId == null) continue;
-    total += await pullBucketsForView(projectServerId, v.server_id, v.local_id, client);
+    total += await pullBucketsForView(projectServerId, v.server_id, v.local_id, client, apiFetch);
   }
   await stampSyncState('buckets_synced_at');
   return total;
+});
 }
 
 /**
@@ -487,27 +522,38 @@ async function pullBucketsForView(
   projectServerId: number,
   viewServerId: number,
   viewLocalId: string,
-  client: ApiClient = createApiClient(),
+  _client: ApiClient = createApiClient(),
+  _apiFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): Promise<number> {
-  const { data, response } = await client.GET(
-    '/projects/{id}/views/{view}/buckets',
-    { params: { path: { id: projectServerId, view: viewServerId } } },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(
-      `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+  const apiFetch = _apiFetch ?? createApiFetch();
+  const collected: BucketResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const response = await apiFetch(
+      `/projects/${projectServerId}/views/${viewServerId}/buckets?page=${page}&per_page=${PER_PAGE}`,
     );
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch: unknown[] = await response.json();
+    for (const raw of batch) {
+      const parsed = bucketResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
   }
-  const batch = data ?? [];
-  const valid: BucketResponse[] = [];
-  for (const raw of batch) {
-    const parsed = bucketResponseSchema.safeParse(raw);
-    if (parsed.success) valid.push(parsed.data);
-    else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
-  }
-  await replaceBucketsForViewFromServer(viewLocalId, valid);
-  return valid.length;
+
+  await replaceBucketsForViewFromServer(viewLocalId, collected);
+  return collected.length;
 }
 
 async function stampSyncState(

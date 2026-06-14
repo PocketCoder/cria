@@ -32,13 +32,23 @@ export function usePeriodicSync() {
 
     let cancelled = false;
     const tick = async () => {
+      // Drain the outbox before pulling so the circuit breaker is clean,
+      // and so a row that failed its push (e.g. server was down) gets a
+      // retry even without a new user mutation to trigger notify('outbox').
+      try {
+        await drainOutbox();
+      } catch (err) {
+        console.warn('[periodic-sync] outbox drain failed:', err);
+      }
       try {
         await pullProjects();
+        notify('projects');
       } catch (err) {
         throttledWarn('periodic-sync/projects', '[periodic-sync] project pull failed:', err);
       }
       try {
         await pullLabels();
+        notify('labels');
       } catch (err) {
         throttledWarn('periodic-sync/labels', '[periodic-sync] label pull failed:', err);
       }
@@ -46,6 +56,7 @@ export function usePeriodicSync() {
         // Pull every task (not just the open project) so the smart views
         // have cross-project data and project lists stay warm (#33).
         await pullAllTasks();
+        notify('tasks');
       } catch (err) {
         throttledWarn('periodic-sync/all-tasks', '[periodic-sync] all-tasks pull failed:', err);
       }
