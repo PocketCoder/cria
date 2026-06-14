@@ -1,9 +1,16 @@
 export class ApiError extends Error {
+  /**
+   * @param dependency - If true the op is blocked on an un-synced dependency
+   *   (e.g. a parent task that hasn't been created server-side yet). The
+   *   drain loop will NOT count this attempt toward MAX_ATTEMPTS, so a chain
+   *   of blocked ops won't dead-letter from attempt exhaustion alone.
+   */
   constructor(
     public readonly status: number,
     public readonly code: number | null,
     message: string,
     public readonly retryable: boolean,
+    public readonly dependency: boolean = false,
   ) {
     super(message);
     this.name = 'ApiError';

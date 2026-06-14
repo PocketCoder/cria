@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
 import { useReminderScheduler } from '@/sync/useReminderScheduler';
 import { useDockBadge } from '@/queries/badge';
-import { useUpdater } from '@/queries/updater';
+import { useUpdaterStore } from '@/stores/updater';
 import { UpdateBanner } from '@/features/shell/UpdateBanner';
 
 export function App() {
@@ -28,7 +28,13 @@ export function App() {
   // sign-in (e.g. v0.2.0-alpha's CORS bug) leaves users stranded with no
   // way to receive the fix — they can't log in, so Shell never renders,
   // so useUpdater never runs.
-  const updater = useUpdater();
+  const updaterState = useUpdaterStore((s) => s.state);
+  const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
+  const installUpdater = useUpdaterStore((s) => s.install);
+
+  useEffect(() => {
+    void runUpdaterCheck();
+  }, [runUpdaterCheck]);
 
   let body: React.ReactNode;
   if (status.kind === 'unknown') {
@@ -51,8 +57,8 @@ export function App() {
       <div className="pointer-events-none fixed inset-x-0 top-2 z-50 flex justify-center">
         <div className="pointer-events-auto">
           <UpdateBanner
-            state={updater.state}
-            onInstall={() => void updater.install()}
+            state={updaterState}
+            onInstall={() => void installUpdater()}
           />
         </div>
       </div>
