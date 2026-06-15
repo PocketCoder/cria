@@ -149,6 +149,45 @@ export function visibleGanttNodes(
   return result;
 }
 
+/**
+ * Reorder the pre-order node list so its top-level rows follow `rootOrder`,
+ * carrying each root's descendant subtree (the contiguous deeper-indent rows
+ * that follow it) along with it. Roots missing from `rootOrder` keep their
+ * original relative position, appended at the end. Used by the gantt's
+ * drag-reorder to apply an optimistic root order to both panes at once.
+ */
+export function reorderRootBlocks(
+  nodes: GanttTaskNode[],
+  rootOrder: string[],
+): GanttTaskNode[] {
+  const blocks = new Map<string, GanttTaskNode[]>();
+  const original: string[] = [];
+  let currentRoot: string | null = null;
+  for (const n of nodes) {
+    if (n.indentLevel === 0) {
+      currentRoot = n.task.localId;
+      blocks.set(currentRoot, [n]);
+      original.push(currentRoot);
+    } else if (currentRoot) {
+      blocks.get(currentRoot)!.push(n);
+    }
+  }
+
+  const out: GanttTaskNode[] = [];
+  const seen = new Set<string>();
+  for (const id of rootOrder) {
+    const block = blocks.get(id);
+    if (block) {
+      out.push(...block);
+      seen.add(id);
+    }
+  }
+  for (const id of original) {
+    if (!seen.has(id)) out.push(...blocks.get(id)!);
+  }
+  return out;
+}
+
 /** child localId → parent localId, from the tree's childIds. */
 export function buildParentMap(nodes: GanttTaskNode[]): Map<string, string> {
   const m = new Map<string, string>();

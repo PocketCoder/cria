@@ -7,35 +7,10 @@ import { getDb, withTx } from '@/db';
 import { createTask, updateTask, deleteTask } from '@/db/tasks';
 import { drainOutbox } from '@/sync/push';
 import type { ApiClient } from '@/api/client';
+// Use the shared, complete migration list (includes 005–008, 012) rather than
+// a hand-maintained subset that drifts as migrations are added.
+import { initSchema } from './_helpers';
 // import { ApiError } from '@/api/errors';
-
-// Helper to run the schema SQL
-async function initSchema() {
-  const db = await getDb();
-  const { promises: fs } = await import('node:fs');
-  const { join } = await import('node:path');
-  const ms = [
-    '001_initial.sql',
-    '002_task_fields.sql',
-    '003_fts.sql',
-    '004_project_favorite.sql',
-    '009_task_identifier.sql',
-    '010_views.sql',
-    '011_kanban.sql',
-  ];
-  for (const file of ms) {
-    const sql = await fs.readFile(
-      join(__dirname, '../../src/db/migrations', file),
-      'utf8',
-    );
-    try {
-      await db.execute(sql);
-    } catch (e: unknown) {
-      const msg = String((e as Error)?.message ?? e);
-      if (!/duplicate column name/i.test(msg)) throw e;
-    }
-  }
-}
 
 // Helper to clear all data tables between tests
 async function clearTables() {

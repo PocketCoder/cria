@@ -2,33 +2,15 @@ import { useState } from 'react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarGrid } from '@/components/ui/calendar';
-import { useDateFormatter } from '@/lib/dateFormat';
 import { cn } from '@/lib/cn';
+import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 
 interface DatePickerProps {
-  /** Selected value as an ISO string (or a `YYYY-MM-DD` date), or null. */
   value: string | null;
-  /** Emits a midnight-UTC ISO string, or null when cleared. */
   onChange: (iso: string | null) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
-}
-
-/**
- * A date picker whose label renders through the user's date-format
- * preference — unlike a native `<input type="date">`, which always shows the
- * OS locale and ignores the app setting. Built on the same calendar grid as
- * the task-detail editor.
- *
- * Due dates are stored at midnight UTC (Vikunja's date-field convention). We
- * read them back by their UTC calendar components so the displayed day never
- * shifts by timezone — a date is a calendar day, not an instant. Time-of-day
- * is out of scope here (tracked in #74).
- */
-function toCalendarDate(value: string): Date {
-  const d = new Date(value);
-  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
 export function DatePicker({

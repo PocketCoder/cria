@@ -1,10 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  DndContext,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/cn';
+import { reorderTask, reindexTasks } from '@/db/tasks';
+import { planReorder } from '@/lib/position';
+import type { Task } from '@/domain/task';
 import {
   visibleGanttNodes,
   buildParentMap,
   resolveVisibleAnchor,
+  reorderRootBlocks,
   dayToIso,
   dayToUtcDate,
   type GanttTaskNode,
@@ -25,6 +44,12 @@ interface GanttChartProps {
   relations: GanttRelationEdge[];
   filters: GanttFilters;
   projectColor: string | null;
+  /** View the chart belongs to; reorder writes its id into the position
+   *  outbox entry. Drag-reorder is disabled when absent. */
+  viewLocalId?: string;
+  /** Project the tasks belong to; used to optimistically reorder the task
+   *  cache so a drag-reorder survives a slow refetch. */
+  projectLocalId?: string;
   onUpdateDates: (taskLocalId: string, startIso: string, endIso: string) => void;
   onOpenTask: (taskLocalId: string) => void;
 }
@@ -59,11 +84,83 @@ export function GanttChart({
   relations,
   filters,
   projectColor,
+  viewLocalId,
+  projectLocalId,
   onUpdateDates,
   onOpenTask,
 }: GanttChartProps) {
+  const queryClient = useQueryClient();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  // Optimistic root order for drag-reorder. Only top-level rows reorder;
+  // their subtrees ride along. Driving the rendered order from this state
+  // (see `orderedNodes`) keeps both panes in sync and avoids snap-back until
+  // the query refetch confirms the new positions. Mirrors the list view.
+  const rootOrder = useMemo(
+    () => nodes.filter((n) => n.indentLevel === 0).map((n) => n.task.localId),
+    [nodes],
+  );
+  const [sortableItems, setSortableItems] = useState<string[]>(rootOrder);
+  useEffect(() => {
+    setSortableItems((prev) => {
+      if (prev.length === rootOrder.length && prev.every((id, i) => id === rootOrder[i])) {
+        return prev;
+      }
+      return rootOrder;
+    });
+  }, [rootOrder]);
+
+  const orderedNodes = useMemo(
+    () => reorderRootBlocks(nodes, sortableItems),
+    [nodes, sortableItems],
+  );
+
+  const reorderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  const handleReorderEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || !viewLocalId) return;
+      const activeRoot = String(active.id);
+      const overRoot = String(over.id);
+      if (activeRoot === overRoot) return;
+
+      const oldIdx = sortableItems.indexOf(activeRoot);
+      const newIdx = sortableItems.indexOf(overRoot);
+      if (oldIdx === -1 || newIdx === -1) return;
+
+      const orderedIds = arrayMove(sortableItems, oldIdx, newIdx);
+      setSortableItems(orderedIds);
+
+      // Optimistically reorder the task cache to the new display order too, so
+      // the rows hold their new positions even if the position write's refetch
+      // (which may do a slow network pull) lands after a faster local refetch
+      // of subtasks/relations would otherwise re-derive the old order.
+      if (projectLocalId) {
+        const displayOrder = reorderRootBlocks(nodes, orderedIds).map((n) => n.task.localId);
+        queryClient.setQueryData<Task[]>(['tasks', projectLocalId], (old) =>
+          old ? reorderTasksByIds(old, displayOrder) : old,
+        );
+      }
+
+      const positionOf = (id: string) =>
+        nodes.find((n) => n.task.localId === id)?.task.position ?? null;
+      const plan = planReorder(orderedIds, activeRoot, positionOf);
+      try {
+        if (plan.type === 'midpoint') {
+          await reorderTask(activeRoot, viewLocalId, plan.position);
+        } else {
+          await reindexTasks(orderedIds, viewLocalId);
+        }
+      } catch (err) {
+        console.error('[gantt] failed to reorder task:', err);
+      }
+    },
+    [viewLocalId, projectLocalId, sortableItems, nodes, queryClient],
+  );
 
   const dragRef = useRef<DragState | null>(null);
   dragRef.current = drag;
@@ -83,10 +180,10 @@ export function GanttChart({
   const chartWidth = totalDays * DAY_WIDTH_PIXELS;
 
   const visible = useMemo(
-    () => visibleGanttNodes(nodes, collapsed, filters.showTasksWithoutDates),
-    [nodes, collapsed, filters.showTasksWithoutDates],
+    () => visibleGanttNodes(orderedNodes, collapsed, filters.showTasksWithoutDates),
+    [orderedNodes, collapsed, filters.showTasksWithoutDates],
   );
-  const parentMap = useMemo(() => buildParentMap(nodes), [nodes]);
+  const parentMap = useMemo(() => buildParentMap(orderedNodes), [orderedNodes]);
   const bodyHeight = visible.length * ROW_HEIGHT;
 
   /** Resolve a node's drawn day-range, filling partial / dateless bars. */
@@ -302,39 +399,21 @@ export function GanttChart({
         >
           Task
         </div>
-        {visible.map((node) => (
-          <div
-            key={node.task.localId}
-            style={{ height: ROW_HEIGHT, paddingLeft: 8 + node.indentLevel * 16 }}
-            className={cn(
-              'flex items-center gap-1 border-b border-[var(--color-border)] pr-2 text-sm',
-              node.task.done && 'text-[var(--color-muted-foreground)] line-through',
-            )}
-          >
-            {node.isParent ? (
-              <button
-                onClick={() => toggleCollapse(node.task.localId)}
-                className="shrink-0 cursor-pointer text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-                aria-label={collapsed.has(node.task.localId) ? 'Expand' : 'Collapse'}
-              >
-                {collapsed.has(node.task.localId) ? (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-              </button>
-            ) : (
-              <span className="w-3.5 shrink-0" />
-            )}
-            <button
-              onClick={() => onOpenTask(node.task.localId)}
-              className="min-w-0 flex-1 cursor-pointer truncate text-left hover:underline"
-              title={node.task.title}
-            >
-              {node.task.title}
-            </button>
-          </div>
-        ))}
+        <DndContext sensors={reorderSensors} onDragEnd={handleReorderEnd}>
+          <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
+            {visible.map((node) => (
+              <GanttRailRow
+                key={node.task.localId}
+                node={node}
+                collapsed={collapsed.has(node.task.localId)}
+                onToggleCollapse={toggleCollapse}
+                onOpenTask={onOpenTask}
+                // Only top-level rows reorder; their subtrees ride along.
+                sortable={node.indentLevel === 0 && !!viewLocalId}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Scrollable timeline */}
@@ -477,3 +556,82 @@ export function GanttChart({
     </div>
   );
 }
+
+/**
+ * Reorder a cached task array so the ids in `orderedIds` lead, in that order,
+ * with every other task kept in its existing relative order after them — the
+ * optimistic-reorder cache update (mirrors the table view's helper).
+ */
+function reorderTasksByIds(tasks: Task[], orderedIds: string[]): Task[] {
+  const rank = new Map(orderedIds.map((id, i) => [id, i]));
+  const ranked: Task[] = [];
+  const rest: Task[] = [];
+  for (const t of tasks) (rank.has(t.localId) ? ranked : rest).push(t);
+  ranked.sort((a, b) => rank.get(a.localId)! - rank.get(b.localId)!);
+  return [...ranked, ...rest];
+}
+
+/* ─── Left-rail row (drag-to-reorder handle for top-level tasks) ─── */
+
+function GanttRailRow({
+  node,
+  collapsed,
+  onToggleCollapse,
+  onOpenTask,
+  sortable,
+}: {
+  node: GanttTaskNode;
+  collapsed: boolean;
+  onToggleCollapse: (taskLocalId: string) => void;
+  onOpenTask: (taskLocalId: string) => void;
+  sortable: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: node.task.localId, disabled: !sortable });
+
+  const style: React.CSSProperties = {
+    height: ROW_HEIGHT,
+    paddingLeft: 8 + node.indentLevel * 16,
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        'flex items-center gap-1 border-b border-[var(--color-border)] pr-2 text-sm',
+        node.task.done && 'text-[var(--color-muted-foreground)] line-through',
+        sortable && 'cursor-grab active:cursor-grabbing',
+        isDragging && 'bg-[var(--color-card)] opacity-60',
+      )}
+    >
+      {node.isParent ? (
+        <button
+          onClick={() => onToggleCollapse(node.task.localId)}
+          className="shrink-0 cursor-pointer text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
+        </button>
+      ) : (
+        <span className="w-3.5 shrink-0" />
+      )}
+      <button
+        onClick={() => onOpenTask(node.task.localId)}
+        className="min-w-0 flex-1 cursor-pointer truncate text-left hover:underline"
+        title={node.task.title}
+      >
+        {node.task.title}
+      </button>
+    </div>
+  );
+}
+

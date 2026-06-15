@@ -6,6 +6,7 @@ import {
   visibleGanttNodes,
   buildParentMap,
   resolveVisibleAnchor,
+  reorderRootBlocks,
   isoToDay,
 } from '@/features/gantt/buildGanttTaskTree';
 import type { Task } from '@/domain/task';
@@ -156,5 +157,36 @@ describe('relation-arrow anchor re-routing', () => {
     // c1 hidden (e.g. dateless filter), p visible but NOT collapsed
     const visibleIds = new Set(['p', 'c2']);
     expect(resolveVisibleAnchor('c1', visibleIds, pm, new Set())).toBeNull();
+  });
+});
+
+describe('reorderRootBlocks', () => {
+  // a (no kids), p → [c1, c2], b (no kids)  →  pre-order: a, p, c1, c2, b
+  const a = mkTask({ localId: 'a' });
+  const p = mkTask({ localId: 'p' });
+  const c1 = mkTask({ localId: 'c1' });
+  const c2 = mkTask({ localId: 'c2' });
+  const b = mkTask({ localId: 'b' });
+  const nodes = buildGanttTaskTree([a, p, c1, c2, b], new Map([['p', ['c1', 'c2']]]));
+
+  it('preserves order for an unchanged root order', () => {
+    const out = reorderRootBlocks(nodes, ['a', 'p', 'b']);
+    expect(out.map((n) => n.task.localId)).toEqual(['a', 'p', 'c1', 'c2', 'b']);
+  });
+
+  it('moves a root and carries its whole subtree along', () => {
+    // move p (with c1, c2) to the front
+    const out = reorderRootBlocks(nodes, ['p', 'a', 'b']);
+    expect(out.map((n) => n.task.localId)).toEqual(['p', 'c1', 'c2', 'a', 'b']);
+  });
+
+  it('moves a leaf root past a parent root', () => {
+    const out = reorderRootBlocks(nodes, ['p', 'b', 'a']);
+    expect(out.map((n) => n.task.localId)).toEqual(['p', 'c1', 'c2', 'b', 'a']);
+  });
+
+  it('appends roots missing from the requested order, keeping their order', () => {
+    const out = reorderRootBlocks(nodes, ['b']);
+    expect(out.map((n) => n.task.localId)).toEqual(['b', 'a', 'p', 'c1', 'c2']);
   });
 });

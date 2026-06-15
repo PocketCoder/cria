@@ -3,6 +3,18 @@ import { getDb } from '@/db';
 import { useEffect } from 'react';
 import { subscribe } from '@/db/bus';
 
+/** A divergence between a dirty local row and the server's version. */
+export interface ConflictRow {
+  id: number;
+  entity_type: string;
+  entity_local_id: string;
+  fields: string;
+  local_snapshot: string;
+  remote_snapshot: string;
+  detected_at: string;
+  resolved_at: string | null;
+}
+
 /** Returns the number of unresolved conflicts */
 export function useConflictsCount() {
   const queryClient = useQueryClient();
@@ -17,7 +29,7 @@ export function useConflictsCount() {
     queryKey: ['conflicts-count'],
     queryFn: async () => {
       const db = await getDb();
-      const rows = await db.select<any[]>(`SELECT COUNT(*) as count FROM conflicts WHERE resolved_at IS NULL`);
+      const rows = await db.select<{ count: number }[]>(`SELECT COUNT(*) as count FROM conflicts WHERE resolved_at IS NULL`);
       return rows[0]?.count ?? 0;
     },
     staleTime: Infinity,
@@ -34,11 +46,11 @@ export function useConflicts() {
     });
   }, [queryClient]);
 
-  return useQuery<any[]>({
+  return useQuery<ConflictRow[]>({
     queryKey: ['conflicts'],
     queryFn: async () => {
       const db = await getDb();
-      const rows = await db.select<any[]>(`SELECT * FROM conflicts WHERE resolved_at IS NULL ORDER BY detected_at ASC`);
+      const rows = await db.select<ConflictRow[]>(`SELECT * FROM conflicts WHERE resolved_at IS NULL ORDER BY detected_at ASC`);
       return rows;
     },
     staleTime: Infinity,

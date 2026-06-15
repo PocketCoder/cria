@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { toCalendarDate } from '@/lib/dateFormat';
 import { CalendarDays, Hash, AlertTriangle, Search } from 'lucide-react';
 import type { SearchQuery } from '@/lib/searchQueryParser';
 
@@ -67,7 +68,7 @@ function Chip({
 
 function formatDate(iso: string): string {
   try {
-    return format(new Date(iso), 'd MMM');
+    return format(toCalendarDate(iso), 'd MMM');
   } catch {
     return iso;
   }

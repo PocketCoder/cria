@@ -1,4 +1,4 @@
-import { getDb, exec, withTx } from './index';
+import { getDb, withTx } from './index';
 import { notify } from './bus';
 import type { TaskAssignee, AssigneeResponse } from '@/domain/task-assignee';
 
@@ -38,18 +38,66 @@ export async function upsertTaskAssigneesFromServer(
 ): Promise<void> {
   const now = new Date().toISOString();
 
-  await exec(`DELETE FROM task_assignees WHERE task_local_id = ?`, [taskLocalId]);
-
-  for (const a of assignees) {
-    const userServerId = a.id;
-    const username = a.username ?? a.name ?? null;
-    await exec(
-      `INSERT INTO task_assignees
-         (task_local_id, user_server_id, username, updated_at, synced_at, dirty, deleted)
-       VALUES (?, ?, ?, ?, ?, 0, 0)`,
-      [taskLocalId, userServerId, username, now, now],
+  await withTx(async (tx) => {
+    const [{ dirty } = { dirty: 0 }] = await tx.select<{ dirty: number }[]>(
+      `SELECT dirty FROM tasks WHERE local_id = ? LIMIT 1`,
+      [taskLocalId],
     );
-  }
+    if (dirty === 1) return;
+
+    // Read pending outbox ops for task_assignee so we don't wipe
+    // an assignee the user just added before the push lands.
+    const ops = await tx.select<{ entity_local_id: string; op: string; payload: string }[]>(
+      `SELECT entity_local_id, op, payload FROM outbox
+        WHERE entity_type = 'task_assignee' ORDER BY id ASC`,
+    );
+    const preserve = new Set<number>();
+    const exclude = new Set<number>();
+    for (const o of ops) {
+      if (o.entity_local_id !== taskLocalId) continue;
+      let payload: { userServerId?: number };
+      try {
+        payload = JSON.parse(o.payload);
+      } catch {
+        continue;
+      }
+      if (typeof payload.userServerId !== 'number') continue;
+      if (o.op === 'add') {
+        preserve.add(payload.userServerId);
+        exclude.delete(payload.userServerId);
+      } else if (o.op === 'remove') {
+        exclude.add(payload.userServerId);
+        preserve.delete(payload.userServerId);
+      }
+    }
+
+    await tx.execute(`DELETE FROM task_assignees WHERE task_local_id = ?`, [taskLocalId]);
+
+    const inserted = new Set<number>();
+    for (const a of assignees) {
+      const userServerId = a.id;
+      if (exclude.has(userServerId)) continue;
+      const username = a.username ?? a.name ?? null;
+      await tx.execute(
+        `INSERT INTO task_assignees
+           (task_local_id, user_server_id, username, updated_at, synced_at, dirty, deleted)
+         VALUES (?, ?, ?, ?, ?, 0, 0)`,
+        [taskLocalId, userServerId, username, now, now],
+      );
+      inserted.add(userServerId);
+    }
+
+    // Re-insert preserved pending-add assignees the server didn't include.
+    for (const userServerId of preserve) {
+      if (inserted.has(userServerId)) continue;
+      await tx.execute(
+        `INSERT INTO task_assignees
+           (task_local_id, user_server_id, username, updated_at, synced_at, dirty, deleted)
+         VALUES (?, ?, NULL, ?, ?, 0, 0)`,
+        [taskLocalId, userServerId, now, now],
+      );
+    }
+  });
 }
 
 export async function addTaskAssignee(

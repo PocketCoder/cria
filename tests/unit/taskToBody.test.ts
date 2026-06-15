@@ -26,6 +26,7 @@ function row(over: Partial<TaskRow> = {}): TaskRow {
     is_favorite: 0,
     repeat_after: 0,
     repeat_mode: 0,
+    updated_at: '2024-01-01T00:00:00Z',
     deleted: 0,
     ...over,
   };
@@ -45,15 +46,10 @@ describe('taskToBody', () => {
     expect(taskToBody(row({ hex_color: '' })).hex_color).toBeUndefined();
   });
 
-  it('scales percent_done from 0–1 to 0–100 (UI stored 0-1, server expects 0-100)', () => {
+  it('scales percent_done from 0–1 to 0–100 (DB stores 0-1, server expects 0-100)', () => {
     expect(taskToBody(row({ percent_done: 0.5 })).percent_done).toBe(50);
     expect(taskToBody(row({ percent_done: 0.33 })).percent_done).toBe(33);
     expect(taskToBody(row({ percent_done: 1 })).percent_done).toBe(100);
-  });
-
-  it('passes percent_done through unchanged when already in 0-100 range', () => {
-    expect(taskToBody(row({ percent_done: 75 })).percent_done).toBe(75);
-    expect(taskToBody(row({ percent_done: 100 })).percent_done).toBe(100);
   });
 
   it('sends is_favorite as explicit false (not omitted — un-favorite was broken before)', () => {

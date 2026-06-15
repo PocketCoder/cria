@@ -29,7 +29,7 @@ function defaults(): GanttFilters {
     // Default on: many local tasks lack start/end, and an empty chart reads
     // as broken. Users can hide them with the toggle.
     showTasksWithoutDates: true,
-    showCompleted: true,
+    showCompleted: false,
   };
 }
 

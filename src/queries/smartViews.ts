@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startOfDay, isBefore, isSameDay, addDays, format } from 'date-fns';
+import { toCalendarDate } from '@/lib/dateFormat';
 import {
   listTasksWithDueDate,
   listTasksForLabel,
@@ -61,7 +62,7 @@ export function useTodayTasks() {
       const due: TaskWithProject[] = [];
       for (const t of all) {
         if (!t.dueDate) continue;
-        const d = startOfDay(new Date(t.dueDate));
+        const d = toCalendarDate(t.dueDate);
         if (isBefore(d, today)) overdue.push(t);
         else if (isSameDay(d, today)) due.push(t);
       }
@@ -97,7 +98,7 @@ export function useUpcomingTasks() {
       for (let i = 1; i <= 7; i++) {
         const day = addDays(today, i);
         const tasks = all.filter(
-          (t) => t.dueDate && isSameDay(startOfDay(new Date(t.dueDate)), day),
+          (t) => t.dueDate && isSameDay(toCalendarDate(t.dueDate), day),
         );
         if (tasks.length === 0) continue;
         groups.push({

@@ -33,6 +33,7 @@ import { SearchView } from '@/features/search/SearchView';
 import { QuickAddModal } from '@/components/QuickAddModal';
 import { SettingsModal } from '@/components/SettingsModal';
 import { useOutboxCount } from '@/queries/outbox';
+import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { cn } from '@/lib/cn';
@@ -75,6 +76,7 @@ export function Shell() {
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
+  const { data: deadLetterCount = 0 } = useDeadLettersCount();
   const { data: serverVersion } = useServerVersion();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -293,14 +295,17 @@ export function Shell() {
             />
             <div className="flex min-h-0 min-w-0 flex-1">
               {currentView ? (
+                // Key each view by its localId so switching views remounts the
+                // component instead of reusing per-view state (filter, collapsed
+                // columns, edit drafts) seeded in useState initializers.
                 currentView.viewKind === 'kanban' ? (
-                  <KanbanBoard view={currentView} project={project} />
-                ) :                 currentView.viewKind === 'table' ? (
-                  <TableView project={project} view={currentView} />
+                  <KanbanBoard key={currentView.localId} view={currentView} project={project} />
+                ) : currentView.viewKind === 'table' ? (
+                  <TableView key={currentView.localId} project={project} view={currentView} />
                 ) : currentView.viewKind === 'gantt' ? (
-                  <GanttView project={project} />
+                  <GanttView key={currentView.localId} project={project} view={currentView} />
                 ) : (
-                  <TaskList project={project} view={currentView} />
+                  <TaskList key={currentView.localId} project={project} view={currentView} />
                 )
               ) : (
                 <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
@@ -396,6 +401,15 @@ export function Shell() {
                  )
                : 'Synced with server'}
            </span>
+           {deadLetterCount > 0 && (
+             <button
+               className="ml-2 flex items-center gap-1 text-red-500 underline"
+               onClick={() => setShowOutbox(true)}
+             >
+               <span className="h-2 w-2 rounded-full bg-red-500" />
+               {deadLetterCount} failed to sync
+             </button>
+           )}
          </div>
         <div className="flex items-center gap-3">
           <button

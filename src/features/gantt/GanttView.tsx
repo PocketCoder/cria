@@ -4,12 +4,14 @@ import { useUi } from '@/stores/ui';
 import { updateTask } from '@/db/tasks';
 import { DatePicker } from '@/components/DatePicker';
 import type { Project } from '@/domain/project';
+import type { ProjectView } from '@/domain/view';
 import { useGanttData } from './useGanttData';
 import { useGanttFilters } from './useGanttFilters';
 import { GanttChart } from './GanttChart';
 
 interface GanttViewProps {
   project: Project;
+  view?: ProjectView;
 }
 
 /**
@@ -21,7 +23,7 @@ interface GanttViewProps {
  * Remaining gap vs Vikunja: arrows whose endpoint is hidden under a collapsed
  * parent are skipped rather than re-routed to the nearest visible ancestor.
  */
-export function GanttView({ project }: GanttViewProps) {
+export function GanttView({ project, view }: GanttViewProps) {
   const { filters, setDateFrom, setDateTo, toggleDateless, toggleCompleted, reset } = useGanttFilters();
   const { nodes, relations, isLoading, isFetching, isError, error } = useGanttData(project, filters.showCompleted);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
@@ -84,6 +86,8 @@ export function GanttView({ project }: GanttViewProps) {
           relations={relations}
           filters={filters}
           projectColor={project.hexColor}
+          viewLocalId={view?.localId}
+          projectLocalId={project.localId}
           onUpdateDates={handleUpdateDates}
           onOpenTask={setSelectedTask}
         />

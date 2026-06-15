@@ -1,6 +1,6 @@
 [package]
 name = "cria"
-version = "0.7.3"
+version = "0.8.0"
 description = "A native desktop client for Vikunja"
 authors = ["jake"]
 license = "MIT"
@@ -15,9 +15,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "devtools", "tray-icon"] }
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
-tauri-plugin-stronghold = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
@@ -39,3 +38,4 @@ objc2-app-kit = { version = "0.3", features = ["NSApplication"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+devtools = ["tauri/devtools"]

@@ -26,7 +26,7 @@ import { labelResponseSchema, type LabelResponse } from '@/domain/label';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
 import { viewResponseSchema, type ViewResponse } from '@/domain/view';
 import { bucketResponseSchema, type BucketResponse } from '@/domain/bucket';
-import { exec, getDb } from '@/db';
+import { exec, getDb, singleFlight } from '@/db';
 import { notify } from '@/db/bus';
 
 const PER_PAGE = 50;
@@ -58,15 +58,18 @@ interface PullResult {
 export async function pullAll(
   client: ApiClient = createApiClient(),
 ): Promise<PullResult> {
+  return singleFlight('pullAll', async () => {
   const projects = await pullProjects(client);
   const views = await pullAllViews(client);
   const buckets = await pullAllBuckets(client);
   return { projects, views, buckets };
+});
 }
 
 export async function pullProjects(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullProjects', async () => {
   const collected: ProjectResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -115,6 +118,7 @@ export async function pullProjects(
 
   await stampSyncState('projects_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -128,6 +132,7 @@ export async function pullTasksForProject(
   projectServerId: number,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullTasksForProject', async () => {
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -171,6 +176,7 @@ export async function pullTasksForProject(
 
   await stampSyncState('tasks_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -288,6 +294,7 @@ async function upsertTaskWithRelations(
 export async function pullAllTasks(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllTasks', async () => {
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -319,6 +326,7 @@ export async function pullAllTasks(
 
   await stampSyncState('tasks_synced_at');
   return collected.length;
+  });
 }
 
 /**
@@ -329,6 +337,7 @@ export async function pullAllTasks(
 export async function pullLabels(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullLabels', async () => {
   const collected: LabelResponse[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, response } = await client.GET('/labels', {
@@ -353,6 +362,7 @@ export async function pullLabels(
   for (const l of collected) await upsertLabelFromServer(l);
   await stampSyncState('labels_synced_at');
   return collected.length;
+});
 }
 
 /**
@@ -362,6 +372,7 @@ export async function pullLabels(
 export async function pullAllViews(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllViews', async () => {
   const db = await getDb();
   const projectRows = await db.select<{ local_id: string; server_id: number | null }[]>(
     `SELECT local_id, server_id FROM projects WHERE server_id IS NOT NULL AND deleted = 0`,
@@ -373,6 +384,7 @@ export async function pullAllViews(
   }
   await stampSyncState('views_synced_at');
   return total;
+});
 }
 
 /**
@@ -385,6 +397,7 @@ export async function pullViewsForProjectLocal(
   projectLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight(`pullViewsForProjectLocal:${projectLocalId}`, async () => {
   const db = await getDb();
   const rows = await db.select<{ server_id: number | null }[]>(
     `SELECT server_id FROM projects WHERE local_id = ? AND deleted = 0 LIMIT 1`,
@@ -413,6 +426,7 @@ export async function pullViewsForProjectLocal(
   }
 
   return count;
+});
 }
 
 /**
@@ -424,25 +438,42 @@ export async function pullViewsForProject(
   projectLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
-  const { data, response } = await client.GET(
-    '/projects/{project}/views',
-    { params: { path: { project: projectServerId } } },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(
-      `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+  return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
+  const collected: ViewResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, response } = await (client.GET as any)(
+      '/projects/{project}/views',
+      {
+        params: {
+          path: { project: projectServerId },
+          query: { page, per_page: PER_PAGE },
+        },
+      },
     );
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch: unknown[] = data ?? [];
+    for (const raw of batch) {
+      const parsed = viewResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
   }
-  const batch = data ?? [];
-  const valid: ViewResponse[] = [];
-  for (const raw of batch) {
-    const parsed = viewResponseSchema.safeParse(raw);
-    if (parsed.success) valid.push(parsed.data);
-    else console.warn('[pullViewsForProject] skipping invalid view:', parsed.error);
-  }
-  await replaceViewsForProjectFromServer(projectLocalId, valid);
-  return valid.length;
+
+  await replaceViewsForProjectFromServer(projectLocalId, collected);
+  return collected.length;
+});
 }
 
 /**
@@ -451,6 +482,7 @@ export async function pullViewsForProject(
 export async function pullAllBuckets(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
+  return singleFlight('pullAllBuckets', async () => {
   const db = await getDb();
   const views = await db.select<{ local_id: string; server_id: number | null }[]>(
     `SELECT pv.local_id, pv.server_id
@@ -477,6 +509,7 @@ export async function pullAllBuckets(
   }
   await stampSyncState('buckets_synced_at');
   return total;
+});
 }
 
 /**
@@ -489,25 +522,40 @@ async function pullBucketsForView(
   viewLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<number> {
-  const { data, response } = await client.GET(
-    '/projects/{id}/views/{view}/buckets',
-    { params: { path: { id: projectServerId, view: viewServerId } } },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(
-      `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+  const collected: BucketResponse[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, response } = await (client.GET as any)(
+      '/projects/{project}/views/{view}/buckets',
+      {
+        params: {
+          path: { project: projectServerId, view: viewServerId },
+          query: { page, per_page: PER_PAGE },
+        },
+      },
     );
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+      );
+    }
+    const batch: unknown[] = data ?? [];
+    for (const raw of batch) {
+      const parsed = bucketResponseSchema.safeParse(raw);
+      if (parsed.success) collected.push(parsed.data);
+      else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
+    }
+
+    const totalPages = parseInt(
+      response.headers.get('x-pagination-total-pages') ?? '1',
+      10,
+    );
+    if (page >= totalPages || batch.length < PER_PAGE) break;
   }
-  const batch = data ?? [];
-  const valid: BucketResponse[] = [];
-  for (const raw of batch) {
-    const parsed = bucketResponseSchema.safeParse(raw);
-    if (parsed.success) valid.push(parsed.data);
-    else console.warn('[pullBucketsForView] skipping invalid bucket:', parsed.error);
-  }
-  await replaceBucketsForViewFromServer(viewLocalId, valid);
-  return valid.length;
+
+  await replaceBucketsForViewFromServer(viewLocalId, collected);
+  return collected.length;
 }
 
 async function stampSyncState(

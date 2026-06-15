@@ -48,9 +48,7 @@ function rowToTask(row: TaskRow): Task {
     startDate: row.start_date,
     endDate: row.end_date,
     priority: row.priority,
-    percentDone: row.percent_done <= 1
-      ? Math.round(row.percent_done * 100)
-      : Math.round(row.percent_done),
+    percentDone: Math.round(row.percent_done * 100),
     hexColor: row.hex_color ? (row.hex_color.startsWith('#') ? row.hex_color : `#${row.hex_color}`) : null,
     position: row.position,
     isFavorite: row.is_favorite === 1,
@@ -196,7 +194,7 @@ export interface SearchFilters {
  */
 export async function searchTasks(filters: SearchFilters): Promise<TaskWithProject[]> {
   const sanitized = filters.text
-    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
     .trim();
 
   const conditions: string[] = [
@@ -206,10 +204,15 @@ export async function searchTasks(filters: SearchFilters): Promise<TaskWithProje
   const params: unknown[] = [];
 
   if (sanitized) {
+    const FTS5_RESERVED = new Set(['AND', 'OR', 'NOT', 'NEAR']);
     const ftsQuery = sanitized
       .split(/\s+/)
       .filter(Boolean)
-      .map((w) => `${w}*`)
+      .map((w) =>
+        FTS5_RESERVED.has(w.toUpperCase())
+          ? `"${w}"`        // double-quoted literal, not an operator
+          : `${w}*`,
+      )
       .join(' AND ');
     conditions.push('tasks_fts MATCH ?');
     params.push(ftsQuery);
@@ -428,7 +431,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
         input.startDate ?? null,
         input.endDate ?? null,
         input.priority ?? 0,
-        input.percentDone ?? 0,
+        (input.percentDone ?? 0) / 100,
         input.hexColor ?? null,
         null,
         input.isFavorite === true ? 1 : 0,
@@ -506,7 +509,7 @@ export async function updateTask(
     }
     if (input.percentDone !== undefined) {
       sets.push('percent_done = ?');
-      params.push(input.percentDone);
+      params.push(input.percentDone / 100);
     }
     if (input.hexColor !== undefined) {
       sets.push('hex_color = ?');
@@ -570,7 +573,7 @@ export async function duplicateTask(localId: string): Promise<Task | null> {
     startDate: original.startDate,
     endDate: original.endDate,
     priority: original.priority,
-    percentDone: original.percentDone,
+    percentDone: original.percentDone / 100,
     hexColor: original.hexColor,
   });
 }
@@ -653,6 +656,44 @@ export async function reorderTask(
        VALUES ('task_position', ?, 'update', ?, ?)`,
       [taskLocalId, JSON.stringify({ view_local_id: viewLocalId, position }), now],
     );
+  });
+  notify('tasks');
+  notify('outbox');
+}
+
+/**
+ * Rewrite positions for an explicit ordering of tasks in one transaction,
+ * giving them a clean, strictly-increasing spread (`baseStep`, `2*baseStep`,
+ * …). Each task gets a `task_position` outbox entry so the server is told
+ * about every change.
+ *
+ * The midpoint strategy in {@link reorderTask} only works once tasks have
+ * distinct numeric positions. Freshly-created tasks start at `position = null`
+ * (they sort by title/date), so the first list/table reorder — and any time a
+ * drop lands between two colliding neighbours — re-indexes the whole list to
+ * establish that spread. After that, single midpoint writes take over again.
+ */
+export async function reindexTasks(
+  orderedLocalIds: string[],
+  viewLocalId: string,
+  baseStep = 1024,
+): Promise<void> {
+  if (orderedLocalIds.length === 0) return;
+  const now = new Date().toISOString();
+  await withTx(async (db) => {
+    for (let i = 0; i < orderedLocalIds.length; i++) {
+      const localId = orderedLocalIds[i];
+      const position = (i + 1) * baseStep;
+      await db.execute(
+        `UPDATE tasks SET position = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+        [position, now, localId],
+      );
+      await db.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('task_position', ?, 'update', ?, ?)`,
+        [localId, JSON.stringify({ view_local_id: viewLocalId, position }), now],
+      );
+    }
   });
   notify('tasks');
   notify('outbox');

@@ -90,7 +90,7 @@ describe('kanban reorder', () => {
     await setTaskBucket('t2', 'v1', 'b1');
     await setTaskBucket('t3', 'v1', 'b1');
 
-    await reorderTasksInBucket('v1', ['t3', 't1', 't2'], 2048);
+    await reorderTasksInBucket('v1', 'b1', ['t3', 't1', 't2'], 2048);
 
     const assignments = await listBucketAssignmentsForView('v1');
     const b1Tasks = assignments.filter((a) => a.bucketLocalId === 'b1');
@@ -98,6 +98,25 @@ describe('kanban reorder', () => {
 
     const posMap = Object.fromEntries(b1Tasks.map((a) => [a.taskLocalId, a.position]));
     expect(posMap).toEqual({ t3: 2048, t1: 4096, t2: 6144 });
+  });
+
+  it('reorderTasksInBucket upserts a row for a task with no prior assignment', async () => {
+    await seedData();
+    // t1 has an assignment; t2 and t3 do NOT (the "unplaced → default bucket"
+    // case). A plain UPDATE would no-op for them — the snap-back bug.
+    await setTaskBucket('t1', 'v1', 'b1');
+
+    await reorderTasksInBucket('v1', 'b1', ['t3', 't1', 't2']);
+
+    const assignments = await listBucketAssignmentsForView('v1');
+    const b1 = assignments.filter((a) => a.bucketLocalId === 'b1');
+    expect(b1).toHaveLength(3);
+    expect(b1.map((a) => a.taskLocalId)).toEqual(['t3', 't1', 't2']); // ordered by position
+    expect(Object.fromEntries(b1.map((a) => [a.taskLocalId, a.position]))).toEqual({
+      t3: 1024,
+      t1: 2048,
+      t2: 3072,
+    });
   });
 
   it('assignments ordered by position after updates', async () => {
