@@ -345,6 +345,10 @@ GitHub Actions secret. Manifest served at
 3. `git tag vX.Y.Z && git push origin vX.Y.Z` — the `v*` tag triggers
    `.github/workflows/release.yml` (macOS aarch64 + x86_64, signs bundles,
    creates the GitHub Release, publishes `update.json`).
+   **Push tags standalone** — `git push origin vX.Y.Z` only, never bundled
+   with `git push origin dev --tags`. GitHub can drop the tag push event when
+   branch and tag refs are sent in the same connection, leaving the release
+   workflow untriggered.
 
 **Versioning is plain `0.x.y`** — no `-alpha`/`-beta`. The `0.` major is the
 stability signal; minor per milestone, patch for fixes. `1.0.0` is the
