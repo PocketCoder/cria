@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: Thu Jun 4 2026
+Last updated: Mon Jun 15 2026
 
 ## Legend
 | Icon | Meaning |
@@ -197,10 +197,10 @@ Last updated: Thu Jun 4 2026
 | UI | Rebindable shortcuts in settings | ❌ | Not started (M7) |
 | UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
 | UI | Inbox view (no-project tasks) | ✅ | Shipped |
-| UI | Kanban view | ❌ | Not started (M9) |
-| UI | Table view (dense, sortable) | ❌ | Not started (M9) |
-| UI | Gantt view | ❌ | Not started (M10) |
-| UI | Drag-to-reorder tasks | ❌ | Not started (M9) |
+| UI | Kanban view | ✅ | M9, drag-reorder, WIP bucket limit |
+| UI | Table view (dense, sortable) | ✅ | M9, sortable columns, drag-reorder |
+| UI | Gantt view | ✅ | M9, timeline with dependency arrows, hide completed toggle |
+| UI | Drag-to-reorder tasks | ✅ | M9, list/kanban/table/gantt |
 | UI | Drag-to-reorder projects in sidebar | ❌ | Not started |
 | UI | Recent projects in sidebar | ❌ | Not started |
 | UI | Task hover preview popup | ✅ | Shipped |
@@ -266,6 +266,4 @@ Vikunja supports comments on tasks via `GET /tasks/{id}/comments`. Read-only dis
 
 Multi-select via Cmd+click / Shift+click on task rows, then batch actions (delete, move, set labels). Leverages existing mutation functions in db/tasks.ts.
 
-### 4. Kanban view — ~3 days
 
-Requires server's position/board endpoint integration. Significant but well-understood work. See SPEC M9.
