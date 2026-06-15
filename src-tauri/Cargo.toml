@@ -1,6 +1,6 @@
 [package]
 name = "cria"
-version = "0.7.4"
+version = "0.8.0"
 description = "A native desktop client for Vikunja"
 authors = ["jake"]
 license = "MIT"
@@ -38,3 +38,4 @@ objc2-app-kit = { version = "0.3", features = ["NSApplication"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+devtools = ["tauri/devtools"]

@@ -1,13 +1,13 @@
 {
   "name": "cria",
   "private": true,
-  "version": "0.7.4",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:release-id": "tauri dev",
     "build": "tsc --noEmit && vite build && tauri build",
-    "build:dev-app": "tsc --noEmit && vite build && tauri build --config src-tauri/tauri.dev.conf.json",
+    "build:dev-app": "tsc --noEmit && vite build && tauri build --config src-tauri/tauri.dev.conf.json --features devtools",
     "vite": "vite",
     "vite:build": "vite build",
     "preview": "vite preview",
@@ -16,7 +16,9 @@
     "bump": "./scripts/bump.sh",
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate:api": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v1/docs.json -o /tmp/vikunja-swagger.json && npx -y swagger2openapi@7 /tmp/vikunja-swagger.json -o /tmp/vikunja-openapi.json && openapi-typescript /tmp/vikunja-openapi.json -o src/api/schema.ts'"
+    "generate:api": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v1/docs.json -o /tmp/vikunja-swagger.json && npx -y swagger2openapi@7 /tmp/vikunja-swagger.json -o /tmp/vikunja-openapi.json && openapi-typescript /tmp/vikunja-openapi.json -o src/api/schema.ts'",
+    "clean": "rm -rf dist src-tauri/target",
+    "clean:all": "rm -rf dist src-tauri/target node_modules"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
