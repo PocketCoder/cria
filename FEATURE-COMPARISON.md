@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: Mon Jun 15 2026
+Last updated: Tue Jun 16 2026
 
 ## Legend
 | Icon | Meaning |
@@ -112,8 +112,9 @@ Last updated: Mon Jun 15 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Comments | Read comments on task | 🟡 | Collapsible section with read/unread tracking, synced via expand=comments (#PR) |
-| Comments | Write/create comments | ❌ | Not started |
+| Comments | Read comments on task | ✅ | Collapsible section with read/unread tracking |
+| Comments | Write/create/update/delete comments | ✅ | Full outbox-backed CRUD |
+| Comments | Emoji reactions | ✅ | Phase 3, inline badges + picker, fire-and-forget API |
 | Comments | @mentions in comments | ❌ | Not started |
 | Comments | In-app notification inbox for @mentions | ❌ | Not started |
 
@@ -160,7 +161,7 @@ Last updated: Mon Jun 15 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Native | SQLite with migrations (9 migrations) | ✅ | 001–009, forward-only |
+| Native | SQLite with migrations (14 migrations) | ✅ | 001–014, forward-only |
 | Native | Single instance (Tauri plugin) | ✅ | plugin-single-instance |
 | Native | macOS Dock badge (reminder count) | ✅ | In queries/badge.ts |
 | Native | Global shortcut (Cmd+Shift+A → quick add) | ✅ | tauri/globalShortcut.ts |
