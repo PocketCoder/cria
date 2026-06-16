@@ -602,6 +602,7 @@ function TaskRow({
         type="checkbox"
         checked={task.done}
         onChange={handleToggle}
+        onClick={(e) => e.stopPropagation()}
         aria-label={task.done ? 'Done' : 'Not done'}
         className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
       />
