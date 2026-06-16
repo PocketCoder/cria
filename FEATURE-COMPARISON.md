@@ -112,7 +112,7 @@ Last updated: Mon Jun 15 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Comments | Read comments on task | ❌ | Not started |
+| Comments | Read comments on task | 🟡 | Collapsible section with read/unread tracking, synced via expand=comments (#PR) |
 | Comments | Write/create comments | ❌ | Not started |
 | Comments | @mentions in comments | ❌ | Not started |
 | Comments | In-app notification inbox for @mentions | ❌ | Not started |

@@ -55,7 +55,7 @@ release").**
 | M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
-| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; 🟡 comments / notes pending |
+| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (read-only collapsible); 🟡 notes pending |
 
 **Next up:** M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable).
 M9 reorder/DnD/Kanban/table view is shipped. After M7, M10 stretch goals.

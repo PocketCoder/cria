@@ -64,6 +64,9 @@ export const taskResponseSchema = z
     // reminders are embedded; parsed by taskReminderSchema and mirrored
     // into task_reminders on pull (drives local notifications).
     reminders: z.array(z.unknown()).nullable().optional(),
+    // comments are embedded with expand=comments; parsed by
+    // commentResponseSchema and mirrored into task_comments on pull.
+    comments: z.array(z.unknown()).nullable().optional(),
     // related_tasks is a map keyed by RelationKind ("subtask",
     // "parenttask", "related", "blocking", "blocked", "duplicates",
     // "duplicateof", "precedes", "follows", "copiedfrom", "copiedto")
