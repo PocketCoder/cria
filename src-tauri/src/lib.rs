@@ -21,6 +21,7 @@ const MIGRATION_10_SQL: &str = include_str!("../../src/db/migrations/010_views.s
 const MIGRATION_11_SQL: &str = include_str!("../../src/db/migrations/011_kanban.sql");
 const MIGRATION_12_SQL: &str = include_str!("../../src/db/migrations/012_task_bucket_position.sql");
 const MIGRATION_13_SQL: &str = include_str!("../../src/db/migrations/013_task_comments.sql");
+const MIGRATION_14_SQL: &str = include_str!("../../src/db/migrations/014_comment_reactions.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -100,6 +101,12 @@ fn migrations() -> Vec<Migration> {
             version: 13,
             description: "task comments",
             sql: MIGRATION_13_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "comment reactions",
+            sql: MIGRATION_14_SQL,
             kind: MigrationKind::Up,
         },
     ]

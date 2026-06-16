@@ -17,8 +17,10 @@ import {
   createComment,
   updateComment,
   deleteComment,
+  toggleCommentReaction,
   type TaskComment,
 } from '@/db/comments';
+import { getCachedUser } from '@/db/user';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { getAuthSnapshot } from '@/auth/store';
 import { RichTextEditor } from './RichTextEditor';
@@ -38,6 +40,12 @@ export function CommentSection({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    getCachedUser().then((user) => setCurrentUserId(user?.serverId ?? null));
+  }, []);
 
   const totalCount = comments.length;
 
@@ -163,6 +171,7 @@ export function CommentSection({
                 isDeleting={deletingCommentId === c.localId}
                 isCopied={copiedId === c.localId}
                 taskServerId={taskServerId}
+                currentUserId={currentUserId}
                 onEdit={() => setEditingCommentId(c.localId)}
                 onCancelEdit={() => setEditingCommentId(null)}
                 onSave={(html) => handleUpdateComment(c.localId, html)}
@@ -191,6 +200,7 @@ function CommentRow({
   isDeleting,
   isCopied,
   taskServerId,
+  currentUserId,
   onEdit,
   onCancelEdit,
   onSave,
@@ -204,6 +214,7 @@ function CommentRow({
   isDeleting: boolean;
   isCopied: boolean;
   taskServerId: number | null;
+  currentUserId: number | null;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSave: (html: string) => Promise<void>;
@@ -212,6 +223,8 @@ function CommentRow({
   onCancelDelete: () => void;
   onCopyPermalink: () => void;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   const initials = useMemo(() => {
     const name = comment.authorName;
     if (!name) return '?';
@@ -352,6 +365,59 @@ function CommentRow({
         className="prose prose-sm max-w-none break-words text-xs leading-relaxed text-[var(--color-foreground)] [&_a]:underline [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-2 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[10px] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.comment) }}
       />
+
+      {comment.deleted ? null : (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {Object.entries(comment.reactions ?? {}).map(([emoji, users]) => {
+            if (users.length === 0) return null;
+            const active = currentUserId !== null && users.some((u) => u.id === currentUserId);
+            return (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => toggleCommentReaction(comment.localId, emoji)}
+                className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] leading-none cursor-pointer transition-colors ${
+                  active
+                    ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                    : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/80'
+                }`}
+              >
+                <span>{emoji}</span>
+                <span className="tabular-nums">{users.length}</span>
+              </button>
+            );
+          })}
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(!pickerOpen)}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-muted)] text-xs leading-none text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/80 hover:text-[var(--color-foreground)] cursor-pointer transition-colors"
+              title="Add reaction"
+            >
+              +
+            </button>
+
+            {pickerOpen ? (
+              <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] p-1 shadow-md z-10">
+                {['👍', '🎉', '❤️', '😄', '🚀', '👀'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      toggleCommentReaction(comment.localId, emoji);
+                      setPickerOpen(false);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded text-sm hover:bg-[var(--color-muted)] cursor-pointer"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

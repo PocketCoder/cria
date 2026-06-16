@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+const reactionUserSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().nullable().optional(),
+  username: z.string().nullable().optional(),
+});
+
+export type ReactionUser = z.infer<typeof reactionUserSchema>;
+
 export const commentResponseSchema = z
   .object({
     id: z.number(),
@@ -14,10 +22,13 @@ export const commentResponseSchema = z
       .optional(),
     created: z.string().nullable().optional(),
     updated: z.string().nullable().optional(),
+    reactions: z.record(z.string(), z.array(reactionUserSchema)).optional(),
   })
   .passthrough();
 
 export type CommentResponse = z.infer<typeof commentResponseSchema>;
+
+export type ReactionMap = Record<string, ReactionUser[]>;
 
 export interface TaskComment {
   localId: string;
@@ -32,4 +43,5 @@ export interface TaskComment {
   syncedAt: string | null;
   dirty: boolean;
   deleted: boolean;
+  reactions: ReactionMap | null;
 }
