@@ -96,6 +96,19 @@ const TASK_CONFLICT_FIELDS = [
 
 const MAX_ATTEMPTS = 10;
 
+/** Call an API function, treating HTTP 404 as success (entity already gone).
+ *  Returns the response on success, null on 404. Lets all other errors through. */
+async function callApiIgnore404<T>(
+  promise: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<T | null> {
+  try {
+    return await callApi(promise);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
 /**
  * Drain the outbox: take the oldest eligible row, execute its op against the
  * server, delete it on success, or back off / dead-letter on failure.
@@ -266,7 +279,7 @@ async function executeOp(
         }),
       );
     } else if (op.op === 'remove') {
-      await callApi(
+      await callApiIgnore404(
         client.DELETE('/tasks/{task}/labels/{label}', {
           params: { path: { task: taskServerId, label: labelServerId } },
         }),
@@ -296,7 +309,7 @@ async function executeOp(
         }),
       );
     } else if (op.op === 'remove') {
-      await callApi(
+      await callApiIgnore404(
         client.DELETE('/tasks/{taskID}/assignees/{userID}', {
           params: { path: { taskID: taskServerId, userID: userServerId } },
         }),
@@ -357,7 +370,7 @@ async function executeOp(
         }),
       );
     } else if (op.op === 'remove') {
-      await callApi(
+      await callApiIgnore404(
         client.DELETE('/tasks/{taskID}/relations/{relationKind}/{otherTaskID}', {
           params: {
             path: {
@@ -595,7 +608,7 @@ async function executeOp(
       notify('tasks');
       return;
     }
-    await callApi(
+    await callApiIgnore404(
       client.DELETE('/tasks/{id}', {
         params: { path: { id: task.server_id } },
       }),
@@ -912,7 +925,7 @@ async function executeProjectOp(
       notify('projects');
       return;
     }
-    await callApi(
+    await callApiIgnore404(
       client.DELETE('/projects/{id}', {
         params: { path: { id: row.server_id } },
       }),
@@ -1100,7 +1113,7 @@ async function executeLabelOp(
       notify('labels');
       return;
     }
-    await callApi(
+    await callApiIgnore404(
       client.DELETE('/labels/{id}', {
         params: { path: { id: row.server_id } },
       }),
@@ -1239,7 +1252,7 @@ async function executeViewOp(
 
   if (op.op === 'delete') {
     if (row.server_id !== null && projectServerId) {
-      await callApi(
+      await callApiIgnore404(
         client.DELETE('/projects/{project}/views/{id}', {
           params: { path: { project: projectServerId, id: row.server_id } },
         }),
@@ -1387,7 +1400,7 @@ async function executeBucketOp(
     if (!projectServerId || !viewServerId) {
       throw new ApiError(408, null, 'bucket: parent view not synced yet', true, true);
     }
-    await callApi(
+    await callApiIgnore404(
       client.DELETE('/projects/{projectID}/views/{view}/buckets/{bucketID}', {
         params: {
           path: {

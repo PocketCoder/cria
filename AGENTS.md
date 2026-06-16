@@ -19,6 +19,8 @@ pnpm test           # vitest run (unit tests in tests/unit/)
 pnpm test:watch     # vitest watch
 pnpm vite:build     # production frontend build
 pnpm generate:api   # regen src/api/schema.ts (VK_URL= to target an instance)
+pnpm clean          # rm -rf dist src-tauri/target (reclaim ~7GB build artifacts)
+pnpm clean:all      # also rm -rf node_modules (needs pnpm install before next dev)
 cargo check --manifest-path src-tauri/Cargo.toml   # Rust shell sanity
 ```
 
@@ -32,7 +34,7 @@ done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.6.0` (in `package.json`,
+shipped in `v0.4.0`. Current version is `0.8.0` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **`v0.4.0`/`v0.4.1` were tagged without bumping
 these files, leaving them stuck at `0.3.1` → running builds reported
@@ -52,11 +54,11 @@ release").**
 | M6 smart views (Today / Upcoming / Inbox) + saved filters + FTS5 search | ✅ |
 | M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
-| M9 reorder, DnD, Kanban, table view | ⏳ |
-| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments (list / upload / delete / download / inline images / lightbox); 🟡 comments / Gantt / notes pending |
+| M9 reorder, DnD, Kanban, table view | ✅ |
+| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; 🟡 comments / notes pending |
 
 **Next up:** M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable).
-After that, M9 reorder/DnD/Kanban/table view and M10 stretch goals.
+M9 reorder/DnD/Kanban/table view is shipped. After M7, M10 stretch goals.
 See [SPEC.md §14](SPEC.md).
 
 **Known gaps / deferred:**
@@ -180,7 +182,7 @@ don't try to "fix" them.
 `sort_by=position` returns **HTTP 400** outside a view context — positions are
 per-view-only. We sort locally (`listTasksForProject` ORDER BY) and pass no
 `sort_by` to the API. Same likely applies to other view-scoped fields; verify
-before adding new `sort_by` values. (This will bite drag-to-reorder in M9.)
+before adding new `sort_by` values. (Bit drag-to-reorder in M9 — handled by local ORDER BY.)
 
 ### Vikunja "no date" sentinel
 
@@ -343,6 +345,10 @@ GitHub Actions secret. Manifest served at
 3. `git tag vX.Y.Z && git push origin vX.Y.Z` — the `v*` tag triggers
    `.github/workflows/release.yml` (macOS aarch64 + x86_64, signs bundles,
    creates the GitHub Release, publishes `update.json`).
+   **Push tags standalone** — `git push origin vX.Y.Z` only, never bundled
+   with `git push origin dev --tags`. GitHub can drop the tag push event when
+   branch and tag refs are sent in the same connection, leaving the release
+   workflow untriggered.
 
 **Versioning is plain `0.x.y`** — no `-alpha`/`-beta`. The `0.` major is the
 stability signal; minor per milestone, patch for fixes. `1.0.0` is the
