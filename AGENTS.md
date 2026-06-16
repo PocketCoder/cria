@@ -34,7 +34,7 @@ done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.8.0` (in `package.json`,
+shipped in `v0.4.0`. Current version is `0.9.0` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **`v0.4.0`/`v0.4.1` were tagged without bumping
 these files, leaving them stuck at `0.3.1` → running builds reported
@@ -55,7 +55,7 @@ release").**
 | M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
-| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; 🟡 comments / notes pending |
+| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
 
 **Next up:** M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable).
 M9 reorder/DnD/Kanban/table view is shipped. After M7, M10 stretch goals.
@@ -76,11 +76,10 @@ See [SPEC.md §14](SPEC.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). Migrations in
-  `src/db/migrations/` — `001_initial.sql`
-  (projects/tasks/labels/outbox/sync_state/conflicts) + `002_task_fields.sql`
-  (`is_favorite`/`is_subscribed`/repeat fields). Forward-only; registered in
-  [src-tauri/src/lib.rs](src-tauri/src/lib.rs). Never edit a shipped migration.
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 14 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `014_comment_reactions.sql`).
+  Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
+  Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),
   generated from Vikunja's docs (Swagger 2 → OpenAPI 3 via `swagger2openapi`).
   Calls route through the Tauri HTTP plugin to dodge CORS.

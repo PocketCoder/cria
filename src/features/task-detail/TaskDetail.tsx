@@ -12,6 +12,7 @@ import { TaskActions } from './TaskActions';
 import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
 import { RelatedTasks } from './RelatedTasks';
+import { CommentSection } from './CommentSection';
 import type { Task } from '@/domain/task';
 import { getAuthSnapshot } from '@/auth/store';
 
@@ -247,6 +248,8 @@ export function TaskDetail() {
             taskServerId={task.serverId}
           />
         </section>
+
+        <CommentSection taskLocalId={task.localId} taskServerId={task.serverId} />
 
         <ReminderList taskLocalId={task.localId} />
 

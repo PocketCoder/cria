@@ -45,6 +45,9 @@ interface RichTextEditorProps {
    * uploads are disabled in that state (we have nothing to attach to);
    * a visual hint covers it. */
   taskServerId: number | null;
+  /** If true, start in edit mode immediately instead of read mode.
+   * Intended for create forms where there is no content to preview. */
+  autoEdit?: boolean;
 }
 
 let _triggerImagePicker: (() => void) | null = null;
@@ -173,8 +176,9 @@ export function RichTextEditor({
   onSave,
   taskLocalId,
   taskServerId,
+  autoEdit,
 }: RichTextEditorProps) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(autoEdit ?? false);
 
   if (!editing) {
     return (

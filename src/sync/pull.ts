@@ -8,6 +8,7 @@ import {
 import { upsertTaskAssigneesFromServer } from '@/db/task-assignees';
 import { replaceTaskAttachmentsFromServer } from '@/db/attachments';
 import { replaceTaskRemindersFromServer } from '@/db/reminders';
+import { replaceTaskCommentsFromServer } from '@/db/comments';
 import { replaceTaskRelationsFromServer } from '@/db/relations';
 import { replaceViewsForProjectFromServer } from '@/db/views';
 import { replaceBucketsForViewFromServer } from '@/db/buckets';
@@ -23,6 +24,7 @@ import {
   type RelatedTaskResponse,
 } from '@/domain/task';
 import { labelResponseSchema, type LabelResponse } from '@/domain/label';
+import { commentResponseSchema, type CommentResponse } from '@/domain/comment';
 import { assigneeResponseSchema, type AssigneeResponse } from '@/domain/task-assignee';
 import { viewResponseSchema, type ViewResponse } from '@/domain/view';
 import { bucketResponseSchema, type BucketResponse } from '@/domain/bucket';
@@ -142,6 +144,7 @@ export async function pullTasksForProject(
           page,
           per_page: PER_PAGE,
           filter: `project_id = ${projectServerId}`,
+          expand: 'comments',
           // No sort_by: `position` is per-view-only and Vikunja returns 400
           // outside a view context. We sort locally in listTasksForProject.
         },
@@ -196,7 +199,7 @@ export async function refetchTaskByServerId(
 ): Promise<void> {
   try {
     const { data, response } = await client.GET('/tasks/{id}', {
-      params: { path: { id: taskServerId } },
+      params: { path: { id: taskServerId }, query: { expand: 'comments' } },
     });
     if (!response.ok || !data) return;
     const parsed = taskResponseSchema.safeParse(data);
@@ -259,6 +262,14 @@ async function upsertTaskWithRelations(
     }
     await replaceTaskRemindersFromServer(taskLocalId, validReminders);
   }
+  if (taskLocalId && Array.isArray(t.comments)) {
+    const validComments: CommentResponse[] = [];
+    for (const raw of t.comments) {
+      const parsed = commentResponseSchema.safeParse(raw);
+      if (parsed.success) validComments.push(parsed.data);
+    }
+    await replaceTaskCommentsFromServer(taskLocalId, validComments);
+  }
   if (taskLocalId && t.related_tasks && typeof t.related_tasks === 'object') {
     // Vikunja sends related_tasks as { [kind]: Task[] }. Validate each
     // peer through relatedTaskSchema (minimal id/title/done shape); the
@@ -299,7 +310,7 @@ export async function pullAllTasks(
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, response } = await client.GET('/tasks', {
-      params: { query: { page, per_page: PER_PAGE } },
+      params: { query: { page, per_page: PER_PAGE, expand: 'comments' } },
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
