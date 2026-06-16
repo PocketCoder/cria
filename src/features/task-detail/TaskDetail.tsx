@@ -249,7 +249,7 @@ export function TaskDetail() {
           />
         </section>
 
-        <CommentSection taskLocalId={task.localId} />
+        <CommentSection taskLocalId={task.localId} taskServerId={task.serverId} />
 
         <ReminderList taskLocalId={task.localId} />
 

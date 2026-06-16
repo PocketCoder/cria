@@ -22,6 +22,7 @@ export type Topic =
   | 'labels'
   | 'task_labels'
   | 'task_assignees'
+  | 'comments'
   | 'outbox'
   | 'conflicts'
   | 'sync_state';

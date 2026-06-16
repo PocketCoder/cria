@@ -10,10 +10,15 @@ import { subscribe } from '@/db/bus';
 export function useTaskComments(taskLocalId: string | null) {
   const qc = useQueryClient();
   useEffect(
-    () =>
-      subscribe('tasks', () => {
+    () => {
+      const unsub1 = subscribe('tasks', () => {
         void qc.invalidateQueries({ queryKey: ['comments'] });
-      }),
+      });
+      const unsub2 = subscribe('comments', () => {
+        void qc.invalidateQueries({ queryKey: ['comments'] });
+      });
+      return () => { unsub1(); unsub2(); };
+    },
     [qc],
   );
   return useQuery<TaskComment[]>({
@@ -28,10 +33,15 @@ export function useTaskComments(taskLocalId: string | null) {
 export function useTaskUnreadCount(taskLocalId: string | null) {
   const qc = useQueryClient();
   useEffect(
-    () =>
-      subscribe('tasks', () => {
+    () => {
+      const unsub1 = subscribe('tasks', () => {
         void qc.invalidateQueries({ queryKey: ['comments', 'unread'] });
-      }),
+      });
+      const unsub2 = subscribe('comments', () => {
+        void qc.invalidateQueries({ queryKey: ['comments', 'unread'] });
+      });
+      return () => { unsub1(); unsub2(); };
+    },
     [qc],
   );
   return useQuery<number>({
