@@ -52,13 +52,12 @@ release").**
 | M4.5 auto-update distribution (updater, signing, release workflow) | ✅ |
 | M5 input parity (TipTap WYSIWYG, NL quick-add, inline pickers, label mutations) | ✅ |
 | M6 smart views (Today / Upcoming / Inbox) + saved filters + FTS5 search | ✅ |
-| M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable) | ⏳ |
+| M7 command palette (Cmd+K) | ✅ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
 | M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
 
-**Next up:** M7 keyboard-first (Cmd+K palette, row shortcuts, rebindable).
-M9 reorder/DnD/Kanban/table view is shipped. After M7, M10 stretch goals.
+**Next up:** M10 stretch goals (notes).
 See [SPEC.md §14](SPEC.md).
 
 **Known gaps / deferred:**

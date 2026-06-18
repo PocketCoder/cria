@@ -193,9 +193,9 @@ Last updated: Tue Jun 16 2026
 | UI | Update-ready banner | ✅ | UpdateBanner |
 | UI | Online/offline indicator in footer | ✅ | Green/amber/red dot |
 | UI | Sync status (pending count) | ✅ | Footer shows outbox count |
-| UI | Cmd+K command palette | ❌ | Not started (M7) |
-| UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ❌ | Not started (M7) |
-| UI | Rebindable shortcuts in settings | ❌ | Not started (M7) |
+| UI | Cmd+K command palette | ✅ | CommandPalette (views, projects, labels, tasks, actions) |
+| UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ❌ | Removed from scope |
+| UI | Rebindable shortcuts in settings | ❌ | Removed from scope |
 | UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
 | UI | Inbox view (no-project tasks) | ✅ | Shipped |
 | UI | Kanban view | ✅ | M9, drag-reorder, WIP bucket limit |
@@ -217,7 +217,7 @@ Last updated: Tue Jun 16 2026
 | Settings | Display name editing | ✅ | Account section input, synced to server |
 | Settings | Autostart toggle | ✅ | SettingsModal Advanced section |
 | Settings | Sign out | ✅ | SettingsModal Account section |
-| Settings | Global shortcuts config | ❌ | Read-only display; rebindable TBD (M7) |
+| Settings | Global shortcuts config | ❌ | Read-only display; rebindable removed from scope |
 | Settings | Appearance (color scheme) | ✅ | SettingsModal Appearance, light/dark/system |
 | Settings | Play sound on task completion | ✅ | SettingsModal Appearance toggle; Web Audio chime on user-initiated completion |
 | Settings | Tray icon toggle | ✅ | SettingsModal Advanced, invokes `set_tray_visible` |

@@ -1016,14 +1016,12 @@ The point at which the app stops feeling like a wrapper. This is the headline mi
 
 **Exit criteria:** the user opens Cria in the morning and Today tells them what to do. Search is sub-100ms on a 10k-task local database.
 
-### M7 — Keyboard-first navigation
+### M7 — Command palette (Cmd+K)
 
 - **Command palette** (Cmd+K): open project, jump to task, run any action by name
-- **Per-row shortcuts**: j/k or arrows to move, Enter to open detail, Space to check, `e` edit title, `d` set date, `l` labels, `p` priority, `#` move to project
-- All shortcuts **rebindable** in settings
 - Global Cmd+Shift+A (already wired) opens the natural-language quick-add modal anywhere
 
-**Exit criteria:** every common action is reachable without the trackpad.
+**Exit criteria:** the palette can find any project, label, task, and common action by name.
 
 ### M8 — Hierarchy, recurrence, reminders
 
@@ -1086,16 +1084,16 @@ criteria are met.
 | `v0.4.0` | Today / Upcoming / Inbox smart views, FTS5 search, saved filters | M6 | ✅ shipped |
 | `v0.4.x` | Reminders (PR #39) + attachments incl. inline images (PR #41) — slips into the 0.4.x line because the work landed alongside M6's polish rather than waiting for its own milestone slot | M8 partial, M10 partial | 🟡 in PR |
 | `v0.5.0` | **Sub-tasks tree + recurrence editor** — the rest of M8, now that reminders is done | M8 | ~2 wks |
-| `v0.6.0` | Command palette (Cmd+K), per-row shortcuts, rebindable keys | M7 | ~1.5 wks |
+| `v0.6.0` | Command palette (Cmd+K) | M7 | ✅ shipped (rolled into v0.9.x) |
 | `v0.7.0` | Drag-to-reorder, Kanban, table view | M9 | ~2–3 wks |
 | `v0.8.0` | **Live sync (WebSockets)** — replace 60s polling, close #33 (conflicts during running), make the app feel native (see §14a below) | M3.5 | ~1.5–2 wks |
 | `v0.9.0` | Pick-up wins: Vikunja importers (Todoist/Trello/Asana/Microsoft To Do/TickTick — already implemented server-side, expose via Settings), task/project duplicate, export-my-data | drive-bys | ~3–5 days total |
 | `v1.0.0` | macOS notarisation + polish + M3 fully signed off | graduation | ~1 wk |
 | `v1.x` | Remaining M10 (comments + @mentions, Gantt, per-project notes, attachment LRU cache) — by demand | M10 | per-feature |
 
-**The headline gap is now M7 + M8 sub-tasks/recurrence.** Reminders and
+**The headline gap is now M8 sub-tasks/recurrence.** Reminders and
 attachments slipped in alongside M6 — both were small enough to land
-without their own minor bump. After M7/M8 the daily-driver / polish
+without their own minor bump. After M8 the daily-driver / polish
 bars are met for the second half of the Todoist parity table.
 
 Sequencing risks worth budgeting for:
