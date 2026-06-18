@@ -31,6 +31,7 @@ import {
 } from '@/features/smart-views/SmartViews';
 import { SearchView } from '@/features/search/SearchView';
 import { QuickAddModal } from '@/components/QuickAddModal';
+import { CommandPalette } from '@/components/CommandPalette';
 import { SettingsModal } from '@/components/SettingsModal';
 import { useOutboxCount } from '@/queries/outbox';
 import { useDeadLettersCount } from '@/queries/outboxRows';
@@ -62,7 +63,10 @@ export function Shell() {
     }
   };
 
-  // Resolve the initial view when opening a project without a viewLocalId
+  // Resolve the initial view when opening a project without a viewLocalId.
+  // Must preserve selectedTaskLocalId — the palette may have set both
+  // activeView and selectedTaskLocalId atomically, and calling
+  // setActiveView here would clear the selection and close the detail card.
   useEffect(() => {
     const av = activeView;
     if (av?.kind === 'project' && !av.viewLocalId && projectViews.length > 0) {
@@ -70,7 +74,11 @@ export function Shell() {
       const targetId = stored && projectViews.some((v) => v.localId === stored)
         ? stored
         : projectViews[0]!.localId;
-      setActiveView({ kind: 'project', localId: av.localId, viewLocalId: targetId });
+      const selected = useUi.getState().selectedTaskLocalId;
+      useUi.setState({
+        activeView: { kind: 'project', localId: av.localId, viewLocalId: targetId },
+        selectedTaskLocalId: selected,
+      });
     }
   }, [activeView?.kind === 'project' ? activeView?.localId : null, projectViews.length]);
 
@@ -150,6 +158,7 @@ export function Shell() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   /* ── search ───────────────────────────────────────────── */
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,7 +206,17 @@ export function Shell() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-
+  // Cmd/Ctrl+K → command palette (always on, not just dev)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   /* ── search handlers ──────────────────────────────────── */
   const handleSearchFocus = () => {
@@ -433,6 +452,13 @@ export function Shell() {
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
       {showQuickAdd && <QuickAddModal onClose={() => setShowQuickAdd(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showCommandPalette && (
+        <CommandPalette
+          onClose={() => setShowCommandPalette(false)}
+          onOpenQuickAdd={() => setShowQuickAdd(true)}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      )}
       <UndoToasts />
       </div>
   );
