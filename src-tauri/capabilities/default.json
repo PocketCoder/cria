@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the main window.",
+  "description": "Shared capabilities for all platforms (desktop + iOS/Android): local DB, networking, notifications, deep links, external links, OS info.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -21,13 +21,6 @@
     "sql:allow-close",
     "deep-link:default",
     "notification:default",
-    "global-shortcut:default",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
-    "autostart:default",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled",
     {
       "identifier": "http:default",
       "allow": [
@@ -45,8 +38,6 @@
         { "url": "mailto:**" }
       ]
     },
-    "updater:default",
-    "process:default",
-    "process:allow-restart"
+    "os:default"
   ]
 }

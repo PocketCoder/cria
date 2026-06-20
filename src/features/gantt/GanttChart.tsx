@@ -4,7 +4,8 @@ import {
   DndContext,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
@@ -117,7 +118,8 @@ export function GanttChart({
   );
 
   const reorderSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
   const handleReorderEnd = useCallback(

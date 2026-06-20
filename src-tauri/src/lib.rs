@@ -1,12 +1,18 @@
 mod tx;
 
+use tauri_plugin_sql::{Migration, MigrationKind};
+
+// Tray, menus, window-close-to-tray and the launch-at-login dock dance are all
+// desktop-only. iOS/Android never compile these imports (or the code that uses
+// them — see the `#[cfg(desktop)]` gates below).
+#[cfg(desktop)]
 use std::sync::Mutex;
+#[cfg(desktop)]
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{TrayIconBuilder, TrayIconId},
     Emitter, Manager, WindowEvent,
 };
-use tauri_plugin_sql::{Migration, MigrationKind};
 
 const INITIAL_MIGRATION_SQL: &str = include_str!("../../src/db/migrations/001_initial.sql");
 const MIGRATION_2_SQL: &str = include_str!("../../src/db/migrations/002_task_fields.sql");
@@ -22,6 +28,7 @@ const MIGRATION_11_SQL: &str = include_str!("../../src/db/migrations/011_kanban.
 const MIGRATION_12_SQL: &str = include_str!("../../src/db/migrations/012_task_bucket_position.sql");
 const MIGRATION_13_SQL: &str = include_str!("../../src/db/migrations/013_task_comments.sql");
 const MIGRATION_14_SQL: &str = include_str!("../../src/db/migrations/014_comment_reactions.sql");
+const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_indexes.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -109,9 +116,16 @@ fn migrations() -> Vec<Migration> {
             sql: MIGRATION_14_SQL,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "performance indexes (active due-date scan)",
+            sql: MIGRATION_15_SQL,
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn set_tray_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(&TrayIconId::new("main")) {
@@ -120,17 +134,20 @@ fn set_tray_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> 
     Ok(())
 }
 
+#[cfg(desktop)]
 struct AppState {
     close_to_tray: Mutex<bool>,
     hide_dock_on_tray: Mutex<bool>,
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn set_close_to_tray(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
     *state.close_to_tray.lock().map_err(|e| e.to_string())? = enabled;
     Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn set_hide_dock_on_tray(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
     *state.hide_dock_on_tray.lock().map_err(|e| e.to_string())? = enabled;
@@ -147,19 +164,122 @@ fn restore_dock() {
         .setActivationPolicy(NSApplicationActivationPolicy::Regular);
 }
 
+/// Builds the system tray + its menu and manages the close-to-tray state.
+/// Desktop-only: iOS/Android have no system tray.
+#[cfg(desktop)]
+fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    app.manage(AppState {
+        close_to_tray: Mutex::new(true),
+        hide_dock_on_tray: Mutex::new(false),
+    });
+
+    let show = MenuItemBuilder::with_id("show", "Show Cria").build(app)?;
+    let quick_add = MenuItemBuilder::with_id("quick_add", "Quick Add...").build(app)?;
+    let quit = MenuItemBuilder::with_id("quit", "Quit Cria").build(app)?;
+
+    let menu = MenuBuilder::new(app)
+        .item(&show)
+        .item(&quick_add)
+        .separator()
+        .item(&quit)
+        .build()?;
+
+    TrayIconBuilder::with_id(TrayIconId::new("main"))
+        .icon(app.default_window_icon().cloned().expect("default window icon"))
+        .menu(&menu)
+        .tooltip("Cria")
+        .on_menu_event(|app, event| {
+            match event.id().as_ref() {
+                "show" => {
+                    #[cfg(target_os = "macos")]
+                    restore_dock();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.unminimize();
+                    }
+                }
+                "quick_add" => {
+                    #[cfg(target_os = "macos")]
+                    restore_dock();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.emit("tray-quick-add", ());
+                    }
+                }
+                "quit" => {
+                    app.exit(0);
+                }
+                _ => {}
+            }
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                #[cfg(target_os = "macos")]
+                restore_dock();
+                let app = tray.app_handle();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.unminimize();
+                }
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            #[cfg(target_os = "macos")]
-            restore_dock();
-            use tauri::Manager;
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_focus();
-                let _ = window.show();
-                let _ = window.unminimize();
-            }
-        }))
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
+
+    // Desktop-only plugins + window behaviours. None of these crates are even
+    // compiled for iOS/Android (see Cargo.toml's target-gated dependency
+    // table), so the whole block is excluded on mobile.
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+                #[cfg(target_os = "macos")]
+                restore_dock();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_focus();
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                }
+            }))
+            .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                None,
+            ))
+            .plugin(tauri_plugin_process::init())
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .on_window_event(|window, event| {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    let state = window.state::<AppState>();
+                    if *state.close_to_tray.lock().unwrap() {
+                        #[cfg(target_os = "macos")]
+                        if *state.hide_dock_on_tray.lock().unwrap() {
+                            let mtm = objc2::MainThreadMarker::new()
+                                .expect("on_window_event runs on the main thread");
+                            objc2_app_kit::NSApplication::sharedApplication(mtm)
+                                .setActivationPolicy(
+                                    objc2_app_kit::NSApplicationActivationPolicy::Accessory,
+                                );
+                        }
+                        let _ = window.hide();
+                        api.prevent_close();
+                    }
+                }
+            });
+    }
+
+    // Cross-platform plugins (work on desktop + iOS + Android).
+    let builder = builder
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:cria.db", migrations())
@@ -167,102 +287,28 @@ pub fn run() {
         )
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                let state = window.state::<AppState>();
-                if *state.close_to_tray.lock().unwrap() {
-                    #[cfg(target_os = "macos")]
-                    if *state.hide_dock_on_tray.lock().unwrap() {
-                        let mtm = objc2::MainThreadMarker::new()
-                            .expect("on_window_event runs on the main thread");
-                        objc2_app_kit::NSApplication::sharedApplication(mtm)
-                            .setActivationPolicy(
-                                objc2_app_kit::NSApplicationActivationPolicy::Accessory,
-                            );
-                    }
-                    let _ = window.hide();
-                    api.prevent_close();
-                }
-            }
-        })
-        .setup(|app| {
-            app.manage(AppState {
-                close_to_tray: Mutex::new(true),
-                hide_dock_on_tray: Mutex::new(false),
-            });
-
-            let show = MenuItemBuilder::with_id("show", "Show Cria").build(app)?;
-            let quick_add = MenuItemBuilder::with_id("quick_add", "Quick Add...").build(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "Quit Cria").build(app)?;
-
-            let menu = MenuBuilder::new(app)
-                .item(&show)
-                .item(&quick_add)
-                .separator()
-                .item(&quit)
-                .build()?;
-
-            TrayIconBuilder::with_id(TrayIconId::new("main"))
-                .icon(app.default_window_icon().cloned().expect("default window icon"))
-                .menu(&menu)
-                .tooltip("Cria")
-                .on_menu_event(|app, event| {
-                    match event.id().as_ref() {
-                        "show" => {
-                            #[cfg(target_os = "macos")]
-                            restore_dock();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                                let _ = window.unminimize();
-                            }
-                        }
-                        "quick_add" => {
-                            #[cfg(target_os = "macos")]
-                            restore_dock();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                                let _ = window.emit("tray-quick-add", ());
-                            }
-                        }
-                        "quit" => {
-                            app.exit(0);
-                        }
-                        _ => {}
-                    }
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                        #[cfg(target_os = "macos")]
-                        restore_dock();
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                            let _ = window.unminimize();
-                        }
-                    }
-                })
-                .build(app)?;
-
+        .plugin(tauri_plugin_os::init())
+        .setup(|_app| {
+            #[cfg(desktop)]
+            setup_tray(_app)?;
             Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            tx::execute_tx,
-            set_tray_visible,
-            set_close_to_tray,
-            set_hide_dock_on_tray,
-        ])
+        });
+
+    // The tray/dock commands only exist on desktop; mobile gets just the
+    // shared transaction command.
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        tx::execute_tx,
+        set_tray_visible,
+        set_close_to_tray,
+        set_hide_dock_on_tray,
+    ]);
+    #[cfg(mobile)]
+    let builder = builder.invoke_handler(tauri::generate_handler![tx::execute_tx]);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

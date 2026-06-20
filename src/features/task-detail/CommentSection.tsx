@@ -23,6 +23,7 @@ import {
 import { getCachedUser } from '@/db/user';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { getAuthSnapshot } from '@/auth/store';
+import { pullCommentsForTask } from '@/sync/pull';
 import { RichTextEditor } from './RichTextEditor';
 
 export function CommentSection({
@@ -46,6 +47,15 @@ export function CommentSection({
   useEffect(() => {
     getCachedUser().then((user) => setCurrentUserId(user?.serverId ?? null));
   }, []);
+
+  // Refresh server comments whenever the detail opens for a task. The bulk
+  // list pulls dropped `expand: 'comments'`, so comments no longer arrive
+  // inline — pull just this task's comments here (lighter than refetching the
+  // whole task, and it won't clobber other relations). Best-effort: it
+  // resolves the server id itself and swallows its own errors.
+  useEffect(() => {
+    void pullCommentsForTask(taskLocalId);
+  }, [taskLocalId]);
 
   const totalCount = comments.length;
 

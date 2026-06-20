@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ReorderErrorPill } from '@/components/ReorderErrorPill';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,7 +6,8 @@ import {
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
@@ -156,8 +157,12 @@ export function TaskList({ project, view }: TaskListProps) {
   }, [taskTree, sortableItems]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    // Touch: long-press to grab, so vertical scrolling still works on a phone.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
     }),
   );
 
@@ -459,7 +464,7 @@ function buildTaskTree(tasks: Task[], parentMap: Map<string, string[]>): TaskTre
     .map((t) => ({ task: t, children: childrenOf(t.localId) }));
 }
 
-function TreeBranch({
+const TreeBranch = memo(function TreeBranch({
   node,
   depth,
   attachmentIds,
@@ -488,7 +493,7 @@ function TreeBranch({
       ))}
     </>
   );
-}
+});
 
 /* ─── Checklist progress from description HTML ─── */
 
@@ -503,7 +508,7 @@ function countChecklistItems(html: string | null | undefined): { checked: number
 }
 
 /* ─── Task row ─── */
-function TaskRow({
+const TaskRow = memo(function TaskRow({
   task,
   hasAttachments,
   depth = 0,
@@ -520,7 +525,14 @@ function TaskRow({
   const [draft, setDraft] = useState('');
   const { data: labels = [] } = useTaskLabels(task.localId);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
-  const checklist = countChecklistItems(task.description);
+  const checklist = useMemo(
+    () => countChecklistItems(task.description),
+    [task.description],
+  );
+  const dueLabel = useMemo(
+    () => (task.dueDate ? formatDate(task.dueDate) : null),
+    [task.dueDate],
+  );
 
   const {
     attributes,
@@ -635,7 +647,7 @@ function TaskRow({
         {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
-              <span>Due {formatDate(task.dueDate)}</span>
+              <span>Due {dueLabel}</span>
             ) : null}
             {hasAttachments ? (
               <Paperclip className="h-3 w-3" aria-label="Has attachments" />
@@ -688,21 +700,21 @@ function TaskRow({
         <button
           onClick={handleTitleEdit}
           aria-label="Rename task"
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+          className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={handleDelete}
           aria-label="Delete task"
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+          className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
     </li>
   );
-}
+});
 
 function formatDate(iso: string): string {
   try {

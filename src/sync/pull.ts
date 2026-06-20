@@ -144,7 +144,9 @@ export async function pullTasksForProject(
           page,
           per_page: PER_PAGE,
           filter: `project_id = ${projectServerId}`,
-          expand: 'comments',
+          // No `expand: 'comments'`: comments inflate every task in the list
+          // response but are only shown in the detail card, so we fetch them
+          // lazily per-task via pullCommentsForTask when a card opens.
           // No sort_by: `position` is per-view-only and Vikunja returns 400
           // outside a view context. We sort locally in listTasksForProject.
         },
@@ -211,6 +213,44 @@ export async function refetchTaskByServerId(
     notify('tasks');
   } catch (err) {
     console.warn('[refetchTaskByServerId] failed:', err);
+  }
+}
+
+/**
+ * Fetch just the comments for one task and mirror them locally. Called when a
+ * task detail card opens, since the list pulls no longer carry comments inline
+ * (see pullTasksForProject). Best-effort + silent on failure: the detail card
+ * already shows whatever comments are cached locally, so an offline open still
+ * works — this only refreshes them. Resolves the server id from the local id;
+ * a local-only task (no server id yet) has no server comments to pull.
+ */
+export async function pullCommentsForTask(
+  taskLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<void> {
+  try {
+    const db = await getDb();
+    const rows = await db.select<{ server_id: number | null }[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? AND deleted = 0 LIMIT 1`,
+      [taskLocalId],
+    );
+    const serverId = rows[0]?.server_id;
+    if (serverId == null) return;
+    const { data, response } = await client.GET('/tasks/{id}', {
+      params: { path: { id: serverId }, query: { expand: 'comments' } },
+    });
+    if (!response.ok || !data) return;
+    const parsed = taskResponseSchema.safeParse(data);
+    if (!parsed.success || !Array.isArray(parsed.data.comments)) return;
+    const valid: CommentResponse[] = [];
+    for (const raw of parsed.data.comments) {
+      const p = commentResponseSchema.safeParse(raw);
+      if (p.success) valid.push(p.data);
+    }
+    await replaceTaskCommentsFromServer(taskLocalId, valid);
+    notify('tasks');
+  } catch (err) {
+    console.warn('[pullCommentsForTask] failed:', err);
   }
 }
 
@@ -310,7 +350,10 @@ export async function pullAllTasks(
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, response } = await client.GET('/tasks', {
-      params: { query: { page, per_page: PER_PAGE, expand: 'comments' } },
+      // No `expand: 'comments'` — see pullTasksForProject. The cross-project
+      // pull runs every 60s, so dropping inline comments here is the bigger
+      // payload/battery win; comments load per-task on detail open.
+      params: { query: { page, per_page: PER_PAGE } },
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');

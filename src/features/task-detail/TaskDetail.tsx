@@ -15,6 +15,8 @@ import { RelatedTasks } from './RelatedTasks';
 import { CommentSection } from './CommentSection';
 import type { Task } from '@/domain/task';
 import { getAuthSnapshot } from '@/auth/store';
+import { cn } from '@/lib/cn';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 /**
  * Task detail, rendered as a right-docked floating card rather than a
@@ -288,12 +290,21 @@ function DetailCard({
   cardRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
+  const isMobile = useIsMobile();
   return (
     <aside
       ref={cardRef}
       role="dialog"
       aria-label="Task details"
-      className="m-4 flex w-[420px] max-w-[calc(100%-2rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]"
+      className={cn(
+        'flex flex-col overflow-hidden bg-[var(--color-card)]',
+        isMobile
+          ? // Full-screen sheet on a phone — no room for a docked column.
+            // safe-* keeps the header/content clear of the notch + home bar.
+            'fixed inset-0 z-40 safe-top safe-bottom safe-x'
+          : // Right-docked floating inspector on desktop (in-flow flex item).
+            'm-4 w-[420px] max-w-[calc(100%-2rem)] shrink-0 rounded-2xl border border-[var(--color-border)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]',
+      )}
     >
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
         <div className="min-w-0 flex-1">

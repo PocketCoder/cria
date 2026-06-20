@@ -212,7 +212,7 @@ export function ProjectSidebar() {
   };
 
   return (
-    <aside className="flex h-full w-52 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)]">
+    <aside className="flex h-full w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-card)] md:w-52">
       <nav className="flex-1 overflow-y-auto px-2 pb-3">
         {/* ── Smart Views ── */}
         <div className="mb-1">

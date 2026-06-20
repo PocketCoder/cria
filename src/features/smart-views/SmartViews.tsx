@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useCallback, memo } from 'react';
 import { format } from 'date-fns';
 import { toCalendarDate } from '@/lib/dateFormat';
 import { Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
@@ -282,7 +282,7 @@ function SmartView({
   );
 }
 
-export function SmartTaskRow({
+export const SmartTaskRow = memo(function SmartTaskRow({
   task,
   showProject,
 }: {
@@ -296,7 +296,14 @@ export function SmartTaskRow({
   const { data: attachmentIds } = useTasksWithAttachments();
   const hasAttachments = attachmentIds?.has(task.localId) ?? false;
 
-  const handleToggle = async () => {
+  // Date formatting is the most expensive per-row work; memoize it so it
+  // only recomputes when the due date itself changes, not on every render.
+  const dueLabel = useMemo(
+    () => (task.dueDate ? formatDue(task.dueDate) : null),
+    [task.dueDate],
+  );
+
+  const handleToggle = useCallback(async () => {
     const nowDone = !task.done;
     try {
       await updateTask(task.localId, { done: nowDone });
@@ -304,12 +311,15 @@ export function SmartTaskRow({
     } catch (err) {
       console.error('Failed to toggle task:', err);
     }
-  };
+  }, [task.localId, task.done]);
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    enqueueDelete(task);
-  };
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      enqueueDelete(task);
+    },
+    [enqueueDelete, task],
+  );
 
   return (
     <li
@@ -342,7 +352,7 @@ export function SmartTaskRow({
         </TaskHoverPreview>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
           {showProject ? <span>{task.projectTitle}</span> : null}
-          {task.dueDate ? <span>{formatDue(task.dueDate)}</span> : null}
+          {dueLabel ? <span>{dueLabel}</span> : null}
           {task.priority > 0 ? (
             <span aria-label={`Priority ${task.priority}`}>
               {'!'.repeat(Math.min(5, task.priority))}
@@ -372,7 +382,7 @@ export function SmartTaskRow({
       </div>
     </li>
   );
-}
+});
 
 function formatDue(iso: string): string {
   try {

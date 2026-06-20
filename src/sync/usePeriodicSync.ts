@@ -5,6 +5,8 @@ import { pullProjects, pullLabels, pullAllTasks, pullAllViews, pullAllBuckets } 
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
 import { notify } from '@/db/bus';
+import { isMobilePlatform } from '@/lib/platform';
+import { isPageVisible, onVisibilityChange } from '@/lib/visibility';
 
 const INTERVAL_MS = 60_000;
 
@@ -71,8 +73,14 @@ export function usePeriodicSync() {
       }
     };
 
+    // On mobile, skip ticks while backgrounded — iOS keeps JS timers running,
+    // so an un-gated pull would burn battery/cellular every 60s in the
+    // background. Desktop ticks unconditionally (cheap, and a tray window is
+    // "hidden" by design). Foreground resume is wired via onVisibilityChange.
+    const shouldTick = () => !cancelled && (!isMobilePlatform() || isPageVisible());
+
     const id = setInterval(() => {
-      if (!cancelled) void tick();
+      if (shouldTick()) void tick();
     }, INTERVAL_MS);
 
     // Deletion reconciliation every 15 min
@@ -80,7 +88,7 @@ export function usePeriodicSync() {
     const reconId = setInterval(() => {
       // reconcileDeletions throws (and aborts the delete sweep) on any HTTP
       // error or incomplete listing, so the call must not float uncaught.
-      if (!cancelled)
+      if (shouldTick())
         void reconcileDeletions().catch((err) =>
           throttledWarn(
             'periodic-sync/reconcile',
@@ -94,12 +102,19 @@ export function usePeriodicSync() {
       if (!cancelled) void tick();
     };
     window.addEventListener('focus', onFocus);
+    // Mobile foreground signal (window 'focus' is unreliable on iOS): pull
+    // immediately when the app returns from the background so the user sees
+    // fresh data without waiting up to 60s for the next tick.
+    const stopVisibility = isMobilePlatform()
+      ? onVisibilityChange({ onShow: () => { if (!cancelled) void tick(); } })
+      : () => {};
 
     return () => {
       cancelled = true;
       clearInterval(id);
       clearInterval(reconId);
       window.removeEventListener('focus', onFocus);
+      stopVisibility();
       stopOutbox();
     };
   }, [isAuthed]);

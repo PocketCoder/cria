@@ -54,6 +54,53 @@ body,
   height: 100%;
 }
 
+/* iOS safe-area helpers (notch / Dynamic Island / home indicator).
+   `viewport-fit=cover` in index.html exposes env(safe-area-inset-*); these
+   pad full-bleed surfaces (the mobile shell root, full-screen overlays) so
+   content clears the status bar and home indicator. They resolve to 0 on
+   platforms with no insets, so they're harmless on desktop. */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Reveal-on-hover affordances (row edit/delete buttons, label-chip remove)
+   that STAY visible on touch devices, which have no hover state. Replaces the
+   `opacity-0 group-hover:opacity-100` pattern: visible by default, and only
+   hidden-until-hover on pointers that actually support hovering. */
+.hover-reveal {
+  opacity: 1;
+  transition: opacity 150ms ease;
+}
+.chip-reveal {
+  opacity: 0.7;
+  transition: opacity 150ms ease;
+}
+@media (hover: hover) {
+  .hover-reveal {
+    opacity: 0;
+  }
+  .group:hover .hover-reveal,
+  .group:focus-within .hover-reveal {
+    opacity: 1;
+  }
+  .chip-reveal {
+    opacity: 0;
+  }
+  .group\/chip:hover .chip-reveal {
+    opacity: 0.7;
+  }
+  .chip-reveal:hover {
+    opacity: 1;
+  }
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);

@@ -2,6 +2,7 @@ import { isPermissionGranted, requestPermission, sendNotification } from '@/taur
 import { getIdentifier } from '@tauri-apps/api/app';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSettings } from '@/stores/settings';
+import { isMobilePlatform } from '@/lib/platform';
 
 /**
  * Send a desktop notification. Checks the user's preference first (from the
@@ -56,6 +57,16 @@ export async function notificationsAllowed(): Promise<boolean> {
  * be a no-op error logged to the console.
  */
 export async function openNotificationSettings(): Promise<void> {
+  // iOS: deep-link to this app's page in Settings, where the notification
+  // toggle lives. (`x-apple.systempreferences:` is macOS-only.)
+  if (isMobilePlatform()) {
+    try {
+      await openUrl('app-settings:');
+    } catch (err) {
+      console.warn('[notify] failed to open app settings:', err);
+    }
+    return;
+  }
   let id: string | null = null;
   try {
     id = await getIdentifier();

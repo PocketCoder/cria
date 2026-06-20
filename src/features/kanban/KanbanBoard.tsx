@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import {
   DndContext,
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDroppable,
   closestCorners,
   type DragStartEvent,
@@ -83,8 +84,12 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    // Touch: long-press to grab a card so the board can still be scrolled.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
     }),
   );
 
@@ -575,7 +580,7 @@ interface CardProps {
   task: Task;
 }
 
-function KanbanCard({ task }: CardProps) {
+const KanbanCard = memo(function KanbanCard({ task }: CardProps) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const {
     attributes,
@@ -621,7 +626,7 @@ function KanbanCard({ task }: CardProps) {
       ) : null}
     </div>
   );
-}
+});
 
 /* ─── Add bucket column ─── */
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -52,7 +52,9 @@ interface SortableRowProps {
   task: Task;
   shownColumns: ColumnDef[];
   editMode: boolean;
-  drafts: Record<string, DraftFields>;
+  // Only this row's own draft, not the whole `drafts` record — so a keystroke
+  // in one cell doesn't change props for (and re-render) every other row.
+  draft: DraftFields | undefined;
   setDraft: (localId: string, field: keyof DraftFields, value: unknown) => void;
   projectTitle: (id: string) => string;
   currentUserServerId: number | null;
@@ -70,11 +72,11 @@ const EDITABLE_COLUMNS = new Set<ColumnKey>([
   'labels',
 ]);
 
-function SortableTableRow({
+const SortableTableRow = memo(function SortableTableRow({
   task,
   shownColumns,
   editMode,
-  drafts,
+  draft,
   setDraft,
   projectTitle,
   currentUserServerId,
@@ -124,7 +126,7 @@ function SortableTableRow({
               <EditField
                 task={task}
                 columnKey={c.key}
-                draft={drafts[task.localId]}
+                draft={draft}
                 onChange={(field, value) => setDraft(task.localId, field, value)}
               />
             ) : (
@@ -140,7 +142,7 @@ function SortableTableRow({
       })}
     </tr>
   );
-}
+});
 
 /**
  * Dense, sortable, multi-column table view. Reads the same
@@ -157,6 +159,7 @@ export function TableView({ project, view }: TableViewProps) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const { data: currentUser } = useCurrentUser();
+  const currentUserServerId = currentUser?.serverId ?? null;
   const qc = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -343,7 +346,10 @@ export function TableView({ project, view }: TableViewProps) {
     [view, orderedRows, clearSort, qc, project.localId],
   );
 
-  const shownColumns = columns.filter((c) => visible[c.key]);
+  const shownColumns = useMemo(
+    () => columns.filter((c) => visible[c.key]),
+    [columns, visible],
+  );
 
   // 1-based sort priority per column, only meaningful with >1 active key.
   const sortOrder = useMemo(() => {
@@ -427,10 +433,10 @@ export function TableView({ project, view }: TableViewProps) {
                     task={task}
                     shownColumns={shownColumns}
                     editMode={editMode}
-                    drafts={drafts}
+                    draft={drafts[task.localId]}
                     setDraft={setDraft}
                     projectTitle={projectTitle}
-                    currentUserServerId={currentUser?.serverId ?? null}
+                    currentUserServerId={currentUserServerId}
                     selectedTaskId={selectedTaskId}
                     setSelectedTask={setSelectedTask}
                   />

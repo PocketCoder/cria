@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 
 import { register, unregister } from '@/tauri/globalShortcut';
 import { OutboxModal } from '@/components/OutboxModal';
@@ -18,9 +18,19 @@ import { useProjectViews } from '@/queries/views';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 import { ProjectHeader } from '@/features/projects/ProjectHeader';
 import { TaskList } from '@/features/tasks/TaskList';
-import { KanbanBoard } from '@/features/kanban/KanbanBoard';
-import { TableView } from '@/features/table/TableView';
-import { GanttView } from '@/features/gantt/GanttView';
+// Heavy, conditionally-rendered project views — code-split out of the startup
+// bundle. Only loaded when the active project view actually selects one. The
+// default views (TaskList, SmartViews) stay eager so first paint isn't gated
+// on a chunk fetch.
+const KanbanBoard = lazy(() =>
+  import('@/features/kanban/KanbanBoard').then((m) => ({ default: m.KanbanBoard })),
+);
+const TableView = lazy(() =>
+  import('@/features/table/TableView').then((m) => ({ default: m.TableView })),
+);
+const GanttView = lazy(() =>
+  import('@/features/gantt/GanttView').then((m) => ({ default: m.GanttView })),
+);
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import {
   TodayView,
@@ -30,15 +40,25 @@ import {
   FavoritesView,
 } from '@/features/smart-views/SmartViews';
 import { SearchView } from '@/features/search/SearchView';
-import { QuickAddModal } from '@/components/QuickAddModal';
-import { CommandPalette } from '@/components/CommandPalette';
-import { SettingsModal } from '@/components/SettingsModal';
+// Modals/overlays that only mount when opened — code-split so their bundles
+// (and the command palette's search machinery) load on first open, not at boot.
+const QuickAddModal = lazy(() =>
+  import('@/components/QuickAddModal').then((m) => ({ default: m.QuickAddModal })),
+);
+const CommandPalette = lazy(() =>
+  import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+);
+const SettingsModal = lazy(() =>
+  import('@/components/SettingsModal').then((m) => ({ default: m.SettingsModal })),
+);
 import { useOutboxCount } from '@/queries/outbox';
 import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { cn } from '@/lib/cn';
-import { Search, Settings, X } from 'lucide-react';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { isMobilePlatform } from '@/lib/platform';
+import { Menu, Plus, Search, Settings, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -160,6 +180,19 @@ export function Shell() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
+  /* ── mobile layout ────────────────────────────────────── */
+  // On phones the three-pane shell collapses to a single pane: the sidebar
+  // becomes a slide-over drawer, the list fills the screen, and TaskDetail
+  // renders full-screen (see TaskDetail). Desktop is unaffected.
+  const isMobile = useIsMobile();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Close the drawer whenever the active view changes — i.e. after the user
+  // taps a project / smart view / label inside it.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [activeView, isMobile]);
+
   /* ── search ───────────────────────────────────────────── */
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -252,7 +285,10 @@ export function Shell() {
   };
 
   /* ── window drag ──────────────────────────────────────── */
+  // Desktop-only: drag the frameless window by its header. There's no window
+  // chrome to drag on mobile, so this is a no-op there.
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
+    if (isMobilePlatform()) return;
     const target = e.target as HTMLElement;
     if (target.closest('input, button, a, [role="button"], textarea, select')) return;
     getCurrentWindow().startDragging().catch(() => {});
@@ -314,18 +350,31 @@ export function Shell() {
             />
             <div className="flex min-h-0 min-w-0 flex-1">
               {currentView ? (
-                // Key each view by its localId so switching views remounts the
-                // component instead of reusing per-view state (filter, collapsed
-                // columns, edit drafts) seeded in useState initializers.
-                currentView.viewKind === 'kanban' ? (
-                  <KanbanBoard key={currentView.localId} view={currentView} project={project} />
-                ) : currentView.viewKind === 'table' ? (
-                  <TableView key={currentView.localId} project={project} view={currentView} />
-                ) : currentView.viewKind === 'gantt' ? (
-                  <GanttView key={currentView.localId} project={project} view={currentView} />
-                ) : (
-                  <TaskList key={currentView.localId} project={project} view={currentView} />
-                )
+                // Kanban/Table/Gantt are lazy-loaded — wrap in Suspense so the
+                // chunk fetch shows a subtle placeholder instead of an empty
+                // pane. TaskList is eager but harmless to nest here.
+                <Suspense
+                  fallback={
+                    <section className="flex flex-1 items-center justify-center p-8">
+                      <p className="text-sm text-[var(--color-muted-foreground)]">
+                        Loading…
+                      </p>
+                    </section>
+                  }
+                >
+                  {/* Key each view by its localId so switching views remounts the
+                      component instead of reusing per-view state (filter, collapsed
+                      columns, edit drafts) seeded in useState initializers. */}
+                  {currentView.viewKind === 'kanban' ? (
+                    <KanbanBoard key={currentView.localId} view={currentView} project={project} />
+                  ) : currentView.viewKind === 'table' ? (
+                    <TableView key={currentView.localId} project={project} view={currentView} />
+                  ) : currentView.viewKind === 'gantt' ? (
+                    <GanttView key={currentView.localId} project={project} view={currentView} />
+                  ) : (
+                    <TaskList key={currentView.localId} project={project} view={currentView} />
+                  )}
+                </Suspense>
               ) : (
                 <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
                   <p className="text-sm text-[var(--color-muted-foreground)]">
@@ -342,13 +391,29 @@ export function Shell() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-x-hidden">
+    <div
+      className={cn(
+        'flex h-full w-full flex-col overflow-x-hidden',
+        isMobile && 'safe-top safe-bottom safe-x',
+      )}
+    >
       {/* Left spacer sits behind macOS traffic lights; programmatic
           drag via getCurrentWindow().startDragging() on mousedown when
           the target isn't an interactive element. */}
       <header onMouseDown={handleHeaderMouseDown} className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
-        <div className="flex-1" />
-        <div className="mx-4 flex flex-1 max-w-md">
+        {isMobile ? (
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open menu"
+            className="-ml-1 shrink-0 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        ) : (
+          <div className="flex-1" />
+        )}
+        <div className={cn('flex flex-1', isMobile ? 'mx-2' : 'mx-4 max-w-md')}>
           <div className="relative w-full">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
             <input
@@ -371,23 +436,67 @@ export function Shell() {
             )}
           </div>
         </div>
-        <div className="flex flex-1 items-center justify-end gap-3">
-          <span className="text-xs text-[var(--color-muted-foreground)]">
-            {displayName}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-            Sign out
-          </Button>
-        </div>
+        {isMobile ? (
+          // Quick Add is keyboard-only (⌘⇧A) on desktop; a phone has no
+          // keyboard, so surface a visible "+" entry point here.
+          <button
+            type="button"
+            onClick={() => setShowQuickAdd(true)}
+            aria-label="Quick add task"
+            className="-mr-1 shrink-0 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        ) : (
+          <div className="flex flex-1 items-center justify-end gap-3">
+            <span className="text-xs text-[var(--color-muted-foreground)]">
+              {displayName}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              Sign out
+            </Button>
+          </div>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <ProjectSidebar />
+        {/* Desktop: sidebar is a permanent left column. Mobile: it lives in
+            the slide-over drawer below instead. */}
+        {!isMobile && <ProjectSidebar />}
 
         <main className="flex min-w-0 flex-1 flex-col">
           {renderMain()}
         </main>
       </div>
+
+      {/* Mobile sidebar drawer — opened by the header hamburger, dismissed by
+          tapping the backdrop or picking a view (see the effect above). */}
+      {isMobile && mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 flex"
+          role="dialog"
+          aria-label="Navigation"
+          aria-modal="true"
+        >
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <div className="safe-top safe-bottom relative flex h-full w-[18rem] max-w-[85vw] flex-col bg-[var(--color-card)] shadow-xl">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ProjectSidebar />
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-3 py-2">
+              <span className="truncate text-xs text-[var(--color-muted-foreground)]">
+                {displayName}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+                Sign out
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="flex select-none items-center justify-between border-t border-[var(--color-border)] bg-[var(--color-background)] px-4 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
         <div className="flex items-center gap-2">
@@ -450,14 +559,26 @@ export function Shell() {
       </footer>
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
-      {showQuickAdd && <QuickAddModal onClose={() => setShowQuickAdd(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {/* Lazy modals — null fallback is fine; they animate in on open, so a
+          brief invisible gap while the chunk loads is imperceptible. */}
+      {showQuickAdd && (
+        <Suspense fallback={null}>
+          <QuickAddModal onClose={() => setShowQuickAdd(false)} />
+        </Suspense>
+      )}
+      {showSettings && (
+        <Suspense fallback={null}>
+          <SettingsModal onClose={() => setShowSettings(false)} />
+        </Suspense>
+      )}
       {showCommandPalette && (
-        <CommandPalette
-          onClose={() => setShowCommandPalette(false)}
-          onOpenQuickAdd={() => setShowQuickAdd(true)}
-          onOpenSettings={() => setShowSettings(true)}
-        />
+        <Suspense fallback={null}>
+          <CommandPalette
+            onClose={() => setShowCommandPalette(false)}
+            onOpenQuickAdd={() => setShowQuickAdd(true)}
+            onOpenSettings={() => setShowSettings(true)}
+          />
+        </Suspense>
       )}
       <UndoToasts />
       </div>

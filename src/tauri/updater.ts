@@ -9,6 +9,7 @@
 
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { isMobilePlatform } from '@/lib/platform';
 
 export interface AvailableUpdate {
   version: string;
@@ -27,6 +28,9 @@ export interface AvailableUpdate {
  * should catch and treat as "no update right now."
  */
 export async function checkForUpdate(): Promise<AvailableUpdate | null> {
+  // iOS/Android update through their app stores, not Tauri's updater (which
+  // isn't compiled on mobile). Always report "no update available."
+  if (isMobilePlatform()) return null;
   const update = await check();
   if (!update) return null;
   return {
@@ -45,6 +49,7 @@ export async function checkForUpdate(): Promise<AvailableUpdate | null> {
  * can't be reused. Callers should re-check on next launch if needed.
  */
 export async function installUpdate(update: AvailableUpdate): Promise<void> {
+  if (isMobilePlatform()) return;
   await update.inner.downloadAndInstall();
   await relaunch();
 }

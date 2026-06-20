@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/cn';
 import { isPermissionGranted, requestPermission } from '@/tauri/notification';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
+import { isMobilePlatform } from '@/lib/platform';
 import { openNotificationSettings } from '@/utils/notify';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { invoke } from '@tauri-apps/api/core';
@@ -22,6 +23,8 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
+  // Tray, launch-at-login and the self-updater are desktop-only features.
+  const isDesktop = !isMobilePlatform();
   const status = useAuth((s) => s.status);
   const signOut = useAuth((s) => s.signOut);
   const { data: user } = useCurrentUser();
@@ -421,6 +424,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             <section>
               <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Advanced</h3>
               <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
+                {isDesktop && (
+                <>
                 <div className="flex items-center justify-between">
                   <Label>Launch at login</Label>
                   <button
@@ -519,6 +524,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     )}
                   </>
                 )}
+                </>
+                )}
                 <div className="flex items-center justify-between">
                   <Label>CalDAV Documentation</Label>
                   <button
@@ -529,6 +536,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     Open <ExternalLink className="h-3 w-3" />
                   </button>
                 </div>
+                {isDesktop && (
                 <div className="flex items-center justify-between">
                   <Label>Updates</Label>
                   <div className="flex items-center gap-2">
@@ -551,6 +559,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </Button>
                   </div>
                 </div>
+                )}
                 <div className="flex items-center justify-between text-xs text-[var(--color-muted-foreground)]">
                   <span>Version</span>
                   <span>

@@ -3,8 +3,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startOfDay, isAfter } from 'date-fns';
 import { listTasksWithDueDate } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
+import { isMobilePlatform } from '@/lib/platform';
 
 async function setDockBadge(n: number): Promise<void> {
+  // No dock/taskbar on mobile — the app-icon badge is driven by the OS
+  // notification system there, not the window. Skip to avoid noisy warnings.
+  if (isMobilePlatform()) return;
   try {
     // Tauri v2: the badge lives on the window (Dock on macOS, taskbar
     // overlay on Windows). `undefined` clears it. Wrapped in try/catch so
@@ -36,7 +40,10 @@ export function useDockBadge(): void {
   const { data: count = 0 } = useQuery<number>({
     queryKey: ['badge', 'due-count'],
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // No dock badge on mobile (see setDockBadge), so the timer is pure waste
+    // there — rely on `tasks` bus invalidation instead. Desktop keeps the 60s
+    // tick so a midnight day-rollover updates the badge without interaction.
+    refetchInterval: isMobilePlatform() ? false : 60_000,
     queryFn: async () => {
       const all = await listTasksWithDueDate(); // incomplete, has due_date
       const today = startOfDay(new Date());

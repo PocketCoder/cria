@@ -40,7 +40,9 @@ export function useTasksWithAttachments() {
   return useQuery<Set<string>>({
     queryKey: ['attachments', 'ids'],
     staleTime: 30_000,
-    refetchInterval: 30_000, // catch attachments added by a background pull
+    // No polling: the `tasks` subscription above already invalidates this when
+    // a background pull mirrors new attachments, so the 30s tick was redundant
+    // (and battery/IO on mobile).
     queryFn: async () => new Set(await listTaskLocalIdsWithAttachments()),
   });
 }
