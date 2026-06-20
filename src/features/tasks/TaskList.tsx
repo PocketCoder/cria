@@ -32,11 +32,13 @@ import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { Check, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, Filter, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
+import { useFilterSort } from '@/stores/filterSort';
+import { SORT_OPTIONS, type SortRule } from '@/lib/sortEngine';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import { TaskHoverPreview } from './TaskHoverPreview';
@@ -73,12 +75,28 @@ interface TaskListProps {
 }
 
 export function TaskList({ project, view }: TaskListProps) {
+  const {
+    filterQuery,
+    sortRule,
+    showFilterBar,
+    showSortMenu,
+    setFilterQuery,
+    setSortRule,
+    setShowFilterBar,
+    setShowSortMenu,
+  } = useFilterSort();
+
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project);
+    useProjectTasks(project, filterQuery || undefined, sortRule);
 
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filterDraft, setFilterDraft] = useState(filterQuery);
+
+  useEffect(() => {
+    setFilterDraft(filterQuery);
+  }, [filterQuery]);
 
   // Tasks queued for deletion are hidden immediately while the undo
   // toast is live (issue #25). They're still deleted=0 in the DB until
@@ -300,15 +318,110 @@ export function TaskList({ project, view }: TaskListProps) {
   return (
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         {reorderError && <ReorderErrorPill onClose={() => setReorderError(false)} />}
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
-        <span>
-          {activeTasks.length === 0 && completedTasks.length === 0
-            ? isLoading
-              ? 'Loading…'
-              : 'No tasks'
-            : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
-        </span>
-        {isFetching ? <span aria-live="polite">syncing…</span> : null}
+      <div className="border-b border-[var(--color-border)]">
+        <div className="flex items-center justify-between px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
+          <div className="flex items-center gap-2">
+            <span>
+              {activeTasks.length === 0 && completedTasks.length === 0
+                ? isLoading
+                  ? 'Loading…'
+                  : 'No tasks'
+                : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
+            </span>
+            <button
+              onClick={() => { setShowFilterBar(!showFilterBar); setShowSortMenu(false); }}
+              className={cn(
+                'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer',
+                showFilterBar || filterQuery
+                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                  : 'hover:bg-[var(--color-accent)]/10',
+              )}
+              title="Filter tasks"
+            >
+              <Filter className="h-3 w-3" />
+              {filterQuery ? 'Filtered' : 'Filter'}
+            </button>
+            <button
+              onClick={() => { setShowSortMenu(!showSortMenu); setShowFilterBar(false); }}
+              className={cn(
+                'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer',
+                showSortMenu || sortRule
+                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                  : 'hover:bg-[var(--color-accent)]/10',
+              )}
+              title="Sort tasks"
+            >
+              <ArrowUpDown className="h-3 w-3" />
+              {sortRule
+                ? SORT_OPTIONS.find((o) => o.field === sortRule.field && o.direction === sortRule.direction)?.label ?? 'Sorted'
+                : 'Sort'}
+            </button>
+          </div>
+          {isFetching ? <span aria-live="polite">syncing…</span> : null}
+        </div>
+
+        {showFilterBar ? (
+          <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-6 py-1.5">
+            <input
+              type="text"
+              value={filterDraft}
+              onChange={(e) => setFilterDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setFilterQuery(filterDraft);
+                } else if (e.key === 'Escape') {
+                  setFilterDraft(filterQuery);
+                  setShowFilterBar(false);
+                }
+              }}
+              placeholder='e.g. priority >= 3 && dueDate <= now'
+              className="flex-1 bg-transparent text-xs placeholder-[var(--color-muted-foreground)] focus:outline-none"
+              autoFocus
+            />
+            <button
+              onClick={() => { setFilterQuery(filterDraft); }}
+              className="rounded px-2 py-0.5 text-xs bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              Apply
+            </button>
+            <button
+              onClick={() => {
+                setFilterDraft('');
+                setFilterQuery('');
+                setShowFilterBar(false);
+              }}
+              className="rounded px-1.5 py-0.5 text-xs hover:bg-[var(--color-accent)]/10 transition-colors cursor-pointer"
+              title="Clear filter"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : null}
+
+        {showSortMenu ? (
+          <div className="border-t border-[var(--color-border)] px-6 py-1.5">
+            <select
+              value={sortRule ? `${sortRule.field}:${sortRule.direction}` : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) {
+                  setSortRule(null);
+                } else {
+                  const [field, dir] = val.split(':') as [SortRule['field'], SortRule['direction']];
+                  setSortRule({ field, direction: dir });
+                }
+              }}
+              className="w-full text-xs bg-transparent border border-[var(--color-border)] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+            >
+              <option value="">Default order</option>
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.label} value={`${opt.field}:${opt.direction}`}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
 
       {/* Inline create — natural-language parsing on the title field

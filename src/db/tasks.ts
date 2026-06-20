@@ -68,6 +68,10 @@ const SELECT_TASK_COLS = `
   position, is_favorite, is_subscribed, repeat_after, repeat_mode,
   updated_at, created_at, created_by_id, identifier`;
 
+const SELECT_TASK_COLS_T = SELECT_TASK_COLS.split(',')
+  .map((col) => `t.${col.trim()}`)
+  .join(',');
+
 export async function listTasksForProject(
   projectLocalId: string,
 ): Promise<Task[]> {
@@ -84,6 +88,41 @@ export async function listTasksForProject(
             due_date ASC,
             title COLLATE NOCASE ASC`,
     [projectLocalId],
+  );
+  return rows.map(rowToTask);
+}
+
+const DEFAULT_ORDER_BY = `t.done ASC, t.position IS NULL, t.position ASC, t.due_date IS NULL, t.due_date ASC, t.title COLLATE NOCASE ASC`;
+
+export async function listTasksForProjectFiltered(
+  projectLocalId: string,
+  preFilterDone: boolean,
+  filterWhere?: string,
+  filterParams?: unknown[],
+  orderBy?: string,
+): Promise<Task[]> {
+  const db = await getDb();
+
+  const conditions: string[] = ['t.deleted = 0'];
+  const allParams: unknown[] = [projectLocalId];
+
+  if (preFilterDone) {
+    conditions.push('t.done = 0');
+  }
+
+  if (filterWhere) {
+    conditions.push(`(${filterWhere})`);
+    if (filterParams) allParams.push(...filterParams);
+  }
+
+  const orderClause = orderBy || DEFAULT_ORDER_BY;
+
+  const rows = await db.select<TaskRow[]>(
+    `SELECT ${SELECT_TASK_COLS_T}
+       FROM tasks t
+      WHERE t.project_local_id = ? AND ${conditions.join(' AND ')}
+   ORDER BY ${orderClause}`,
+    allParams,
   );
   return rows.map(rowToTask);
 }
