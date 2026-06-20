@@ -1,6 +1,6 @@
 # Vikunja Desktop Client — Technical Specification
 
-A polished, offline-capable, cross-platform desktop client for [Vikunja](https://vikunja.io), built with Tauri 2 and TypeScript.
+A polished, offline-capable, cross-platform client for [Vikunja](https://vikunja.io) — desktop (macOS / Windows / Linux) and iOS — built with Tauri 2 and TypeScript.
 
 **Codename:** `Cria`.
 
@@ -14,12 +14,12 @@ A polished, offline-capable, cross-platform desktop client for [Vikunja](https:/
 - **Offline-first.** Every read hits a local SQLite database. Every write goes to a local outbox and is replayed against the server when online. The app never blocks on the network for UI interactions.
 - **Sync is invisible when it works, transparent when it doesn't.** No spinners on common actions. Clear UI for conflicts and queued operations.
 - **Small footprint.** Target <15 MB installed, <80 MB RAM idle.
-- **Cross-platform.** macOS (Apple Silicon + Intel), Windows, Linux. Same codebase, native installers.
+- **Cross-platform.** macOS (Apple Silicon + Intel), Windows, Linux, **and iOS** — same codebase, native installers and a native iOS app bundle (see §14 iOS milestone).
 - **Self-host friendly.** Configurable server URL, handles CORS gracefully, no Vikunja Cloud assumptions baked in.
 
 ### Non-goals (v1)
 
-- Mobile (Tauri 2 supports it, but defer)
+- Android (iOS has since shipped — see the §14 iOS milestone; Android is feasible on Tauri 2 but deferred)
 - Real-time multi-user collaboration via WebSocket (Vikunja doesn't expose one)
 - Built-in server-side hosting
 - Custom plugin/extension API
@@ -31,7 +31,7 @@ A polished, offline-capable, cross-platform desktop client for [Vikunja](https:/
 
 | Concern | Choice | Why |
 |---|---|---|
-| Shell | **Tauri 2.x** | Native webview, ~10 MB bundles, sandboxed, mobile-ready later |
+| Shell | **Tauri 2.x** | Native webview, ~10 MB bundles, sandboxed, one codebase for desktop + iOS |
 | UI framework | **React 18** + TypeScript | Largest ecosystem, best Tauri plugin docs, easiest hiring |
 | Bundler | **Vite** | Tauri's default, fast HMR |
 | Router | **TanStack Router** | Type-safe routes, built-in search params, integrates with TanStack Query |
@@ -584,6 +584,8 @@ The sync engine runs in the main webview process (no separate worker needed for 
 
 All triggers funnel through a single scheduler that ensures only one sync cycle runs at a time per type.
 
+**Mobile lifecycle.** On iOS the periodic-sync and reminder loops pause while the app is backgrounded — JS timers don't run reliably in the background and would waste battery/cellular — gated on `isPageVisible()` ([src/lib/visibility.ts](src/lib/visibility.ts)). They resume on `visibilitychange`, which also fires an immediate pull. Reminders themselves are handed to the OS as scheduled local notifications (see §10.2), so they still fire when the app is fully closed.
+
 ### 7.7 Real-time considerations
 
 Vikunja has no WebSocket/SSE endpoint as of writing. Options if real-time becomes important later:
@@ -729,6 +731,8 @@ Click for sync details modal.
 
 ## 10. System Integration
 
+> **Platform note.** Tray (§10.1), global shortcuts (§10.3), autostart (§10.4), the updater, and the OS-specific niceties (§10.7) are **desktop-only** — gated off on iOS via `isMobilePlatform()` and the `capabilities/desktop.json` split (those plugins aren't compiled on iOS). Notifications (§10.2) and deep links (§10.5) work on both.
+
 ### 10.1 Tray icon
 
 Optional, opt-in via settings. Shows next task due today, quick-add menu item, sync status. Plugin: `@tauri-apps/plugin-tray-icon` (built into Tauri 2 core).
@@ -737,7 +741,7 @@ Optional, opt-in via settings. Shows next task due today, quick-add menu item, s
 
 Plugin: `@tauri-apps/plugin-notification`.
 
-- Task due reminders (scheduled via local SQLite + a Tauri timer; we don't rely on Vikunja's reminder push since there isn't one)
+- Task due reminders. **Desktop:** a JS timer polls local SQLite and fires them immediately while the app runs. **iOS:** future reminders are registered with the OS via the notification plugin's `Schedule.at`, so they fire even when the app is closed; a reconcile loop keeps the OS's pending set in sync with local reminders ([src/sync/useReminderScheduler.ts](src/sync/useReminderScheduler.ts)). We don't rely on Vikunja's reminder push since there isn't one.
 - Sync failure notifications (rate-limited; one per session)
 - @mention in comments (on next pull cycle)
 
@@ -893,6 +897,9 @@ kanban` or `features/settings` (M9 and later). Filled in by M6+.
   "build:mac-universal": "tauri build --target universal-apple-darwin",
   "build:win": "tauri build --target x86_64-pc-windows-msvc",
   "build:linux": "tauri build",
+  // iOS is driven by the Tauri CLI directly (not a named script):
+  //   pnpm tauri ios dev --host                       — dev on device / simulator
+  //   pnpm tauri ios build --export-method debugging  — standalone signed build
   "generate:api": "openapi-typescript $VK_URL/api/v1/docs.json -o src/api/schema.ts"
 }
 ```
@@ -1046,6 +1053,19 @@ Individually shippable; pulled in by demand:
 - **Comments + @mentions** with notification on next pull
 - **Gantt** view
 - **Per-project notes** — a markdown notebook docked to the sidebar
+
+### iOS support
+
+Cria runs on iPhone from the same codebase — a native Tauri 2 iOS app, not a web wrapper of the desktop UI.
+
+- **Platform seam** — `isMobilePlatform()` (OS capability) vs `useIsMobile()` (viewport breakpoint); desktop-only plugins (tray, global shortcut, autostart, updater, Dock badge) gated off Rust-side (`#[cfg(desktop)]`) and in the JS wrappers; capabilities split into shared `default.json` + desktop-only `desktop.json`.
+- **Responsive shell** — the three-pane layout collapses to a single navigable view ≤768px; drag-and-drop runs on pointer/touch sensors; viewport meta disables input-focus zoom.
+- **Reminders that survive a closed app** — future reminders are scheduled with the OS via the notification plugin's schedule API (a JS timer can't run in the background on iOS); a reconcile loop keeps the OS pending set in sync (see §10.2).
+- **Battery/network hygiene** — background sync/reminder timers pause when the app is backgrounded; polling intervals relaxed on mobile.
+- **Performance pass** (shared with desktop) — code-split heavy views + the TipTap editor behind lazy boundaries, memoised list rows, dropped redundant polling/over-fetch.
+- **CI/CD** — `.github/workflows/ci-ios.yml` compile-checks the iOS Rust shell on native-code changes. Signed iOS distribution is a manual step (`tauri ios build --export-method debugging`) until a paid Apple Developer account + App Store Connect secrets exist; the release workflow stays macOS-only for now (see §12).
+
+**Exit criteria:** the app builds, installs, and runs standalone on a physical iPhone; tasks / projects / views work offline; reminders fire when the app is closed. ✅
 
 ### Daily-driver and polish bars
 
