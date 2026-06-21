@@ -1321,7 +1321,7 @@ async function executeViewOp(
     if (typeof cachedId === 'number') {
       await withTx(async (tx) => {
         await tx.execute(
-          `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          `UPDATE project_views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
           [cachedId, new Date().toISOString(), localId],
         );
         await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
@@ -1345,7 +1345,7 @@ async function executeViewOp(
 
     await withTx(async (tx) => {
       await tx.execute(
-        `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+        `UPDATE project_views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
         [newServerId ?? null, new Date().toISOString(), localId],
       );
       await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);

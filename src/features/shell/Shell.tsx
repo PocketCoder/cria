@@ -74,7 +74,7 @@ export function Shell() {
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
   const projectLocalId = activeView?.kind === 'project' ? activeView.localId : '';
-  const { data: projectViews = [] } = useProjectViews(projectLocalId);
+  const { data: projectViews = [], isPending: viewsPending } = useProjectViews(projectLocalId);
 
   const handleSelectView = (viewLocalId: string) => {
     if (activeView?.kind === 'project') {
@@ -375,6 +375,12 @@ export function Shell() {
                     <TaskList key={currentView.localId} project={project} view={currentView} />
                   )}
                 </Suspense>
+              ) : viewsPending ? (
+                <section className="flex flex-1 items-center justify-center p-8">
+                  <p className="text-sm text-[var(--color-muted-foreground)]">
+                    Loading views…
+                  </p>
+                </section>
               ) : (
                 <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
                   <p className="text-sm text-[var(--color-muted-foreground)]">
