@@ -296,52 +296,80 @@ function DetailCard({
   const isMobile = useIsMobile();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [sheetOffset, setSheetOffset] = useState(0);
-  const sheetDragRef = useRef({ startY: 0, startOffset: 0, dragging: false });
+  const offsetRef = useRef(0);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
-  // Interactive sheet dismiss: pull down to close
+  // Interactive sheet dismiss: pull DOWN from the top to close. It must not
+  // fight the inner scroll, so it only engages when the content is at the top
+  // and the gesture is a decisive *downward* drag (mirrors PullToRefresh's
+  // arbitration). Listeners stay attached for the whole gesture — `sheetOffset`
+  // is intentionally NOT a dep (it changes every move) and onClose is read via
+  // a ref, so the effect never re-runs mid-drag (which was causing the jank).
   useEffect(() => {
     if (!isMobile) return;
     const el = sheetRef.current;
     if (!el) return;
 
+    const THRESHOLD = 8;
+    let startX = 0;
+    let startY = 0;
+    let atTop = false;
+    let dragging = false;
+    let decided = false;
+
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
-      if (el.scrollTop > 0) return; // only when scrolled to top
-      sheetDragRef.current = {
-        startY: e.touches[0]!.clientY,
-        startOffset: 0,
-        dragging: true,
-      };
+      startX = e.touches[0]!.clientX;
+      startY = e.touches[0]!.clientY;
+      atTop = el.scrollTop <= 0;
+      dragging = false;
+      decided = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      const drag = sheetDragRef.current;
-      if (!drag.dragging) return;
-      const dy = e.touches[0]!.clientY - drag.startY;
-      if (dy > 0) {
-        setSheetOffset(dy);
+      if (e.touches.length !== 1) return;
+      if (!dragging) {
+        if (decided || !atTop) return; // a scroll, not a dismiss
+        const dx = e.touches[0]!.clientX - startX;
+        const dy = e.touches[0]!.clientY - startY;
+        if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
+        // Only a downward, vertical drag dismisses; anything else is a scroll.
+        if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) {
+          decided = true;
+          return;
+        }
+        dragging = true;
+        decided = true;
+        startY = e.touches[0]!.clientY; // reset baseline so the offset starts at 0
       }
+      // Committed to a dismiss drag — take over from native scroll.
+      e.preventDefault();
+      const dy = Math.max(0, e.touches[0]!.clientY - startY);
+      offsetRef.current = dy;
+      setSheetOffset(dy);
     };
 
     const onTouchEnd = () => {
-      const drag = sheetDragRef.current;
-      if (!drag.dragging) return;
-      drag.dragging = false;
-      if (sheetOffset > 120) {
-        onClose();
-      }
-      setSheetOffset(0);
+      if (!dragging) return;
+      dragging = false;
+      const dy = offsetRef.current;
+      offsetRef.current = 0;
+      if (dy > 120) onCloseRef.current();
+      else setSheetOffset(0);
     };
 
     el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
     return () => {
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [isMobile, onClose, sheetOffset]);
+  }, [isMobile]);
 
   return (
     <>
