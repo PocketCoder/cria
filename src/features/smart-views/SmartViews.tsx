@@ -1,16 +1,20 @@
 import { useState, useRef, useMemo, useCallback, memo } from 'react';
 import { format } from 'date-fns';
 import { toCalendarDate } from '@/lib/dateFormat';
-import { Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DatePicker } from '@/components/DatePicker';
 import { useUi } from '@/stores/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { createTask, updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
 import { useProjects } from '@/queries/projects';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
+import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { impactComplete, impactDeleted } from '@/utils/haptics';
 import {
   useTodayTasks,
   useUpcomingTasks,
@@ -78,6 +82,10 @@ function SmartView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [projectLocalId, setProjectLocalId] = useState('');
   const submittingRef = useRef(false);
+  const qc = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    await qc.invalidateQueries();
+  }, [qc]);
   // Set default project once projects are loaded
   if (!projectLocalId && projects.length > 0) {
     const first = projects[0];
@@ -168,7 +176,8 @@ function SmartView({
       </header>
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        <PullToRefresh onRefresh={handleRefresh}>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Inline create */}
           <form onSubmit={handleSubmit} className="border-b border-[var(--color-border)] px-6 py-3">
             <div className="flex items-center gap-3">
@@ -276,6 +285,7 @@ function SmartView({
             })
           )}
         </section>
+        </PullToRefresh>
         <TaskDetail />
       </div>
     </>
@@ -307,7 +317,10 @@ export const SmartTaskRow = memo(function SmartTaskRow({
     const nowDone = !task.done;
     try {
       await updateTask(task.localId, { done: nowDone });
-      if (nowDone) playCompletionSound();
+      if (nowDone) {
+        playCompletionSound();
+        impactComplete();
+      }
     } catch (err) {
       console.error('Failed to toggle task:', err);
     }
@@ -321,64 +334,121 @@ export const SmartTaskRow = memo(function SmartTaskRow({
     [enqueueDelete, task],
   );
 
+  const handleSwipeComplete = useCallback(() => {
+    void handleToggle();
+  }, [handleToggle]);
+
+  const handleSwipeDelete = useCallback(() => {
+    enqueueDelete(task);
+    impactDeleted();
+  }, [enqueueDelete, task]);
+
+  const { ref: swipeRef, isSwiping, swipeOffset } = useSwipeGesture<HTMLDivElement>({
+    onComplete: handleSwipeComplete,
+    onDelete: handleSwipeDelete,
+  });
+
+  const handleClick = useCallback(() => {
+    if (!isSwiping) setSelectedTask(task.localId);
+  }, [isSwiping, task.localId, setSelectedTask]);
+
   return (
     <li
       data-task-row=""
-      onClick={() => setSelectedTask(task.localId)}
+      onClick={handleClick}
       className={cn(
-        'group flex cursor-pointer items-start gap-3 border-b border-[var(--color-border)] px-6 py-3 transition-colors hover:bg-[var(--color-accent)]/5',
+        'group flex cursor-pointer items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
         task.done && 'opacity-60',
         selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
       )}
+      style={{ overflow: 'hidden', position: 'relative' }}
     >
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="mt-1 h-4 w-4 cursor-pointer rounded accent-[var(--color-primary)]"
-      />
-      <div className="min-w-0 flex-1">
-        <TaskHoverPreview task={task}>
-          <p
-            className={cn(
-              'truncate text-sm',
-              task.done && 'text-[var(--color-muted-foreground)] line-through',
-            )}
+      {/* Left-side progressive action indicator (left-to-right swipe) */}
+      {(() => {
+        const t = swipeOffset > 0
+          ? Math.min(1, swipeOffset / SWIPE_DELETE_THRESHOLD)
+          : 0;
+        const blend = swipeOffset > SWIPE_COMPLETE_THRESHOLD
+          ? Math.min(1, (swipeOffset - SWIPE_COMPLETE_THRESHOLD) / (SWIPE_DELETE_THRESHOLD - SWIPE_COMPLETE_THRESHOLD))
+          : 0;
+        const r = Math.round(22 + (239 - 22) * blend);
+        const g = Math.round(163 - 163 * blend);
+        const b = Math.round(74 - 74 * blend);
+        const doneOpacity = swipeOffset > 0 ? (swipeOffset < SWIPE_COMPLETE_THRESHOLD ? 1 : Math.max(0, 1 - blend * 1.5)) : 0;
+        const deleteOpacity = swipeOffset > SWIPE_COMPLETE_THRESHOLD ? Math.min(1, (blend - 0.2) / 0.8) : 0;
+        return (
+          <div
+            className="absolute inset-y-0 left-0 flex items-center justify-center text-white text-xs font-medium pointer-events-none"
+            style={{ zIndex: 0, width: `${Math.round(t * SWIPE_DELETE_THRESHOLD)}px` }}
           >
-            {task.title}
-          </p>
-        </TaskHoverPreview>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-          {showProject ? <span>{task.projectTitle}</span> : null}
-          {dueLabel ? <span>{dueLabel}</span> : null}
-          {task.priority > 0 ? (
-            <span aria-label={`Priority ${task.priority}`}>
-              {'!'.repeat(Math.min(5, task.priority))}
+            <span style={{ background: t > 0 ? `rgb(${r} ${g} ${b})` : 'transparent', position: 'absolute', inset: 0 }} />
+            <span className="absolute flex items-center gap-1" style={{ opacity: doneOpacity, transition: 'none' }}>
+              <Check className="h-4 w-4" />
+              Done
             </span>
-          ) : null}
-          {hasAttachments ? (
-            <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-          ) : null}
-          <LabelChips labels={labels} />
-        </div>
-      </div>
-      {task.hexColor ? (
-        <span
-          aria-hidden="true"
-          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-          style={{ background: task.hexColor }}
+            <span className="absolute flex items-center gap-1" style={{ opacity: deleteOpacity, transition: 'none' }}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </span>
+          </div>
+        );
+      })()}
+
+
+      <div
+        ref={swipeRef as React.Ref<HTMLDivElement>}
+        className="flex w-full items-start gap-3 pr-6 py-3"
+        style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
+      >
+        <input
+          type="checkbox"
+          checked={task.done}
+          onChange={handleToggle}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={task.done ? 'Done' : 'Not done'}
+          className="mt-1 h-4 w-4 cursor-pointer rounded accent-[var(--color-primary)]"
         />
-      ) : null}
-      <div className="mt-1 flex items-center gap-1">
-        <button
-          onClick={handleDelete}
-          aria-label="Delete task"
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="min-w-0 flex-1">
+          <TaskHoverPreview task={task}>
+            <p
+              className={cn(
+                'truncate text-sm',
+                task.done && 'text-[var(--color-muted-foreground)] line-through',
+              )}
+            >
+              {task.title}
+            </p>
+          </TaskHoverPreview>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
+            {showProject ? <span>{task.projectTitle}</span> : null}
+            {dueLabel ? <span>{dueLabel}</span> : null}
+            {task.priority > 0 ? (
+              <span aria-label={`Priority ${task.priority}`}>
+                {'!'.repeat(Math.min(5, task.priority))}
+              </span>
+            ) : null}
+            {hasAttachments ? (
+              <Paperclip className="h-3 w-3" aria-label="Has attachments" />
+            ) : null}
+            <LabelChips labels={labels} />
+          </div>
+        </div>
+        {task.hexColor ? (
+          <span
+            aria-hidden="true"
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+            style={{ background: task.hexColor }}
+          />
+        ) : null}
+        <div className="mt-1 flex items-center gap-1">
+          <button
+            onClick={handleDelete}
+            aria-label="Delete task"
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </li>
   );

@@ -32,7 +32,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--color-background)] rounded-lg shadow-lg w-11/12 max-w-2xl max-h-[80vh] overflow-auto p-4">
+      <div className="glass-surface rounded-lg shadow-lg w-11/12 max-w-2xl max-h-[80vh] overflow-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Pending Mutations</h2>
           <button onClick={onClose} className="text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-primary)]">

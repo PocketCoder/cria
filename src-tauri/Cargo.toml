@@ -25,6 +25,8 @@ tauri-plugin-http = "2"
 tauri-plugin-opener = "2"
 # Platform detection (used by the frontend via @tauri-apps/plugin-os).
 tauri-plugin-os = "2"
+# Mobile haptic feedback (iOS/Android only; no-op on desktop inside the plugin).
+tauri-plugin-haptics = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }

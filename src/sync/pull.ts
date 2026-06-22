@@ -248,7 +248,6 @@ export async function pullCommentsForTask(
       if (p.success) valid.push(p.data);
     }
     await replaceTaskCommentsFromServer(taskLocalId, valid);
-    notify('tasks');
   } catch (err) {
     console.warn('[pullCommentsForTask] failed:', err);
   }

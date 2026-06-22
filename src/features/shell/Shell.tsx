@@ -55,10 +55,12 @@ import { useOutboxCount } from '@/queries/outbox';
 import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
+import { SpecularTracker } from '@/components/SpecularTracker';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
-import { Menu, Plus, Search, Settings, X } from 'lucide-react';
+import { TabBar } from './TabBar';
+import { Search, Settings, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -111,21 +113,15 @@ export function Shell() {
     );
 
 
-  // Track previous counts to fire notifications only on transition
-  const prevOutbox = useRef<number>(outboxCount);
+  // Notify only on sync conflicts (not routine outbox drain)
   const prevConflicts = useRef<number>(conflictCount);
 
-  // Notification side‑effects
   useEffect(() => {
-    if (prevOutbox.current === 0 && outboxCount > 0) {
-      nativeNotify('Sync pending', `${outboxCount} mutation(s) awaiting upload`);
-    }
     if (prevConflicts.current === 0 && conflictCount > 0) {
       nativeNotify('Conflicts detected', `${conflictCount} conflict(s) need your attention`);
     }
-    prevOutbox.current = outboxCount;
     prevConflicts.current = conflictCount;
-  }, [outboxCount, conflictCount]);
+  }, [conflictCount]);
 
   // Tray icon quick-add
   useEffect(() => {
@@ -174,7 +170,23 @@ export function Shell() {
     };
   }, []);
 
-    const [showOutbox, setShowOutbox] = useState(false);
+    const [headerScrolled, setHeaderScrolled] = useState(false);
+  const scrollSentinelRef = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver to detect when the main content has been scrolled
+  // past the top — we toggle .scrolled on the header to increase glass opacity.
+  useEffect(() => {
+    const sentinel = scrollSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeaderScrolled(!entry?.isIntersecting),
+      { rootMargin: '-1px 0px 0px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
+  const [showOutbox, setShowOutbox] = useState(false);
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -182,16 +194,10 @@ export function Shell() {
 
   /* ── mobile layout ────────────────────────────────────── */
   // On phones the three-pane shell collapses to a single pane: the sidebar
-  // becomes a slide-over drawer, the list fills the screen, and TaskDetail
-  // renders full-screen (see TaskDetail). Desktop is unaffected.
+  // opens as a bottom sheet via TabBar, the list fills the screen, and
+  // TaskDetail renders full-screen (see TaskDetail). Desktop is unaffected.
   const isMobile = useIsMobile();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  // Close the drawer whenever the active view changes — i.e. after the user
-  // taps a project / smart view / label inside it.
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [activeView, isMobile]);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   /* ── search ───────────────────────────────────────────── */
   const [searchQuery, setSearchQuery] = useState('');
@@ -275,6 +281,7 @@ export function Shell() {
     setSearchQuery('');
     setActiveView(prevViewRef.current);
     prevViewRef.current = null;
+    setMobileSearchOpen(false);
     searchInputRef.current?.focus();
   };
 
@@ -293,6 +300,23 @@ export function Shell() {
     if (target.closest('input, button, a, [role="button"], textarea, select')) return;
     getCurrentWindow().startDragging().catch(() => {});
   };
+
+  function getViewTitle(): string {
+    if (!activeView) return 'Cria';
+    switch (activeView.kind) {
+      case 'today': return 'Today';
+      case 'upcoming': return 'Upcoming';
+      case 'inbox': return 'Inbox';
+      case 'favorites': return 'Favorites';
+      case 'search': return 'Search';
+      case 'label':
+        return 'Label';
+      case 'project': {
+        const proj = projects.find((proj) => proj.localId === activeView.localId);
+        return proj?.title ?? 'Project';
+      }
+    }
+  }
 
   function renderMain() {
     if (!activeView) {
@@ -403,55 +427,56 @@ export function Shell() {
         isMobile && 'safe-top safe-bottom safe-x',
       )}
     >
+      <SpecularTracker />
       {/* Left spacer sits behind macOS traffic lights; programmatic
           drag via getCurrentWindow().startDragging() on mousedown when
           the target isn't an interactive element. */}
-      <header onMouseDown={handleHeaderMouseDown} className="flex select-none items-center border-b border-[var(--color-border)] px-4 py-2">
+      <header onMouseDown={handleHeaderMouseDown} className={cn('glass-surface flex select-none items-center border-b px-4 py-2', headerScrolled && 'scrolled')}>
         {isMobile ? (
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen(true)}
-            aria-label="Open menu"
-            className="-ml-1 shrink-0 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="flex flex-1 items-center gap-2">
+            <h1 className={headerScrolled ? 'nav-title-small' : 'nav-title-large'}>
+              {getViewTitle()}
+            </h1>
+          </div>
         ) : (
           <div className="flex-1" />
         )}
-        <div className={cn('flex flex-1', isMobile ? 'mx-2' : 'mx-4 max-w-md')}>
-          <div className="relative w-full">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onFocus={handleSearchFocus}
-              onKeyDown={handleSearchKeyDown}
-              placeholder="Search tasks…  ⌘F"
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-9 pr-8 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-            />
-            {searchQuery && (
-              <button
-                onClick={handleSearchClear}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+        {isMobile ? null : (
+          <div className="mx-4 flex max-w-md flex-1">
+            <div className="relative w-full">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={handleSearchFocus}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search tasks…  ⌘F"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-9 pr-8 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+              />
+              {searchQuery && (
+                <button
+                  onClick={handleSearchClear}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {isMobile ? (
-          // Quick Add is keyboard-only (⌘⇧A) on desktop; a phone has no
-          // keyboard, so surface a visible "+" entry point here.
           <button
             type="button"
-            onClick={() => setShowQuickAdd(true)}
-            aria-label="Quick add task"
+            aria-label="Search"
+            onClick={() => {
+              setMobileSearchOpen(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
             className="-mr-1 shrink-0 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
           >
-            <Plus className="h-5 w-5" />
+            <Search className="h-5 w-5" />
           </button>
         ) : (
           <div className="flex flex-1 items-center justify-end gap-3">
@@ -471,98 +496,71 @@ export function Shell() {
         {!isMobile && <ProjectSidebar />}
 
         <main className="flex min-w-0 flex-1 flex-col">
+          <div ref={scrollSentinelRef} className="pointer-events-none h-px w-full shrink-0" />
           {renderMain()}
         </main>
       </div>
 
-      {/* Mobile sidebar drawer — opened by the header hamburger, dismissed by
-          tapping the backdrop or picking a view (see the effect above). */}
-      {isMobile && mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-40 flex"
-          role="dialog"
-          aria-label="Navigation"
-          aria-modal="true"
-        >
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileNavOpen(false)}
-          />
-          <div className="safe-top safe-bottom relative flex h-full w-[18rem] max-w-[85vw] flex-col bg-[var(--color-card)] shadow-xl">
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <ProjectSidebar />
-            </div>
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-3 py-2">
-              <span className="truncate text-xs text-[var(--color-muted-foreground)]">
-                {displayName}
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-                Sign out
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <footer className="flex select-none items-center justify-between border-t border-[var(--color-border)] bg-[var(--color-background)] px-4 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              'h-2 w-2 rounded-full transition-colors duration-300',
-              !isOnline ? 'bg-red-500 animate-pulse' : outboxCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
-            )}
-          />
-           <span>
-             {!isOnline
-               ? 'Offline'
-               : outboxCount > 0
-               ? (
-                   <button
-                     className="underline"
-                     onClick={() => setShowOutbox(true)}
-                   >
-                     Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
-                   </button>
-                 )
-               : conflictCount > 0
-               ? (
-                   <button
-                     className="underline"
-                     onClick={() => setShowConflicts(true)}
-                   >
-                     {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
-                   </button>
-                 )
-               : 'Synced with server'}
-           </span>
-           {deadLetterCount > 0 && (
-             <button
-               className="ml-2 flex items-center gap-1 text-red-500 underline"
-               onClick={() => setShowOutbox(true)}
-             >
-               <span className="h-2 w-2 rounded-full bg-red-500" />
-               {deadLetterCount} failed to sync
-             </button>
-           )}
-         </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-            aria-label="Settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-          {/* Update banner moved to App.tsx so it's visible pre-auth
-              too — see the comment there. Keeping just the version
-              label here. */}
-          <span>
-            Cria {pkg.version}
-            {serverVersion ? <span className="ml-2 text-[var(--color-muted-foreground)]">· {serverVersion}</span> : null}
-          </span>
-        </div>
-      </footer>
+
+      {!isMobile && (
+        <footer className="glass-surface flex select-none items-center justify-between border-t px-4 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                'h-2 w-2 rounded-full transition-colors duration-300',
+                !isOnline ? 'bg-red-500 animate-pulse' : outboxCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
+              )}
+            />
+             <span>
+               {!isOnline
+                 ? 'Offline'
+                 : outboxCount > 0
+                 ? (
+                     <button
+                       className="underline"
+                       onClick={() => setShowOutbox(true)}
+                     >
+                       Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
+                     </button>
+                   )
+                 : conflictCount > 0
+                 ? (
+                     <button
+                       className="underline"
+                       onClick={() => setShowConflicts(true)}
+                     >
+                       {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
+                     </button>
+                   )
+                 : 'Synced with server'}
+             </span>
+             {deadLetterCount > 0 && (
+               <button
+                 className="ml-2 flex items-center gap-1 text-red-500 underline"
+                 onClick={() => setShowOutbox(true)}
+               >
+                 <span className="h-2 w-2 rounded-full bg-red-500" />
+                 {deadLetterCount} failed to sync
+               </button>
+             )}
+           </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+              aria-label="Settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+            <span>
+              Cria {pkg.version}
+              {serverVersion ? <span className="ml-2 text-[var(--color-muted-foreground)]">· {serverVersion}</span> : null}
+            </span>
+          </div>
+        </footer>
+      )}
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
       {/* Lazy modals — null fallback is fine; they animate in on open, so a
@@ -587,6 +585,48 @@ export function Shell() {
         </Suspense>
       )}
       <UndoToasts />
+
+      {/* Mobile search overlay */}
+      {isMobile && mobileSearchOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-background)] safe-top">
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search tasks…"
+                autoFocus
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-input)] py-2 pl-9 pr-4 text-base focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileSearchOpen(false);
+                handleSearchClear();
+              }}
+              className="shrink-0 text-sm text-[var(--color-primary)]"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {searchQuery.trim() ? (
+              <SearchView query={searchQuery} />
+            ) : (
+              <div className="flex items-center justify-center p-8 text-sm text-[var(--color-muted-foreground)]">
+                Type to search tasks
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <TabBar onOpenQuickAdd={() => setShowQuickAdd(true)} />
       </div>
   );
 }

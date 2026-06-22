@@ -39,6 +39,7 @@ export function TaskDetail() {
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [copied, setCopied] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     return subscribe('tasks', () => {
@@ -74,8 +75,10 @@ export function TaskDetail() {
   //  - on another task row — let the row's own click swap the card's
   //    contents in place instead of close-then-reopen (no re-animation).
   // pointerdown (not click) so dismissal feels immediate.
+  // On mobile (sheet), click-away is replaced by interactive swipe-down.
   useEffect(() => {
     if (!selectedId) return;
+    if (isMobile) return; // sheet uses swipe-down dismiss instead
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target instanceof Element ? e.target : null;
       if (!target) return;
@@ -291,39 +294,100 @@ function DetailCard({
   children: React.ReactNode;
 }) {
   const isMobile = useIsMobile();
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [sheetOffset, setSheetOffset] = useState(0);
+  const sheetDragRef = useRef({ startY: 0, startOffset: 0, dragging: false });
+
+  // Interactive sheet dismiss: pull down to close
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = sheetRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (el.scrollTop > 0) return; // only when scrolled to top
+      sheetDragRef.current = {
+        startY: e.touches[0]!.clientY,
+        startOffset: 0,
+        dragging: true,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const drag = sheetDragRef.current;
+      if (!drag.dragging) return;
+      const dy = e.touches[0]!.clientY - drag.startY;
+      if (dy > 0) {
+        setSheetOffset(dy);
+      }
+    };
+
+    const onTouchEnd = () => {
+      const drag = sheetDragRef.current;
+      if (!drag.dragging) return;
+      drag.dragging = false;
+      if (sheetOffset > 120) {
+        onClose();
+      }
+      setSheetOffset(0);
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd);
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isMobile, onClose, sheetOffset]);
+
   return (
-    <aside
-      ref={cardRef}
-      role="dialog"
-      aria-label="Task details"
-      className={cn(
-        'flex flex-col overflow-hidden bg-[var(--color-card)]',
-        isMobile
-          ? // Full-screen sheet on a phone — no room for a docked column.
-            // safe-* keeps the header/content clear of the notch + home bar.
-            'fixed inset-0 z-40 safe-top safe-bottom safe-x'
-          : // Right-docked floating inspector on desktop (in-flow flex item).
-            'm-4 w-[420px] max-w-[calc(100%-2rem)] shrink-0 rounded-2xl border border-[var(--color-border)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]',
+    <>
+      {isMobile && (
+        <div className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
       )}
-    >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
-        <div className="min-w-0 flex-1">
-          {header ?? (
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Task
-            </span>
+      <aside
+        ref={cardRef}
+        role="dialog"
+        aria-label="Task details"
+        className={cn(
+          'flex flex-col overflow-hidden',
+          isMobile
+            ? // iOS-style sheet: slides up from bottom with rounded top corners,
+              // a grab handle, and spring animation. Interactive pull-down dismiss.
+              'fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-2xl bg-[var(--color-card)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)] animate-[sheet-up_350ms_var(--spring-snappy)]'
+            : // Right-docked floating inspector on desktop (in-flow flex item).
+              'glass-surface glass-specular relative m-4 w-[420px] max-w-[calc(100%-2rem)] shrink-0 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]',
+        )}
+        style={isMobile && sheetOffset > 0 ? { transform: `translateY(${sheetOffset}px)`, transition: 'none' } : undefined}
+      >
+        <div ref={sheetRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {isMobile && (
+            // Grab handle for interactive sheet dismiss
+            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
           )}
+          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              {header ?? (
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  Task
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close details"
+              className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
+          {children}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close details"
-          className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </header>
-      {children}
-    </aside>
+      </aside>
+    </>
   );
 }

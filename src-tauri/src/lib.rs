@@ -290,6 +290,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_haptics::init())
         .setup(|_app| {
             #[cfg(desktop)]
             setup_tray(_app)?;

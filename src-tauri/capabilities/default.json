@@ -38,6 +38,7 @@
         { "url": "mailto:**" }
       ]
     },
-    "os:default"
+    "os:default",
+    "haptics:default"
   ]
 }

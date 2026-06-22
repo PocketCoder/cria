@@ -32,19 +32,19 @@
 
 @media (prefers-color-scheme: dark) {
   @theme {
-    --color-background: oklch(18% 0.015 250);
+    --color-background: oklch(12% 0 0);
     --color-foreground: oklch(96% 0.005 240);
-    --color-muted: oklch(24% 0.015 250);
-    --color-muted-foreground: oklch(70% 0.02 240);
-    --color-card: oklch(22% 0.015 250);
+    --color-muted: oklch(20% 0.005 250);
+    --color-muted-foreground: oklch(65% 0.02 240);
+    --color-card: oklch(16% 0.005 250);
     --color-card-foreground: oklch(96% 0.005 240);
-    --color-border: oklch(30% 0.015 250);
-    --color-input: oklch(28% 0.015 250);
+    --color-border: oklch(26% 0.01 250);
+    --color-input: oklch(22% 0.01 250);
     --color-ring: oklch(72% 0.18 250);
     --color-primary: oklch(72% 0.18 250);
-    --color-primary-foreground: oklch(18% 0.015 250);
+    --color-primary-foreground: oklch(12% 0 0);
     --color-accent: oklch(72% 0.18 250);
-    --color-accent-foreground: oklch(18% 0.015 250);
+    --color-accent-foreground: oklch(12% 0 0);
   }
 }
 
@@ -123,6 +123,185 @@ body {
   }
 }
 
+/* ── iOS spring curves ────────────────────────────────── */
+:root {
+  --spring-snappy: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── iOS-style large title ────────────────────────────── */
+.nav-title-large {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  transition: font-size 200ms var(--spring-snappy),
+              line-height 200ms var(--spring-snappy);
+}
+.nav-title-small {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.3;
+  transition: font-size 200ms var(--spring-snappy),
+              line-height 200ms var(--spring-snappy);
+}
+
+/* ── iOS tab bar glass ────────────────────────────────── */
+.glass-tab-bar {
+  background: oklch(99% 0 0 / 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 0.5px solid var(--glass-border);
+}
+.dark .glass-tab-bar {
+  background: oklch(18% 0.015 250 / 0.85);
+}
+
+/* Tab bar item — iOS-style active state indicator */
+.tab-item {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.tab-item.active .tab-icon {
+  color: var(--color-primary);
+}
+.tab-item.active .tab-label {
+  color: var(--color-primary);
+}
+
+/* ── iOS sheet entrance ───────────────────────────────── */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sheet-backdrop {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 200ms ease-out;
+}
+
+/* ── iOS inset grouped list ───────────────────────────── */
+.inset-list {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-card);
+}
+.inset-list > li:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Liquid Glass tokens (iOS-material tuned) ─────────── */
+:root {
+  --glass-bg: oklch(99% 0 0 / 0.72);
+  --glass-bg-dark: oklch(22% 0.015 250 / 0.78);
+  --glass-blur: 12px;
+  --glass-border: oklch(90% 0.005 240 / 0.5);
+}
+
+.dark {
+  --glass-bg: oklch(16% 0.005 250 / 0.78);
+  --glass-bg-dark: oklch(99% 0 0 / 0.6);
+}
+
+/* Glass surface utility — semi-transparent bg + backdrop blur + subtle
+   border. Apply to any surface that should look like Liquid Glass. */
+.glass-surface {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+/* Nav-specific glass (sidebars, persistent headers). Tuned for
+   high-contrast labels on top of blur. */
+.glass-nav {
+  background: var(--glass-bg);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.2));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.2));
+  border-right: 1px solid var(--glass-border);
+}
+
+/* Register --sheen-angle as an animatable angle so both JS pointer tracking
+   and the mobile sweep animation can interpolate it smoothly. */
+@property --sheen-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 180deg;
+}
+
+/* Specular sheen pseudo-element — applied via ::after on glass surfaces.
+   A conic-gradient that gives the glass a glossy highlight. The
+   --sheen-angle (set by JS pointer tracking — Phase 5) makes it
+   interactive on desktop; on mobile/touch it uses the CSS animation. */
+.glass-specular::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: conic-gradient(
+    from calc(var(--sheen-angle) - 30deg) at 50% 0%,
+    transparent 0deg,
+    oklch(100% 0 0 / 0.08) 45deg,
+    transparent 90deg
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Scrolled-state glass — increased opacity + blur for surfaces that
+   gain visual weight when the page is scrolled (headers, nav). Applied
+   by JS toggling `.scrolled` on the element. */
+.glass-surface.scrolled,
+.glass-nav.scrolled {
+  background: oklch(98% 0 0 / 0.88);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5));
+  border-color: oklch(80% 0.005 240 / 0.6);
+}
+
+.dark .glass-surface.scrolled,
+.dark .glass-nav.scrolled {
+  background: oklch(25% 0.015 250 / 0.88);
+  border-color: oklch(35% 0.015 250 / 0.6);
+}
+
+/* Specular sheen sweep animation — a looping gradient shift for
+   touch devices where pointer tracking isn't available. */
+@keyframes sheen-sweep {
+  0% { --sheen-angle: 140deg; }
+  50% { --sheen-angle: 220deg; }
+  100% { --sheen-angle: 140deg; }
+}
+
+.glass-sheen-animate::after {
+  animation: sheen-sweep 6s ease-in-out infinite;
+}
+
+/* Refraction effect for sidebars — a subtle horizontal gradient shift
+   that mimics content bending through the glass. */
+.glass-refract {
+  mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 60%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 60%,
+    transparent 100%
+  );
+}
+
 /* Honour reduce-motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -153,19 +332,19 @@ body {
 }
 
 .dark {
-  --color-background: oklch(18% 0.015 250);
+  --color-background: oklch(12% 0 0);
   --color-foreground: oklch(96% 0.005 240);
-  --color-muted: oklch(24% 0.015 250);
-  --color-muted-foreground: oklch(70% 0.02 240);
-  --color-card: oklch(22% 0.015 250);
+  --color-muted: oklch(20% 0.005 250);
+  --color-muted-foreground: oklch(65% 0.02 240);
+  --color-card: oklch(16% 0.005 250);
   --color-card-foreground: oklch(96% 0.005 240);
-  --color-border: oklch(30% 0.015 250);
-  --color-input: oklch(28% 0.015 250);
+  --color-border: oklch(26% 0.01 250);
+  --color-input: oklch(22% 0.01 250);
   --color-ring: oklch(72% 0.18 250);
   --color-primary: oklch(72% 0.18 250);
-  --color-primary-foreground: oklch(18% 0.015 250);
+  --color-primary-foreground: oklch(12% 0 0);
   --color-accent: oklch(72% 0.18 250);
-  --color-accent-foreground: oklch(18% 0.015 250);
+  --color-accent-foreground: oklch(12% 0 0);
 }
 
 /* TipTap task-list — zero the inner <p> margins so each checked item

@@ -212,7 +212,7 @@ export function ProjectSidebar() {
   };
 
   return (
-    <aside className="flex h-full w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-card)] md:w-52">
+    <aside className="glass-nav flex h-full w-full flex-col md:w-52">
       <nav className="flex-1 overflow-y-auto px-2 pb-3">
         {/* ── Smart Views ── */}
         <div className="mb-1">
@@ -420,7 +420,7 @@ export function ProjectSidebar() {
         </div>
       </nav>
 
-      <footer className="border-t border-[var(--color-border)] px-2 py-2">
+      <footer className="border-t border-[var(--color-border)] bg-[var(--color-muted)]/50 px-2 py-2">
         {creating ? (
           <input
             type="text"

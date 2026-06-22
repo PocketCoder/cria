@@ -256,7 +256,7 @@ export function CommandPalette({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] shadow-xl"
+        className="glass-surface w-full max-w-lg rounded-lg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-[var(--color-border)] px-4 py-3">

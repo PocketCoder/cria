@@ -32,7 +32,7 @@ import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
@@ -43,6 +43,9 @@ import { TaskHoverPreview } from './TaskHoverPreview';
 import { DatePicker } from '@/components/DatePicker';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
+import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { impactComplete, impactReordered, impactDeleted } from '@/utils/haptics';
 
 // Collect a task and all its descendants from the task tree
 function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {
@@ -91,13 +94,17 @@ export function TaskList({ project, view }: TaskListProps) {
   // a different project than the one currently open.
   const { data: allProjects = [] } = useProjects();
   const qc = useQueryClient();
-
-  const { data: subtaskMap = new Map() } = useQuery({
+  const {
+    data: subtaskMap = new Map()
+  } = useQuery({
     queryKey: ['subtasks', project.localId],
     queryFn: () => listSubtaskRelationsForProject(project.localId),
     staleTime: 30_000,
   });
 
+  const handleRefresh = useCallback(async () => {
+    await qc.invalidateQueries();
+  }, [qc]);
   useEffect(() => subscribe('tasks', () => {
     qc.invalidateQueries({ queryKey: ['subtasks', project.localId] });
   }), [qc, project.localId]);
@@ -220,6 +227,7 @@ export function TaskList({ project, view }: TaskListProps) {
         } else {
           await reindexTasks(orderedIds, view.localId);
         }
+        impactReordered();
       } catch (err) {
         console.error('[tasks] failed to reorder task:', err);
         setReorderError(true);
@@ -365,7 +373,8 @@ export function TaskList({ project, view }: TaskListProps) {
           items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="flex-1 overflow-y-auto">
+          <PullToRefresh onRefresh={handleRefresh}>
+          <ul>
             {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
@@ -406,6 +415,7 @@ export function TaskList({ project, view }: TaskListProps) {
               </li>
             ) : null}
           </ul>
+          </PullToRefresh>
         </SortableContext>
         <DragOverlay>
           {activeId ? (
@@ -534,6 +544,34 @@ const TaskRow = memo(function TaskRow({
     [task.dueDate],
   );
 
+  const handleToggle = useCallback(async () => {
+    const nowDone = !task.done;
+    try {
+      await updateTask(task.localId, { done: nowDone });
+      if (nowDone) {
+        playCompletionSound();
+        impactComplete();
+      }
+    } catch (err) {
+      console.error('Failed to update task:', err);
+    }
+  }, [task.localId, task.done]);
+
+  const handleSwipeComplete = useCallback(() => {
+    void handleToggle();
+  }, [handleToggle]);
+
+  const handleSwipeDelete = useCallback(() => {
+    enqueueDelete(task);
+    impactDeleted();
+  }, [enqueueDelete, task]);
+
+  const { ref: swipeRef, isSwiping, swipeOffset } = useSwipeGesture<HTMLDivElement>({
+    onComplete: handleSwipeComplete,
+    onDelete: handleSwipeDelete,
+    disabled: editing,
+  });
+
   const {
     attributes,
     listeners,
@@ -543,23 +581,16 @@ const TaskRow = memo(function TaskRow({
     isDragging,
   } = useSortable({
     id: task.localId,
-    disabled: !sortable || editing,
+    disabled: !sortable || editing || isSwiping,
   });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     paddingLeft: `${24 + depth * 28}px`,
-  };
-
-  const handleToggle = async () => {
-    const nowDone = !task.done;
-    try {
-      await updateTask(task.localId, { done: nowDone });
-      if (nowDone) playCompletionSound();
-    } catch (err) {
-      console.error('Failed to update task:', err);
-    }
+    paddingRight: 0,
+    overflow: 'hidden',
+    position: 'relative',
   };
 
   // Deferred delete: stash the task and show the undo toast. The real
@@ -601,8 +632,7 @@ const TaskRow = memo(function TaskRow({
       {...listeners}
       data-task-row=""
       className={cn(
-        'group flex items-start gap-3 border-b border-[var(--color-border)] py-3 transition-colors hover:bg-[var(--color-accent)]/5',
-        'px-6',
+        'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
         task.done && 'opacity-60',
         selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
         isDragging && 'opacity-40',
@@ -610,107 +640,145 @@ const TaskRow = memo(function TaskRow({
       )}
       onClick={() => { if (!editing) setSelectedTask(task.localId); }}
     >
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
-      />
-      <div className="min-w-0 flex-1">
-        {editing ? (
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => void handleTitleSave()}
-            onKeyDown={handleTitleKeyDown}
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-          />
-        ) : (
-            <TaskHoverPreview task={task}>
-              <p
-                className={cn(
-                  'truncate rounded px-1 py-0.5 text-sm transition-all',
-                  task.done && 'line-through text-[var(--color-muted-foreground)]',
-                )}
-                onDoubleClick={handleTitleEdit}
-                title={task.title}
-              >
-                {task.title}
-              </p>
-            </TaskHoverPreview>
-        )}
-        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-            {task.dueDate ? (
-              <span>Due {dueLabel}</span>
-            ) : null}
-            {hasAttachments ? (
-              <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-            ) : null}
-            {checklist.total > 0 ? (
-              <span className="flex items-center gap-1">
-                {checklist.checked === checklist.total ? (
-                  <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
-                ) : (
-                  <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
-                )}
-                <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
-              </span>
-            ) : null}
-            {task.priority > 0 ? (
-              <span aria-label={`Priority ${task.priority}`}>
-                {'!'.repeat(Math.min(5, task.priority))}
-              </span>
-            ) : null}
-            <LabelChips labels={labels} />
-            {task.percentDone > 0 ? (
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
-                  <span
-                    className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
-                    style={{ width: `${Math.min(100, task.percentDone)}%` }}
-                  />
-                </span>
-                <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
-              </span>
-            ) : null}
-            {task.repeatAfter > 0 ? (
-              <RefreshCw className="h-3 w-3" aria-label="Repeating" />
-            ) : null}
+      {/* Left-side progressive action indicator (left-to-right swipe) */}
+      {(() => {
+        const t = swipeOffset > 0
+          ? Math.min(1, swipeOffset / SWIPE_DELETE_THRESHOLD)
+          : 0;
+        const blend = swipeOffset > SWIPE_COMPLETE_THRESHOLD
+          ? Math.min(1, (swipeOffset - SWIPE_COMPLETE_THRESHOLD) / (SWIPE_DELETE_THRESHOLD - SWIPE_COMPLETE_THRESHOLD))
+          : 0;
+        const r = Math.round(22 + (239 - 22) * blend);
+        const g = Math.round(163 - 163 * blend);
+        const b = Math.round(74 - 74 * blend);
+        const doneOpacity = swipeOffset > 0 ? (swipeOffset < SWIPE_COMPLETE_THRESHOLD ? 1 : Math.max(0, 1 - blend * 1.5)) : 0;
+        const deleteOpacity = swipeOffset > SWIPE_COMPLETE_THRESHOLD ? Math.min(1, (blend - 0.2) / 0.8) : 0;
+        return (
+          <div
+            className="absolute inset-y-0 left-0 flex items-center justify-center text-white text-xs font-medium pointer-events-none"
+            style={{ zIndex: 0, width: `${Math.round(t * SWIPE_DELETE_THRESHOLD)}px` }}
+          >
+            <span style={{ background: t > 0 ? `rgb(${r} ${g} ${b})` : 'transparent', position: 'absolute', inset: 0 }} />
+            <span className="absolute flex items-center gap-1" style={{ opacity: doneOpacity, transition: 'none' }}>
+              <Check className="h-4 w-4" />
+              Done
+            </span>
+            <span className="absolute flex items-center gap-1" style={{ opacity: deleteOpacity, transition: 'none' }}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </span>
           </div>
-        ) : null}
-      </div>
-      {task.hexColor ? (
-        <span
-          aria-hidden="true"
-          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-          style={{ background: task.hexColor }}
+        );
+      })()}
+
+
+      <div
+        ref={swipeRef as React.Ref<HTMLDivElement>}
+        className="flex w-full items-start gap-3 pr-6 py-3"
+        style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
+      >
+        <input
+          type="checkbox"
+          checked={task.done}
+          onChange={handleToggle}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={task.done ? 'Done' : 'Not done'}
+          className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
         />
-      ) : null}
-      {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
-          the title baseline (issue #21). Pencil enters inline rename —
-          the explicit affordance now that single-click on the title
-          opens detail instead of editing (issue #20). */}
-      <div className="mt-1 flex items-center gap-1">
-        <button
-          onClick={handleTitleEdit}
-          aria-label="Rename task"
-          className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={handleDelete}
-          aria-label="Delete task"
-          className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => void handleTitleSave()}
+              onKeyDown={handleTitleKeyDown}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+            />
+          ) : (
+              <TaskHoverPreview task={task}>
+                <p
+                  className={cn(
+                    'truncate rounded px-1 py-0.5 text-sm transition-all',
+                    task.done && 'line-through text-[var(--color-muted-foreground)]',
+                  )}
+                  onDoubleClick={handleTitleEdit}
+                  title={task.title}
+                >
+                  {task.title}
+                </p>
+              </TaskHoverPreview>
+          )}
+          {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
+              {task.dueDate ? (
+                <span>Due {dueLabel}</span>
+              ) : null}
+              {hasAttachments ? (
+                <Paperclip className="h-3 w-3" aria-label="Has attachments" />
+              ) : null}
+              {checklist.total > 0 ? (
+                <span className="flex items-center gap-1">
+                  {checklist.checked === checklist.total ? (
+                    <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
+                  ) : (
+                    <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
+                  )}
+                  <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
+                </span>
+              ) : null}
+              {task.priority > 0 ? (
+                <span aria-label={`Priority ${task.priority}`}>
+                  {'!'.repeat(Math.min(5, task.priority))}
+                </span>
+              ) : null}
+              <LabelChips labels={labels} />
+              {task.percentDone > 0 ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
+                    <span
+                      className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
+                      style={{ width: `${Math.min(100, task.percentDone)}%` }}
+                    />
+                  </span>
+                  <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
+                </span>
+              ) : null}
+              {task.repeatAfter > 0 ? (
+                <RefreshCw className="h-3 w-3" aria-label="Repeating" />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {task.hexColor ? (
+          <span
+            aria-hidden="true"
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+            style={{ background: task.hexColor }}
+          />
+        ) : null}
+        {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
+            the title baseline (issue #21). Pencil enters inline rename —
+            the explicit affordance now that single-click on the title
+            opens detail instead of editing (issue #20). */}
+        <div className={cn('mt-1 flex items-center gap-1', isSwiping && 'opacity-0')}>
+          <button
+            onClick={handleTitleEdit}
+            aria-label="Rename task"
+            className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={handleDelete}
+            aria-label="Delete task"
+            className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </li>
   );

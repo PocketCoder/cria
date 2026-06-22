@@ -44,6 +44,9 @@ importers:
       '@tauri-apps/plugin-global-shortcut':
         specifier: ^2.3.0
         version: 2.3.1
+      '@tauri-apps/plugin-haptics':
+        specifier: ^2.3.2
+        version: 2.3.2
       '@tauri-apps/plugin-http':
         specifier: ^2.5.9
         version: 2.5.9
@@ -1294,6 +1297,9 @@ packages:
 
   '@tauri-apps/plugin-global-shortcut@2.3.1':
     resolution: {integrity: sha512-vr40W2N6G63dmBPaha1TsBQLLURXG538RQbH5vAm0G/ovVZyXJrmZR1HF1W+WneNloQvwn4dm8xzwpEXRW560g==}
+
+  '@tauri-apps/plugin-haptics@2.3.2':
+    resolution: {integrity: sha512-TqvBR5JoPodDQWPXsNymmyqp37dOpunZOdVVbx5xOAxki7rVwiCMvoEPdtJQNIrU+dQDfkQYZ2oDBVOu4hf+ig==}
 
   '@tauri-apps/plugin-http@2.5.9':
     resolution: {integrity: sha512-lCiY0+vs4HvIUSvZrBs8TC3TiCB0MOPRmiUjTq4prW7SlcJE2jdLeT6KBsJrT9Tlplufl7W1pY6SFAO3gCWxDA==}
@@ -3336,6 +3342,10 @@ snapshots:
       '@tauri-apps/api': 2.11.0
 
   '@tauri-apps/plugin-global-shortcut@2.3.1':
+    dependencies:
+      '@tauri-apps/api': 2.11.0
+
+  '@tauri-apps/plugin-haptics@2.3.2':
     dependencies:
       '@tauri-apps/api': 2.11.0
 
