@@ -135,6 +135,12 @@ export async function pullTasksForProject(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   return singleFlight('pullTasksForProject', async () => {
+  // Delta filter: only tasks changed since the last sync (see tasksDeltaFilter),
+  // composed with the project scope. Null on first sync → full project pull.
+  const delta = await tasksDeltaFilter();
+  const filter = delta
+    ? `project_id = ${projectServerId} && ${delta}`
+    : `project_id = ${projectServerId}`;
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -143,7 +149,7 @@ export async function pullTasksForProject(
         query: {
           page,
           per_page: PER_PAGE,
-          filter: `project_id = ${projectServerId}`,
+          filter,
           // No `expand: 'comments'`: comments inflate every task in the list
           // response but are only shown in the detail card, so we fetch them
           // lazily per-task via pullCommentsForTask when a card opens.
@@ -345,6 +351,9 @@ export async function pullAllTasks(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   return singleFlight('pullAllTasks', async () => {
+  // Delta filter: only tasks changed since the last sync (see tasksDeltaFilter).
+  // Null on first sync → full pull.
+  const delta = await tasksDeltaFilter();
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -352,7 +361,13 @@ export async function pullAllTasks(
       // No `expand: 'comments'` — see pullTasksForProject. The cross-project
       // pull runs every 60s, so dropping inline comments here is the bigger
       // payload/battery win; comments load per-task on detail open.
-      params: { query: { page, per_page: PER_PAGE } },
+      params: {
+        query: {
+          page,
+          per_page: PER_PAGE,
+          ...(delta ? { filter: delta } : {}),
+        },
+      },
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -611,9 +626,45 @@ async function pullBucketsForView(
   return collected.length;
 }
 
-async function stampSyncState(
-  column: 'projects_synced_at' | 'tasks_synced_at' | 'labels_synced_at' | 'views_synced_at' | 'buckets_synced_at',
-): Promise<void> {
+type SyncColumn =
+  | 'projects_synced_at'
+  | 'tasks_synced_at'
+  | 'labels_synced_at'
+  | 'views_synced_at'
+  | 'buckets_synced_at';
+
+// Delta-pull high-watermark margin. `tasks_synced_at` is stamped with the
+// *client* clock but compared against the server's `updated`, so we subtract an
+// overlap before filtering: re-fetching a few already-seen tasks is harmless
+// (upserts are idempotent), but missing one — because the client clock ran
+// ahead of the server, or a task was updated mid-pull — is not. Server-side
+// deletions aren't captured by a delta filter at all; reconcileDeletions (the
+// 15-min sweep) is what removes those.
+const DELTA_OVERLAP_MS = 5 * 60_000;
+
+async function readSyncState(column: SyncColumn): Promise<string | null> {
+  const db = await getDb();
+  const rows = await db.select<Record<string, string | null>[]>(
+    `SELECT ${column} FROM sync_state WHERE id = 1 LIMIT 1`,
+  );
+  return rows[0]?.[column] ?? null;
+}
+
+/**
+ * Vikunja filter clause limiting a task pull to rows changed since the last
+ * sync (minus DELTA_OVERLAP_MS). Returns null on first sync so the caller does
+ * a full pull. Keeps the 60s tick from re-fetching every task every minute.
+ */
+async function tasksDeltaFilter(): Promise<string | null> {
+  const last = await readSyncState('tasks_synced_at');
+  if (!last) return null;
+  const ms = Date.parse(last);
+  if (Number.isNaN(ms)) return `updated > '${last}'`;
+  const since = new Date(ms - DELTA_OVERLAP_MS).toISOString();
+  return `updated > '${since}'`;
+}
+
+async function stampSyncState(column: SyncColumn): Promise<void> {
   const now = new Date().toISOString();
   await exec(`UPDATE sync_state SET ${column} = ? WHERE id = 1`, [now]);
   notify('sync_state');

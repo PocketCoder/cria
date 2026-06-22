@@ -179,6 +179,27 @@ describe('sync/pull', () => {
       const count = await pullTasksForProject(20, client);
       expect(count).toBe(51);
     });
+
+    it('includes updated filter when tasks_synced_at is set', async () => {
+      const db = await getDb();
+      await db.execute(
+        `UPDATE sync_state SET tasks_synced_at = '2026-06-20T12:00:00Z' WHERE id = 1`,
+      );
+      await seedProject(42, 'Delta project');
+      const get = vi.fn().mockResolvedValue({
+        data: [],
+        response: {
+          ok: true, status: 200,
+          headers: new Map(Object.entries({ 'x-pagination-total-pages': '1' })),
+          text: vi.fn().mockResolvedValue(''),
+        },
+      });
+      const client = mockClient({ get });
+      await pullTasksForProject(42, client);
+      const calledWith = get.mock.calls[0]?.[1] as any;
+      expect(calledWith?.params?.query?.filter).toMatch(/project_id = 42/);
+      expect(calledWith?.params?.query?.filter).toMatch(/updated > '/);
+    });
   });
 
   describe('pullAllTasks', () => {
@@ -195,6 +216,32 @@ describe('sync/pull', () => {
       });
       const count = await pullAllTasks(client);
       expect(count).toBe(1);
+    });
+
+    it('includes updated filter in query when tasks_synced_at is set', async () => {
+      const db = await getDb();
+      await db.execute(
+        `UPDATE sync_state SET tasks_synced_at = '2026-06-20T12:00:00Z' WHERE id = 1`,
+      );
+      await seedProject(50, 'Delta all project');
+      const get = vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 501, project_id: 50, title: 'Delta task', done: false,
+            priority: 0, percent_done: 0, is_favorite: false,
+            repeat_after: 0, repeat_mode: 0, updated: now(),
+          },
+        ],
+        response: {
+          ok: true, status: 200,
+          headers: new Map(Object.entries({ 'x-pagination-total-pages': '1' })),
+          text: vi.fn().mockResolvedValue(''),
+        },
+      });
+      const client = mockClient({ get });
+      await pullAllTasks(client);
+      const calledWith = get.mock.calls[0]?.[1] as any;
+      expect(calledWith?.params?.query?.filter).toMatch(/^updated > '/);
     });
   });
 
