@@ -10,6 +10,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/unit/**/*.test.ts', 'src/**/*.test.ts'],
+    // Polyfills window.localStorage for jsdom-env tests (zustand persist needs
+    // it); no-ops under the node environment. See tests/setup.ts.
+    setupFiles: ['./tests/setup.ts'],
     // Fork-isolate each test file: src/db/index.ts holds a module-level
     // `dbPromise` singleton, and the better-sqlite3 in-memory DB it
     // returns is shared across files inside one thread-pool worker —
