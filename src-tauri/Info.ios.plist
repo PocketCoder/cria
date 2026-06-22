@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required so the shopping-list photo importer can open the camera / photo
+	     library. iOS terminates the app (SIGABRT) if either picker is shown
+	     without its usage-description string. Tauri merges this file into the
+	     generated iOS Info.plist at build time. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Cria uses the camera to photograph a shopping list and turn it into tasks.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cria reads a photo you choose to turn a shopping list into tasks.</string>
+</dict>
+</plist>

@@ -62,7 +62,7 @@ export function TabBar() {
                 isActive(tab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
               )} />
               <span className={cn(
-                'tab-label text-[10px] font-medium transition-colors',
+                'tab-label text-footnote font-medium transition-colors',
                 isActive(tab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
               )}>
                 {tab.label}

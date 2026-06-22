@@ -1,3 +1,4 @@
+mod ocr;
 mod tx;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -302,12 +303,14 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
+        ocr::recognize_text,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
     ]);
     #[cfg(mobile)]
-    let builder = builder.invoke_handler(tauri::generate_handler![tx::execute_tx]);
+    let builder =
+        builder.invoke_handler(tauri::generate_handler![tx::execute_tx, ocr::recognize_text]);
 
     builder
         .run(tauri::generate_context!())

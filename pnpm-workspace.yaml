@@ -1,3 +1,6 @@
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+  # tesseract.js's only install hook is an OpenCollective donation prompt; we
+  # use its prebuilt dist/, so the build step is unnecessary.
+  tesseract.js: false

@@ -44,8 +44,29 @@ tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSApplication"] }
+
+# Apple-platform native OCR (Vision framework) — powers the shopping-list
+# photo → tasks feature on macOS and iOS. On-device, free, offline. Other
+# platforms fall back to Tesseract.js in the webview (see src/features/shoppingPhoto).
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+base64 = "0.22"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSData",
+    "NSString",
+    "NSArray",
+    "NSDictionary",
+    "NSError",
+] }
+objc2-vision = { version = "0.3", features = [
+    "VNRequest",
+    "VNRequestHandler",
+    "VNRecognizeTextRequest",
+    "VNObservation",
+    "VNTypes",
+    "alloc",
+] }
 
 [features]
 default = ["custom-protocol"]

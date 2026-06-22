@@ -4,10 +4,13 @@ import { useCurrentUser } from '@/queries/user';
 import { useServerVersion } from '@/queries/server';
 import { useUpdaterStore } from '@/stores/updater';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
+import { useProjects } from '@/queries/projects';
 import { pushUserSettings, type UserSettingsInput } from '@/api/userSettings';
 import { notify } from '@/db/bus';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import { isPermissionGranted, requestPermission } from '@/tauri/notification';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
@@ -83,6 +86,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setTimeFormat = useSettings((s) => s.setTimeFormat);
   const playSoundWhenDone = useSettings((s) => s.playSoundWhenDone);
   const setPlaySoundWhenDone = useSettings((s) => s.setPlaySoundWhenDone);
+  const shoppingProjectId = useSettings((s) => s.shoppingProjectId);
+  const setShoppingProjectId = useSettings((s) => s.setShoppingProjectId);
+  const shoppingLabel = useSettings((s) => s.shoppingLabel);
+  const setShoppingLabel = useSettings((s) => s.setShoppingLabel);
+  const { data: projects = [] } = useProjects();
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
@@ -225,66 +233,42 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
                 <div className="flex items-center justify-between">
                   <Label>Date Format</Label>
-                  <select
-                    value={dateFormat}
-                    onChange={(e) => handleDateFormatChange(e.target.value)}
-                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-                  >
-                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                  </select>
+                  <Select value={dateFormat} onValueChange={handleDateFormatChange}>
+                    <SelectTrigger className="w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                      <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                      <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Time Format</Label>
-                  <select
-                    value={timeFormat}
-                    onChange={(e) => handleTimeFormatChange(e.target.value)}
-                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-                  >
-                    <option value="24h">24-hour</option>
-                    <option value="12h">12-hour</option>
-                  </select>
+                  <Select value={timeFormat} onValueChange={handleTimeFormatChange}>
+                    <SelectTrigger className="w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24h">24-hour</SelectItem>
+                      <SelectItem value="12h">12-hour</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Email reminders</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={emailRemindersEnabled}
-                    onClick={() => handleEmailRemindersToggle(!emailRemindersEnabled)}
-                    className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      emailRemindersEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                        emailRemindersEnabled && 'translate-x-4',
-                      )}
-                    />
-                  </button>
+                  <Switch
+                    checked={emailRemindersEnabled}
+                    onCheckedChange={handleEmailRemindersToggle}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Overdue reminder email</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={overdueRemindersEnabled}
-                    onClick={() => handleOverdueRemindersToggle(!overdueRemindersEnabled)}
-                    className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      overdueRemindersEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                        overdueRemindersEnabled && 'translate-x-4',
-                      )}
-                    />
-                  </button>
+                  <Switch
+                    checked={overdueRemindersEnabled}
+                    onCheckedChange={handleOverdueRemindersToggle}
+                  />
                 </div>
                 {overdueRemindersEnabled && (
                   <div className="flex items-center justify-between">
@@ -323,23 +307,58 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Play sound when task is completed</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={playSoundWhenDone}
-                    onClick={() => setPlaySoundWhenDone(!playSoundWhenDone)}
-                    className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      playSoundWhenDone ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                    )}
+                  <Switch
+                    checked={playSoundWhenDone}
+                    onCheckedChange={setPlaySoundWhenDone}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* ── Photo capture ── */}
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">
+                Photo capture
+              </h3>
+              <p className="mb-3 text-caption text-[var(--color-muted-foreground)]">
+                Defaults for creating tasks from a photo of a list. You can still
+                change the project and label each time you import.
+              </p>
+              <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
+                <div className="flex items-center justify-between">
+                  <Label>Default project</Label>
+                  <Select
+                    value={shoppingProjectId ?? '__ask__'}
+                    onValueChange={(v) => setShoppingProjectId(v === '__ask__' ? null : v)}
                   >
-                    <span
-                      className={cn(
-                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                        playSoundWhenDone && 'translate-x-4',
-                      )}
-                    />
-                  </button>
+                    <SelectTrigger className="w-44">
+                      <SelectValue placeholder="Ask each time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__ask__">Ask each time</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.localId} value={p.localId}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
+                              style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
+                            />
+                            {p.title}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Default label</Label>
+                  <input
+                    type="text"
+                    value={shoppingLabel}
+                    onChange={(e) => setShoppingLabel(e.target.value)}
+                    placeholder="e.g. shopping (blank for none)"
+                    className="w-44 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                  />
                 </div>
               </div>
             </section>
@@ -372,12 +391,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
                 <div className="flex items-center justify-between">
                   <Label>Show desktop notifications</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={notificationsEnabled}
-                    onClick={async () => {
-                      if (notificationsEnabled) {
+                  <Switch
+                    checked={notificationsEnabled}
+                    onCheckedChange={async (enabled) => {
+                      if (!enabled) {
                         setNotificationsEnabled(false);
                         return;
                       }
@@ -391,18 +408,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       setOsPermissionGranted(granted);
                       setNotificationsEnabled(granted);
                     }}
-                    className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      notificationsEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                        notificationsEnabled && 'translate-x-4',
-                      )}
-                    />
-                  </button>
+                  />
                 </div>
                 {osPermissionGranted === false && notificationsEnabled && (
                   <p className="text-xs text-amber-500">
@@ -428,98 +434,43 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <>
                 <div className="flex items-center justify-between">
                   <Label>Launch at login</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={autostartEnabled}
-                    onClick={handleAutostartToggle}
-                    className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      autostartEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                        autostartEnabled && 'translate-x-4',
-                      )}
-                    />
-                  </button>
+                  <Switch
+                    checked={autostartEnabled}
+                    onCheckedChange={handleAutostartToggle}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label>Show tray icon</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={trayIconEnabled}
-                    onClick={() => {
-                      const newVal = !trayIconEnabled;
+                  <Switch
+                    checked={trayIconEnabled}
+                    onCheckedChange={(newVal) => {
                       setTrayIconEnabledInStore(newVal);
                       void invoke('set_tray_visible', { visible: newVal });
                     }}
-                    className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      trayIconEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                        trayIconEnabled && 'translate-x-4',
-                      )}
-                    />
-                  </button>
+                  />
                 </div>
                 {trayIconEnabled && (
                   <>
                     <div className="flex items-center justify-between">
                       <Label>Close to tray</Label>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={closeToTray}
-                        onClick={() => {
-                          const newVal = !closeToTray;
+                      <Switch
+                        checked={closeToTray}
+                        onCheckedChange={(newVal) => {
                           setCloseToTrayInStore(newVal);
                           void invoke('set_close_to_tray', { enabled: newVal });
                         }}
-                        className={cn(
-                          'relative h-5 w-9 rounded-full transition-colors',
-                          closeToTray ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                            closeToTray && 'translate-x-4',
-                          )}
-                        />
-                      </button>
+                      />
                     </div>
                     {closeToTray && (
                       <div className="flex items-center justify-between">
                         <Label>Hide dock icon when closed</Label>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={hideDockOnTray}
-                          onClick={() => {
-                            const newVal = !hideDockOnTray;
-                            setHideDockOnTrayInStore(newVal);
-                            void invoke('set_hide_dock_on_tray', { enabled: newVal });
-                          }}
-                          className={cn(
-                            'relative h-5 w-9 rounded-full transition-colors',
-                            hideDockOnTray ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-muted-foreground)]',
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                              hideDockOnTray && 'translate-x-4',
-                            )}
+                          <Switch
+                            checked={hideDockOnTray}
+                            onCheckedChange={(newVal) => {
+                              setHideDockOnTrayInStore(newVal);
+                              void invoke('set_hide_dock_on_tray', { enabled: newVal });
+                            }}
                           />
-                        </button>
                       </div>
                     )}
                   </>

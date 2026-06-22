@@ -46,6 +46,11 @@ import { SearchView } from '@/features/search/SearchView';
 const QuickAddModal = lazy(() =>
   import('@/components/QuickAddModal').then((m) => ({ default: m.QuickAddModal })),
 );
+const PhotoTaskCreator = lazy(() =>
+  import('@/features/shoppingPhoto/PhotoTaskCreator').then((m) => ({
+    default: m.PhotoTaskCreator,
+  })),
+);
 const CommandPalette = lazy(() =>
   import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
 );
@@ -63,7 +68,7 @@ import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Plus, Search, Settings, X } from 'lucide-react';
+import { Plus, Search, Settings, X, Camera } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -75,6 +80,8 @@ export function Shell() {
   const setActiveView = useUi((s) => s.setActiveView);
   const setSelectedProject = useUi((s) => s.setSelectedProject);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
+  const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
+  const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
   const displayName =
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
@@ -492,6 +499,15 @@ export function Shell() {
             </button>
             <button
               type="button"
+              aria-label="Add tasks from a photo"
+              title="Add tasks from a photo of a list"
+              onClick={() => setPhotoCaptureOpen(true)}
+              className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
               aria-label="Add task"
               onClick={() => setShowQuickAdd(true)}
               className="-mr-1 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
@@ -523,7 +539,7 @@ export function Shell() {
       </div>
 
       {!isMobile && (
-        <footer className="glass-surface flex select-none items-center justify-between border-t px-4 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
+        <footer className="glass-surface flex select-none items-center justify-between border-t px-4 py-1.5 text-caption text-[var(--color-muted-foreground)]">
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -591,6 +607,11 @@ export function Shell() {
       {showQuickAdd && (
         <Suspense fallback={null}>
           <QuickAddModal onClose={() => setShowQuickAdd(false)} />
+        </Suspense>
+      )}
+      {photoCaptureOpen && (
+        <Suspense fallback={null}>
+          <PhotoTaskCreator onClose={() => setPhotoCaptureOpen(false)} />
         </Suspense>
       )}
       {showSettings && (

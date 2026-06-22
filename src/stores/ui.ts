@@ -19,11 +19,14 @@ interface UiState {
   activeView: ActiveView | null;
   selectedTaskLocalId: string | null;
   sidebarCollapsed: boolean;
+  /** Transient: the "create tasks from a photo" capture modal is open. */
+  photoCaptureOpen: boolean;
   setActiveView: (view: ActiveView | null) => void;
   /** Convenience for the common "open a project" path. */
   setSelectedProject: (id: string | null) => void;
   setSelectedTask: (id: string | null) => void;
   toggleSidebar: () => void;
+  setPhotoCaptureOpen: (open: boolean) => void;
 }
 
 /**
@@ -38,6 +41,7 @@ export const useUi = create<UiState>()(
       activeView: { kind: 'today' },
       selectedTaskLocalId: null,
       sidebarCollapsed: false,
+      photoCaptureOpen: false,
       setActiveView: (view) =>
         set({ activeView: view, selectedTaskLocalId: null }),
       setSelectedProject: (id) =>
@@ -48,6 +52,7 @@ export const useUi = create<UiState>()(
       setSelectedTask: (id) => set({ selectedTaskLocalId: id }),
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
     }),
     {
       name: 'cria:ui/v2',
