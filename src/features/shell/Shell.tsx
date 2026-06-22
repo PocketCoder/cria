@@ -57,6 +57,8 @@ import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { SpecularTracker } from '@/components/SpecularTracker';
+import { useUpdater } from '@/queries/updater';
+import { UpdateBanner } from '@/features/shell/UpdateBanner';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
@@ -109,6 +111,7 @@ export function Shell() {
   const { data: conflictCount = 0 } = useConflictsCount();
   const { data: deadLetterCount = 0 } = useDeadLettersCount();
   const { data: serverVersion } = useServerVersion();
+  const updater = useUpdater();
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -519,8 +522,6 @@ export function Shell() {
         </main>
       </div>
 
-
-
       {!isMobile && (
         <footer className="glass-surface flex select-none items-center justify-between border-t px-4 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
           <div className="flex items-center gap-2">
@@ -572,6 +573,10 @@ export function Shell() {
             >
               <Settings className="h-3.5 w-3.5" />
             </button>
+            <UpdateBanner
+              state={updater.state}
+              onInstall={() => void updater.install()}
+            />
             <span>
               Cria {pkg.version}
               {serverVersion ? <span className="ml-2 text-[var(--color-muted-foreground)]">· {serverVersion}</span> : null}
