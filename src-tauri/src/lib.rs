@@ -1,5 +1,4 @@
 mod ocr;
-#[cfg(desktop)]
 mod secure;
 mod tx;
 
@@ -314,8 +313,13 @@ pub fn run() {
         set_hide_dock_on_tray,
     ]);
     #[cfg(mobile)]
-    let builder =
-        builder.invoke_handler(tauri::generate_handler![tx::execute_tx, ocr::recognize_text]);
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        tx::execute_tx,
+        ocr::recognize_text,
+        secure::secure_get_token,
+        secure::secure_set_token,
+        secure::secure_delete_token,
+    ]);
 
     builder
         .run(tauri::generate_context!())

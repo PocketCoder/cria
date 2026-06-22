@@ -42,17 +42,24 @@ tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
-# OS keychain for the auth token (see src/secure.rs). Backends are per-OS and
-# target-gated inside the crate, so enabling all three desktop backends is safe.
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+# OS keychain for the auth token (see src/secure.rs). One backend per OS family
+# so each build pulls only the deps it needs — Windows/Linux below; the Apple
+# `apple-native` backend (Keychain via SecItem, macOS + iOS) lives in the shared
+# apple dependency table further down.
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd"))'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", features = ["NSApplication"] }
 
-# Apple-platform native OCR (Vision framework) — powers the shopping-list
-# photo → tasks feature on macOS and iOS. On-device, free, offline. Other
-# platforms fall back to Tesseract.js in the webview (see src/features/shoppingPhoto).
+# Apple-platform native deps (macOS + iOS): Vision OCR for the shopping-list
+# photo feature, and the keyring Keychain backend for the auth token.
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
 base64 = "0.22"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = [

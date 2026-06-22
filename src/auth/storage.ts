@@ -2,15 +2,15 @@
  * Credential storage.
  *
  * The non-secret bits (serverUrl, authMethod) live in localStorage. The **auth
- * token** is kept in the OS secret store (macOS Keychain / Windows Credential
- * Manager / Linux Secret Service) via the `secure_*_token` Tauri commands, so a
- * stolen app-data-dir snapshot no longer yields a usable token.
+ * token** is kept in the OS secret store — macOS/iOS Keychain, Windows
+ * Credential Manager, Linux Secret Service — via the `secure_*_token` Tauri
+ * commands, so a stolen app-data-dir snapshot no longer yields a usable token.
  *
- * Where the native commands aren't present — iOS builds (no keyring backend
- * yet) and the browser-only dev server / tests — the token falls back to
- * localStorage, matching the previous behaviour. We probe once and cache the
- * result. Legacy single-blob credentials (`cria:credentials/v1`) are migrated
- * to this split layout on first load and the plaintext token is scrubbed.
+ * Where the native commands aren't present or the store errors — the
+ * browser-only dev server, tests, Android, or an iOS keychain-access failure —
+ * the token falls back to localStorage. We probe once and cache the result.
+ * Legacy single-blob credentials (`cria:credentials/v1`) are migrated to this
+ * split layout on first load and the plaintext token is scrubbed.
  *
  * All three entry points are async because the keychain round-trips over IPC.
  * The running token is held in memory by the auth store for synchronous reads

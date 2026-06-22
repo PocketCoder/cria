@@ -18,15 +18,17 @@ documents how credentials and user data are protected, and the known gaps.
 
 ## Auth token at rest
 
-- **Desktop (macOS/Windows/Linux):** stored in the OS secret store (Keychain /
-  Credential Manager / Secret Service) via the `secure_*_token` Tauri commands
-  (`src-tauri/src/secure.rs`, `keyring` crate). A stolen app-data-dir snapshot
+- **macOS / iOS / Windows / Linux:** stored in the OS secret store — Keychain
+  (macOS + iOS) / Credential Manager / Secret Service — via the `secure_*_token`
+  Tauri commands (`src-tauri/src/secure.rs`, `keyring` crate, verified compiling
+  for the host, iOS-sim and iOS-device targets). A stolen app-data-dir snapshot
   does **not** contain the token.
-- **iOS / browser dev / tests:** the native commands aren't present, so the
-  token falls back to `localStorage` (`src/auth/storage.ts`). Protection there is
-  the OS file sandbox + disk encryption (iOS Data Protection requires a device
-  passcode). **Follow-up:** wire an iOS Keychain backend (needs on-device
-  verification).
+- **Browser dev / tests / Android, or an iOS keychain-access failure:** the
+  token falls back to `localStorage` (`src/auth/storage.ts`); the layer probes
+  for a working store once and degrades gracefully. On iOS a real-device
+  keychain write needs a valid provisioning profile (the app has a development
+  team set); confirm on-device that the token lands in Keychain and not the
+  fallback.
 - Only the non-secret `serverUrl` / `authMethod` live in `localStorage`. The
   password is never persisted — it exists only in form state during sign-in.
 - Tokens are requested as `long_token` (long-lived); a leaked token is valid
