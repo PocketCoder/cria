@@ -42,6 +42,9 @@ tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
+# OS keychain for the auth token (see src/secure.rs). Backends are per-OS and
+# target-gated inside the crate, so enabling all three desktop backends is safe.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", features = ["NSApplication"] }

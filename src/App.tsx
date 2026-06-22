@@ -13,7 +13,7 @@ export function App() {
 
   useEffect(() => {
     if (status.kind === 'unknown') {
-      hydrate();
+      void hydrate();
     }
   }, [status.kind, hydrate]);
 
