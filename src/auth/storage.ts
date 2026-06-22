@@ -23,6 +23,7 @@ export const STORAGE_KEY = 'cria:credentials/v1';
 export interface Credentials {
   serverUrl: string;
   token: string;
+  authMethod: 'token' | 'password';
 }
 
 export function loadCredentials(): Credentials | null {
@@ -34,7 +35,11 @@ export function loadCredentials(): Credentials | null {
     if (typeof parsed.serverUrl !== 'string' || typeof parsed.token !== 'string') {
       return null;
     }
-    return { serverUrl: parsed.serverUrl, token: parsed.token };
+    return {
+      serverUrl: parsed.serverUrl,
+      token: parsed.token,
+      authMethod: parsed.authMethod === 'password' ? 'password' : 'token',
+    };
   } catch {
     return null;
   }
