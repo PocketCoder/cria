@@ -32,6 +32,8 @@ import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
 import { cn } from '@/lib/cn';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { PrioritySelect, PRIORITY_LABELS } from '@/components/ui/priority-select';
 import { Calendar as CalendarGrid } from '@/components/ui/calendar';
 
 interface TaskActionsProps {
@@ -210,13 +212,13 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
           <span className="text-xs text-red-600">Delete forever?</span>
           <button
             onClick={handleDelete}
-            className="ml-auto rounded bg-red-600 px-2 py-0.5 text-[11px] text-white hover:bg-red-700"
+            className="ml-auto rounded bg-red-600 px-2 py-0.5 text-caption text-white hover:bg-red-700"
           >
             Confirm
           </button>
           <button
             onClick={() => setConfirmDelete(false)}
-            className="text-[11px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            className="text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
           >
             Cancel
           </button>
@@ -274,7 +276,7 @@ function SectionDivider() {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted-foreground)]">
+    <p className="px-3 pb-0.5 pt-1 text-footnote font-semibold uppercase tracking-widest text-[var(--color-muted-foreground)]">
       {label}
     </p>
   );
@@ -291,8 +293,6 @@ function InlinePriority({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const PRIORITY_LABELS = ['None', 'Low', 'Medium', 'High', 'Urgent', 'Critical'];
-
   return (
     <div>
       <ActionButton
@@ -301,23 +301,13 @@ function InlinePriority({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex gap-1">
-          {[0, 1, 2, 3, 4, 5].map((p) => (
-            <button
-              key={p}
-              onClick={async () => {
-                await updateTask(task.localId, { priority: p });
-              }}
-              className={cn(
-                'flex-1 rounded px-1 py-1 text-center text-[11px] transition-colors',
-                p === task.priority
-                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                  : 'hover:bg-[var(--color-accent)]/10 text-[var(--color-muted-foreground)]',
-              )}
-            >
-              {p}
-            </button>
-          ))}
+        <div className="mx-3 mb-1">
+          <PrioritySelect
+            value={task.priority}
+            onChange={(p) => {
+              void updateTask(task.localId, { priority: p });
+            }}
+          />
         </div>
       )}
     </div>
@@ -428,7 +418,7 @@ function InlineColor({
             ))}
             <button
               onClick={() => handleSelect(null)}
-              className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-footnote text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
               title="Remove color"
             >
               ×
@@ -517,10 +507,10 @@ function InlineLabels({
             placeholder="Search or create…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="sticky top-0 z-10 mb-1 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+            className="sticky top-0 z-10 mb-1 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1 text-caption focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
           />
           {filtered.length === 0 && !search.trim() && (
-            <p className="py-1 text-[11px] text-[var(--color-muted-foreground)]">
+            <p className="py-1 text-caption text-[var(--color-muted-foreground)]">
               No labels available.
             </p>
           )}
@@ -531,7 +521,7 @@ function InlineLabels({
                 key={label.localId}
                 onClick={() => handleToggle(label.localId)}
                 className={cn(
-                  'flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] transition-colors',
+                  'flex items-center gap-2 rounded px-2 py-1 text-left text-caption transition-colors',
                   active
                     ? 'bg-[var(--color-accent)]/10 font-medium'
                     : 'hover:bg-[var(--color-accent)]/5',
@@ -545,7 +535,7 @@ function InlineLabels({
                   style={label.hexColor ? { background: label.hexColor } : undefined}
                 />
                 <span className="flex-1 truncate">{label.title}</span>
-                {active && <span className="text-[10px] text-[var(--color-muted-foreground)]">✓</span>}
+                {active && <span className="text-footnote text-[var(--color-muted-foreground)]">✓</span>}
               </button>
             );
           })}
@@ -553,16 +543,16 @@ function InlineLabels({
             <button
               type="button"
               onClick={handleCreateAndToggle}
-              className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-[var(--color-primary)] hover:bg-[var(--color-accent)]/5"
+              className="flex items-center gap-2 rounded px-2 py-1 text-left text-caption text-[var(--color-primary)] hover:bg-[var(--color-accent)]/5"
             >
-              <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-[var(--color-primary)] text-[9px] leading-none">+</span>
+              <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-[var(--color-primary)] text-micro leading-none">+</span>
               <span className="flex-1 truncate">Create &quot;{search.trim()}&quot;</span>
             </button>
           )}
           <button
             type="button"
             onClick={() => setShowManager(true)}
-            className="sticky bottom-0 mt-1 flex items-center gap-2 rounded bg-[var(--color-background)] px-2 py-1 text-left text-[11px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            className="sticky bottom-0 mt-1 flex items-center gap-2 rounded bg-[var(--color-background)] px-2 py-1 text-left text-caption text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
           >
             Manage labels…
           </button>
@@ -673,7 +663,7 @@ function InlineMove({
             <button
               key={p.localId}
               onClick={() => onMove(p.localId)}
-              className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-[var(--color-accent)]/10"
+              className="flex items-center gap-2 rounded px-2 py-1 text-left text-caption transition-colors hover:bg-[var(--color-accent)]/10"
             >
               {p.hexColor && (
                 <span
@@ -721,13 +711,13 @@ function InlineAssignees({
           {assignees.map((a) => (
             <div
               key={a.userServerId}
-              className="flex items-center gap-2 rounded bg-[var(--color-accent)]/5 px-2 py-1 text-[11px]"
+              className="flex items-center gap-2 rounded bg-[var(--color-accent)]/5 px-2 py-1 text-caption"
             >
               <span className="flex-1 truncate">{a.username ?? `User #${a.userServerId}`}</span>
             </div>
           ))}
           {assignees.length === 0 && (
-            <p className="py-1 text-[11px] text-[var(--color-muted-foreground)]">
+            <p className="py-1 text-caption text-[var(--color-muted-foreground)]">
               User search coming soon
             </p>
           )}
@@ -809,18 +799,19 @@ function InlineRepeat({
               onChange={(e) => setValue(Math.max(1, Number(e.target.value)))}
               className="w-14 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-xs text-center"
             />
-            <select
-              value={unit}
-              onChange={(e) => setUnit(e.target.value as typeof unit)}
-              className="rounded border border-[var(--color-border)] bg-transparent px-1 py-1 text-xs"
-            >
-              {UNIT_OPTIONS.map((u) => (
-                <option key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</option>
-              ))}
-            </select>
+            <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UNIT_OPTIONS.map((u) => (
+                  <SelectItem key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <button
               onClick={() => save(valueUnitToSeconds(value, unit), mode)}
-              className="ml-auto rounded bg-[var(--color-accent)] px-2.5 py-1 text-[10px] font-medium text-[var(--color-accent-foreground)]"
+              className="ml-auto rounded bg-[var(--color-accent)] px-2.5 py-1 text-footnote font-medium text-[var(--color-accent-foreground)]"
             >
               Apply
             </button>
@@ -833,7 +824,7 @@ function InlineRepeat({
                 key={m}
                 onClick={() => save(valueUnitToSeconds(value, unit), m)}
                 className={cn(
-                  'flex-1 rounded px-1.5 py-1 text-[10px] transition-colors',
+                  'flex-1 rounded px-1.5 py-1 text-footnote transition-colors',
                   m === mode
                     ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
                     : 'hover:bg-[var(--color-accent)]/10 text-[var(--color-muted-foreground)]',
@@ -848,7 +839,7 @@ function InlineRepeat({
           {task.repeatAfter > 0 && (
             <button
               onClick={() => save(0, 0)}
-              className="self-start rounded px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10"
+              className="self-start rounded px-2 py-0.5 text-footnote text-red-500 hover:bg-red-500/10"
             >
               Remove repeat
             </button>

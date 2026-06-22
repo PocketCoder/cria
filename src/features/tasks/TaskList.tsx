@@ -26,23 +26,34 @@ import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
-import { createTask, updateTask, reorderTask, reindexTasks } from '@/db/tasks';
+import { createTask, updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { ArrowUpDown, Filter, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ArrowUpDown, Filter, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight, X, Copy, ExternalLink } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useFilterSort } from '@/stores/filterSort';
 import { SORT_OPTIONS, type SortRule } from '@/lib/sortEngine';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import { TaskHoverPreview } from './TaskHoverPreview';
 import { DatePicker } from '@/components/DatePicker';
+import { PrioritySelect } from '@/components/ui/priority-select';
+import { LabelPicker } from '@/components/ui/label-picker';
+import { RecurrencePicker } from '@/components/ui/recurrence-picker';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 
@@ -88,6 +99,7 @@ export function TaskList({ project, view }: TaskListProps) {
 
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
+  const [labelTitles, setLabelTitles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterDraft, setFilterDraft] = useState(filterQuery);
 
@@ -280,12 +292,17 @@ export function TaskList({ project, view }: TaskListProps) {
 
       const created = await createTask(input);
 
-      // Apply parsed labels (the *label token): look up case-insensitively,
-      // create any that don't exist yet, then apply. Prefix per Vikunja
-      // default Quick Add Magic ('*' = label).
-      if (parsed.labelTitles.length > 0 && created.localId) {
+      // Apply labels from the picker plus any typed *label tokens
+      // (case-insensitive union); create-if-missing, then apply.
+      const allLabelTitles = [
+        ...labelTitles,
+        ...parsed.labelTitles.filter(
+          (t) => !labelTitles.some((s) => s.toLowerCase() === t.toLowerCase()),
+        ),
+      ];
+      if (allLabelTitles.length > 0 && created.localId) {
         try {
-          await applyLabelsByTitle(created.localId, parsed.labelTitles);
+          await applyLabelsByTitle(created.localId, allLabelTitles);
         } catch (err) {
           console.warn('[quick-add] label application failed:', err);
         }
@@ -301,6 +318,7 @@ export function TaskList({ project, view }: TaskListProps) {
 
       setNewTitle('');
       setMetadata({});
+      setLabelTitles([]);
     } catch (err) {
       console.error('Failed to create task:', err);
     } finally {
@@ -393,26 +411,27 @@ export function TaskList({ project, view }: TaskListProps) {
 
         {showSortMenu ? (
           <div className="border-t border-[var(--color-border)] px-6 py-1.5">
-            <select
-              value={sortRule ? `${sortRule.field}:${sortRule.direction}` : ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (!val) {
+            <Select
+              value={sortRule ? `${sortRule.field}:${sortRule.direction}` : 'default'}
+              onValueChange={(val) => {
+                if (val === 'default') {
                   setSortRule(null);
                 } else {
                   const [field, dir] = val.split(':') as [SortRule['field'], SortRule['direction']];
                   setSortRule({ field, direction: dir });
                 }
               }}
-              className="w-full text-xs bg-transparent border border-[var(--color-border)] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
             >
-              <option value="">Default order</option>
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.label} value={`${opt.field}:${opt.direction}`}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue placeholder="Default order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default order</SelectItem>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.label} value={`${opt.field}:${opt.direction}`}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
       </div>
@@ -423,7 +442,7 @@ export function TaskList({ project, view }: TaskListProps) {
           syntax; they override the parsed values when set. */}
       <form
         onSubmit={handleSubmit}
-        className="border-b border-[var(--color-border)] px-6 py-3"
+        className="border-b border-[var(--color-border)] px-6 pt-3 pb-4"
       >
         <div className="flex items-center gap-3">
           <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
@@ -442,30 +461,36 @@ export function TaskList({ project, view }: TaskListProps) {
             className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
           />
         </div>
-        {/* Secondary row: explicit date + priority pickers. They override
-            the NL-parsed values when touched, but live below the title so
-            they don't crowd the primary input (issue #19). `pl-7` aligns
-            them under the title input, past the plus-icon column. */}
-        <div className="mt-2 flex items-center gap-3 pl-7 text-[var(--color-muted-foreground)]">
+        {/* Secondary row: explicit pickers for every NL-settable field (date,
+            priority, labels, recurrence). They override the NL-parsed values
+            when touched, but live below the title so they don't crowd the
+            primary input (issue #19). `pl-7` aligns them under the title input,
+            past the plus-icon column. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-[var(--color-muted-foreground)]">
           <DatePicker
             value={metadata.dueDate ?? null}
             onChange={(iso) => setMetadata({ ...metadata, dueDate: iso })}
             placeholder="Due date"
             disabled={isSubmitting}
           />
-          <select
-            onChange={(e) =>
-              setMetadata({ ...metadata, priority: Number(e.target.value) })
+          <PrioritySelect
+            className="w-auto"
+            value={metadata.priority ?? parsed.priority ?? 0}
+            onChange={(p) => setMetadata({ ...metadata, priority: p })}
+            compact
+          />
+          <LabelPicker value={labelTitles} onChange={setLabelTitles} />
+          <RecurrencePicker
+            repeatAfter={metadata.repeatAfter ?? parsed.repeatAfter ?? null}
+            repeatMode={metadata.repeatMode ?? parsed.repeatMode ?? null}
+            onChange={(after, mode) =>
+              setMetadata({
+                ...metadata,
+                repeatAfter: after ?? undefined,
+                repeatMode: mode ?? undefined,
+              })
             }
-            className="text-xs"
-          >
-            <option value="0">Priority 0</option>
-            <option value="1">Priority 1</option>
-            <option value="2">Priority 2</option>
-            <option value="3">Priority 3</option>
-            <option value="4">Priority 4</option>
-            <option value="5">Priority 5</option>
-          </select>
+          />
         </div>
         <QuickAddPreview parsed={parsed} />
       </form>
@@ -713,126 +738,157 @@ const TaskRow = memo(function TaskRow({
   };
 
   return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      data-task-row=""
-      className={cn(
-        'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
-        task.done && 'opacity-60',
-        selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
-        isDragging && 'opacity-40',
-        sortable && 'cursor-grab active:cursor-grabbing',
-      )}
-      onClick={() => { if (!editing) setSelectedTask(task.localId); }}
-    >
-      <div className="flex w-full items-start gap-3 pr-6 py-3">
-        <input
-          type="checkbox"
-          checked={task.done}
-          onChange={handleToggle}
-          onClick={(e) => e.stopPropagation()}
-          aria-label={task.done ? 'Done' : 'Not done'}
-          className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
-        />
-        <div className="min-w-0 flex-1">
-          {editing ? (
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => void handleTitleSave()}
-              onKeyDown={handleTitleKeyDown}
-              autoFocus
-              onClick={(e) => e.stopPropagation()}
-              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-            />
-          ) : (
-              <TaskHoverPreview task={task}>
-                <p
-                  className={cn(
-                    'truncate rounded px-1 py-0.5 text-sm transition-all',
-                    task.done && 'line-through text-[var(--color-muted-foreground)]',
-                  )}
-                  onDoubleClick={handleTitleEdit}
-                  title={task.title}
-                >
-                  {task.title}
-                </p>
-              </TaskHoverPreview>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
+          data-task-row=""
+          className={cn(
+            'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
+            task.done && 'opacity-60',
+            selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+            isDragging && 'opacity-40',
+            sortable && 'cursor-grab active:cursor-grabbing',
           )}
-          {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-              {task.dueDate ? (
-                <span>Due {dueLabel}</span>
-              ) : null}
-              {hasAttachments ? (
-                <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-              ) : null}
-              {checklist.total > 0 ? (
-                <span className="flex items-center gap-1">
-                  {checklist.checked === checklist.total ? (
-                    <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
-                  ) : (
-                    <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
-                  )}
-                  <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
-                </span>
-              ) : null}
-              {task.priority > 0 ? (
-                <span aria-label={`Priority ${task.priority}`}>
-                  {'!'.repeat(Math.min(5, task.priority))}
-                </span>
-              ) : null}
-              <LabelChips labels={labels} />
-              {task.percentDone > 0 ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
-                    <span
-                      className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
-                      style={{ width: `${Math.min(100, task.percentDone)}%` }}
-                    />
-                  </span>
-                  <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
-                </span>
-              ) : null}
-              {task.repeatAfter > 0 ? (
-                <RefreshCw className="h-3 w-3" aria-label="Repeating" />
+          onClick={() => { if (!editing) setSelectedTask(task.localId); }}
+        >
+          <div className="flex w-full items-start gap-3 pr-6 py-3">
+            <input
+              type="checkbox"
+              checked={task.done}
+              onChange={handleToggle}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={task.done ? 'Done' : 'Not done'}
+              className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
+            />
+            <div className="min-w-0 flex-1">
+              {editing ? (
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => void handleTitleSave()}
+                  onKeyDown={handleTitleKeyDown}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+                />
+              ) : (
+                  <TaskHoverPreview task={task}>
+                    <p
+                      className={cn(
+                        'truncate rounded px-1 py-0.5 text-sm transition-all',
+                        task.done && 'line-through text-[var(--color-muted-foreground)]',
+                      )}
+                      onDoubleClick={handleTitleEdit}
+                      title={task.title}
+                    >
+                      {task.title}
+                    </p>
+                  </TaskHoverPreview>
+              )}
+              {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-[var(--color-muted-foreground)]">
+                  {task.dueDate ? (
+                    <span>Due {dueLabel}</span>
+                  ) : null}
+                  {hasAttachments ? (
+                    <Paperclip className="h-3 w-3" aria-label="Has attachments" />
+                  ) : null}
+                  {checklist.total > 0 ? (
+                    <span className="flex items-center gap-1">
+                      {checklist.checked === checklist.total ? (
+                        <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
+                      ) : (
+                        <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
+                      )}
+                      <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
+                    </span>
+                  ) : null}
+                  {task.priority > 0 ? (
+                    <span aria-label={`Priority ${task.priority}`}>
+                      {'!'.repeat(Math.min(5, task.priority))}
+                    </span>
+                  ) : null}
+                  <LabelChips labels={labels} />
+                  {task.percentDone > 0 ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
+                        <span
+                          className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
+                          style={{ width: `${Math.min(100, task.percentDone)}%` }}
+                        />
+                      </span>
+                      <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
+                    </span>
+                  ) : null}
+                  {task.repeatAfter > 0 ? (
+                    <RefreshCw className="h-3 w-3" aria-label="Repeating" />
+                  ) : null}
+                </div>
               ) : null}
             </div>
-          ) : null}
-        </div>
-        {task.hexColor ? (
-          <span
-            aria-hidden="true"
-            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-            style={{ background: task.hexColor }}
-          />
-        ) : null}
-        {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
-            the title baseline (issue #21). Pencil enters inline rename —
-            the explicit affordance now that single-click on the title
-            opens detail instead of editing (issue #20). */}
-        <div className="mt-1 flex items-center gap-1">
-          <button
-            onClick={handleTitleEdit}
-            aria-label="Rename task"
-            className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-          >
+            {task.hexColor ? (
+              <span
+                aria-hidden="true"
+                className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                style={{ background: task.hexColor }}
+              />
+            ) : null}
+            {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
+                the title baseline (issue #21). Pencil enters inline rename —
+                the explicit affordance now that single-click on the title
+                opens detail instead of editing (issue #20). */}
+            <div className="mt-1 flex items-center gap-1">
+              <button
+                onClick={handleTitleEdit}
+                aria-label="Rename task"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={handleDelete}
+                aria-label="Delete task"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => setSelectedTask(task.localId)}>
+          <span className="flex items-center gap-2">
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { setDraft(task.title); setEditing(true); }}>
+          <span className="flex items-center gap-2">
             <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={handleDelete}
-            aria-label="Delete task"
-            className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-          >
+            Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { duplicateTask(task.localId).catch(console.error); }}>
+          <span className="flex items-center gap-2">
+            <Copy className="h-3.5 w-3.5" />
+            Duplicate
+          </span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => enqueueDelete(task)}>
+          <span className="flex items-center gap-2">
             <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-    </li>
+            Delete
+          </span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 });
 

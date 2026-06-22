@@ -17,6 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { PrioritySelect } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
@@ -683,17 +684,11 @@ function EditField({
       );
     case 'priority':
       return (
-        <select
-          value={String(draft?.priority ?? task.priority)}
-          onChange={(e) => onChange('priority', Number(e.target.value))}
-          className={EDIT_INPUT_CLS}
-        >
-          {[0, 1, 2, 3, 4, 5].map((p) => (
-            <option key={p} value={p}>
-              {p === 0 ? 'None' : '!'.repeat(p)}
-            </option>
-          ))}
-        </select>
+        <PrioritySelect
+          value={draft?.priority ?? task.priority}
+          onChange={(p) => onChange('priority', p)}
+          compact
+        />
       );
     case 'percentDone':
       return (
@@ -766,7 +761,7 @@ function PercentCell({ value }: { value: number }) {
           style={{ width: `${Math.min(100, value)}%` }}
         />
       </span>
-      <span className="tabular-nums text-[11px]">{Math.round(value)}%</span>
+      <span className="tabular-nums text-caption">{Math.round(value)}%</span>
     </span>
   );
 }
