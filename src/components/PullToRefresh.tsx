@@ -6,7 +6,8 @@ import { cn } from '@/lib/cn';
 const PULL_THRESHOLD = 60;
 const MAX_PULL = 100;
 const DAMPING = 0.5;
-const START_PULL_DISTANCE = 10; // minimum downward movement before pull starts; avoids conflict with DnD long-press grab
+const START_PULL_DISTANCE = 10; // movement (px) before a gesture is classified
+const LONG_PRESS_MS = 200; // matches the dnd-kit TouchSensor delay (drag-to-reorder)
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
@@ -31,32 +32,59 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
 
+    let startX = 0;
     let startY = 0;
+    let startTime = 0;
+    let atTop = false;
     let pulling = false;
+    let disqualified = false; // this gesture can't become a pull
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
+      startX = e.touches[0]!.clientX;
       startY = e.touches[0]!.clientY;
+      startTime = e.timeStamp;
+      // Only the *starting* scroll position counts: pull fires when the touch
+      // begins at the top, not when a mid-list scroll happens to reach it. This
+      // is the "only after scrolling up is done" behaviour.
+      atTop = scrollEl.scrollTop <= 0;
       pulling = false;
+      disqualified = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
+      if (e.touches.length !== 1 || disqualified) return;
+      const dx = e.touches[0]!.clientX - startX;
       const dy = e.touches[0]!.clientY - startY;
 
-      if (!pulling && scrollEl.scrollTop <= 0 && dy > START_PULL_DISTANCE) {
+      if (!pulling) {
+        // Wait for a decisive amount of movement before classifying the gesture.
+        if (Math.abs(dx) < START_PULL_DISTANCE && Math.abs(dy) < START_PULL_DISTANCE) return;
+        // A pull is a fresh, prompt, downward drag from the top. Disqualify
+        // everything else so it doesn't fight the other gestures:
+        //  - !atTop          → mid-list scroll
+        //  - |dx| > |dy|     → horizontal row swipe (complete/delete)
+        //  - dy <= 0         → upward drag (scrolling down through the list)
+        //  - held > 200ms    → press-and-hold that dnd-kit grabs as a reorder
+        if (
+          !atTop ||
+          Math.abs(dx) > Math.abs(dy) ||
+          dy <= 0 ||
+          e.timeStamp - startTime > LONG_PRESS_MS
+        ) {
+          disqualified = true;
+          return;
+        }
         pulling = true;
-        startY = e.touches[0]!.clientY;
+        startY = e.touches[0]!.clientY; // reset baseline so the pull starts at 0
       }
 
-      if (pulling) {
-        e.preventDefault();
-        const rawDy = e.touches[0]!.clientY - startY;
-        const distance = Math.min(MAX_PULL, rawDy * DAMPING);
-        pullDistanceRef.current = distance;
-        setPullDistance(distance);
-        setState(distance >= PULL_THRESHOLD ? 'ready' : 'pulling');
-      }
+      e.preventDefault();
+      const rawDy = e.touches[0]!.clientY - startY;
+      const distance = Math.min(MAX_PULL, rawDy * DAMPING);
+      pullDistanceRef.current = distance;
+      setPullDistance(distance);
+      setState(distance >= PULL_THRESHOLD ? 'ready' : 'pulling');
     };
 
     const onTouchEnd = () => {
@@ -73,10 +101,12 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
         }
       }
       pulling = false;
+      disqualified = false;
     };
 
     const onTouchCancel = () => {
       pulling = false;
+      disqualified = false;
       pullDistanceRef.current = 0;
       setState('idle');
       setPullDistance(0);
