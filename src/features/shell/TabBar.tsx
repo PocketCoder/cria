@@ -80,7 +80,7 @@ export function TabBar() {
             {/* Grab handle */}
             <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             <div className="overflow-y-auto p-3">
-              <ProjectSidebar />
+              <ProjectSidebar showSmartViews={false} />
             </div>
           </div>
         </div>

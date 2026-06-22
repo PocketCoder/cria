@@ -65,7 +65,11 @@ function NavItem({
  * project CRUD below. Clicking a view updates `activeView` in the UI
  * store, which the Shell reads to decide what to render in the main pane.
  */
-export function ProjectSidebar() {
+export function ProjectSidebar({
+  showSmartViews = true,
+}: {
+  showSmartViews?: boolean;
+} = {}) {
   const { data: projects = [], isLoading, isFetching, isError, error } =
     useProjects();
   const { data: labels = [] } = useLabels();
@@ -214,127 +218,131 @@ export function ProjectSidebar() {
   return (
     <aside className="glass-nav flex h-full w-full flex-col md:w-52">
       <nav className="flex-1 overflow-y-auto px-2 pb-3">
-        {/* ── Smart Views ── */}
+        {/* ── Smart Views (hidden in mobile sheet — only shows projects + labels) ── */}
+        {showSmartViews && (
+          <div className="mb-1">
+            <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              Smart Views
+            </p>
+            <div className="space-y-0.5">
+              <NavItem
+                icon={Calendar}
+                label="Today"
+                isSelected={activeView?.kind === 'today'}
+                onClick={() => setActiveView({ kind: 'today' })}
+              />
+              <NavItem
+                icon={CalendarDays}
+                label="Upcoming"
+                isSelected={activeView?.kind === 'upcoming'}
+                onClick={() => setActiveView({ kind: 'upcoming' })}
+              />
+              <NavItem
+                icon={Star}
+                label="Favorites"
+                isSelected={activeView?.kind === 'favorites'}
+                onClick={() => setActiveView({ kind: 'favorites' })}
+              />
+              <NavItem
+                icon={Inbox}
+                label="Inbox"
+                isSelected={activeView?.kind === 'inbox'}
+                onClick={() => setActiveView({ kind: 'inbox' })}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Labels ── */}
         <div className="mb-1">
           <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-            Smart Views
+            Labels
           </p>
           <div className="space-y-0.5">
-            <NavItem
-              icon={Calendar}
-              label="Today"
-              isSelected={activeView?.kind === 'today'}
-              onClick={() => setActiveView({ kind: 'today' })}
-            />
-            <NavItem
-              icon={CalendarDays}
-              label="Upcoming"
-              isSelected={activeView?.kind === 'upcoming'}
-              onClick={() => setActiveView({ kind: 'upcoming' })}
-            />
-            <NavItem
-              icon={Star}
-              label="Favorites"
-              isSelected={activeView?.kind === 'favorites'}
-              onClick={() => setActiveView({ kind: 'favorites' })}
-            />
-            <NavItem
-              icon={Inbox}
-              label="Inbox"
-              isSelected={activeView?.kind === 'inbox'}
-              onClick={() => setActiveView({ kind: 'inbox' })}
-            />
-            <>
-              <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-                Labels
-              </p>
-              <div className="space-y-0.5">
-                {labels.map((l) => (
-                  <LabelRow
-                    key={l.localId}
-                    label={l}
-                    isSelected={
+            {labels.map((l) => (
+              <LabelRow
+                key={l.localId}
+                label={l}
+                isSelected={
+                  activeView?.kind === 'label' &&
+                  activeView.localId === l.localId
+                }
+                isEditing={labelEditingId === l.localId}
+                editingTitle={labelEditingTitle}
+                onSelect={() =>
+                  setActiveView({ kind: 'label', localId: l.localId })
+                }
+                onStartRename={() => {
+                  setLabelEditingId(l.localId);
+                  setLabelEditingTitle(l.title);
+                }}
+                onChangeRename={setLabelEditingTitle}
+                onSaveRename={async () => {
+                  const title = labelEditingTitle.trim();
+                  if (!title) {
+                    setLabelEditingId(null);
+                    return;
+                  }
+                  try {
+                    await updateLabel(l.localId, { title });
+                  } catch (err) {
+                    console.error('[sidebar] updateLabel failed:', err);
+                  } finally {
+                    setLabelEditingId(null);
+                    setLabelEditingTitle('');
+                  }
+                }}
+                onCancelRename={() => {
+                  setLabelEditingId(null);
+                  setLabelEditingTitle('');
+                }}
+                onDelete={async () => {
+                  try {
+                    await deleteLabel(l.localId);
+                    if (
                       activeView?.kind === 'label' &&
                       activeView.localId === l.localId
-                    }
-                    isEditing={labelEditingId === l.localId}
-                    editingTitle={labelEditingTitle}
-                    onSelect={() =>
-                      setActiveView({ kind: 'label', localId: l.localId })
-                    }
-                    onStartRename={() => {
-                      setLabelEditingId(l.localId);
-                      setLabelEditingTitle(l.title);
-                    }}
-                    onChangeRename={setLabelEditingTitle}
-                    onSaveRename={async () => {
-                      const title = labelEditingTitle.trim();
-                      if (!title) {
-                        setLabelEditingId(null);
-                        return;
-                      }
-                      try {
-                        await updateLabel(l.localId, { title });
-                      } catch (err) {
-                        console.error('[sidebar] updateLabel failed:', err);
-                      } finally {
-                        setLabelEditingId(null);
-                        setLabelEditingTitle('');
-                      }
-                    }}
-                    onCancelRename={() => {
-                      setLabelEditingId(null);
-                      setLabelEditingTitle('');
-                    }}
-                    onDelete={async () => {
-                      try {
-                        await deleteLabel(l.localId);
-                        if (
-                          activeView?.kind === 'label' &&
-                          activeView.localId === l.localId
-                        )
-                          setActiveView(null);
-                      } catch (err) {
-                        console.error('[sidebar] deleteLabel failed:', err);
-                      }
-                    }}
-                  />
-                ))}
-                {creatingLabel ? (
-                  <input
-                    type="text"
-                    autoFocus
-                    value={newLabelTitle}
-                    disabled={labelBusy}
-                    onChange={(e) => setNewLabelTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleCreateLabel();
-                      } else if (e.key === 'Escape') {
-                        setCreatingLabel(false);
-                        setNewLabelTitle('');
-                      }
-                    }}
-                    placeholder="New label name…"
-                    className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-                  />
+                    )
+                      setActiveView(null);
+                  } catch (err) {
+                    console.error('[sidebar] deleteLabel failed:', err);
+                  }
+                }}
+              />
+            ))}
+            {creatingLabel ? (
+              <input
+                type="text"
+                autoFocus
+                value={newLabelTitle}
+                disabled={labelBusy}
+                onChange={(e) => setNewLabelTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateLabel();
+                  } else if (e.key === 'Escape') {
+                    setCreatingLabel(false);
+                    setNewLabelTitle('');
+                  }
+                }}
+                placeholder="New label name…"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreatingLabel(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+              >
+                {labelBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCreatingLabel(true)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-                  >
-                    {labelBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5" />
-                    )}
-                    New label
-                  </button>
+                  <Plus className="h-3.5 w-3.5" />
                 )}
-              </div>
-            </>
+                New label
+              </button>
+            )}
           </div>
         </div>
 
