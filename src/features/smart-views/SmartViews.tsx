@@ -14,6 +14,7 @@ import { useProjects } from '@/queries/projects';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { impactComplete, impactDeleted } from '@/utils/haptics';
 import {
   useTodayTasks,
@@ -62,6 +63,7 @@ function SmartView({
   defaultLabelLocalId?: string;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
+  const isMobile = useIsMobile();
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const filtered = groups
     .map((g) => ({
@@ -166,14 +168,18 @@ function SmartView({
 
   return (
     <>
-      <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
-        <h1 className="text-base font-semibold tracking-tight">{title}</h1>
-        {activeTotal > 0 ? (
-          <span className="text-xs text-[var(--color-muted-foreground)]">
-            {activeTotal}
-          </span>
-        ) : null}
-      </header>
+      {/* On mobile the title is shown by the app header (large title), so this
+          in-content header would duplicate it — desktop only. */}
+      {!isMobile && (
+        <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
+          <h1 className="text-base font-semibold tracking-tight">{title}</h1>
+          {activeTotal > 0 ? (
+            <span className="text-xs text-[var(--color-muted-foreground)]">
+              {activeTotal}
+            </span>
+          ) : null}
+        </header>
+      )}
 
       <div className="flex min-h-0 min-w-0 flex-1">
         <PullToRefresh onRefresh={handleRefresh}>

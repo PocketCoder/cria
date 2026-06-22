@@ -5,26 +5,23 @@ export const SWIPE_DELETE_THRESHOLD = 160;
 const DIRECTION_RATIO = 1.5;
 
 interface UseSwipeGestureOptions {
-  /** Called when a full-swipe threshold is met (either direction) */
+  /** Called when the complete threshold is met on a left-to-right swipe */
   onComplete?: () => void;
-  /** Called when a delete-swipe threshold is met (either direction) */
+  /** Called when the delete threshold is met on a left-to-right swipe */
   onDelete?: () => void;
-  /** Live offset callback for progressive UI updates (no re-render) */
-  onProgress?: (offset: number) => void;
   disabled?: boolean;
 }
 
 interface UseSwipeGestureReturn<T> {
   ref: React.RefObject<T | null>;
   isSwiping: boolean;
-  /** Current translateX value (-160..160). Positive = left-to-right, negative = right-to-left. */
+  /** Current translateX value (0..160), tracking a left-to-right swipe. */
   swipeOffset: number;
 }
 
 export function useSwipeGesture<T extends HTMLElement>({
   onComplete,
   onDelete,
-  onProgress,
   disabled = false,
 }: UseSwipeGestureOptions): UseSwipeGestureReturn<T> {
   const ref = useRef<T>(null);
@@ -32,12 +29,10 @@ export function useSwipeGesture<T extends HTMLElement>({
   const [swipeOffset, setSwipeOffset] = useState(0);
   const onCompleteRef = useRef(onComplete);
   const onDeleteRef = useRef(onDelete);
-  const onProgressRef = useRef(onProgress);
   const swipeOccurredRef = useRef(false);
 
   onCompleteRef.current = onComplete;
   onDeleteRef.current = onDelete;
-  onProgressRef.current = onProgress;
 
   useEffect(() => {
     const el = ref.current;
@@ -74,7 +69,6 @@ export function useSwipeGesture<T extends HTMLElement>({
         translateX = Math.max(0, Math.min(SWIPE_DELETE_THRESHOLD, dx));
         el.style.transform = `translateX(${translateX}px)`;
         setSwipeOffset(translateX);
-        onProgressRef.current?.(translateX);
       }
     };
 

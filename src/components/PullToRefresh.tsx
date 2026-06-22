@@ -18,14 +18,16 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
   const [state, setState] = useState<'idle' | 'pulling' | 'ready' | 'refreshing'>('idle');
   const [pullDistance, setPullDistance] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pullingRef = useRef(false);
   const pullDistanceRef = useRef(0);
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
 
-  if (!isMobile) return <>{children}</>;
-
+  // The effect is gated on `isMobile` *inside* the body (not via an early
+  // return before it): a `return` ahead of a hook changes the hook count when
+  // the viewport crosses the 768px breakpoint and crashes React. The desktop
+  // passthrough render lives after all hooks instead.
   useEffect(() => {
+    if (!isMobile) return;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
 
@@ -36,7 +38,6 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       if (e.touches.length !== 1) return;
       startY = e.touches[0]!.clientY;
       pulling = false;
-      pullingRef.current = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -45,7 +46,6 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
 
       if (!pulling && scrollEl.scrollTop <= 0 && dy > START_PULL_DISTANCE) {
         pulling = true;
-        pullingRef.current = true;
         startY = e.touches[0]!.clientY;
       }
 
@@ -63,8 +63,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       if (pulling) {
         if (pullDistanceRef.current >= PULL_THRESHOLD) {
           setState('refreshing');
-          const promise = onRefreshRef.current();
-          promise.finally(() => {
+          onRefreshRef.current().finally(() => {
             setState('idle');
             setPullDistance(0);
           });
@@ -74,12 +73,10 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
         }
       }
       pulling = false;
-      pullingRef.current = false;
     };
 
     const onTouchCancel = () => {
       pulling = false;
-      pullingRef.current = false;
       pullDistanceRef.current = 0;
       setState('idle');
       setPullDistance(0);
@@ -96,11 +93,13 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       scrollEl.removeEventListener('touchend', onTouchEnd);
       scrollEl.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (!isMobile) return <>{children}</>;
 
   const label =
     state === 'ready' ? 'Release to refresh' :
-    state === 'refreshing' ? 'Refreshing\u2026' :
+    state === 'refreshing' ? 'Refreshing…' :
     'Pull to refresh';
 
   return (

@@ -17,6 +17,7 @@ import { useProjects } from '@/queries/projects';
 import { useProjectViews } from '@/queries/views';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 import { ProjectHeader } from '@/features/projects/ProjectHeader';
+import { MobileViewSwitcher } from '@/features/projects/MobileViewSwitcher';
 import { TaskList } from '@/features/tasks/TaskList';
 // Heavy, conditionally-rendered project views — code-split out of the startup
 // bundle. Only loaded when the active project view actually selects one. The
@@ -60,7 +61,7 @@ import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Search, Settings, X } from 'lucide-react';
+import { Plus, Search, Settings, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -467,17 +468,34 @@ export function Shell() {
           </div>
         )}
         {isMobile ? (
-          <button
-            type="button"
-            aria-label="Search"
-            onClick={() => {
-              setMobileSearchOpen(true);
-              setTimeout(() => searchInputRef.current?.focus(), 100);
-            }}
-            className="-mr-1 shrink-0 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-          >
-            <Search className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {activeView?.kind === 'project' && (
+              <MobileViewSwitcher
+                views={projectViews}
+                activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
+                onSelect={handleSelectView}
+              />
+            )}
+            <button
+              type="button"
+              aria-label="Search"
+              onClick={() => {
+                setMobileSearchOpen(true);
+                setTimeout(() => searchInputRef.current?.focus(), 100);
+              }}
+              className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Add task"
+              onClick={() => setShowQuickAdd(true)}
+              className="-mr-1 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-end gap-3">
             <span className="text-xs text-[var(--color-muted-foreground)]">
@@ -626,7 +644,7 @@ export function Shell() {
         </div>
       )}
 
-      <TabBar onOpenQuickAdd={() => setShowQuickAdd(true)} />
+      <TabBar />
       </div>
   );
 }

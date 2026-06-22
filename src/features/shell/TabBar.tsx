@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Calendar, CalendarDays, Star, Inbox, ListTodo, Plus } from 'lucide-react';
+import { Calendar, CalendarDays, Star, Inbox, ListTodo } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
 
-interface TabBarProps {
-  onOpenQuickAdd: () => void;
-}
-
-export function TabBar({ onOpenQuickAdd }: TabBarProps) {
+export function TabBar() {
   const isMobile = useIsMobile();
   const activeView = useUi((s) => s.activeView);
   const setActiveView = useUi((s) => s.setActiveView);
@@ -36,16 +32,11 @@ export function TabBar({ onOpenQuickAdd }: TabBarProps) {
     { key: 'projects', icon: ListTodo, label: 'Projects', view: null, action: () => setSheetOpen(true) },
   ];
 
-  const isActive = (tab: typeof tabs[number]) => {
-    if (!activeView) return tab.key === 'today';
-    if (tab.view) {
-      return activeView.kind === tab.view.kind &&
-        'localId' in tab.view && 'localId' in activeView
-        ? tab.view.localId === (activeView as any).localId
-        : activeView.kind === tab.view.kind;
-    }
-    return false;
-  };
+  // All tabs map to smart views (today/upcoming/inbox/favorites), keyed by
+  // `kind` alone; the Projects tab has `view: null` and is never "active" (it
+  // opens a sheet). Default to Today when no view is selected.
+  const isActive = (tab: typeof tabs[number]) =>
+    !activeView ? tab.key === 'today' : tab.view !== null && activeView.kind === tab.view.kind;
 
   return (
     <>
@@ -79,15 +70,6 @@ export function TabBar({ onOpenQuickAdd }: TabBarProps) {
             </button>
           );
         })}
-        {/* Floating quick-add button sitting above the tab bar */}
-        <button
-          type="button"
-          onClick={onOpenQuickAdd}
-          className="absolute -top-5 left-1/2 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)] shadow-lg transition-transform active:scale-90"
-          aria-label="Quick add"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
       </nav>
 
       {/* Projects/Labels bottom sheet */}
