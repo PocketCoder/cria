@@ -153,12 +153,6 @@ interface TaskWithProjectRow extends TaskRow {
   project_title: string;
 }
 
-// SELECT_TASK_COLS prefixed with the `t.` table alias for joins; SQLite
-// returns each as its bare column name, so it still maps to TaskRow.
-const SELECT_TASK_COLS_T = SELECT_TASK_COLS.split(',')
-  .map((c) => `t.${c.trim()}`)
-  .join(', ');
-
 function rowToTaskWithProject(row: TaskWithProjectRow): TaskWithProject {
   return { ...rowToTask(row), projectTitle: row.project_title };
 }

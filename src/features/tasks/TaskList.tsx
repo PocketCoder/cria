@@ -45,9 +45,6 @@ import { TaskHoverPreview } from './TaskHoverPreview';
 import { DatePicker } from '@/components/DatePicker';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
-import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
-import { PullToRefresh } from '@/components/PullToRefresh';
-import { impactComplete, impactReordered, impactDeleted } from '@/utils/haptics';
 
 // Collect a task and all its descendants from the task tree
 function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {
@@ -120,9 +117,6 @@ export function TaskList({ project, view }: TaskListProps) {
     staleTime: 30_000,
   });
 
-  const handleRefresh = useCallback(async () => {
-    await qc.invalidateQueries();
-  }, [qc]);
   useEffect(() => subscribe('tasks', () => {
     qc.invalidateQueries({ queryKey: ['subtasks', project.localId] });
   }), [qc, project.localId]);
@@ -245,7 +239,6 @@ export function TaskList({ project, view }: TaskListProps) {
         } else {
           await reindexTasks(orderedIds, view.localId);
         }
-        impactReordered();
       } catch (err) {
         console.error('[tasks] failed to reorder task:', err);
         setReorderError(true);
@@ -316,7 +309,7 @@ export function TaskList({ project, view }: TaskListProps) {
   };
 
   return (
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {reorderError && <ReorderErrorPill onClose={() => setReorderError(false)} />}
       <div className="border-b border-[var(--color-border)]">
         <div className="flex items-center justify-between px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
@@ -486,8 +479,7 @@ export function TaskList({ project, view }: TaskListProps) {
           items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
-          <PullToRefresh onRefresh={handleRefresh}>
-          <ul>
+          <ul className="min-h-0 flex-1 overflow-y-auto">
             {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
@@ -528,7 +520,6 @@ export function TaskList({ project, view }: TaskListProps) {
               </li>
             ) : null}
           </ul>
-          </PullToRefresh>
         </SortableContext>
         <DragOverlay>
           {activeId ? (
@@ -663,27 +654,11 @@ const TaskRow = memo(function TaskRow({
       await updateTask(task.localId, { done: nowDone });
       if (nowDone) {
         playCompletionSound();
-        impactComplete();
       }
     } catch (err) {
       console.error('Failed to update task:', err);
     }
   }, [task.localId, task.done]);
-
-  const handleSwipeComplete = useCallback(() => {
-    void handleToggle();
-  }, [handleToggle]);
-
-  const handleSwipeDelete = useCallback(() => {
-    enqueueDelete(task);
-    impactDeleted();
-  }, [enqueueDelete, task]);
-
-  const { ref: swipeRef, isSwiping, swipeOffset } = useSwipeGesture<HTMLDivElement>({
-    onComplete: handleSwipeComplete,
-    onDelete: handleSwipeDelete,
-    disabled: editing,
-  });
 
   const {
     attributes,
@@ -694,7 +669,7 @@ const TaskRow = memo(function TaskRow({
     isDragging,
   } = useSortable({
     id: task.localId,
-    disabled: !sortable || editing || isSwiping,
+    disabled: !sortable || editing,
   });
 
   const style: React.CSSProperties = {
@@ -753,43 +728,7 @@ const TaskRow = memo(function TaskRow({
       )}
       onClick={() => { if (!editing) setSelectedTask(task.localId); }}
     >
-      {/* Left-side progressive action indicator (left-to-right swipe) */}
-      {(() => {
-        const t = swipeOffset > 0
-          ? Math.min(1, swipeOffset / SWIPE_DELETE_THRESHOLD)
-          : 0;
-        const blend = swipeOffset > SWIPE_COMPLETE_THRESHOLD
-          ? Math.min(1, (swipeOffset - SWIPE_COMPLETE_THRESHOLD) / (SWIPE_DELETE_THRESHOLD - SWIPE_COMPLETE_THRESHOLD))
-          : 0;
-        const r = Math.round(22 + (239 - 22) * blend);
-        const g = Math.round(163 - 163 * blend);
-        const b = Math.round(74 - 74 * blend);
-        const doneOpacity = swipeOffset > 0 ? (swipeOffset < SWIPE_COMPLETE_THRESHOLD ? 1 : Math.max(0, 1 - blend * 1.5)) : 0;
-        const deleteOpacity = swipeOffset > SWIPE_COMPLETE_THRESHOLD ? Math.min(1, (blend - 0.2) / 0.8) : 0;
-        return (
-          <div
-            className="absolute inset-y-0 left-0 flex items-center justify-center text-white text-xs font-medium pointer-events-none"
-            style={{ zIndex: 0, width: `${Math.round(t * SWIPE_DELETE_THRESHOLD)}px` }}
-          >
-            <span style={{ background: t > 0 ? `rgb(${r} ${g} ${b})` : 'transparent', position: 'absolute', inset: 0 }} />
-            <span className="absolute flex items-center gap-1" style={{ opacity: doneOpacity, transition: 'none' }}>
-              <Check className="h-4 w-4" />
-              Done
-            </span>
-            <span className="absolute flex items-center gap-1" style={{ opacity: deleteOpacity, transition: 'none' }}>
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </span>
-          </div>
-        );
-      })()}
-
-
-      <div
-        ref={swipeRef as React.Ref<HTMLDivElement>}
-        className="flex w-full items-start gap-3 pr-6 py-3"
-        style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
-      >
+      <div className="flex w-full items-start gap-3 pr-6 py-3">
         <input
           type="checkbox"
           checked={task.done}
@@ -876,7 +815,7 @@ const TaskRow = memo(function TaskRow({
             the title baseline (issue #21). Pencil enters inline rename —
             the explicit affordance now that single-click on the title
             opens detail instead of editing (issue #20). */}
-        <div className={cn('mt-1 flex items-center gap-1', isSwiping && 'opacity-0')}>
+        <div className="mt-1 flex items-center gap-1">
           <button
             onClick={handleTitleEdit}
             aria-label="Rename task"
