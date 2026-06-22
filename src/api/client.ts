@@ -9,9 +9,21 @@ import {
   recordRequestSuccess,
   withTimeout,
 } from './resilience';
-import { getAuthSnapshot } from '@/auth/store';
+import { getAuthSnapshot, useAuth } from '@/auth/store';
 
 export type ApiClient = Client<paths>;
+
+/**
+ * The server rejected our token (expired or revoked). Drop the stored
+ * credentials and return to the login screen — but only when we currently
+ * think we're authenticated, so a stray 401 during the login handshake itself
+ * can't trigger a sign-out loop.
+ */
+function handleUnauthorized(): void {
+  if (useAuth.getState().status.kind === 'authenticated') {
+    void useAuth.getState().signOut();
+  }
+}
 
 function normalizeBase(url: string): string {
   return url.replace(/\/+$/, '');
@@ -146,12 +158,14 @@ export function createApiFetch(): (input: RequestInfo | URL, init?: RequestInit)
   const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/v1`;
   const token = snap.token ?? '';
   guardTokenDestination(baseUrl, token);
-  return (input, init) => {
+  return async (input, init) => {
     const url = typeof input === 'string' ? `${baseUrl}${input}` : input;
     const headers: Record<string, string> = token
       ? { Authorization: `Bearer ${token}`, ...(init?.headers as Record<string, string> | undefined) }
       : { ...(init?.headers as Record<string, string> | undefined) };
-    return platformFetch(url, { ...init, headers });
+    const res = await platformFetch(url, { ...init, headers });
+    if (res.status === 401) handleUnauthorized();
+    return res;
   };
 }
 
@@ -184,6 +198,7 @@ export async function callApi<T>(
   // `undefined` cast as T, which is fine for `await callApi(...)`.
   if (response.ok) return data as T;
 
+  if (response.status === 401) handleUnauthorized();
   const bodyText = await response.text().catch(() => '');
   throw await buildApiError(response.status, bodyText);
 }
