@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Loader2, X, Plus, Trash2, Sparkles } from 'lucide-react';
 import { createTask } from '@/db/tasks';
 import { applyLabelsByTitle } from '@/db/labels';
-import { useProjects } from '@/queries/projects';
+import { useSelectableProjects } from '@/queries/projects';
 import { useSettings } from '@/stores/settings';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
@@ -33,7 +33,7 @@ interface DraftItem {
  */
 export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
   const isMobile = useIsMobile();
-  const { data: projects = [] } = useProjects();
+  const { data: projects = [] } = useSelectableProjects();
   const shoppingProjectId = useSettings((s) => s.shoppingProjectId);
   const shoppingLabel = useSettings((s) => s.shoppingLabel);
 

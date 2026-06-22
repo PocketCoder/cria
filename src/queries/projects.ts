@@ -42,3 +42,26 @@ export function useProjects() {
     refetchOnWindowFocus: false,
   });
 }
+
+/**
+ * Vikunja syncs a magic "Favorites" project that aggregates favourited tasks —
+ * it's a view, not a real container, so it must never be offered as a place to
+ * *create* a task (you favourite a task via its isFavorite flag instead). The
+ * sidebar hides it the same way.
+ */
+export function isFavoritesPseudoProject(p: Project): boolean {
+  return p.title === 'Favorites';
+}
+
+/**
+ * Like {@link useProjects} but excludes the Favorites pseudo-project — use this
+ * for every "which project does this task go in?" picker. `data` is always an
+ * array (never undefined) so callers can drop the `?? []` default.
+ */
+export function useSelectableProjects() {
+  const query = useProjects();
+  return {
+    ...query,
+    data: (query.data ?? []).filter((p) => !isFavoritesPseudoProject(p)),
+  };
+}

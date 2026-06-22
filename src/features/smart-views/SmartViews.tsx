@@ -11,7 +11,7 @@ import { createTask, updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
-import { useProjects } from '@/queries/projects';
+import { useSelectableProjects } from '@/queries/projects';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
 import { PullToRefresh } from '@/components/PullToRefresh';
@@ -79,7 +79,7 @@ function SmartView({
   );
 
   /* ── inline create ──────────────────────────────────────── */
-  const { data: projects = [] } = useProjects();
+  const { data: projects = [] } = useSelectableProjects();
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);

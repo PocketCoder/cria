@@ -4,7 +4,7 @@ import { useCurrentUser } from '@/queries/user';
 import { useServerVersion } from '@/queries/server';
 import { useUpdaterStore } from '@/stores/updater';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
-import { useProjects } from '@/queries/projects';
+import { useSelectableProjects } from '@/queries/projects';
 import { pushUserSettings, type UserSettingsInput } from '@/api/userSettings';
 import { notify } from '@/db/bus';
 import { Button } from '@/components/ui/button';
@@ -90,7 +90,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setShoppingProjectId = useSettings((s) => s.setShoppingProjectId);
   const shoppingLabel = useSettings((s) => s.shoppingLabel);
   const setShoppingLabel = useSettings((s) => s.setShoppingLabel);
-  const { data: projects = [] } = useProjects();
+  const { data: projects = [] } = useSelectableProjects();
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
