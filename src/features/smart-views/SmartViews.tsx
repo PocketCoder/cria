@@ -403,7 +403,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
 
       <div
         ref={swipeRef as React.Ref<HTMLDivElement>}
-        className="flex w-full items-start gap-3 pr-6 py-3"
+        className="flex w-full items-start gap-3 px-6 py-3"
         style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
       >
         <input
