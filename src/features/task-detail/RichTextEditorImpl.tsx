@@ -775,7 +775,7 @@ function EditView({
       <div className="min-w-0 max-w-full">
         <EditorContent editor={editor} />
       </div>
-      <div className="flex items-center justify-end gap-2 text-[10px] text-[var(--color-muted-foreground)]">
+      <div className="flex items-center justify-end gap-2 text-footnote text-[var(--color-muted-foreground)]">
         <span className="mr-auto">⌘+Enter · Esc · /commands</span>
         <button
           type="button"
@@ -833,7 +833,7 @@ function EditView({
                   <span className="text-xs font-medium leading-none">{cmd.label}</span>
                   <span
                     className={cn(
-                      'mt-0.5 text-[9px] leading-tight truncate',
+                      'mt-0.5 text-micro leading-tight truncate',
                       isSelected
                         ? 'text-[var(--color-primary-foreground)]/80'
                         : 'text-[var(--color-muted-foreground)]'

@@ -279,7 +279,7 @@ export function CommandPalette({
           )}
           {grouped.map((group) => (
             <div key={group.name}>
-              <p className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+              <p className="px-2 pb-1 pt-3 text-caption font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
                 {group.name}
               </p>
               {group.items.map((item) => {
@@ -301,7 +301,7 @@ export function CommandPalette({
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {item.label}
                     </span>
-                    <span className="flex-shrink-0 text-[11px] opacity-40">
+                    <span className="flex-shrink-0 text-caption opacity-40">
                       {item.subtitle}
                     </span>
                   </button>
@@ -311,7 +311,7 @@ export function CommandPalette({
           ))}
         </div>
 
-        <div className="border-t border-[var(--color-border)] px-4 py-2 text-[11px] text-[var(--color-muted-foreground)]">
+        <div className="border-t border-[var(--color-border)] px-4 py-2 text-caption text-[var(--color-muted-foreground)]">
           <span>&uarr;&darr; Navigate &middot; Enter select &middot; Esc close</span>
         </div>
       </div>

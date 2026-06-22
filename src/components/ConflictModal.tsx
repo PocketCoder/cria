@@ -148,7 +148,7 @@ function ConflictItem({
     <li className="space-y-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <p className="text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
             {conflict.entity_type}
           </p>
           <p className="text-xs text-[var(--color-muted-foreground)]">
@@ -182,7 +182,7 @@ function ConflictItem({
       ) : (
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            <tr className="text-footnote uppercase tracking-wide text-[var(--color-muted-foreground)]">
               <th className="w-[28%] py-1 pr-2 text-left font-medium">Field</th>
               <th className="w-[36%] py-1 pr-2 text-left font-medium">
                 My version

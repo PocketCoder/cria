@@ -4,6 +4,7 @@ import { toCalendarDate } from '@/lib/dateFormat';
 import { Check, Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DatePicker } from '@/components/DatePicker';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useUi } from '@/stores/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { createTask, updateTask } from '@/db/tasks';
@@ -204,19 +205,18 @@ function SmartView({
               />
             </div>
             <div className="mt-2 flex items-center gap-3 pl-7 text-[var(--color-muted-foreground)]">
-              <select
-                value={projectLocalId}
-                onChange={(e) => setProjectLocalId(e.target.value)}
-                className="text-xs max-w-36 truncate"
-                disabled={isSubmitting}
-              >
-                {projects.length === 0 && <option value="">No projects</option>}
-                {projects.map((p) => (
-                  <option key={p.localId} value={p.localId}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
+              {projects.length > 0 ? (
+                <Select value={projectLocalId} onValueChange={setProjectLocalId} disabled={isSubmitting}>
+                  <SelectTrigger className="max-w-36 truncate text-xs">
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.localId} value={p.localId}>{p.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
               <DatePicker
                 value={metadata.dueDate !== undefined ? metadata.dueDate : datePicker || null}
                 onChange={(iso) => {
@@ -244,7 +244,7 @@ function SmartView({
               const completed = g.tasks.filter((t) => t.done);
               return (
                 <div key={g.key}>
-                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
                     {g.label}
                     <span className="font-normal normal-case">{active.length}</span>
                   </h2>
@@ -262,7 +262,7 @@ function SmartView({
                           <button
                             type="button"
                             onClick={() => setShowCompleted((s) => !s)}
-                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
                           >
                             {showCompleted ? (
                               <ChevronDown className="h-3 w-3 shrink-0" />
@@ -425,7 +425,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
               {task.title}
             </p>
           </TaskHoverPreview>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-[var(--color-muted-foreground)]">
             {showProject ? <span>{task.projectTitle}</span> : null}
             {dueLabel ? <span>{dueLabel}</span> : null}
             {task.priority > 0 ? (

@@ -9,7 +9,7 @@ export function SearchQueryPreview({ parsed }: { parsed: SearchQuery }) {
   if (!hasFilters && !text) return null;
 
   return (
-    <ul className="flex flex-wrap items-center gap-1 text-[11px]">
+    <ul className="flex flex-wrap items-center gap-1 text-caption">
       {dueDateStart ? (
         <Chip
           icon={<CalendarDays className="h-3 w-3" />}

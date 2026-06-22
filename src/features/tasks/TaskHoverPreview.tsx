@@ -111,7 +111,7 @@ export function TaskHoverPreview({ task, children }: TaskHoverPreviewProps) {
             ) : null}
             {task.title}
           </p>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-muted-foreground)]">
+          <div className="flex flex-wrap items-center gap-2 text-caption text-[var(--color-muted-foreground)]">
             {task.dueDate ? (
               <span>Due {format(new Date(task.dueDate), 'd MMM')}</span>
             ) : null}

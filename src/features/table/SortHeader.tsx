@@ -47,7 +47,7 @@ export function SortHeader({ column, dir, order, onSort }: SortHeaderProps) {
           <ChevronsUpDown className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-60" />
         )}
         {order !== null ? (
-          <span className="text-[9px] tabular-nums text-[var(--color-muted-foreground)]">
+          <span className="text-micro tabular-nums text-[var(--color-muted-foreground)]">
             {order}
           </span>
         ) : null}

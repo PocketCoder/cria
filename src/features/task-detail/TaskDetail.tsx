@@ -204,7 +204,7 @@ export function TaskDetail() {
         title="Click to edit"
       >
         {task.identifier ? (
-          <span className="mr-1.5 text-[10px] font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <span className="mr-1.5 text-footnote font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
             {task.identifier}
           </span>
         ) : null}
@@ -223,7 +223,7 @@ export function TaskDetail() {
         <Copy className="h-3.5 w-3.5" />
       </button>
       {copied ? (
-        <span className="shrink-0 text-[10px] text-[var(--color-primary)] animate-in fade-in">
+        <span className="shrink-0 text-footnote text-[var(--color-primary)] animate-in fade-in">
           Copied!
         </span>
       ) : null}
@@ -243,7 +243,7 @@ export function TaskDetail() {
         ) : null}
 
         <section className="mb-4">
-          <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <h3 className="mb-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
             Description
           </h3>
           <RichTextEditor
@@ -399,7 +399,7 @@ function DetailCard({
           <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
             <div className="min-w-0 flex-1">
               {header ?? (
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                <span className="text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
                   Task
                 </span>
               )}

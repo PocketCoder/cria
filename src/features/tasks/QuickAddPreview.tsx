@@ -39,7 +39,7 @@ export function QuickAddPreview({ parsed }: Props) {
   if (!hasAny) return null;
 
   return (
-    <ul className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
+    <ul className="mt-1 flex flex-wrap items-center gap-1 text-caption">
       {dueDate ? (
         <Chip
           icon={<CalendarDays className="h-3 w-3" />}

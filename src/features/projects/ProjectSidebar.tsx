@@ -28,6 +28,13 @@ import {
 } from '@/components/ui/popover';
 import type { Project } from '@/domain/project';
 import type { Label } from '@/domain/label';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu';
 
 /* ────────────────────────── shared nav item ─────────────────────────── */
 
@@ -221,7 +228,7 @@ export function ProjectSidebar({
         {/* ── Smart Views (hidden in mobile sheet — only shows projects + labels) ── */}
         {showSmartViews && (
           <div className="mb-1">
-            <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
               Smart Views
             </p>
             <div className="space-y-0.5">
@@ -255,7 +262,7 @@ export function ProjectSidebar({
 
         {/* ── Labels ── */}
         <div className="mb-1">
-          <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
             Labels
           </p>
           <div className="space-y-0.5">
@@ -350,7 +357,7 @@ export function ProjectSidebar({
 
         {/* ── Projects ── */}
         <div>
-          <header className="flex items-center justify-between px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <header className="flex items-center justify-between px-2 pb-1 pt-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
             <span>Projects</span>
             {isFetching ? (
               <span aria-live="polite">syncing…</span>
@@ -536,177 +543,196 @@ function ProjectRow({
   }
 
   return (
-    <li
-      draggable={!isEditing}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      className={cn(
-        'group relative',
-        isDragOver && 'border-t-2 border-[var(--color-primary)]',
-      )}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          'flex w-full items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
-          'hover:bg-[var(--color-muted)]',
-          isSelected && 'bg-[var(--color-muted)] font-medium',
-        )}
-      >
-        <GripVertical
-          aria-hidden="true"
-          className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-        />
-        <span
-          aria-hidden="true"
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{
-            background: project.hexColor || 'var(--color-muted-foreground)',
-          }}
-        />
-        <span className="truncate">{project.title}</span>
-        {project.isArchived ? (
-          <span className="ml-auto text-[10px] uppercase text-[var(--color-muted-foreground)]">
-            archived
-          </span>
-        ) : taskCount > 0 ? (
-          <span className="ml-auto text-[10px] text-[var(--color-muted-foreground)]">
-            {taskCount}
-          </span>
-        ) : null}
-      </button>
-
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger asChild>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li
+          draggable={!isEditing}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          onDragEnd={onDragEnd}
+          className={cn(
+            'group relative',
+            isDragOver && 'border-t-2 border-[var(--color-primary)]',
+          )}
+        >
           <button
             type="button"
-            aria-label={`Actions for ${project.title}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={onSelect}
             className={cn(
-              'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
-              'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
-              menuOpen && 'opacity-100',
+              'flex w-full items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
+              'hover:bg-[var(--color-muted)]',
+              isSelected && 'bg-[var(--color-muted)] font-medium',
             )}
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <GripVertical
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+            />
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                background: project.hexColor || 'var(--color-muted-foreground)',
+              }}
+            />
+            <span className="truncate">{project.title}</span>
+            {project.isArchived ? (
+              <span className="ml-auto text-footnote uppercase text-[var(--color-muted-foreground)]">
+                archived
+              </span>
+            ) : taskCount > 0 ? (
+              <span className="ml-auto text-footnote text-[var(--color-muted-foreground)]">
+                {taskCount}
+              </span>
+            ) : null}
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
-          {confirmDelete ? (
-            <div className="space-y-1.5 p-1.5 text-xs">
-              <p>Delete "{project.title}"?</p>
-              <p className="text-[10px] text-[var(--color-muted-foreground)]">
-                Tasks inside the project are removed too.
-              </p>
-              <div className="flex justify-end gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await onDelete();
-                    setMenuOpen(false);
-                    setConfirmDelete(false);
-                  }}
-                  className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ) : (
-            <ul className="text-xs">
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
-                  onClick={() => {
-                    onStartRename();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Rename
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
-                  onClick={() => setColorOpen(!colorOpen)}
-                >
-                  <Palette className="h-3.5 w-3.5" />
-                  Color
-                </button>
-                {colorOpen && (
-                  <div className="flex flex-wrap gap-1 px-2 py-1.5">
-                    {PROJECT_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={async () => {
-                          await updateProject(project.localId, {
-                            hexColor: c === project.hexColor ? null : c,
-                          });
-                          setMenuOpen(false);
-                          setColorOpen(false);
-                        }}
-                        className={cn(
-                          'h-5 w-5 rounded-full border-2 transition-all',
-                          c === project.hexColor
-                            ? 'border-[var(--color-foreground)] scale-110'
-                            : 'border-transparent hover:scale-110',
-                        )}
-                        style={{ background: c }}
-                      />
-                    ))}
-                    <input
-                      type="color"
-                      value={project.hexColor ?? '#000000'}
-                      onChange={(e) => {
-                        updateProject(project.localId, { hexColor: e.target.value });
-                        setMenuOpen(false);
-                        setColorOpen(false);
-                      }}
-                      className="h-5 w-5 cursor-pointer rounded-full border-0 overflow-hidden"
-                      title="Custom color"
-                    />
+
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Actions for ${project.title}`}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
+                  'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
+                  menuOpen && 'opacity-100',
+                )}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
+              {confirmDelete ? (
+                <div className="space-y-1.5 p-1.5 text-xs">
+                  <p>Delete "{project.title}"?</p>
+                  <p className="text-footnote text-[var(--color-muted-foreground)]">
+                    Tasks inside the project are removed too.
+                  </p>
+                  <div className="flex justify-end gap-1.5 pt-0.5">
                     <button
-                      onClick={async () => {
-                        await updateProject(project.localId, { hexColor: null });
-                        setMenuOpen(false);
-                        setColorOpen(false);
-                      }}
-                      className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
-                      title="Remove color"
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
                     >
-                      ×
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onDelete();
+                        setMenuOpen(false);
+                        setConfirmDelete(false);
+                      }}
+                      className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
+                    >
+                      Delete
                     </button>
                   </div>
-                )}
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              </li>
-            </ul>
-          )}
-        </PopoverContent>
-      </Popover>
-    </li>
+                </div>
+              ) : (
+                <ul className="text-xs">
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                      onClick={() => {
+                        onStartRename();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                      onClick={() => setColorOpen(!colorOpen)}
+                    >
+                      <Palette className="h-3.5 w-3.5" />
+                      Color
+                    </button>
+                    {colorOpen && (
+                      <div className="flex flex-wrap gap-1 px-2 py-1.5">
+                        {PROJECT_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={async () => {
+                              await updateProject(project.localId, {
+                                hexColor: c === project.hexColor ? null : c,
+                              });
+                              setMenuOpen(false);
+                              setColorOpen(false);
+                            }}
+                            className={cn(
+                              'h-5 w-5 rounded-full border-2 transition-all',
+                              c === project.hexColor
+                                ? 'border-[var(--color-foreground)] scale-110'
+                                : 'border-transparent hover:scale-110',
+                            )}
+                            style={{ background: c }}
+                          />
+                        ))}
+                        <input
+                          type="color"
+                          value={project.hexColor ?? '#000000'}
+                          onChange={(e) => {
+                            updateProject(project.localId, { hexColor: e.target.value });
+                            setMenuOpen(false);
+                            setColorOpen(false);
+                          }}
+                          className="h-5 w-5 cursor-pointer rounded-full border-0 overflow-hidden"
+                          title="Custom color"
+                        />
+                        <button
+                          onClick={async () => {
+                            await updateProject(project.localId, { hexColor: null });
+                            setMenuOpen(false);
+                            setColorOpen(false);
+                          }}
+                          className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-footnote text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
+                          title="Remove color"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </PopoverContent>
+          </Popover>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onStartRename}>
+          <span className="flex items-center gap-2">
+            <Pencil className="h-3.5 w-3.5" />
+            Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => { onDelete(); }}>
+          <span className="flex items-center gap-2">
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -760,98 +786,117 @@ function LabelRow({
   }
 
   return (
-    <li className="group relative">
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
-          'hover:bg-[var(--color-muted)]',
-          isSelected && 'bg-[var(--color-muted)] font-medium',
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{
-            background: label.hexColor || 'var(--color-muted-foreground)',
-          }}
-        />
-        <span className="truncate">{label.title}</span>
-      </button>
-
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger asChild>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li className="group relative">
           <button
             type="button"
-            aria-label={`Actions for ${label.title}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={onSelect}
             className={cn(
-              'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
-              'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
-              menuOpen && 'opacity-100',
+              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
+              'hover:bg-[var(--color-muted)]',
+              isSelected && 'bg-[var(--color-muted)] font-medium',
             )}
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                background: label.hexColor || 'var(--color-muted-foreground)',
+              }}
+            />
+            <span className="truncate">{label.title}</span>
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
-          {confirmDelete ? (
-            <div className="space-y-1.5 p-1.5 text-xs">
-              <p>Delete "{label.title}"?</p>
-              <p className="text-[10px] text-[var(--color-muted-foreground)]">
-                Removed from all tasks.
-              </p>
-              <div className="flex justify-end gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await onDelete();
-                    setMenuOpen(false);
-                    setConfirmDelete(false);
-                  }}
-                  className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ) : (
-            <ul className="text-xs">
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
-                  onClick={() => {
-                    onStartRename();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Rename
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              </li>
-            </ul>
-          )}
-        </PopoverContent>
-      </Popover>
-    </li>
+
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Actions for ${label.title}`}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
+                  'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
+                  menuOpen && 'opacity-100',
+                )}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
+              {confirmDelete ? (
+                <div className="space-y-1.5 p-1.5 text-xs">
+                  <p>Delete "{label.title}"?</p>
+                  <p className="text-footnote text-[var(--color-muted-foreground)]">
+                    Removed from all tasks.
+                  </p>
+                  <div className="flex justify-end gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onDelete();
+                        setMenuOpen(false);
+                        setConfirmDelete(false);
+                      }}
+                      className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <ul className="text-xs">
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                      onClick={() => {
+                        onStartRename();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </PopoverContent>
+          </Popover>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onStartRename}>
+          <span className="flex items-center gap-2">
+            <Pencil className="h-3.5 w-3.5" />
+            Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => { onDelete(); }}>
+          <span className="flex items-center gap-2">
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

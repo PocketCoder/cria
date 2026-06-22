@@ -136,7 +136,7 @@ export function CommentSection({
       <button
         type="button"
         onClick={handleToggle}
-        className="flex w-full items-center gap-1 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+        className="flex w-full items-center gap-1 text-left text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3 shrink-0" />
@@ -149,7 +149,7 @@ export function CommentSection({
           <span className="font-normal">{totalCount}</span>
         ) : null}
         {unreadCount > 0 ? (
-          <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-[9px] font-normal text-white">
+          <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-white">
             {unreadCount} new
           </span>
         ) : null}
@@ -161,7 +161,7 @@ export function CommentSection({
             <button
               type="button"
               onClick={() => setSortAsc(!sortAsc)}
-              className="flex items-center gap-1 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+              className="flex items-center gap-1 text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
             >
               <ArrowUpDown className="h-3 w-3" />
               {sortAsc ? 'Oldest first' : 'Newest first'}
@@ -270,14 +270,14 @@ function CommentRow({
           <button
             type="button"
             onClick={() => void onConfirmDelete()}
-            className="cursor-pointer rounded bg-[var(--color-destructive)] px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90"
+            className="cursor-pointer rounded bg-[var(--color-destructive)] px-2 py-0.5 text-footnote font-medium text-white hover:opacity-90"
           >
             Delete
           </button>
           <button
             type="button"
             onClick={onCancelDelete}
-            className="cursor-pointer rounded px-2 py-0.5 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            className="cursor-pointer rounded px-2 py-0.5 text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
           >
             Cancel
           </button>
@@ -299,7 +299,7 @@ function CommentRow({
         <button
           type="button"
           onClick={onCancelEdit}
-          className="mt-1 cursor-pointer text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+          className="mt-1 cursor-pointer text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
         >
           Cancel editing
         </button>
@@ -372,7 +372,7 @@ function CommentRow({
         </div>
       </div>
       <div
-        className="prose prose-sm max-w-none break-words text-xs leading-relaxed text-[var(--color-foreground)] [&_a]:underline [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-2 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[10px] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
+        className="prose prose-sm max-w-none break-words text-xs leading-relaxed text-[var(--color-foreground)] [&_a]:underline [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-2 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-footnote [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.comment) }}
       />
 
@@ -386,7 +386,7 @@ function CommentRow({
                 key={emoji}
                 type="button"
                 onClick={() => toggleCommentReaction(comment.localId, emoji)}
-                className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] leading-none cursor-pointer transition-colors ${
+                className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-caption leading-none cursor-pointer transition-colors ${
                   active
                     ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
                     : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/80'

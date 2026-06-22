@@ -10,6 +10,15 @@
 
   --radius: 0.5rem;
 
+  /* Typography scale — semantic tiers for the metadata sizes that live
+     below Tailwind's text-xs (12px), where arbitrary text-[Npx] values had
+     proliferated. Font-size only (no paired line-height) so existing
+     leading-* utilities keep controlling line-height. text-sm (14px) stays
+     the body default; text-xs (12px) is the subhead tier. */
+  --text-caption: 11px;  /* metadata, timestamps, chip labels */
+  --text-footnote: 10px; /* badges, secondary indicators */
+  --text-micro: 9px;     /* dense badges, avatar initials, tiny glyphs */
+
   /* Light theme tokens. */
   --color-accent: oklch(55% 0.2 250);
   --color-accent-foreground: oklch(99% 0 0);
@@ -345,6 +354,48 @@ body {
   --color-primary-foreground: oklch(12% 0 0);
   --color-accent: oklch(72% 0.18 250);
   --color-accent-foreground: oklch(12% 0 0);
+}
+
+/* ── Scrollbars ───────────────────────────────────────────
+   Thin, rounded, translucent — tuned to recede into the glass
+   aesthetic rather than the chunky default OS bar. The thumb
+   only gains contrast on hover. Firefox uses the standardised
+   scrollbar-* properties; WebKit/Blink uses ::-webkit-scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(60% 0.01 250 / 0.35) transparent;
+}
+.dark * {
+  scrollbar-color: oklch(70% 0.01 250 / 0.3) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(60% 0.01 250 / 0.3);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(55% 0.01 250 / 0.5);
+  background-clip: padding-box;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(70% 0.01 250 / 0.28);
+  background-clip: padding-box;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(75% 0.01 250 / 0.45);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* TipTap task-list — zero the inner <p> margins so each checked item

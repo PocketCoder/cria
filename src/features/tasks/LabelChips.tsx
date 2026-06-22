@@ -30,7 +30,7 @@ export const LabelChips = memo(function LabelChips({
           <li
             key={l.localId}
             title={l.description ?? l.title}
-            className="group/chip inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] leading-tight"
+            className="group/chip inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-footnote leading-tight"
             style={{
               background: bg,
               color: fg,

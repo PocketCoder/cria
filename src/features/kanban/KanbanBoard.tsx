@@ -423,7 +423,7 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
           ) : null}
           <span
             className={cn(
-              'ml-auto shrink-0 text-[10px] tabular-nums',
+              'ml-auto shrink-0 text-footnote tabular-nums',
               atLimit
                 ? 'font-medium text-[var(--color-warning)]'
                 : 'text-[var(--color-muted-foreground)]',
@@ -523,7 +523,7 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
               ))}
             </SortableContext>
             {tasks.length === 0 && (
-              <p className="py-4 text-center text-[11px] text-[var(--color-muted-foreground)]">
+              <p className="py-4 text-center text-caption text-[var(--color-muted-foreground)]">
                 No tasks
               </p>
             )}
@@ -615,7 +615,7 @@ const KanbanCard = memo(function KanbanCard({ task }: CardProps) {
         <p className="min-w-0 flex-1 truncate text-xs">{task.title}</p>
       </div>
       {task.priority > 0 || task.dueDate ? (
-        <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--color-muted-foreground)]">
+        <div className="mt-1 flex items-center gap-2 text-footnote text-[var(--color-muted-foreground)]">
           {task.priority > 0 ? (
             <span>{'!'.repeat(Math.min(5, task.priority))}</span>
           ) : null}
