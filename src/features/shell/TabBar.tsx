@@ -3,7 +3,7 @@ import { Calendar, CalendarDays, Star, Inbox, ListTodo } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
+import { ProjectPickerList } from '@/features/projects/ProjectPickerList';
 
 export function TabBar() {
   const isMobile = useIsMobile();
@@ -72,16 +72,14 @@ export function TabBar() {
         })}
       </nav>
 
-      {/* Projects/Labels bottom sheet */}
+      {/* Projects/Labels bottom sheet — tall, searchable, with counts */}
       {sheetOpen && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end" role="dialog" aria-label="Projects and labels" aria-modal="true">
           <div className="sheet-backdrop absolute inset-0" onClick={() => setSheetOpen(false)} />
-          <div className="safe-bottom relative z-10 max-h-[70vh] rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)]">
+          <div className="safe-bottom relative z-10 flex max-h-[88vh] min-h-[60vh] flex-col rounded-t-2xl bg-[var(--color-card)] pt-2 shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)]">
             {/* Grab handle */}
-            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
-            <div className="overflow-y-auto p-3">
-              <ProjectSidebar showSmartViews={false} />
-            </div>
+            <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
+            <ProjectPickerList onPick={() => setSheetOpen(false)} />
           </div>
         </div>
       )}
