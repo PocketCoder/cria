@@ -330,7 +330,7 @@ export function TaskList({ project, view }: TaskListProps) {
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {reorderError && <ReorderErrorPill onClose={() => setReorderError(false)} />}
       <div className="border-b border-[var(--color-border)]">
-        <div className="flex items-center justify-between px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
+        <div className="flex items-center justify-between px-7 py-2 text-xs text-[var(--color-muted-foreground)]">
           <div className="flex items-center gap-2">
             <span>
               {activeTasks.length === 0 && completedTasks.length === 0
@@ -372,7 +372,7 @@ export function TaskList({ project, view }: TaskListProps) {
         </div>
 
         {showFilterBar ? (
-          <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-6 py-1.5">
+          <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-7 py-1.5">
             <input
               type="text"
               value={filterDraft}
@@ -410,7 +410,7 @@ export function TaskList({ project, view }: TaskListProps) {
         ) : null}
 
         {showSortMenu ? (
-          <div className="border-t border-[var(--color-border)] px-6 py-1.5">
+          <div className="border-t border-[var(--color-border)] px-7 py-1.5">
             <Select
               value={sortRule ? `${sortRule.field}:${sortRule.direction}` : 'default'}
               onValueChange={(val) => {
@@ -442,7 +442,7 @@ export function TaskList({ project, view }: TaskListProps) {
           syntax; they override the parsed values when set. */}
       <form
         onSubmit={handleSubmit}
-        className="border-b border-[var(--color-border)] px-6 pt-3 pb-4"
+        className="border-b border-[var(--color-border)] px-7 pt-3 pb-4"
       >
         <div className="flex items-center gap-3">
           <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
@@ -548,7 +548,7 @@ export function TaskList({ project, view }: TaskListProps) {
         </SortableContext>
         <DragOverlay>
           {activeId ? (
-            <li className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-6 py-3 shadow-lg opacity-90">
+            <li className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-7 py-3 shadow-lg opacity-90">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm">{tasks.find((t) => t.localId === activeId)?.title ?? ''}</p>
               </div>
@@ -558,7 +558,7 @@ export function TaskList({ project, view }: TaskListProps) {
       </DndContext>
 
       {isError ? (
-        <p className="border-t border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-warning)]">
+        <p className="border-t border-[var(--color-border)] px-7 py-2 text-xs text-[var(--color-warning)]">
           Couldn't refresh
           {error instanceof Error ? `: ${error.message}` : ''}.
         </p>
@@ -700,7 +700,7 @@ const TaskRow = memo(function TaskRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    paddingLeft: `${24 + depth * 28}px`,
+    paddingLeft: `${28 + depth * 28}px`,
     paddingRight: 0,
     overflow: 'hidden',
     position: 'relative',

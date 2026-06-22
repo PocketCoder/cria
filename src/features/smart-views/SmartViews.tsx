@@ -172,7 +172,7 @@ function SmartView({
       {/* On mobile the title is shown by the app header (large title), so this
           in-content header would duplicate it — desktop only. */}
       {!isMobile && (
-        <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
+        <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-7 py-3">
           <h1 className="text-base font-semibold tracking-tight">{title}</h1>
           {activeTotal > 0 ? (
             <span className="text-xs text-[var(--color-muted-foreground)]">
@@ -186,7 +186,7 @@ function SmartView({
         <PullToRefresh onRefresh={handleRefresh}>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Inline create */}
-          <form onSubmit={handleSubmit} className="border-b border-[var(--color-border)] px-6 py-3">
+          <form onSubmit={handleSubmit} className="border-b border-[var(--color-border)] px-7 py-3">
             <div className="flex items-center gap-3">
               <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
                 {isSubmitting ? (
@@ -244,7 +244,7 @@ function SmartView({
               const completed = g.tasks.filter((t) => t.done);
               return (
                 <div key={g.key}>
-                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
                     {g.label}
                     <span className="font-normal normal-case">{active.length}</span>
                   </h2>
@@ -403,7 +403,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
 
       <div
         ref={swipeRef as React.Ref<HTMLDivElement>}
-        className="flex w-full items-start gap-3 px-6 py-3"
+        className="flex w-full items-start gap-3 px-7 py-3"
         style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
       >
         <input
