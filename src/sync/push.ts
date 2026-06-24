@@ -689,6 +689,29 @@ export async function retryDeadLetter(id: number): Promise<boolean> {
   return true;
 }
 
+/**
+ * Discard a single queued op. Removing the head row unblocks the FIFO drain
+ * so the rest of the queue can proceed. The local entity stays as-is (it just
+ * won't sync via this op), so this is a deliberate, destructive escape hatch
+ * for an op that's wedged the queue.
+ */
+export async function discardOutboxOp(id: number): Promise<void> {
+  await exec('DELETE FROM outbox WHERE id = ?', [id]);
+  notify('outbox');
+}
+
+/** Discard a single dead-lettered op (it already failed permanently). */
+export async function discardDeadLetter(id: number): Promise<void> {
+  await exec('DELETE FROM outbox_dead_letter WHERE id = ?', [id]);
+  notify('outbox');
+}
+
+/** Discard every dead-lettered op. */
+export async function clearDeadLetters(): Promise<void> {
+  await exec('DELETE FROM outbox_dead_letter', []);
+  notify('outbox');
+}
+
 export function taskToBody(
   task: TaskRow,
   projectServerId?: number,
