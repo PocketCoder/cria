@@ -154,7 +154,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
           />
           <span>{label}</span>
         </div>
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={scrollRef} className={cn('min-h-0 flex-1 overflow-y-auto', isMobile && 'tab-bar-safe-bottom')}>
           {children}
         </div>
       </div>

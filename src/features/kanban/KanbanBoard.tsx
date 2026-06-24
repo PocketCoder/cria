@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
 import { toCalendarDate } from '@/lib/dateFormat';
+import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTaskLabels } from '@/queries/taskLabels';
 import { KanbanFilterPopup } from './KanbanFilterPopup';
 import {
@@ -617,7 +618,7 @@ const KanbanCard = memo(function KanbanCard({ task }: CardProps) {
       {task.priority > 0 || task.dueDate ? (
         <div className="mt-1 flex items-center gap-2 text-footnote text-[var(--color-muted-foreground)]">
           {task.priority > 0 ? (
-            <span>{'!'.repeat(Math.min(5, task.priority))}</span>
+            <span style={{ color: priorityColor(task.priority) }}>{'!'.repeat(Math.min(5, task.priority))}</span>
           ) : null}
           {task.dueDate ? (
             <span>{formatShortDate(task.dueDate)}</span>

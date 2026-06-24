@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
 import { format } from 'date-fns';
 import { toCalendarDate } from '@/lib/dateFormat';
+import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
@@ -46,6 +47,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import { TaskHoverPreview } from './TaskHoverPreview';
@@ -83,6 +85,7 @@ interface TaskListProps {
 }
 
 export function TaskList({ project, view }: TaskListProps) {
+  const isMobile = useIsMobile();
   const {
     filterQuery,
     sortRule,
@@ -504,7 +507,7 @@ export function TaskList({ project, view }: TaskListProps) {
           items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="min-h-0 flex-1 overflow-y-auto">
+          <ul className={cn('min-h-0 flex-1 overflow-y-auto', isMobile && 'tab-bar-safe-bottom')}>
             {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
@@ -809,7 +812,7 @@ const TaskRow = memo(function TaskRow({
                     </span>
                   ) : null}
                   {task.priority > 0 ? (
-                    <span aria-label={`Priority ${task.priority}`}>
+                    <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
                       {'!'.repeat(Math.min(5, task.priority))}
                     </span>
                   ) : null}

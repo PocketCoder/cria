@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { useTaskLabels } from '@/queries/taskLabels';
+import { priorityColor } from '@/components/ui/priority-select';
 import { LabelChips } from './LabelChips';
 import type { Task } from '@/domain/task';
 
@@ -116,7 +117,7 @@ export function TaskHoverPreview({ task, children }: TaskHoverPreviewProps) {
               <span>Due {format(new Date(task.dueDate), 'd MMM')}</span>
             ) : null}
             {task.priority > 0 ? (
-              <span>{'!'.repeat(Math.min(5, task.priority))}</span>
+              <span style={{ color: priorityColor(task.priority) }}>{'!'.repeat(Math.min(5, task.priority))}</span>
             ) : null}
             {labels.length > 0 ? (
               <LabelChips labels={labels} />

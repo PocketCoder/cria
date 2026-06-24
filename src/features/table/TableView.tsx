@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { PrioritySelect } from '@/components/ui/priority-select';
+import { PrioritySelect, priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
@@ -593,7 +593,7 @@ function Cell({
       );
     case 'priority':
       return task.priority > 0 ? (
-        <span aria-label={`Priority ${task.priority}`}>
+        <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
           {'!'.repeat(Math.min(5, task.priority))}
         </span>
       ) : (
