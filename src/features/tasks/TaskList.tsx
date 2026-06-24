@@ -762,7 +762,7 @@ const TaskRow = memo(function TaskRow({
               onChange={handleToggle}
               onClick={(e) => e.stopPropagation()}
               aria-label={task.done ? 'Done' : 'Not done'}
-              className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
+              className="task-check mt-0.5"
             />
             <div className="min-w-0 flex-1">
               {editing ? (

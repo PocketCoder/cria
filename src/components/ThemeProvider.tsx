@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { useSettings, type ColorScheme } from '@/stores/settings';
+import { refreshNativeGlassTint } from '@/tauri/liquidGlass';
 
 function applyTheme(scheme: ColorScheme) {
   const root = document.documentElement;
@@ -10,6 +11,9 @@ function applyTheme(scheme: ColorScheme) {
   } else {
     root.classList.add(scheme);
   }
+  // Keep the native macOS glass tint in sync with the active scheme (no-op
+  // off macOS / when glass was never applied).
+  void refreshNativeGlassTint();
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

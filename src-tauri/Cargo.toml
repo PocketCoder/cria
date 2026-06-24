@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # `tray-icon` feature is desktop-only inside Tauri (the tray-icon crate is
 # target-gated to desktop), so leaving it enabled is a no-op on iOS/Android.
-tauri = { version = "2", features = ["image-png", "tray-icon"] }
+tauri = { version = "2", features = ["macos-private-api", "image-png", "tray-icon"] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
@@ -55,6 +55,11 @@ keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", features = ["NSApplication"] }
+# Native Liquid Glass (NSGlassEffectView, macOS 26+; falls back to
+# NSVisualEffectView on older macOS). macOS-only — the frontend gates the call
+# behind isGlassSupported(), and the window is made transparent only on macOS
+# (see tauri.macos.conf.json). Requires app.macOSPrivateApi = true.
+tauri-plugin-liquid-glass = "0.1"
 
 # Apple-platform native deps (macOS + iOS): Vision OCR for the shopping-list
 # photo feature, and the keyring Keychain backend for the auth token.

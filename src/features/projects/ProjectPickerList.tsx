@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Search, Star } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
@@ -41,6 +41,10 @@ export function ProjectPickerList({
     setActiveView({ kind: 'label', localId: id });
     onPick?.();
   };
+  const openFavorites = () => {
+    setActiveView({ kind: 'favorites' });
+    onPick?.();
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -58,6 +62,22 @@ export function ProjectPickerList({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+        {!term && (
+          <ul>
+            <li>
+              <button
+                type="button"
+                onClick={openFavorites}
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--color-accent)]/10"
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                  <Star className="h-4 w-4 text-[var(--color-primary)]" />
+                </span>
+                <span className="flex-1 truncate text-sm">Favorites</span>
+              </button>
+            </li>
+          </ul>
+        )}
         {fp.length > 0 && (
           <>
             <p className="sticky top-0 bg-[var(--color-card)] px-2 pb-1 pt-2 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">

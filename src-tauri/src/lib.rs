@@ -280,6 +280,15 @@ pub fn run() {
             });
     }
 
+    // Native Liquid Glass — macOS only (NSGlassEffectView on macOS 26+, with a
+    // NSVisualEffectView fallback). The crate is target-gated in Cargo.toml, so
+    // this block only compiles on macOS; the frontend (src/tauri/liquidGlass.ts)
+    // still gates the actual effect call behind isGlassSupported().
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_plugin_liquid_glass::init());
+    }
+
     // Cross-platform plugins (work on desktop + iOS + Android).
     let builder = builder
         .plugin(
