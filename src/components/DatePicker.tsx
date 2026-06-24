@@ -18,9 +18,43 @@ interface DatePickerProps {
    * emitted as a local datetime ISO.
    */
   enableTime?: boolean;
+  /**
+   * Todoist-style chip: when a date is set, show a relative label
+   * (Today / Tomorrow / weekday / date) and tint the chip — green for today,
+   * red for overdue, accent for future. Off by default so other call sites
+   * keep their plain formatted date.
+   */
+  smart?: boolean;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
+const DAY_MS = 86_400_000;
+
+/** Whole-calendar-day delta from today (local), ignoring time-of-day. */
+function dayDelta(d: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((cal.getTime() - today.getTime()) / DAY_MS);
+}
+
+/** Relative label à la Todoist. */
+function smartLabel(d: Date, formatDate: (d: Date) => string): string {
+  const diff = dayDelta(d);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  if (diff > 1 && diff < 7) return d.toLocaleDateString(undefined, { weekday: 'long' });
+  return formatDate(d);
+}
+
+/** Semantic colour for a set date: overdue red, today green, future accent. */
+function smartColor(d: Date): string {
+  const diff = dayDelta(d);
+  if (diff < 0) return 'var(--color-destructive)';
+  if (diff === 0) return 'var(--color-success)';
+  return 'var(--color-primary)';
+}
 
 /** Parse a stored ISO into the date + whether it carries a time-of-day.
    All-day values are stored as UTC midnight; anything else is "timed". */
@@ -48,6 +82,7 @@ export function DatePicker({
   disabled,
   className,
   enableTime = false,
+  smart = false,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const { formatDate } = useDateFormatter();
@@ -58,11 +93,13 @@ export function DatePicker({
 
   let display: string | null = null;
   let selectedDate: Date | undefined;
+  let chipColor: string | undefined;
   if (value) {
     try {
       const cal = toCalendarDate(value);
-      display = formatDate(cal);
       selectedDate = parsed.hasTime ? parsed.date ?? cal : cal;
+      display = smart ? smartLabel(selectedDate, formatDate) : formatDate(cal);
+      if (smart) chipColor = smartColor(selectedDate);
       if (enableTime && parsed.hasTime) display = `${display} · ${parsed.timeStr}`;
     } catch {
       display = value;
@@ -105,12 +142,16 @@ export function DatePicker({
         <button
           type="button"
           disabled={disabled}
+          style={chipColor ? { color: chipColor, borderColor: chipColor } : undefined}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] disabled:opacity-50',
             className,
           )}
         >
-          <CalendarIcon className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
+          <CalendarIcon
+            className="h-3.5 w-3.5"
+            style={{ color: chipColor ?? 'var(--color-muted-foreground)' }}
+          />
           <span className={cn(!display && 'text-[var(--color-muted-foreground)]')}>
             {display ?? placeholder}
           </span>
