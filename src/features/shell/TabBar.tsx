@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Calendar, CalendarDays, Inbox, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi, type ActiveView } from '@/stores/ui';
@@ -15,6 +15,66 @@ export function TabBar() {
   useEffect(() => {
     setSheetOpen(false);
   }, [activeView]);
+
+  // ── Swipe-down-to-dismiss for the Browse drawer ──────────────────────────
+  // Native (non-passive) touch listeners so we can preventDefault and stop the
+  // page rubber-banding while dragging. The drag only engages when the inner
+  // list is scrolled to the top, so it never fights normal scrolling. Past a
+  // distance threshold the sheet animates out and unmounts; otherwise it snaps
+  // back.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({ startY: 0, active: false });
+  const [dragY, setDragY] = useState(0);
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    setDragY(0);
+    const scroller = panel.querySelector<HTMLElement>('.overflow-y-auto');
+
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      drag.current = { startY: e.touches[0]!.clientY, active: false };
+    };
+    const move = (e: TouchEvent) => {
+      const dy = e.touches[0]!.clientY - drag.current.startY;
+      if (!drag.current.active) {
+        // Only hijack as a dismiss-drag when pulling down from the very top.
+        if (dy > 4 && (!scroller || scroller.scrollTop <= 0)) drag.current.active = true;
+        else return;
+      }
+      if (dy <= 0) {
+        setDragY(0);
+        return;
+      }
+      e.preventDefault();
+      setDragY(dy);
+    };
+    const end = (e: TouchEvent) => {
+      if (!drag.current.active) return;
+      const dy = (e.changedTouches[0]?.clientY ?? drag.current.startY) - drag.current.startY;
+      drag.current.active = false;
+      if (dy > 110) {
+        // Slide fully out, then unmount once the transition has played.
+        setDragY(window.innerHeight);
+        window.setTimeout(() => setSheetOpen(false), 240);
+      } else {
+        setDragY(0);
+      }
+    };
+
+    panel.addEventListener('touchstart', start, { passive: true });
+    panel.addEventListener('touchmove', move, { passive: false });
+    panel.addEventListener('touchend', end, { passive: true });
+    panel.addEventListener('touchcancel', end, { passive: true });
+    return () => {
+      panel.removeEventListener('touchstart', start);
+      panel.removeEventListener('touchmove', move);
+      panel.removeEventListener('touchend', end);
+      panel.removeEventListener('touchcancel', end);
+    };
+  }, [sheetOpen]);
 
   if (!isMobile) return null;
 
@@ -91,7 +151,17 @@ export function TabBar() {
       {sheetOpen && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end" role="dialog" aria-label="Projects and labels" aria-modal="true">
           <div className="sheet-backdrop absolute inset-0" onClick={() => setSheetOpen(false)} />
-          <div className="safe-bottom relative z-10 flex max-h-[88vh] min-h-[60vh] flex-col rounded-t-2xl bg-[var(--color-card)] pt-2 shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)]">
+          <div
+            ref={panelRef}
+            className={cn(
+              'safe-bottom relative z-10 flex max-h-[88vh] min-h-[60vh] flex-col rounded-t-2xl bg-[var(--color-card)] pt-2 shadow-xl',
+              dragY === 0 && !drag.current.active && 'animate-[sheet-up_350ms_var(--spring-snappy)]',
+            )}
+            style={{
+              transform: dragY ? `translateY(${dragY}px)` : undefined,
+              transition: drag.current.active ? 'none' : 'transform 240ms var(--spring-snappy)',
+            }}
+          >
             {/* Grab handle */}
             <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             <ProjectPickerList onPick={() => setSheetOpen(false)} />
