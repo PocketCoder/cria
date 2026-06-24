@@ -32,14 +32,14 @@
      rather than clinical blue-grey. */
   --color-accent: oklch(55% 0.18 285);
   --color-accent-foreground: oklch(99% 0 0);
-  --color-background: oklch(98% 0.005 70);
+  --color-background: oklch(99.3% 0.004 95);
   --color-foreground: oklch(24% 0.015 285);
-  --color-muted: oklch(96% 0.006 70);
+  --color-muted: oklch(97% 0.005 95);
   --color-muted-foreground: oklch(50% 0.015 285);
   --color-card: oklch(100% 0 0);
   --color-card-foreground: oklch(24% 0.015 285);
-  --color-border: oklch(92% 0.005 70);
-  --color-input: oklch(95% 0.005 70);
+  --color-border: oklch(93% 0.004 95);
+  --color-input: oklch(97% 0.005 95);
   --color-ring: oklch(58% 0.16 285);
   --color-primary: oklch(55% 0.18 285);
   --color-primary-foreground: oklch(99% 0 0);
@@ -179,16 +179,21 @@ body {
               line-height 200ms var(--spring-snappy);
 }
 
-/* ── iOS tab bar ──────────────────────────────────────────
-   Solid like Todoist's — an opaque bar with a hairline top border and a soft
-   upward shadow for separation, rather than a translucent glass material. */
-.glass-tab-bar {
-  background: var(--color-background);
-  border-top: 0.5px solid var(--color-border);
-  box-shadow: 0 -1px 8px oklch(0% 0 0 / 0.04);
+/* ── iOS floating tab bar (Todoist-style) ─────────────────
+   A rounded capsule card hovering above the bottom safe area, not an
+   edge-to-edge bar. Solid card surface with a soft drop shadow so it reads as
+   a floating control. */
+.tab-bar-dock {
+  background: var(--color-card);
+  border: 0.5px solid var(--color-border);
+  box-shadow:
+    0 8px 28px -8px oklch(0% 0 0 / 0.22),
+    0 2px 8px -2px oklch(0% 0 0 / 0.12);
 }
-.dark .glass-tab-bar {
-  box-shadow: 0 -1px 8px oklch(0% 0 0 / 0.25);
+.dark .tab-bar-dock {
+  box-shadow:
+    0 8px 28px -8px oklch(0% 0 0 / 0.6),
+    0 2px 8px -2px oklch(0% 0 0 / 0.4);
 }
 
 /* Tab bar item — iOS-style active state indicator */
@@ -233,10 +238,10 @@ body {
 
 /* ── Liquid Glass tokens (iOS-material tuned) ─────────── */
 :root {
-  --glass-bg: oklch(98% 0.005 70 / 0.72);
+  --glass-bg: oklch(99.3% 0.004 95 / 0.72);
   --glass-bg-dark: oklch(22% 0.012 285 / 0.78);
   --glass-blur: 14px;
-  --glass-border: oklch(92% 0.005 70 / 0.5);
+  --glass-border: oklch(93% 0.004 95 / 0.5);
 }
 
 .dark {
@@ -350,14 +355,14 @@ body {
    have higher specificity than @theme inside @media so they win
    over the system preference when explicitly set. */
 .light {
-  --color-background: oklch(98% 0.005 70);
+  --color-background: oklch(99.3% 0.004 95);
   --color-foreground: oklch(24% 0.015 285);
-  --color-muted: oklch(96% 0.006 70);
+  --color-muted: oklch(97% 0.005 95);
   --color-muted-foreground: oklch(50% 0.015 285);
   --color-card: oklch(100% 0 0);
   --color-card-foreground: oklch(24% 0.015 285);
-  --color-border: oklch(92% 0.005 70);
-  --color-input: oklch(95% 0.005 70);
+  --color-border: oklch(93% 0.004 95);
+  --color-input: oklch(97% 0.005 95);
   --color-ring: oklch(58% 0.16 285);
   --color-primary: oklch(55% 0.18 285);
   --color-primary-foreground: oklch(99% 0 0);

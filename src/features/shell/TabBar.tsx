@@ -50,36 +50,41 @@ export function TabBar() {
 
   return (
     <>
-      <nav className="glass-tab-bar safe-bottom fixed inset-x-0 bottom-0 z-30 flex items-center justify-around px-2 pb-1 pt-2">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => {
-                if (tab.action) tab.action();
-                else if (tab.view) setActiveView(tab.view);
-              }}
-              className={cn(
-                'tab-item flex flex-1 flex-col items-center gap-0.5 py-1',
-                isActive(tab) ? 'active' : '',
-              )}
-              aria-label={tab.label}
-            >
-              <Icon className={cn(
-                'tab-icon h-5 w-5 transition-colors',
-                isActive(tab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
-              )} />
-              <span className={cn(
-                'tab-label text-footnote font-medium transition-colors',
-                isActive(tab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
-              )}>
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
+      <nav
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+      >
+        <div className="tab-bar-dock pointer-events-auto flex w-full max-w-md items-center justify-around gap-1 rounded-[26px] px-2 py-1.5">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  if (tab.action) tab.action();
+                  else if (tab.view) setActiveView(tab.view);
+                }}
+                className={cn(
+                  'tab-item flex flex-1 flex-col items-center gap-0.5 rounded-[20px] py-1.5',
+                  isActive(tab) ? 'active' : '',
+                )}
+                aria-label={tab.label}
+              >
+                <Icon className={cn(
+                  'tab-icon h-5 w-5 transition-colors',
+                  isActive(tab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
+                )} />
+                <span className={cn(
+                  'tab-label text-footnote font-medium transition-colors',
+                  isActive(tab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
+                )}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       {/* Projects/Labels bottom sheet — tall, searchable, with counts */}
