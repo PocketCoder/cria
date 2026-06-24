@@ -12,6 +12,7 @@ import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
 import { useSelectableProjects } from '@/queries/projects';
+import { priorityColor } from '@/components/ui/priority-select';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
 import { PullToRefresh } from '@/components/PullToRefresh';
@@ -429,7 +430,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
             {showProject ? <span>{task.projectTitle}</span> : null}
             {dueLabel ? <span>{dueLabel}</span> : null}
             {task.priority > 0 ? (
-              <span aria-label={`Priority ${task.priority}`}>
+              <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
                 {'!'.repeat(Math.min(5, task.priority))}
               </span>
             ) : null}
@@ -528,7 +529,6 @@ export function FavoritesView() {
       isLoading={isLoading}
       emptyMessage="No favorited tasks."
       showProject
-      defaultDueDate={todayISO()}
     />
   );
 }
@@ -543,7 +543,6 @@ export function InboxView() {
       isLoading={isLoading}
       emptyMessage="No inbox project set. Configure it in your Vikunja server settings."
       showProject={false}
-      defaultDueDate={todayISO()}
     />
   );
 }

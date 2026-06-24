@@ -79,6 +79,13 @@ body,
   padding-right: env(safe-area-inset-right);
 }
 
+/* Bottom padding for scrollable task lists behind the fixed tab bar on
+   mobile. The 52px accounts for the tab bar body (~48px) plus a comfortable
+   gap so content doesn't sit flush against it. */
+.tab-bar-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 52px);
+}
+
 /* Reveal-on-hover affordances (row edit/delete buttons, label-chip remove)
    that STAY visible on touch devices, which have no hover state. Replaces the
    `opacity-0 group-hover:opacity-100` pattern: visible by default, and only

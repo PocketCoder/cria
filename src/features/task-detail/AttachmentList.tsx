@@ -149,7 +149,7 @@ export function AttachmentList({
           disabled={disabled || uploading}
           title={
             disabled
-              ? 'Save the task first — attachments need a server id'
+              ? 'Complete creating the task first (sync to server) — then you can add attachments'
               : 'Add attachment'
           }
           className="ml-auto flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-40 cursor-pointer"

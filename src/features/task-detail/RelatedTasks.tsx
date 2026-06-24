@@ -45,6 +45,7 @@ export function RelatedTasks({
   taskLocalId: string;
   taskServerId: number | null;
 }) {
+  void taskServerId; // kept in props for API symmetry with sibling panels
   const qc = useQueryClient();
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const [adding, setAdding] = useState(false);
@@ -78,8 +79,6 @@ export function RelatedTasks({
       ([a], [b]) => (KIND_ORDER[a] ?? 99) - (KIND_ORDER[b] ?? 99),
     );
   }, [relations]);
-
-  const disabled = taskServerId == null;
 
   const handleRemove = async (r: TaskRelation) => {
     setOpError(null);
@@ -151,7 +150,6 @@ export function RelatedTasks({
                     <button
                       type="button"
                       onClick={() => void handleRemove(r)}
-                      disabled={disabled}
                       aria-label="Remove relation"
                       className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
                     >
@@ -181,7 +179,7 @@ export function RelatedTasks({
       {adding ? (
         <AddRelationRow
           taskLocalId={taskLocalId}
-          disabled={disabled}
+          disabled={false}
           onCancel={() => setAdding(false)}
           onError={(msg) => setOpError(msg)}
         />
@@ -189,13 +187,8 @@ export function RelatedTasks({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          disabled={disabled}
-          title={
-            disabled
-              ? 'Save the task first — relations need a server id'
-              : 'Add a related task'
-          }
-          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-40 cursor-pointer"
+          title="Add a related task"
+          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
           Add relation
