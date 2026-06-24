@@ -82,6 +82,7 @@ export function Shell() {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
   const displayName =
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
@@ -434,7 +435,7 @@ export function Shell() {
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col overflow-x-hidden',
+        'app-root flex h-full w-full flex-col overflow-x-hidden',
         isMobile && 'safe-top safe-bottom safe-x',
       )}
     >
@@ -442,7 +443,7 @@ export function Shell() {
       {/* Left spacer sits behind macOS traffic lights; programmatic
           drag via getCurrentWindow().startDragging() on mousedown when
           the target isn't an interactive element. */}
-      <header onMouseDown={handleHeaderMouseDown} className={cn('glass-surface flex select-none items-center border-b px-4 py-2', headerScrolled && 'scrolled')}>
+      <header onMouseDown={handleHeaderMouseDown} className={cn('flex select-none items-center border-b border-[var(--color-border)] px-4 py-2', isMobile ? 'bg-[var(--color-background)]' : 'glass-surface', headerScrolled && 'scrolled')}>
         {isMobile ? (
           <div className="flex flex-1 items-center gap-2">
             <h1 className={headerScrolled ? 'nav-title-small' : 'nav-title-large'}>
@@ -502,17 +503,9 @@ export function Shell() {
               aria-label="Add tasks from a photo"
               title="Add tasks from a photo of a list"
               onClick={() => setPhotoCaptureOpen(true)}
-              className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-            >
-              <Camera className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Add task"
-              onClick={() => setShowQuickAdd(true)}
               className="-mr-1 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
             >
-              <Plus className="h-5 w-5" />
+              <Camera className="h-5 w-5" />
             </button>
           </div>
         ) : (
@@ -669,6 +662,25 @@ export function Shell() {
           </div>
         </div>
       )}
+
+      {/* Floating action button — Todoist's round "+" anchored above the tab
+          bar. Mobile only; hidden while a full-screen overlay (task detail,
+          search, photo capture, quick-add) owns the screen. */}
+      {isMobile &&
+        !selectedTaskLocalId &&
+        !mobileSearchOpen &&
+        !photoCaptureOpen &&
+        !showQuickAdd && (
+          <button
+            type="button"
+            aria-label="Add task"
+            onClick={() => setShowQuickAdd(true)}
+            className="fab fixed right-5 z-30 flex h-14 w-14 items-center justify-center"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4.75rem)' }}
+          >
+            <Plus className="h-7 w-7" strokeWidth={2.5} />
+          </button>
+        )}
 
       <TabBar />
       </div>

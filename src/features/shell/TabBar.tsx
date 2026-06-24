@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, CalendarDays, Star, Inbox, ListTodo } from 'lucide-react';
+import { Calendar, CalendarDays, Inbox, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -25,18 +25,28 @@ export function TabBar() {
     view: ActiveView | null;
     action?: () => void;
   }[] = [
+    { key: 'inbox', icon: Inbox, label: 'Inbox', view: { kind: 'inbox' } },
     { key: 'today', icon: Calendar, label: 'Today', view: { kind: 'today' } },
     { key: 'upcoming', icon: CalendarDays, label: 'Upcoming', view: { kind: 'upcoming' } },
-    { key: 'inbox', icon: Inbox, label: 'Inbox', view: { kind: 'inbox' } },
-    { key: 'favorites', icon: Star, label: 'Favorites', view: { kind: 'favorites' } },
-    { key: 'projects', icon: ListTodo, label: 'Projects', view: null, action: () => setSheetOpen(true) },
+    { key: 'browse', icon: LayoutGrid, label: 'Browse', view: null, action: () => setSheetOpen(true) },
   ];
 
-  // All tabs map to smart views (today/upcoming/inbox/favorites), keyed by
-  // `kind` alone; the Projects tab has `view: null` and is never "active" (it
-  // opens a sheet). Default to Today when no view is selected.
-  const isActive = (tab: typeof tabs[number]) =>
-    !activeView ? tab.key === 'today' : tab.view !== null && activeView.kind === tab.view.kind;
+  // Inbox/Today/Upcoming map to smart views keyed by `kind`; Browse has
+  // `view: null` and opens the projects/labels sheet (it reads as active while
+  // that sheet is open, or when a project/label is the current view). Default
+  // to Inbox when nothing is selected.
+  const isActive = (tab: typeof tabs[number]) => {
+    if (tab.key === 'browse') {
+      return (
+        sheetOpen ||
+        activeView?.kind === 'project' ||
+        activeView?.kind === 'label' ||
+        activeView?.kind === 'favorites'
+      );
+    }
+    if (!activeView) return tab.key === 'inbox';
+    return tab.view !== null && activeView.kind === tab.view.kind;
+  };
 
   return (
     <>

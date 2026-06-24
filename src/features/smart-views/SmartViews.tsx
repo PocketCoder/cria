@@ -413,7 +413,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
           onChange={handleToggle}
           onClick={(e) => e.stopPropagation()}
           aria-label={task.done ? 'Done' : 'Not done'}
-          className="mt-1 h-4 w-4 cursor-pointer rounded accent-[var(--color-primary)]"
+          className="task-check mt-0.5"
         />
         <div className="min-w-0 flex-1">
           <TaskHoverPreview task={task}>

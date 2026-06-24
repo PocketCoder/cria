@@ -3,6 +3,7 @@
   "productName": "Cria Dev",
   "identifier": "io.cria.desktop.dev",
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Cria Dev",
@@ -16,7 +17,8 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "dragDropEnabled": false,
-        "devtools": true
+        "devtools": true,
+        "transparent": true
       }
     ],
     "security": {

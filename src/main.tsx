@@ -1,9 +1,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+// Plus Jakarta Sans (variable weight) — Cria's branded geometric sans. Bundled
+// so it ships offline and renders identically on every platform. Must be
+// imported before globals.css references the family in --font-sans.
+import '@fontsource-variable/plus-jakarta-sans';
 import './styles/globals.css';
 import { App } from './App';
 import { initPlatform, isMobilePlatform } from './lib/platform';
+import { applyNativeGlass } from './tauri/liquidGlass';
 
 // `networkMode: 'offlineFirst'` is load-bearing. The default
 // (`'online'`) tells TanStack Query to *pause* every query when
@@ -26,6 +31,10 @@ if (!rootEl) throw new Error('Missing #root element');
 // the resolved value: on mobile we widen `staleTime` (background sync keeps
 // data fresh, so foreground refetches are wasteful battery/network).
 void initPlatform().finally(() => {
+  // Best-effort native macOS Liquid Glass. No-ops off macOS / unsupported
+  // versions, and never rejects, so render proceeds regardless.
+  void applyNativeGlass();
+
   const mobile = isMobilePlatform();
   const queryClient = new QueryClient({
     defaultOptions: {
