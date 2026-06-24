@@ -1,11 +1,23 @@
 import { useState } from 'react';
-import { useOutboxRows, useDeadLetters } from '@/queries/outboxRows';
+import { useOutboxRows, useDeadLetters, type OutboxRow, type DeadLetterRow } from '@/queries/outboxRows';
 import { retryDeadLetter } from '@/sync/push';
+import { cn } from '@/lib/cn';
 
 interface OutboxModalProps {
   onClose: () => void;
 }
 
+/**
+ * Pending-mutations diagnostic — used by both the desktop footer button and
+ * the mobile sync indicator in the header. Lists every queued outbox row and
+ * every dead-lettered row with its entity/op, attempt count, last error and
+ * (collapsed-by-default) payload. The first row in `rows` is the FIFO blocker:
+ * its `last_error` explains why the queue is stuck.
+ *
+ * Layout is a responsive card list (not a wide table) so it works inside the
+ * narrow iOS viewport without horizontal overflow. The container is a
+ * bottom-sheet on mobile and a centred dialog on desktop.
+ */
 export function OutboxModal({ onClose }: OutboxModalProps) {
   const { data: rows = [], isLoading, isError } = useOutboxRows();
   const { data: deadRows = [] } = useDeadLetters();
@@ -31,102 +43,190 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="glass-surface rounded-lg shadow-lg w-11/12 max-w-2xl max-h-[80vh] overflow-auto p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Pending Mutations</h2>
-          <button onClick={onClose} className="text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-primary)]">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="glass-surface flex w-full max-h-[92vh] flex-col rounded-t-2xl shadow-lg sm:w-11/12 sm:max-w-2xl sm:max-h-[80vh] sm:rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sticky header — keeps Close reachable while the list scrolls. */}
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+          <h2 className="text-base font-semibold">Pending mutations</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded p-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+          >
             ✕
           </button>
         </div>
 
-        {isLoading && <p>Loading…</p>}
-        {isError && <p className="text-[var(--color-warning)]">Failed to load outbox.</p>}
-        {!isLoading && rows.length === 0 && deadRows.length === 0 && <p>No pending mutations.</p>}
-        {rows.length > 0 && (
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-1">ID</th>
-                <th className="text-left py-1">Entity</th>
-                <th className="text-left py-1">Op</th>
-                <th className="text-left py-1">Attempts</th>
-                <th className="text-left py-1">Last error</th>
-                <th className="text-left py-1">Payload</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-b align-top">
-                  <td className="py-1">{row.id}</td>
-                  <td className="py-1">{row.entity_type}</td>
-                  <td className="py-1">{row.op}</td>
-                  <td className="py-1">{row.attempts}</td>
-                  <td className="py-1 max-w-[16ch] truncate" title={row.last_error ?? ''}>
-                    {row.last_error ?? '—'}
-                  </td>
-                  <td className="py-1 break-all">
-                    <pre className="whitespace-pre-wrap">{JSON.stringify(JSON.parse(row.payload), null, 2)}</pre>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {deadRows.length > 0 && (
-          <>
-            <div className="flex justify-between items-center mt-6 mb-2">
-              <h3 className="text-base font-semibold text-[var(--color-warning)]">
-                Failed to sync ({deadRows.length})
-              </h3>
-              <button
-                onClick={() => void retryAll()}
-                className="text-sm underline text-[var(--color-primary)] disabled:opacity-50"
-                disabled={retrying.size > 0}
-              >
-                Retry all
-              </button>
-            </div>
-            <p className="text-xs text-[var(--color-muted-foreground)] mb-2">
-              These operations exhausted their automatic retries. Retrying re-queues
-              them for the next sync.
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3 safe-bottom"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+        >
+          {isLoading && <p className="text-sm">Loading…</p>}
+          {isError && (
+            <p className="text-sm text-[var(--color-warning)]">
+              Failed to load outbox.
             </p>
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-1">Entity</th>
-                  <th className="text-left py-1">Op</th>
-                  <th className="text-left py-1">Failed at</th>
-                  <th className="text-left py-1">Last error</th>
-                  <th className="text-left py-1"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {deadRows.map((row) => (
-                  <tr key={row.id} className="border-b align-top">
-                    <td className="py-1">{row.entity_type}</td>
-                    <td className="py-1">{row.op}</td>
-                    <td className="py-1 whitespace-nowrap">{row.failed_at.slice(0, 19).replace('T', ' ')}</td>
-                    <td className="py-1 max-w-[24ch] truncate" title={row.last_error ?? ''}>
-                      {row.last_error ?? '—'}
-                    </td>
-                    <td className="py-1">
-                      <button
-                        onClick={() => void retry(row.id)}
-                        className="text-sm underline text-[var(--color-primary)] disabled:opacity-50"
-                        disabled={retrying.has(row.id)}
-                      >
-                        {retrying.has(row.id) ? 'Retrying…' : 'Retry'}
-                      </button>
-                    </td>
-                  </tr>
+          )}
+          {!isLoading && rows.length === 0 && deadRows.length === 0 && (
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              No pending mutations.
+            </p>
+          )}
+
+          {rows.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                Queued ({rows.length})
+              </h3>
+              <p className="mb-3 text-xs text-[var(--color-muted-foreground)]">
+                The first row is the FIFO blocker — its error explains why the
+                queue is stuck.
+              </p>
+              <ul className="flex flex-col gap-2">
+                {rows.map((row, i) => (
+                  <li key={row.id}>
+                    <OpCard row={row} highlight={i === 0} />
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </>
-        )}
+              </ul>
+            </section>
+          )}
+
+          {deadRows.length > 0 && (
+            <section className={cn(rows.length > 0 && 'mt-6')}>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-warning)]">
+                  Failed to sync ({deadRows.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => void retryAll()}
+                  disabled={retrying.size > 0}
+                  className="text-xs font-medium text-[var(--color-primary)] underline disabled:opacity-50"
+                >
+                  Retry all
+                </button>
+              </div>
+              <p className="mb-3 text-xs text-[var(--color-muted-foreground)]">
+                These operations exhausted their automatic retries. Retrying
+                re-queues them for the next sync.
+              </p>
+              <ul className="flex flex-col gap-2">
+                {deadRows.map((row) => (
+                  <li key={row.id}>
+                    <OpCard
+                      row={row}
+                      dead
+                      retrying={retrying.has(row.id)}
+                      onRetry={() => void retry(row.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+/* ── single-row card ─────────────────────────────────────────
+   Stacked, wrap-friendly layout: header chip row, error block, then a
+   collapsible payload. The payload <pre> is the only horizontally-scrollable
+   element — long JSON lines scroll *inside* the card instead of pushing the
+   viewport. */
+function OpCard({
+  row,
+  highlight,
+  dead,
+  retrying,
+  onRetry,
+}: {
+  row: OutboxRow | DeadLetterRow;
+  highlight?: boolean;
+  dead?: boolean;
+  retrying?: boolean;
+  onRetry?: () => void;
+}) {
+  const failedAt =
+    'failed_at' in row && row.failed_at
+      ? row.failed_at.slice(0, 19).replace('T', ' ')
+      : null;
+  return (
+    <div
+      className={cn(
+        'rounded-lg border bg-[var(--color-card)] p-3',
+        highlight
+          ? 'border-[var(--color-warning)] shadow-sm'
+          : 'border-[var(--color-border)]',
+      )}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <span className="font-mono text-xs font-medium text-[var(--color-foreground)]">
+          {row.entity_type} · {row.op}
+        </span>
+        <span className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap">
+          #{row.id} · {row.attempts} attempt{row.attempts === 1 ? '' : 's'}
+          {failedAt ? ` · ${failedAt}` : ''}
+        </span>
+      </div>
+
+      {row.last_error ? (
+        <p
+          className={cn(
+            'mt-2 text-xs leading-snug break-words',
+            dead || highlight
+              ? 'text-[var(--color-warning)]'
+              : 'text-[var(--color-foreground)]',
+          )}
+        >
+          {row.last_error}
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
+          No error reported yet.
+        </p>
+      )}
+
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
+          Payload
+        </summary>
+        <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-[var(--color-muted)] p-2 text-[10px] leading-snug whitespace-pre">
+          {safeFormatJson(row.payload)}
+        </pre>
+      </details>
+
+      {dead && onRetry ? (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-xs font-medium hover:bg-[var(--color-muted)] disabled:opacity-50"
+          >
+            {retrying ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Pretty-print JSON if we can; otherwise show the raw payload. Never throw —
+ * a malformed payload (corruption, future migration) shouldn't crash the
+ * diagnostic that's there to surface problems. */
+function safeFormatJson(payload: string): string {
+  try {
+    return JSON.stringify(JSON.parse(payload), null, 2);
+  } catch {
+    return payload;
+  }
 }
