@@ -233,6 +233,42 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Suppress the iOS keyboard's input-accessory bar — the toolbar WKWebView
+/// shows above the keyboard for every web text field (‹ › chevrons that step
+/// between form fields, plus a Done button). We replace
+/// `-[WKContentView inputAccessoryView]` with an implementation that returns
+/// nil, app-wide, so the keyboard sits directly under our sheets with no gap.
+///
+/// Best-effort: `WKContentView` is a private WebKit class, so if it can't be
+/// found (future iOS rename) we simply no-op and leave the bar in place.
+#[cfg(target_os = "ios")]
+fn hide_input_accessory_bar() {
+    use objc2::runtime::{AnyClass, AnyObject, Imp, Sel};
+
+    // Replacement IMP for -[WKContentView inputAccessoryView]: always nil.
+    // Signature matches the original (`id` return; implicit self + _cmd).
+    unsafe extern "C" fn input_accessory_view_nil(
+        _this: *mut AnyObject,
+        _cmd: Sel,
+    ) -> *mut AnyObject {
+        core::ptr::null_mut()
+    }
+
+    unsafe {
+        let Some(cls) = AnyClass::get(c"WKContentView") else {
+            return;
+        };
+        let Some(method) = cls.instance_method(objc2::sel!(inputAccessoryView)) else {
+            return;
+        };
+        let imp: Imp = core::mem::transmute(
+            input_accessory_view_nil
+                as unsafe extern "C" fn(*mut AnyObject, Sel) -> *mut AnyObject,
+        );
+        method.set_implementation(imp);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -305,6 +341,10 @@ pub fn run() {
         .setup(|_app| {
             #[cfg(desktop)]
             setup_tray(_app)?;
+            // iOS: strip the WKWebView keyboard accessory bar (‹ › field-nav
+            // chevrons + Done) so the quick-add sheet sits flush on the keyboard.
+            #[cfg(target_os = "ios")]
+            hide_input_accessory_bar();
             Ok(())
         });
 
