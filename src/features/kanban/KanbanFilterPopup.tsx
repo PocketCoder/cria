@@ -1,5 +1,6 @@
 import { SlidersHorizontal, X } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useLabels } from '@/queries/labels';
 import { cn } from '@/lib/cn';
 import {
@@ -63,18 +64,17 @@ export function KanbanFilterPopup({ filter, onChange }: KanbanFilterPopupProps) 
 
           <label className="flex items-center justify-between gap-2">
             <span className="text-[var(--color-muted-foreground)]">Min priority</span>
-            <select
-              value={String(filter.minPriority)}
-              onChange={(e) => onChange({ ...filter, minPriority: Number(e.target.value) })}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-            >
-              <option value="0">Any</option>
-              {[1, 2, 3, 4, 5].map((p) => (
-                <option key={p} value={p}>
-                  {'!'.repeat(p)}
-                </option>
-              ))}
-            </select>
+            <Select value={String(filter.minPriority)} onValueChange={(v) => onChange({ ...filter, minPriority: Number(v) })}>
+              <SelectTrigger className="w-20 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Any</SelectItem>
+                {[1, 2, 3, 4, 5].map((p) => (
+                  <SelectItem key={p} value={String(p)}>{'!'.repeat(p)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
 
           {labels.length > 0 ? (
@@ -89,7 +89,7 @@ export function KanbanFilterPopup({ filter, onChange }: KanbanFilterPopupProps) 
                       type="button"
                       onClick={() => toggleLabel(l.localId)}
                       className={cn(
-                        'rounded-full border px-2 py-0.5 text-[10px]',
+                        'rounded-full border px-2 py-0.5 text-footnote',
                         on
                           ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-foreground)]'
                           : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',

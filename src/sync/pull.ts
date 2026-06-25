@@ -80,7 +80,7 @@ export async function pullProjects(
         query: {
           page,
           per_page: PER_PAGE,
-          is_archived: true,
+          
         },
       },
     });
@@ -135,6 +135,12 @@ export async function pullTasksForProject(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   return singleFlight('pullTasksForProject', async () => {
+  // Delta filter: only tasks changed since the last sync (see tasksDeltaFilter),
+  // composed with the project scope. Null on first sync → full project pull.
+  const delta = await tasksDeltaFilter();
+  const filter = delta
+    ? `project_id = ${projectServerId} && ${delta}`
+    : `project_id = ${projectServerId}`;
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -143,8 +149,10 @@ export async function pullTasksForProject(
         query: {
           page,
           per_page: PER_PAGE,
-          filter: `project_id = ${projectServerId}`,
-          expand: 'comments',
+          filter,
+          // No `expand: 'comments'`: comments inflate every task in the list
+          // response but are only shown in the detail card, so we fetch them
+          // lazily per-task via pullCommentsForTask when a card opens.
           // No sort_by: `position` is per-view-only and Vikunja returns 400
           // outside a view context. We sort locally in listTasksForProject.
         },
@@ -177,7 +185,12 @@ export async function pullTasksForProject(
     await upsertTaskWithRelations(t);
   }
 
-  await stampSyncState('tasks_synced_at');
+  // Do NOT stamp tasks_synced_at here. That watermark drives the delta filter
+  // for the *cross-project* pullAllTasks ("all tasks up to T are mirrored"). A
+  // per-project pull only mirrors one project, so stamping it here would make
+  // the next pullAllTasks delta-skip every other project's tasks — the cause of
+  // "only the project I opened has tasks; Today/Upcoming/Inbox are empty". Only
+  // pullAllTasks may advance the watermark.
   return collected.length;
   });
 }
@@ -211,6 +224,43 @@ export async function refetchTaskByServerId(
     notify('tasks');
   } catch (err) {
     console.warn('[refetchTaskByServerId] failed:', err);
+  }
+}
+
+/**
+ * Fetch just the comments for one task and mirror them locally. Called when a
+ * task detail card opens, since the list pulls no longer carry comments inline
+ * (see pullTasksForProject). Best-effort + silent on failure: the detail card
+ * already shows whatever comments are cached locally, so an offline open still
+ * works — this only refreshes them. Resolves the server id from the local id;
+ * a local-only task (no server id yet) has no server comments to pull.
+ */
+export async function pullCommentsForTask(
+  taskLocalId: string,
+  client: ApiClient = createApiClient(),
+): Promise<void> {
+  try {
+    const db = await getDb();
+    const rows = await db.select<{ server_id: number | null }[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? AND deleted = 0 LIMIT 1`,
+      [taskLocalId],
+    );
+    const serverId = rows[0]?.server_id;
+    if (serverId == null) return;
+    const { data, response } = await client.GET('/tasks/{id}', {
+      params: { path: { id: serverId }, query: { expand: 'comments' } },
+    });
+    if (!response.ok || !data) return;
+    const parsed = taskResponseSchema.safeParse(data);
+    if (!parsed.success || !Array.isArray(parsed.data.comments)) return;
+    const valid: CommentResponse[] = [];
+    for (const raw of parsed.data.comments) {
+      const p = commentResponseSchema.safeParse(raw);
+      if (p.success) valid.push(p.data);
+    }
+    await replaceTaskCommentsFromServer(taskLocalId, valid);
+  } catch (err) {
+    console.warn('[pullCommentsForTask] failed:', err);
   }
 }
 
@@ -306,11 +356,23 @@ export async function pullAllTasks(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   return singleFlight('pullAllTasks', async () => {
+  // Delta filter: only tasks changed since the last sync (see tasksDeltaFilter).
+  // Null on first sync → full pull.
+  const delta = await tasksDeltaFilter();
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, response } = await client.GET('/tasks', {
-      params: { query: { page, per_page: PER_PAGE, expand: 'comments' } },
+      // No `expand: 'comments'` — see pullTasksForProject. The cross-project
+      // pull runs every 60s, so dropping inline comments here is the bigger
+      // payload/battery win; comments load per-task on detail open.
+      params: {
+        query: {
+          page,
+          per_page: PER_PAGE,
+          ...(delta ? { filter: delta } : {}),
+        },
+      },
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -569,9 +631,57 @@ async function pullBucketsForView(
   return collected.length;
 }
 
-async function stampSyncState(
-  column: 'projects_synced_at' | 'tasks_synced_at' | 'labels_synced_at' | 'views_synced_at' | 'buckets_synced_at',
-): Promise<void> {
+type SyncColumn =
+  | 'projects_synced_at'
+  | 'tasks_synced_at'
+  | 'labels_synced_at'
+  | 'views_synced_at'
+  | 'buckets_synced_at';
+
+// Delta-pull high-watermark margin. `tasks_synced_at` is stamped with the
+// *client* clock but compared against the server's `updated`, so we subtract an
+// overlap before filtering: re-fetching a few already-seen tasks is harmless
+// (upserts are idempotent), but missing one — because the client clock ran
+// ahead of the server, or a task was updated mid-pull — is not. Server-side
+// deletions aren't captured by a delta filter at all; reconcileDeletions (the
+// 15-min sweep) is what removes those.
+const DELTA_OVERLAP_MS = 5 * 60_000;
+
+async function readSyncState(column: SyncColumn): Promise<string | null> {
+  const db = await getDb();
+  const rows = await db.select<Record<string, string | null>[]>(
+    `SELECT ${column} FROM sync_state WHERE id = 1 LIMIT 1`,
+  );
+  return rows[0]?.[column] ?? null;
+}
+
+/**
+ * Vikunja filter clause limiting a task pull to rows changed since the last
+ * sync (minus DELTA_OVERLAP_MS). Returns null on first sync so the caller does
+ * a full pull. Keeps the 60s tick from re-fetching every task every minute.
+ */
+async function tasksDeltaFilter(): Promise<string | null> {
+  const last = await readSyncState('tasks_synced_at');
+  if (!last) return null;
+  // Self-heal a poisoned watermark. tasks_synced_at can get stamped to "now"
+  // by a pull that mirrored *zero* tasks — e.g. an early pull whose tasks were
+  // all skipped because their projects hadn't synced yet (see
+  // upsertTaskFromServer's project-not-synced skip). After that, a delta filter
+  // (`updated > <stamp>`) excludes every pre-existing task forever, so tasks
+  // never appear even once projects sync. If we hold a watermark but have no
+  // tasks stored, the watermark is provably wrong — do a full pull instead.
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    `SELECT COUNT(*) AS n FROM tasks WHERE deleted = 0`,
+  );
+  if ((rows[0]?.n ?? 0) === 0) return null;
+  const ms = Date.parse(last);
+  if (Number.isNaN(ms)) return `updated > '${last}'`;
+  const since = new Date(ms - DELTA_OVERLAP_MS).toISOString();
+  return `updated > '${since}'`;
+}
+
+async function stampSyncState(column: SyncColumn): Promise<void> {
   const now = new Date().toISOString();
   await exec(`UPDATE sync_state SET ${column} = ? WHERE id = 1`, [now]);
   notify('sync_state');

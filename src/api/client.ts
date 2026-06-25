@@ -9,9 +9,38 @@ import {
   recordRequestSuccess,
   withTimeout,
 } from './resilience';
-import { getAuthSnapshot } from '@/auth/store';
+import { getAuthSnapshot, useAuth } from '@/auth/store';
 
 export type ApiClient = Client<paths>;
+
+/**
+ * The server rejected our token. A *single* 401 is often transient — a request
+ * resumed after the app was backgrounded with a momentarily-stale token, a
+ * proxy/server hiccup, a clock-skew JWT rejection, or a race where the token
+ * wasn't attached yet. Signing out on the first one nukes the whole session and
+ * forces a re-login ("logged out after a short while"). So we only sign out
+ * after several *consecutive* 401s with no successful response in between: a
+ * genuinely expired/revoked token keeps 401ing — the 60s sync alone hits
+ * several endpoints — so real revocation still signs out within a tick or two,
+ * while a stray 401 is shrugged off and the next success resets the count.
+ */
+const MAX_CONSECUTIVE_AUTH_FAILURES = 3;
+let consecutiveAuthFailures = 0;
+
+/** Any successful response proves the current token still works — reset. */
+function noteRequestAuthorized(): void {
+  consecutiveAuthFailures = 0;
+}
+
+function handleUnauthorized(): void {
+  // A stray 401 during the login handshake itself can't trigger a sign-out.
+  if (useAuth.getState().status.kind !== 'authenticated') return;
+  consecutiveAuthFailures += 1;
+  if (consecutiveAuthFailures >= MAX_CONSECUTIVE_AUTH_FAILURES) {
+    consecutiveAuthFailures = 0;
+    void useAuth.getState().signOut();
+  }
+}
 
 function normalizeBase(url: string): string {
   return url.replace(/\/+$/, '');
@@ -85,6 +114,9 @@ export async function platformFetch(
     // A 5xx means the server is unhealthy; 2xx/4xx mean it's responding.
     if (response.status >= 500) recordRequestFailure();
     else recordRequestSuccess();
+    // A 2xx proves the current token is still accepted — clears any transient
+    // 401 streak so a single stray rejection can't accumulate into a sign-out.
+    if (response.ok) noteRequestAuthorized();
     return response;
   } catch (err) {
     recordRequestFailure();
@@ -146,12 +178,14 @@ export function createApiFetch(): (input: RequestInfo | URL, init?: RequestInit)
   const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/v1`;
   const token = snap.token ?? '';
   guardTokenDestination(baseUrl, token);
-  return (input, init) => {
+  return async (input, init) => {
     const url = typeof input === 'string' ? `${baseUrl}${input}` : input;
     const headers: Record<string, string> = token
       ? { Authorization: `Bearer ${token}`, ...(init?.headers as Record<string, string> | undefined) }
       : { ...(init?.headers as Record<string, string> | undefined) };
-    return platformFetch(url, { ...init, headers });
+    const res = await platformFetch(url, { ...init, headers });
+    if (res.status === 401) handleUnauthorized();
+    return res;
   };
 }
 
@@ -184,6 +218,7 @@ export async function callApi<T>(
   // `undefined` cast as T, which is fine for `await callApi(...)`.
   if (response.ok) return data as T;
 
+  if (response.status === 401) handleUnauthorized();
   const bodyText = await response.text().catch(() => '');
   throw await buildApiError(response.status, bodyText);
 }

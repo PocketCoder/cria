@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/auth/store';
 import { createApiClient } from '@/api/client';
 import { fetchCurrentUser } from '@/api/user';
+import { loginWithPassword, isTotpRequired } from '@/api/login';
 import { ApiError, NetworkError } from '@/api/errors';
 
 const serverUrlSchema = z.string().trim().url().refine(
@@ -15,46 +14,123 @@ const serverUrlSchema = z.string().trim().url().refine(
     try {
       const u = new URL(url);
       if (u.protocol === 'https:') return true;
-      // Allow http:// for loopback addresses only
       return ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
     } catch { return false; }
   },
   'Use https:// or a loopback address (localhost/127.0.0.1) for http://',
 );
 
-const schema = z.object({
-  serverUrl: serverUrlSchema,
-  token: z.string().trim().min(8, 'Paste your API token from Vikunja settings'),
-});
-
-type FormValues = z.infer<typeof schema>;
+type AuthMethod = 'token' | 'password';
 
 export function LoginScreen() {
   const signIn = useAuth((s) => s.signIn);
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('token');
+  const [serverUrl, setServerUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [serverUrlError, setServerUrlError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [totpRequired, setTotpRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      serverUrl: 'https://try.vikunja.io',
-      token: '',
-    },
-  });
-
-  const onSubmit = form.handleSubmit(async (values) => {
+  const switchMethod = (method: AuthMethod) => {
+    setAuthMethod(method);
     setSubmitError(null);
-    try {
-      const client = createApiClient({
-        baseUrl: values.serverUrl,
-        token: values.token,
-      });
-      const user = await fetchCurrentUser(client);
-      await signIn(values, user);
-    } catch (err) {
-      console.error('[login] sign-in failed:', err);
-      setSubmitError(messageFor(err));
+    setTotpRequired(false);
+    setTotpCode('');
+    setServerUrlError(undefined);
+  };
+
+  const doPasswordSignIn = async (
+    url: string,
+    user: string,
+    pass: string,
+    totp_passcode?: string,
+  ) => {
+    const t = await loginWithPassword(url, {
+      username: user,
+      password: pass,
+      long_token: true,
+      totp_passcode,
+    });
+    const client = createApiClient({ baseUrl: url, token: t });
+    const me = await fetchCurrentUser(client);
+    await signIn({ serverUrl: url, token: t, authMethod: 'password' }, me);
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+
+    // Server URL is the only field with structural validation (the rest are
+    // checked per-method below). Reuse the trimmed/normalised value zod returns.
+    const parsed = serverUrlSchema.safeParse(serverUrl);
+    if (!parsed.success) {
+      setServerUrlError(parsed.error.issues[0]?.message ?? 'Enter a valid server URL.');
+      return;
     }
-  });
+    setServerUrlError(undefined);
+    const url = parsed.data;
+
+    if (authMethod === 'token') {
+      if (!token || token.trim().length < 8) {
+        setSubmitError('Paste your API token from Vikunja settings.');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        const client = createApiClient({ baseUrl: url, token });
+        const user = await fetchCurrentUser(client);
+        await signIn({ serverUrl: url, token, authMethod: 'token' }, user);
+      } catch (err) {
+        console.error('[login] token sign-in failed:', err);
+        setSubmitError(messageFor(err));
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    if (!username || !password) {
+      setSubmitError('Enter your username and password.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (totpRequired) {
+        try {
+          await doPasswordSignIn(url, username, password, totpCode || undefined);
+        } catch (err) {
+          console.error('[login] password+TOTP sign-in failed:', err);
+          if (isTotpRequired(err)) {
+            setSubmitError('Invalid two-factor code. Try again.');
+          } else {
+            setSubmitError(messageFor(err));
+            setTotpRequired(false);
+            setTotpCode('');
+          }
+        }
+        return;
+      }
+
+      try {
+        await doPasswordSignIn(url, username, password);
+      } catch (err) {
+        if (isTotpRequired(err)) {
+          setTotpRequired(true);
+          setSubmitError(null);
+          return;
+        }
+        console.error('[login] password sign-in failed:', err);
+        setSubmitError(messageFor(err));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <main className="flex min-h-full items-center justify-center p-6">
@@ -62,8 +138,35 @@ export function LoginScreen() {
         <div className="space-y-1.5">
           <h1 className="text-xl font-semibold tracking-tight">Sign in to Vikunja</h1>
           <p className="text-sm text-[var(--color-muted-foreground)]">
-            Connect Cria to your Vikunja instance with an API token.
+            {authMethod === 'token'
+              ? 'Connect Cria to your Vikunja instance with an API token.'
+              : 'Sign in with your Vikunja username or email and password.'}
           </p>
+        </div>
+
+        <div className="flex rounded-lg border border-[var(--color-border)] p-0.5">
+          <button
+            type="button"
+            onClick={() => switchMethod('token')}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+              authMethod === 'token'
+                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+            }`}
+          >
+            API Token
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMethod('password')}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+              authMethod === 'password'
+                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+            }`}
+          >
+            Username &amp; Password
+          </button>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
@@ -71,30 +174,83 @@ export function LoginScreen() {
             <Label htmlFor="serverUrl">Server URL</Label>
             <Input
               id="serverUrl"
+              type="url"
+              inputMode="url"
               autoComplete="url"
               autoCapitalize="off"
               spellCheck={false}
               placeholder="https://vikunja.example.com"
-              {...form.register('serverUrl')}
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
             />
-            <FieldError message={form.formState.errors.serverUrl?.message} />
+            <FieldError message={serverUrlError} />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="token">API token</Label>
-            <Input
-              id="token"
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="tk_…"
-              {...form.register('token')}
-            />
-            <FieldError message={form.formState.errors.token?.message} />
-            <p className="text-xs text-[var(--color-muted-foreground)]">
-              Create one in Vikunja's web UI under Settings → API Tokens.
-            </p>
-          </div>
+          {authMethod === 'token' ? (
+            <div className="space-y-2">
+              <Label htmlFor="apiToken">API token</Label>
+              <Input
+                id="apiToken"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="tk_…"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
+              <p className="text-xs text-[var(--color-muted-foreground)]">
+                Create one in Vikunja's web UI under Settings → API Tokens.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="loginUsername">Username or email</Label>
+                <Input
+                  id="loginUsername"
+                  autoComplete="username"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  placeholder="jane@example.com"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="loginPassword">Password</Label>
+                <Input
+                  id="loginPassword"
+                  type="password"
+                  autoComplete="current-password"
+                  spellCheck={false}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+
+              {totpRequired && (
+                <div className="space-y-2">
+                  <Label htmlFor="token">Two-factor code</Label>
+                  <Input
+                    id="token"
+                    name="token"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    placeholder="000000"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  />
+                  <p className="text-xs text-[var(--color-muted-foreground)]">
+                    Enter the code from your authenticator app.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
 
           {submitError ? (
             <div
@@ -105,8 +261,12 @@ export function LoginScreen() {
             </div>
           ) : null}
 
-          <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
-            {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting
+              ? 'Signing in…'
+              : totpRequired
+                ? 'Verify'
+                : 'Sign in'}
           </Button>
         </form>
       </div>
@@ -122,7 +282,7 @@ function FieldError({ message }: { message?: string | undefined }) {
 function messageFor(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
-      return 'That token was rejected. Double-check it in Vikunja settings.';
+      return 'That was rejected. Double-check your credentials.';
     }
     if (err.status === 404) {
       return "Couldn't find a Vikunja API at that URL — is /api/v1 reachable?";

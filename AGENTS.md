@@ -1,7 +1,7 @@
 # Cria — agent guide
 
-**Cria** is a native desktop client for [Vikunja](https://vikunja.io), built
-with Tauri 2 + React. Read [SPEC.md](SPEC.md) for the *design*; this file is
+**Cria** is a native desktop and iOS client for [Vikunja](https://vikunja.io),
+built with Tauri 2 + React. Read [SPEC.md](SPEC.md) for the *design*; this file is
 the *implementation* cheat-sheet — commands, conventions, and the hard-won
 gotchas a fresh session needs before touching code.
 
@@ -22,6 +22,9 @@ pnpm generate:api   # regen src/api/schema.ts (VK_URL= to target an instance)
 pnpm clean          # rm -rf dist src-tauri/target (reclaim ~7GB build artifacts)
 pnpm clean:all      # also rm -rf node_modules (needs pnpm install before next dev)
 cargo check --manifest-path src-tauri/Cargo.toml   # Rust shell sanity
+pnpm tauri ios dev --host           # run on a connected iOS device / simulator
+pnpm tauri ios build --export-method debugging   # standalone signed iOS build
+cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios   # iOS shell compile-check
 ```
 
 If pnpm's build-script pre-flight nags, the same binaries live under
@@ -29,7 +32,8 @@ If pnpm's build-script pre-flight nags, the same binaries live under
 `…/vite build`) and skip the check.
 
 **Always** run `pnpm typecheck` and `pnpm test` before declaring a change
-done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
+done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
+`cargo check --target aarch64-apple-ios` to catch iOS-only breakage).
 
 ## Current state
 
@@ -56,6 +60,7 @@ release").**
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
 | M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
+| **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅ |
 
 **Next up:** M10 stretch goals (notes).
 See [SPEC.md §14](SPEC.md).
@@ -75,8 +80,8 @@ See [SPEC.md §14](SPEC.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 14 migrations in
-  `src/db/migrations/` (`001_initial.sql` → `014_comment_reactions.sql`).
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 15 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `015_perf_indexes.sql`).
   Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
   Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),
@@ -238,6 +243,49 @@ cargo, `source "$HOME/.cargo/env"` (or open a new tab — rustup added itself to
 All development happens on `dev`. Feature work uses `feature/<name>` branches,
 fixes use `fix/<name>`. PRs target `dev`; `main` is released-only. Always
 branch off `dev`, never off `main`.
+
+### iOS & platform gating
+
+Cria builds for iOS from the same codebase. Two distinct "is this mobile?"
+checks — **don't conflate them**:
+
+- **`isMobilePlatform()`** ([src/lib/platform.ts](src/lib/platform.ts)) —
+  *capability* gating (the OS). Resolved once at boot from
+  `@tauri-apps/plugin-os`; a cheap sync read elsewhere, defaults to desktop.
+  Use it to no-op desktop-only features on iOS.
+- **`useIsMobile()`** ([src/lib/useIsMobile.ts](src/lib/useIsMobile.ts)) —
+  *layout* breakpoint (viewport ≤768px) for the responsive shell. A narrow
+  desktop window is "mobile" here but not for capabilities.
+
+Other rules:
+- **Capabilities are split by platform.** Shared perms (sql, http,
+  notification, deep-link, os) live in
+  [`capabilities/default.json`](src-tauri/capabilities/default.json) (no
+  `platforms` key → all platforms). Desktop-only perms (global-shortcut,
+  autostart, updater, process) live in
+  [`capabilities/desktop.json`](src-tauri/capabilities/desktop.json) with
+  `"platforms": ["macOS","windows","linux"]` — those plugins aren't compiled
+  on iOS, so listing them on mobile breaks the build.
+- **Desktop-only plugins are gated Rust-side** with `#[cfg(desktop)]` in
+  [lib.rs](src-tauri/src/lib.rs) and no-op'd in the `src/tauri/` JS wrappers
+  via `isMobilePlatform()`.
+- **Reminders differ by platform**
+  ([src/sync/useReminderScheduler.ts](src/sync/useReminderScheduler.ts)):
+  desktop polls + fires immediately while running; mobile hands future
+  reminders to the OS via the notification plugin's `Schedule.at` so they fire
+  when the app is closed, reconciling local reminders against the OS pending
+  list (see the `notification.ts` wrapper).
+- **Background timers pause on mobile** via
+  [`isPageVisible()`](src/lib/visibility.ts) (periodic-sync + reminder loops),
+  so they don't drain battery in the background; they resume on
+  `visibilitychange`.
+- **iOS dev quirks:** `tauri ios dev --host` serves Vite over the LAN (device
+  needs Local Network permission); after install, trust the dev profile in
+  Settings → General → VPN & Device Management; the home-screen icon caches
+  hard (delete app + reboot if it shows the default). CI compile-checks the iOS
+  shell on native-code changes
+  ([.github/workflows/ci-ios.yml](.github/workflows/ci-ios.yml)); signed
+  distribution is manual (no paid Apple account yet — see release.yml).
 
 ### Sync vs user mutations
 

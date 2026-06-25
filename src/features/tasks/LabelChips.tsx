@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { X } from 'lucide-react';
 import type { Label } from '@/domain/label';
 
@@ -11,7 +12,7 @@ import type { Label } from '@/domain/label';
  * which is what the dense task-row usages (TaskList / SmartViews) want;
  * only the detail card passes `onRemove`.
  */
-export function LabelChips({
+export const LabelChips = memo(function LabelChips({
   labels,
   onRemove,
 }: {
@@ -29,7 +30,7 @@ export function LabelChips({
           <li
             key={l.localId}
             title={l.description ?? l.title}
-            className="group/chip inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] leading-tight"
+            className="group/chip inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-footnote leading-tight"
             style={{
               background: bg,
               color: fg,
@@ -48,7 +49,7 @@ export function LabelChips({
                   onRemove(l.localId);
                 }}
                 aria-label={`Remove label ${l.title}`}
-                className="ml-0.5 inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-black/15 group-hover/chip:opacity-70 hover:!opacity-100 cursor-pointer"
+                className="chip-reveal ml-0.5 inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full hover:bg-black/15 cursor-pointer"
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -58,23 +59,39 @@ export function LabelChips({
       })}
     </ul>
   );
-}
+});
+
+// Label colours are a tiny, stable set, so the parse/luminance work for each
+// distinct hex only needs to happen once. These module-level caches keep the
+// per-label-per-render math from re-running; unbounded Maps are fine here.
+const normaliseCache = new Map<string, string | null>();
+const lightCache = new Map<string, boolean>();
 
 /** Normalise to `#rrggbb`; return null for empty/invalid. */
 function normaliseHex(hex: string | null): string | null {
   if (!hex) return null;
+  const cached = normaliseCache.get(hex);
+  if (cached !== undefined) return cached;
   const trimmed = hex.trim().replace(/^#/, '');
-  if (!/^[0-9a-f]{6}$/i.test(trimmed)) return null;
-  return `#${trimmed}`;
+  const result = /^[0-9a-f]{6}$/i.test(trimmed) ? `#${trimmed}` : null;
+  normaliseCache.set(hex, result);
+  return result;
 }
 
 /** Quick luminance test so chip text stays legible on bright fills. */
 function isLight(hex: string): boolean {
+  const cached = lightCache.get(hex);
+  if (cached !== undefined) return cached;
   const m = hex.replace('#', '');
-  if (m.length !== 6) return false;
+  if (m.length !== 6) {
+    lightCache.set(hex, false);
+    return false;
+  }
   const r = parseInt(m.slice(0, 2), 16);
   const g = parseInt(m.slice(2, 4), 16);
   const b = parseInt(m.slice(4, 6), 16);
   // ITU-R BT.709 luma
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 160;
+  const result = 0.2126 * r + 0.7152 * g + 0.0722 * b > 160;
+  lightCache.set(hex, result);
+  return result;
 }

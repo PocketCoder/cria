@@ -1,16 +1,24 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useCallback, memo } from 'react';
 import { format } from 'date-fns';
 import { toCalendarDate } from '@/lib/dateFormat';
-import { Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, Plus, Loader2, Trash2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DatePicker } from '@/components/DatePicker';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useUi } from '@/stores/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { createTask, updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle, toggleTaskLabel } from '@/db/labels';
 import { useLabels } from '@/queries/labels';
-import { useProjects } from '@/queries/projects';
+import { useSelectableProjects } from '@/queries/projects';
+import { priorityColor } from '@/components/ui/priority-select';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
+import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { forceSync } from '@/sync/forceSync';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { impactComplete, impactDeleted } from '@/utils/haptics';
 import {
   useTodayTasks,
   useUpcomingTasks,
@@ -58,6 +66,7 @@ function SmartView({
   defaultLabelLocalId?: string;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
+  const isMobile = useIsMobile();
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const filtered = groups
     .map((g) => ({
@@ -72,12 +81,22 @@ function SmartView({
   );
 
   /* ── inline create ──────────────────────────────────────── */
-  const { data: projects = [] } = useProjects();
+  const { data: projects = [] } = useSelectableProjects();
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [projectLocalId, setProjectLocalId] = useState('');
   const submittingRef = useRef(false);
+  const qc = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    // Pull-to-refresh must actually hit the server. The smart-view queries only
+    // read the local DB, so invalidating alone re-reads unchanged data and
+    // nothing appears to sync. forceSync drains the outbox + pulls every entity
+    // and notifies the bus; the invalidate is belt-and-braces for any query not
+    // covered by a bus topic.
+    await forceSync();
+    await qc.invalidateQueries();
+  }, [qc]);
   // Set default project once projects are loaded
   if (!projectLocalId && projects.length > 0) {
     const first = projects[0];
@@ -158,19 +177,24 @@ function SmartView({
 
   return (
     <>
-      <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
-        <h1 className="text-base font-semibold tracking-tight">{title}</h1>
-        {activeTotal > 0 ? (
-          <span className="text-xs text-[var(--color-muted-foreground)]">
-            {activeTotal}
-          </span>
-        ) : null}
-      </header>
+      {/* On mobile the title is shown by the app header (large title), so this
+          in-content header would duplicate it — desktop only. */}
+      {!isMobile && (
+        <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-7 py-3">
+          <h1 className="text-base font-semibold tracking-tight">{title}</h1>
+          {activeTotal > 0 ? (
+            <span className="text-xs text-[var(--color-muted-foreground)]">
+              {activeTotal}
+            </span>
+          ) : null}
+        </header>
+      )}
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        <PullToRefresh onRefresh={handleRefresh}>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Inline create */}
-          <form onSubmit={handleSubmit} className="border-b border-[var(--color-border)] px-6 py-3">
+          <form onSubmit={handleSubmit} className="border-b border-[var(--color-border)] px-7 py-3">
             <div className="flex items-center gap-3">
               <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
                 {isSubmitting ? (
@@ -189,19 +213,18 @@ function SmartView({
               />
             </div>
             <div className="mt-2 flex items-center gap-3 pl-7 text-[var(--color-muted-foreground)]">
-              <select
-                value={projectLocalId}
-                onChange={(e) => setProjectLocalId(e.target.value)}
-                className="text-xs max-w-36 truncate"
-                disabled={isSubmitting}
-              >
-                {projects.length === 0 && <option value="">No projects</option>}
-                {projects.map((p) => (
-                  <option key={p.localId} value={p.localId}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
+              {projects.length > 0 ? (
+                <Select value={projectLocalId} onValueChange={setProjectLocalId} disabled={isSubmitting}>
+                  <SelectTrigger className="max-w-36 truncate text-xs">
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.localId} value={p.localId}>{p.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
               <DatePicker
                 value={metadata.dueDate !== undefined ? metadata.dueDate : datePicker || null}
                 onChange={(iso) => {
@@ -229,7 +252,7 @@ function SmartView({
               const completed = g.tasks.filter((t) => t.done);
               return (
                 <div key={g.key}>
-                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
                     {g.label}
                     <span className="font-normal normal-case">{active.length}</span>
                   </h2>
@@ -247,7 +270,7 @@ function SmartView({
                           <button
                             type="button"
                             onClick={() => setShowCompleted((s) => !s)}
-                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
                           >
                             {showCompleted ? (
                               <ChevronDown className="h-3 w-3 shrink-0" />
@@ -276,13 +299,14 @@ function SmartView({
             })
           )}
         </section>
+        </PullToRefresh>
         <TaskDetail />
       </div>
     </>
   );
 }
 
-export function SmartTaskRow({
+export const SmartTaskRow = memo(function SmartTaskRow({
   task,
   showProject,
 }: {
@@ -296,83 +320,153 @@ export function SmartTaskRow({
   const { data: attachmentIds } = useTasksWithAttachments();
   const hasAttachments = attachmentIds?.has(task.localId) ?? false;
 
-  const handleToggle = async () => {
+  // Date formatting is the most expensive per-row work; memoize it so it
+  // only recomputes when the due date itself changes, not on every render.
+  const dueLabel = useMemo(
+    () => (task.dueDate ? formatDue(task.dueDate) : null),
+    [task.dueDate],
+  );
+
+  const handleToggle = useCallback(async () => {
     const nowDone = !task.done;
     try {
       await updateTask(task.localId, { done: nowDone });
-      if (nowDone) playCompletionSound();
+      if (nowDone) {
+        playCompletionSound();
+        impactComplete();
+      }
     } catch (err) {
       console.error('Failed to toggle task:', err);
     }
-  };
+  }, [task.localId, task.done]);
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      enqueueDelete(task);
+    },
+    [enqueueDelete, task],
+  );
+
+  const handleSwipeComplete = useCallback(() => {
+    void handleToggle();
+  }, [handleToggle]);
+
+  const handleSwipeDelete = useCallback(() => {
     enqueueDelete(task);
-  };
+    impactDeleted();
+  }, [enqueueDelete, task]);
+
+  const { ref: swipeRef, isSwiping, swipeOffset } = useSwipeGesture<HTMLDivElement>({
+    onComplete: handleSwipeComplete,
+    onDelete: handleSwipeDelete,
+  });
+
+  const handleClick = useCallback(() => {
+    if (!isSwiping) setSelectedTask(task.localId);
+  }, [isSwiping, task.localId, setSelectedTask]);
 
   return (
     <li
       data-task-row=""
-      onClick={() => setSelectedTask(task.localId)}
+      onClick={handleClick}
       className={cn(
-        'group flex cursor-pointer items-start gap-3 border-b border-[var(--color-border)] px-6 py-3 transition-colors hover:bg-[var(--color-accent)]/5',
+        'group flex cursor-pointer items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
         task.done && 'opacity-60',
         selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
       )}
+      style={{ overflow: 'hidden', position: 'relative' }}
     >
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="mt-1 h-4 w-4 cursor-pointer rounded accent-[var(--color-primary)]"
-      />
-      <div className="min-w-0 flex-1">
-        <TaskHoverPreview task={task}>
-          <p
-            className={cn(
-              'truncate text-sm',
-              task.done && 'text-[var(--color-muted-foreground)] line-through',
-            )}
+      {/* Left-side progressive action indicator (left-to-right swipe) */}
+      {(() => {
+        const t = swipeOffset > 0
+          ? Math.min(1, swipeOffset / SWIPE_DELETE_THRESHOLD)
+          : 0;
+        const blend = swipeOffset > SWIPE_COMPLETE_THRESHOLD
+          ? Math.min(1, (swipeOffset - SWIPE_COMPLETE_THRESHOLD) / (SWIPE_DELETE_THRESHOLD - SWIPE_COMPLETE_THRESHOLD))
+          : 0;
+        const r = Math.round(22 + (239 - 22) * blend);
+        const g = Math.round(163 - 163 * blend);
+        const b = Math.round(74 - 74 * blend);
+        const doneOpacity = swipeOffset > 0 ? (swipeOffset < SWIPE_COMPLETE_THRESHOLD ? 1 : Math.max(0, 1 - blend * 1.5)) : 0;
+        const deleteOpacity = swipeOffset > SWIPE_COMPLETE_THRESHOLD ? Math.min(1, (blend - 0.2) / 0.8) : 0;
+        return (
+          <div
+            className="absolute inset-y-0 left-0 flex items-center justify-center text-white text-xs font-medium pointer-events-none"
+            style={{ zIndex: 0, width: `${Math.round(t * SWIPE_DELETE_THRESHOLD)}px` }}
           >
-            {task.title}
-          </p>
-        </TaskHoverPreview>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-          {showProject ? <span>{task.projectTitle}</span> : null}
-          {task.dueDate ? <span>{formatDue(task.dueDate)}</span> : null}
-          {task.priority > 0 ? (
-            <span aria-label={`Priority ${task.priority}`}>
-              {'!'.repeat(Math.min(5, task.priority))}
+            <span style={{ background: t > 0 ? `rgb(${r} ${g} ${b})` : 'transparent', position: 'absolute', inset: 0 }} />
+            <span className="absolute flex items-center gap-1" style={{ opacity: doneOpacity, transition: 'none' }}>
+              <Check className="h-4 w-4" />
+              Done
             </span>
-          ) : null}
-          {hasAttachments ? (
-            <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-          ) : null}
-          <LabelChips labels={labels} />
-        </div>
-      </div>
-      {task.hexColor ? (
-        <span
-          aria-hidden="true"
-          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-          style={{ background: task.hexColor }}
+            <span className="absolute flex items-center gap-1" style={{ opacity: deleteOpacity, transition: 'none' }}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </span>
+          </div>
+        );
+      })()}
+
+
+      <div
+        ref={swipeRef as React.Ref<HTMLDivElement>}
+        className="flex w-full items-start gap-3 px-7 py-3"
+        style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
+      >
+        <input
+          type="checkbox"
+          checked={task.done}
+          onChange={handleToggle}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={task.done ? 'Done' : 'Not done'}
+          className="task-check mt-0.5"
         />
-      ) : null}
-      <div className="mt-1 flex items-center gap-1">
-        <button
-          onClick={handleDelete}
-          aria-label="Delete task"
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="min-w-0 flex-1">
+          <TaskHoverPreview task={task}>
+            <p
+              className={cn(
+                'truncate text-sm',
+                task.done && 'text-[var(--color-muted-foreground)] line-through',
+              )}
+            >
+              {task.title}
+            </p>
+          </TaskHoverPreview>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-[var(--color-muted-foreground)]">
+            {showProject ? <span>{task.projectTitle}</span> : null}
+            {dueLabel ? <span>{dueLabel}</span> : null}
+            {task.priority > 0 ? (
+              <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
+                {'!'.repeat(Math.min(5, task.priority))}
+              </span>
+            ) : null}
+            {hasAttachments ? (
+              <Paperclip className="h-3 w-3" aria-label="Has attachments" />
+            ) : null}
+            <LabelChips labels={labels} />
+          </div>
+        </div>
+        {task.hexColor ? (
+          <span
+            aria-hidden="true"
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+            style={{ background: task.hexColor }}
+          />
+        ) : null}
+        <div className="mt-1 flex items-center gap-1">
+          <button
+            onClick={handleDelete}
+            aria-label="Delete task"
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </li>
   );
-}
+});
 
 function formatDue(iso: string): string {
   try {
@@ -442,7 +536,6 @@ export function FavoritesView() {
       isLoading={isLoading}
       emptyMessage="No favorited tasks."
       showProject
-      defaultDueDate={todayISO()}
     />
   );
 }
@@ -457,7 +550,6 @@ export function InboxView() {
       isLoading={isLoading}
       emptyMessage="No inbox project set. Configure it in your Vikunja server settings."
       showProject={false}
-      defaultDueDate={todayISO()}
     />
   );
 }

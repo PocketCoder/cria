@@ -201,7 +201,7 @@ export function normaliseDate(value: string | null | undefined): string | null {
 
 export interface TaskInput {
   title: string;
-  projectLocalId: string;
+  projectLocalId?: string | null;
   description?: string | null;
   dueDate?: string | null;
   startDate?: string | null;

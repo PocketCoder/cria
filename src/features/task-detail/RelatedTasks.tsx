@@ -10,6 +10,7 @@ import {
   Square,
   Loader2,
 } from 'lucide-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import {
   listRelationsForTask,
   addRelation,
@@ -44,6 +45,7 @@ export function RelatedTasks({
   taskLocalId: string;
   taskServerId: number | null;
 }) {
+  void taskServerId; // kept in props for API symmetry with sibling panels
   const qc = useQueryClient();
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const [adding, setAdding] = useState(false);
@@ -78,8 +80,6 @@ export function RelatedTasks({
     );
   }, [relations]);
 
-  const disabled = taskServerId == null;
-
   const handleRemove = async (r: TaskRelation) => {
     setOpError(null);
     try {
@@ -96,7 +96,7 @@ export function RelatedTasks({
 
   return (
     <section className="mb-4">
-      <h3 className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+      <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
         <Link2 className="h-3 w-3" />
         Related tasks
         {relations.length > 0 ? (
@@ -108,7 +108,7 @@ export function RelatedTasks({
         <div className="mb-1 space-y-1.5">
           {grouped.map(([kind, items]) => (
             <div key={kind}>
-              <div className="mb-0.5 text-[10px] font-medium text-[var(--color-muted-foreground)]">
+              <div className="mb-0.5 text-footnote font-medium text-[var(--color-muted-foreground)]">
                 {KIND_LABEL[kind]}
               </div>
               <ul className="space-y-1">
@@ -150,7 +150,6 @@ export function RelatedTasks({
                     <button
                       type="button"
                       onClick={() => void handleRemove(r)}
-                      disabled={disabled}
                       aria-label="Remove relation"
                       className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
                     >
@@ -180,7 +179,7 @@ export function RelatedTasks({
       {adding ? (
         <AddRelationRow
           taskLocalId={taskLocalId}
-          disabled={disabled}
+          disabled={false}
           onCancel={() => setAdding(false)}
           onError={(msg) => setOpError(msg)}
         />
@@ -188,13 +187,8 @@ export function RelatedTasks({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          disabled={disabled}
-          title={
-            disabled
-              ? 'Save the task first — relations need a server id'
-              : 'Add a related task'
-          }
-          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-40 cursor-pointer"
+          title="Add a related task"
+          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
           Add relation
@@ -296,7 +290,7 @@ function AddRelationRow({
         >
           {t.title}
         </span>
-        <span className="shrink-0 text-[10px] text-[var(--color-muted-foreground)]">
+        <span className="shrink-0 text-footnote text-[var(--color-muted-foreground)]">
           {t.projectTitle}
         </span>
       </button>
@@ -306,21 +300,16 @@ function AddRelationRow({
   return (
     <div className="space-y-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5">
       <div className="flex items-center gap-2">
-        <div className="relative">
-          <select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as TaskRelationKind)}
-            disabled={disabled || busy}
-            className="appearance-none rounded border border-[var(--color-border)] bg-[var(--color-input)] py-1 pl-1.5 pr-5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-          >
+        <Select value={kind} onValueChange={(v) => setKind(v as TaskRelationKind)} disabled={disabled || busy}>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
             {TASK_RELATION_PICKABLE_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
+              <SelectItem key={k} value={k}>{KIND_LABEL[k]}</SelectItem>
             ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
-        </div>
+          </SelectContent>
+        </Select>
         <input
           type="text"
           autoFocus
@@ -358,7 +347,7 @@ function AddRelationRow({
           <button
             type="button"
             onClick={() => setShowCompleted((v) => !v)}
-            className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+            className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
           >
             {showCompleted ? (
               <ChevronDown className="h-3 w-3 shrink-0" />
@@ -376,7 +365,7 @@ function AddRelationRow({
       ) : null}
 
       {query.trim() && active.length === 0 && completed.length === 0 ? (
-        <div className="px-1 py-0.5 text-[10px] text-[var(--color-muted-foreground)]">
+        <div className="px-1 py-0.5 text-footnote text-[var(--color-muted-foreground)]">
           No matches
         </div>
       ) : null}

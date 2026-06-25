@@ -1,0 +1,78 @@
+name: iOS build check
+
+# Validates that the Rust shell still COMPILES for iOS. The main CI workflow
+# (ci.yml) already typechecks/tests/builds the frontend, which is shared with
+# iOS — the only iOS-specific gap is the native side: a desktop-only plugin or
+# API used without a `#[cfg(desktop)]` / isMobilePlatform() gate breaks the iOS
+# build but passes the Ubuntu jobs. This job catches that.
+#
+# `cargo check --target aarch64-apple-ios` is unsigned — no Apple certs needed.
+# A full signed IPA (TestFlight / App Store) is NOT automated: it needs a paid
+# Apple Developer account + App Store Connect API key as secrets, plus a
+# distribution channel. Until then, ship iOS manually:
+#   pnpm tauri ios build --export-method debugging   (see README "iOS")
+#
+# Runs only when the native shell / iOS config changes (macOS runners are
+# pricey and slow), so frontend-only PRs don't pay for it.
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/ci-ios.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/ci-ios.yml'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ci-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-check:
+    name: iOS Rust compile check
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust toolchain (iOS target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      # tauri-build validates that `frontendDist` (../dist) exists, so build the
+      # frontend first even though we only compile-check the Rust side.
+      - name: Build frontend
+        run: pnpm vite:build
+
+      - name: Compile-check Rust shell for iOS
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios

@@ -138,7 +138,7 @@ export function AttachmentList({
       onDrop={onDrop}
     >
       <div className="mb-1 flex items-center gap-1">
-        <h3 className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+        <h3 className="flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
           <Paperclip className="h-3 w-3" />
           Attachments
           {!empty ? <span className="font-normal">{attachments.length}</span> : null}
@@ -149,7 +149,7 @@ export function AttachmentList({
           disabled={disabled || uploading}
           title={
             disabled
-              ? 'Save the task first — attachments need a server id'
+              ? 'Complete creating the task first (sync to server) — then you can add attachments'
               : 'Add attachment'
           }
           className="ml-auto flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-40 cursor-pointer"

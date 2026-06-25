@@ -25,7 +25,7 @@ export function UpdateBanner({ state, onInstall }: UpdateBannerProps) {
       title={
         state.update.notes ?? 'Click to restart into the new version'
       }
-      className="flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-primary-foreground)] shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+      className="flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-2.5 py-1 text-caption font-medium text-[var(--color-primary-foreground)] shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
     >
       <Download className="h-3 w-3" />
       {installing

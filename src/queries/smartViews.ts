@@ -12,6 +12,14 @@ import {
 import { getDb } from '@/db';
 import { useCurrentUser } from '@/queries/user';
 import { subscribe } from '@/db/bus';
+import { pullTasksForProject } from '@/sync/pull';
+import { throttledWarn } from '@/api/resilience';
+import { isMobilePlatform } from '@/lib/platform';
+
+// Foreground refresh cadence. The 60s periodic sync + `tasks` bus invalidation
+// already keep these views fresh, so the extra poll is just belt-and-braces;
+// on mobile we slow it to 60s to cut redundant DB scans / battery.
+const SMART_REFETCH_MS = () => (isMobilePlatform() ? 60_000 : 15_000);
 
 export interface TaskGroup {
   key: string;
@@ -54,7 +62,7 @@ export function useTodayTasks() {
   return useQuery<TaskGroup[]>({
     queryKey: ['smart', 'today'],
     staleTime: 30_000,
-    refetchInterval: 15_000,
+    refetchInterval: SMART_REFETCH_MS(),
     queryFn: async () => {
       const all = await listTasksWithDueDate();
       const today = startOfDay(new Date());
@@ -90,7 +98,7 @@ export function useUpcomingTasks() {
   return useQuery<TaskGroup[]>({
     queryKey: ['smart', 'upcoming'],
     staleTime: 30_000,
-    refetchInterval: 15_000,
+    refetchInterval: SMART_REFETCH_MS(),
     queryFn: async () => {
       const all = await listTasksWithDueDate();
       const today = startOfDay(new Date());
@@ -130,7 +138,7 @@ export function useLabelTasks(labelLocalId: string | null) {
     queryKey: ['smart', 'label', labelLocalId],
     enabled: !!labelLocalId,
     staleTime: 30_000,
-    refetchInterval: 15_000,
+    refetchInterval: SMART_REFETCH_MS(),
     queryFn: async () => {
       if (!labelLocalId) return [];
       return groupByProject(await listTasksForLabel(labelLocalId));
@@ -154,9 +162,17 @@ export function useInboxTasks() {
     queryKey: ['smart', 'inbox'],
     enabled: !!user?.defaultProjectId,
     staleTime: 30_000,
-    refetchInterval: 15_000,
+    refetchInterval: SMART_REFETCH_MS(),
     queryFn: async () => {
       if (!user?.defaultProjectId) return [];
+      // Pull the inbox project's tasks on view (like useProjectTasks does for an
+      // opened project) so the Inbox populates immediately, independent of when
+      // the periodic cross-project pullAllTasks runs.
+      try {
+        await pullTasksForProject(user.defaultProjectId);
+      } catch (err) {
+        throttledWarn('queries/smartViews/inbox', '[smart-view] inbox pull failed:', err);
+      }
       const db = await getDb();
       const rows = await db.select<{ local_id: string; title: string }[]>(
         `SELECT local_id, title FROM projects WHERE server_id = ? LIMIT 1`,
@@ -188,7 +204,7 @@ export function useFavoriteTasks() {
   return useQuery<TaskGroup[]>({
     queryKey: ['smart', 'favorites'],
     staleTime: 30_000,
-    refetchInterval: 15_000,
+    refetchInterval: SMART_REFETCH_MS(),
     queryFn: async () => groupByProject(await listFavoriteTasks()),
   });
 }

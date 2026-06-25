@@ -1,10 +1,21 @@
+import { useCallback } from 'react';
 import { Search, Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchTasks } from '@/queries/search';
 import { SmartTaskRow } from '@/features/smart-views/SmartViews';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { forceSync } from '@/sync/forceSync';
 import { SearchQueryPreview } from './SearchQueryPreview';
 
 export function SearchView({ query }: { query: string }) {
+  const qc = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    // Actually sync from the server before re-reading local results — see the
+    // note in SmartViews.handleRefresh.
+    await forceSync();
+    await qc.invalidateQueries();
+  }, [qc]);
   const { parsed, query: { data: results = [], isLoading } } = useSearchTasks(query);
   const hasQuery = query.trim().length > 0;
 
@@ -24,7 +35,8 @@ export function SearchView({ query }: { query: string }) {
       </header>
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        <PullToRefresh onRefresh={handleRefresh}>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {hasQuery && (parsed.dueDateStart || parsed.priority != null || parsed.labelTitle || parsed.text) ? (
             <div className="border-b border-[var(--color-border)] px-6 py-2">
               <SearchQueryPreview parsed={parsed} />
@@ -58,6 +70,7 @@ export function SearchView({ query }: { query: string }) {
             </ul>
           )}
         </section>
+        </PullToRefresh>
         <TaskDetail />
       </div>
     </>

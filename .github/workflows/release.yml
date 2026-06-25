@@ -9,6 +9,14 @@ name: Release
 #   - TAURI_SIGNING_PRIVATE_KEY            (contents of ~/.tauri/cria-update.key)
 #   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (empty string is fine for an
 #                                           unprotected dev key)
+#
+# iOS is intentionally NOT built here. A distributable iOS build needs a paid
+# Apple Developer account + App Store Connect API key (as secrets) and a
+# distribution channel (TestFlight / App Store). The current setup is a free
+# personal team, whose builds expire after 7 days and can't be distributed, so
+# iOS ships manually for now — `pnpm tauri ios build --export-method debugging`
+# (see README "iOS"). PRs are still iOS-compile-checked by ci-ios.yml. Add an
+# iOS job here once a paid account + ASC secrets exist.
 
 on:
   push:

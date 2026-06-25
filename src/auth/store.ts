@@ -15,15 +15,15 @@ export type AuthStatus =
 
 interface AuthState {
   status: AuthStatus;
-  hydrate: () => void;
+  hydrate: () => Promise<void>;
   signIn: (credentials: Credentials, user: User) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 export const useAuth = create<AuthState>((set) => ({
   status: { kind: 'unknown' },
-  hydrate() {
-    const creds = loadCredentials();
+  async hydrate() {
+    const creds = await loadCredentials();
     set({
       status: creds
         ? { kind: 'authenticated', credentials: creds }
@@ -31,12 +31,12 @@ export const useAuth = create<AuthState>((set) => ({
     });
   },
   async signIn(credentials, user) {
-    saveCredentials(credentials);
+    await saveCredentials(credentials);
     await upsertUser(user);
     set({ status: { kind: 'authenticated', credentials } });
   },
   async signOut() {
-    clearCredentials();
+    await clearCredentials();
     await clearUser();
     set({ status: { kind: 'unauthenticated' } });
   },

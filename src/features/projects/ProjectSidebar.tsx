@@ -28,6 +28,13 @@ import {
 } from '@/components/ui/popover';
 import type { Project } from '@/domain/project';
 import type { Label } from '@/domain/label';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu';
 
 /* ────────────────────────── shared nav item ─────────────────────────── */
 
@@ -65,7 +72,11 @@ function NavItem({
  * project CRUD below. Clicking a view updates `activeView` in the UI
  * store, which the Shell reads to decide what to render in the main pane.
  */
-export function ProjectSidebar() {
+export function ProjectSidebar({
+  showSmartViews = true,
+}: {
+  showSmartViews?: boolean;
+} = {}) {
   const { data: projects = [], isLoading, isFetching, isError, error } =
     useProjects();
   const { data: labels = [] } = useLabels();
@@ -212,129 +223,133 @@ export function ProjectSidebar() {
   };
 
   return (
-    <aside className="flex h-full w-52 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)]">
+    <aside className="glass-nav flex h-full w-full flex-col md:w-52">
       <nav className="flex-1 overflow-y-auto px-2 pb-3">
-        {/* ── Smart Views ── */}
+        {/* ── Smart Views (hidden in mobile sheet — only shows projects + labels) ── */}
+        {showSmartViews && (
+          <div className="mb-1">
+            <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              Smart Views
+            </p>
+            <div className="space-y-0.5">
+              <NavItem
+                icon={Calendar}
+                label="Today"
+                isSelected={activeView?.kind === 'today'}
+                onClick={() => setActiveView({ kind: 'today' })}
+              />
+              <NavItem
+                icon={CalendarDays}
+                label="Upcoming"
+                isSelected={activeView?.kind === 'upcoming'}
+                onClick={() => setActiveView({ kind: 'upcoming' })}
+              />
+              <NavItem
+                icon={Star}
+                label="Favorites"
+                isSelected={activeView?.kind === 'favorites'}
+                onClick={() => setActiveView({ kind: 'favorites' })}
+              />
+              <NavItem
+                icon={Inbox}
+                label="Inbox"
+                isSelected={activeView?.kind === 'inbox'}
+                onClick={() => setActiveView({ kind: 'inbox' })}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Labels ── */}
         <div className="mb-1">
-          <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-            Smart Views
+          <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            Labels
           </p>
           <div className="space-y-0.5">
-            <NavItem
-              icon={Calendar}
-              label="Today"
-              isSelected={activeView?.kind === 'today'}
-              onClick={() => setActiveView({ kind: 'today' })}
-            />
-            <NavItem
-              icon={CalendarDays}
-              label="Upcoming"
-              isSelected={activeView?.kind === 'upcoming'}
-              onClick={() => setActiveView({ kind: 'upcoming' })}
-            />
-            <NavItem
-              icon={Star}
-              label="Favorites"
-              isSelected={activeView?.kind === 'favorites'}
-              onClick={() => setActiveView({ kind: 'favorites' })}
-            />
-            <NavItem
-              icon={Inbox}
-              label="Inbox"
-              isSelected={activeView?.kind === 'inbox'}
-              onClick={() => setActiveView({ kind: 'inbox' })}
-            />
-            <>
-              <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-                Labels
-              </p>
-              <div className="space-y-0.5">
-                {labels.map((l) => (
-                  <LabelRow
-                    key={l.localId}
-                    label={l}
-                    isSelected={
+            {labels.map((l) => (
+              <LabelRow
+                key={l.localId}
+                label={l}
+                isSelected={
+                  activeView?.kind === 'label' &&
+                  activeView.localId === l.localId
+                }
+                isEditing={labelEditingId === l.localId}
+                editingTitle={labelEditingTitle}
+                onSelect={() =>
+                  setActiveView({ kind: 'label', localId: l.localId })
+                }
+                onStartRename={() => {
+                  setLabelEditingId(l.localId);
+                  setLabelEditingTitle(l.title);
+                }}
+                onChangeRename={setLabelEditingTitle}
+                onSaveRename={async () => {
+                  const title = labelEditingTitle.trim();
+                  if (!title) {
+                    setLabelEditingId(null);
+                    return;
+                  }
+                  try {
+                    await updateLabel(l.localId, { title });
+                  } catch (err) {
+                    console.error('[sidebar] updateLabel failed:', err);
+                  } finally {
+                    setLabelEditingId(null);
+                    setLabelEditingTitle('');
+                  }
+                }}
+                onCancelRename={() => {
+                  setLabelEditingId(null);
+                  setLabelEditingTitle('');
+                }}
+                onDelete={async () => {
+                  try {
+                    await deleteLabel(l.localId);
+                    if (
                       activeView?.kind === 'label' &&
                       activeView.localId === l.localId
-                    }
-                    isEditing={labelEditingId === l.localId}
-                    editingTitle={labelEditingTitle}
-                    onSelect={() =>
-                      setActiveView({ kind: 'label', localId: l.localId })
-                    }
-                    onStartRename={() => {
-                      setLabelEditingId(l.localId);
-                      setLabelEditingTitle(l.title);
-                    }}
-                    onChangeRename={setLabelEditingTitle}
-                    onSaveRename={async () => {
-                      const title = labelEditingTitle.trim();
-                      if (!title) {
-                        setLabelEditingId(null);
-                        return;
-                      }
-                      try {
-                        await updateLabel(l.localId, { title });
-                      } catch (err) {
-                        console.error('[sidebar] updateLabel failed:', err);
-                      } finally {
-                        setLabelEditingId(null);
-                        setLabelEditingTitle('');
-                      }
-                    }}
-                    onCancelRename={() => {
-                      setLabelEditingId(null);
-                      setLabelEditingTitle('');
-                    }}
-                    onDelete={async () => {
-                      try {
-                        await deleteLabel(l.localId);
-                        if (
-                          activeView?.kind === 'label' &&
-                          activeView.localId === l.localId
-                        )
-                          setActiveView(null);
-                      } catch (err) {
-                        console.error('[sidebar] deleteLabel failed:', err);
-                      }
-                    }}
-                  />
-                ))}
-                {creatingLabel ? (
-                  <input
-                    type="text"
-                    autoFocus
-                    value={newLabelTitle}
-                    disabled={labelBusy}
-                    onChange={(e) => setNewLabelTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleCreateLabel();
-                      } else if (e.key === 'Escape') {
-                        setCreatingLabel(false);
-                        setNewLabelTitle('');
-                      }
-                    }}
-                    placeholder="New label name…"
-                    className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-                  />
+                    )
+                      setActiveView(null);
+                  } catch (err) {
+                    console.error('[sidebar] deleteLabel failed:', err);
+                  }
+                }}
+              />
+            ))}
+            {creatingLabel ? (
+              <input
+                type="text"
+                autoFocus
+                value={newLabelTitle}
+                disabled={labelBusy}
+                onChange={(e) => setNewLabelTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateLabel();
+                  } else if (e.key === 'Escape') {
+                    setCreatingLabel(false);
+                    setNewLabelTitle('');
+                  }
+                }}
+                placeholder="New label name…"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreatingLabel(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+              >
+                {labelBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCreatingLabel(true)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-                  >
-                    {labelBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5" />
-                    )}
-                    New label
-                  </button>
+                  <Plus className="h-3.5 w-3.5" />
                 )}
-              </div>
-            </>
+                New label
+              </button>
+            )}
           </div>
         </div>
 
@@ -342,7 +357,7 @@ export function ProjectSidebar() {
 
         {/* ── Projects ── */}
         <div>
-          <header className="flex items-center justify-between px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <header className="flex items-center justify-between px-2 pb-1 pt-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
             <span>Projects</span>
             {isFetching ? (
               <span aria-live="polite">syncing…</span>
@@ -420,7 +435,7 @@ export function ProjectSidebar() {
         </div>
       </nav>
 
-      <footer className="border-t border-[var(--color-border)] px-2 py-2">
+      <footer className="border-t border-[var(--color-border)] bg-[var(--color-muted)]/50 px-2 py-2">
         {creating ? (
           <input
             type="text"
@@ -528,177 +543,196 @@ function ProjectRow({
   }
 
   return (
-    <li
-      draggable={!isEditing}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      className={cn(
-        'group relative',
-        isDragOver && 'border-t-2 border-[var(--color-primary)]',
-      )}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          'flex w-full items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
-          'hover:bg-[var(--color-muted)]',
-          isSelected && 'bg-[var(--color-muted)] font-medium',
-        )}
-      >
-        <GripVertical
-          aria-hidden="true"
-          className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-        />
-        <span
-          aria-hidden="true"
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{
-            background: project.hexColor || 'var(--color-muted-foreground)',
-          }}
-        />
-        <span className="truncate">{project.title}</span>
-        {project.isArchived ? (
-          <span className="ml-auto text-[10px] uppercase text-[var(--color-muted-foreground)]">
-            archived
-          </span>
-        ) : taskCount > 0 ? (
-          <span className="ml-auto text-[10px] text-[var(--color-muted-foreground)]">
-            {taskCount}
-          </span>
-        ) : null}
-      </button>
-
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger asChild>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li
+          draggable={!isEditing}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          onDragEnd={onDragEnd}
+          className={cn(
+            'group relative',
+            isDragOver && 'border-t-2 border-[var(--color-primary)]',
+          )}
+        >
           <button
             type="button"
-            aria-label={`Actions for ${project.title}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={onSelect}
             className={cn(
-              'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
-              'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
-              menuOpen && 'opacity-100',
+              'flex w-full items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
+              'hover:bg-[var(--color-muted)]',
+              isSelected && 'bg-[var(--color-muted)] font-medium',
             )}
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <GripVertical
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+            />
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                background: project.hexColor || 'var(--color-muted-foreground)',
+              }}
+            />
+            <span className="truncate">{project.title}</span>
+            {project.isArchived ? (
+              <span className="ml-auto text-footnote uppercase text-[var(--color-muted-foreground)]">
+                archived
+              </span>
+            ) : taskCount > 0 ? (
+              <span className="ml-auto text-footnote text-[var(--color-muted-foreground)]">
+                {taskCount}
+              </span>
+            ) : null}
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
-          {confirmDelete ? (
-            <div className="space-y-1.5 p-1.5 text-xs">
-              <p>Delete "{project.title}"?</p>
-              <p className="text-[10px] text-[var(--color-muted-foreground)]">
-                Tasks inside the project are removed too.
-              </p>
-              <div className="flex justify-end gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await onDelete();
-                    setMenuOpen(false);
-                    setConfirmDelete(false);
-                  }}
-                  className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ) : (
-            <ul className="text-xs">
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
-                  onClick={() => {
-                    onStartRename();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Rename
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
-                  onClick={() => setColorOpen(!colorOpen)}
-                >
-                  <Palette className="h-3.5 w-3.5" />
-                  Color
-                </button>
-                {colorOpen && (
-                  <div className="flex flex-wrap gap-1 px-2 py-1.5">
-                    {PROJECT_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={async () => {
-                          await updateProject(project.localId, {
-                            hexColor: c === project.hexColor ? null : c,
-                          });
-                          setMenuOpen(false);
-                          setColorOpen(false);
-                        }}
-                        className={cn(
-                          'h-5 w-5 rounded-full border-2 transition-all',
-                          c === project.hexColor
-                            ? 'border-[var(--color-foreground)] scale-110'
-                            : 'border-transparent hover:scale-110',
-                        )}
-                        style={{ background: c }}
-                      />
-                    ))}
-                    <input
-                      type="color"
-                      value={project.hexColor ?? '#000000'}
-                      onChange={(e) => {
-                        updateProject(project.localId, { hexColor: e.target.value });
-                        setMenuOpen(false);
-                        setColorOpen(false);
-                      }}
-                      className="h-5 w-5 cursor-pointer rounded-full border-0 overflow-hidden"
-                      title="Custom color"
-                    />
+
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Actions for ${project.title}`}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
+                  'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
+                  menuOpen && 'opacity-100',
+                )}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
+              {confirmDelete ? (
+                <div className="space-y-1.5 p-1.5 text-xs">
+                  <p>Delete "{project.title}"?</p>
+                  <p className="text-footnote text-[var(--color-muted-foreground)]">
+                    Tasks inside the project are removed too.
+                  </p>
+                  <div className="flex justify-end gap-1.5 pt-0.5">
                     <button
-                      onClick={async () => {
-                        await updateProject(project.localId, { hexColor: null });
-                        setMenuOpen(false);
-                        setColorOpen(false);
-                      }}
-                      className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
-                      title="Remove color"
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
                     >
-                      ×
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onDelete();
+                        setMenuOpen(false);
+                        setConfirmDelete(false);
+                      }}
+                      className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
+                    >
+                      Delete
                     </button>
                   </div>
-                )}
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              </li>
-            </ul>
-          )}
-        </PopoverContent>
-      </Popover>
-    </li>
+                </div>
+              ) : (
+                <ul className="text-xs">
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                      onClick={() => {
+                        onStartRename();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                      onClick={() => setColorOpen(!colorOpen)}
+                    >
+                      <Palette className="h-3.5 w-3.5" />
+                      Color
+                    </button>
+                    {colorOpen && (
+                      <div className="flex flex-wrap gap-1 px-2 py-1.5">
+                        {PROJECT_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={async () => {
+                              await updateProject(project.localId, {
+                                hexColor: c === project.hexColor ? null : c,
+                              });
+                              setMenuOpen(false);
+                              setColorOpen(false);
+                            }}
+                            className={cn(
+                              'h-5 w-5 rounded-full border-2 transition-all',
+                              c === project.hexColor
+                                ? 'border-[var(--color-foreground)] scale-110'
+                                : 'border-transparent hover:scale-110',
+                            )}
+                            style={{ background: c }}
+                          />
+                        ))}
+                        <input
+                          type="color"
+                          value={project.hexColor ?? '#000000'}
+                          onChange={(e) => {
+                            updateProject(project.localId, { hexColor: e.target.value });
+                            setMenuOpen(false);
+                            setColorOpen(false);
+                          }}
+                          className="h-5 w-5 cursor-pointer rounded-full border-0 overflow-hidden"
+                          title="Custom color"
+                        />
+                        <button
+                          onClick={async () => {
+                            await updateProject(project.localId, { hexColor: null });
+                            setMenuOpen(false);
+                            setColorOpen(false);
+                          }}
+                          className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-footnote text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10"
+                          title="Remove color"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </PopoverContent>
+          </Popover>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onStartRename}>
+          <span className="flex items-center gap-2">
+            <Pencil className="h-3.5 w-3.5" />
+            Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => { onDelete(); }}>
+          <span className="flex items-center gap-2">
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -752,98 +786,117 @@ function LabelRow({
   }
 
   return (
-    <li className="group relative">
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
-          'hover:bg-[var(--color-muted)]',
-          isSelected && 'bg-[var(--color-muted)] font-medium',
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{
-            background: label.hexColor || 'var(--color-muted-foreground)',
-          }}
-        />
-        <span className="truncate">{label.title}</span>
-      </button>
-
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger asChild>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li className="group relative">
           <button
             type="button"
-            aria-label={`Actions for ${label.title}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={onSelect}
             className={cn(
-              'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
-              'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
-              menuOpen && 'opacity-100',
+              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
+              'hover:bg-[var(--color-muted)]',
+              isSelected && 'bg-[var(--color-muted)] font-medium',
             )}
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                background: label.hexColor || 'var(--color-muted-foreground)',
+              }}
+            />
+            <span className="truncate">{label.title}</span>
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
-          {confirmDelete ? (
-            <div className="space-y-1.5 p-1.5 text-xs">
-              <p>Delete "{label.title}"?</p>
-              <p className="text-[10px] text-[var(--color-muted-foreground)]">
-                Removed from all tasks.
-              </p>
-              <div className="flex justify-end gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await onDelete();
-                    setMenuOpen(false);
-                    setConfirmDelete(false);
-                  }}
-                  className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ) : (
-            <ul className="text-xs">
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
-                  onClick={() => {
-                    onStartRename();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Rename
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              </li>
-            </ul>
-          )}
-        </PopoverContent>
-      </Popover>
-    </li>
+
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Actions for ${label.title}`}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
+                  'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
+                  menuOpen && 'opacity-100',
+                )}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="right" sideOffset={4} className="w-44 p-1">
+              {confirmDelete ? (
+                <div className="space-y-1.5 p-1.5 text-xs">
+                  <p>Delete "{label.title}"?</p>
+                  <p className="text-footnote text-[var(--color-muted-foreground)]">
+                    Removed from all tasks.
+                  </p>
+                  <div className="flex justify-end gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded-md px-2 py-1 hover:bg-[var(--color-muted)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onDelete();
+                        setMenuOpen(false);
+                        setConfirmDelete(false);
+                      }}
+                      className="rounded-md bg-[var(--color-destructive)] px-2 py-1 font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <ul className="text-xs">
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)]"
+                      onClick={() => {
+                        onStartRename();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </PopoverContent>
+          </Popover>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onStartRename}>
+          <span className="flex items-center gap-2">
+            <Pencil className="h-3.5 w-3.5" />
+            Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => { onDelete(); }}>
+          <span className="flex items-center gap-2">
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

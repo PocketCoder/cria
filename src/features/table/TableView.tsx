@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -17,6 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { PrioritySelect, priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
@@ -52,7 +53,9 @@ interface SortableRowProps {
   task: Task;
   shownColumns: ColumnDef[];
   editMode: boolean;
-  drafts: Record<string, DraftFields>;
+  // Only this row's own draft, not the whole `drafts` record — so a keystroke
+  // in one cell doesn't change props for (and re-render) every other row.
+  draft: DraftFields | undefined;
   setDraft: (localId: string, field: keyof DraftFields, value: unknown) => void;
   projectTitle: (id: string) => string;
   currentUserServerId: number | null;
@@ -70,11 +73,11 @@ const EDITABLE_COLUMNS = new Set<ColumnKey>([
   'labels',
 ]);
 
-function SortableTableRow({
+const SortableTableRow = memo(function SortableTableRow({
   task,
   shownColumns,
   editMode,
-  drafts,
+  draft,
   setDraft,
   projectTitle,
   currentUserServerId,
@@ -124,7 +127,7 @@ function SortableTableRow({
               <EditField
                 task={task}
                 columnKey={c.key}
-                draft={drafts[task.localId]}
+                draft={draft}
                 onChange={(field, value) => setDraft(task.localId, field, value)}
               />
             ) : (
@@ -140,7 +143,7 @@ function SortableTableRow({
       })}
     </tr>
   );
-}
+});
 
 /**
  * Dense, sortable, multi-column table view. Reads the same
@@ -157,6 +160,7 @@ export function TableView({ project, view }: TableViewProps) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const { data: currentUser } = useCurrentUser();
+  const currentUserServerId = currentUser?.serverId ?? null;
   const qc = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -343,7 +347,10 @@ export function TableView({ project, view }: TableViewProps) {
     [view, orderedRows, clearSort, qc, project.localId],
   );
 
-  const shownColumns = columns.filter((c) => visible[c.key]);
+  const shownColumns = useMemo(
+    () => columns.filter((c) => visible[c.key]),
+    [columns, visible],
+  );
 
   // 1-based sort priority per column, only meaningful with >1 active key.
   const sortOrder = useMemo(() => {
@@ -427,10 +434,10 @@ export function TableView({ project, view }: TableViewProps) {
                     task={task}
                     shownColumns={shownColumns}
                     editMode={editMode}
-                    drafts={drafts}
+                    draft={drafts[task.localId]}
                     setDraft={setDraft}
                     projectTitle={projectTitle}
-                    currentUserServerId={currentUser?.serverId ?? null}
+                    currentUserServerId={currentUserServerId}
                     selectedTaskId={selectedTaskId}
                     setSelectedTask={setSelectedTask}
                   />
@@ -586,7 +593,7 @@ function Cell({
       );
     case 'priority':
       return task.priority > 0 ? (
-        <span aria-label={`Priority ${task.priority}`}>
+        <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
           {'!'.repeat(Math.min(5, task.priority))}
         </span>
       ) : (
@@ -677,17 +684,11 @@ function EditField({
       );
     case 'priority':
       return (
-        <select
-          value={String(draft?.priority ?? task.priority)}
-          onChange={(e) => onChange('priority', Number(e.target.value))}
-          className={EDIT_INPUT_CLS}
-        >
-          {[0, 1, 2, 3, 4, 5].map((p) => (
-            <option key={p} value={p}>
-              {p === 0 ? 'None' : '!'.repeat(p)}
-            </option>
-          ))}
-        </select>
+        <PrioritySelect
+          value={draft?.priority ?? task.priority}
+          onChange={(p) => onChange('priority', p)}
+          compact
+        />
       );
     case 'percentDone':
       return (
@@ -760,7 +761,7 @@ function PercentCell({ value }: { value: number }) {
           style={{ width: `${Math.min(100, value)}%` }}
         />
       </span>
-      <span className="tabular-nums text-[11px]">{Math.round(value)}%</span>
+      <span className="tabular-nums text-caption">{Math.round(value)}%</span>
     </span>
   );
 }

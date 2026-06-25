@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Cria",
-  "version": "0.10.1",
-  "identifier": "io.cria.desktop",
+  "version": "0.11.0",
+  "identifier": "io.cria.app",
   "build": {
     "beforeDevCommand": "pnpm vite",
     "devUrl": "http://localhost:5180",

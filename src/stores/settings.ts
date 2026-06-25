@@ -27,6 +27,13 @@ interface SettingsState {
   setHideDockOnTray: (enabled: boolean) => void;
   playSoundWhenDone: boolean;
   setPlaySoundWhenDone: (enabled: boolean) => void;
+  // Defaults for the photo → tasks importer (overridable per-import in the
+  // capture modal). `shoppingProjectId` null means "ask each time"; an empty
+  // `shoppingLabel` means don't tag. See src/features/shoppingPhoto.
+  shoppingProjectId: string | null;
+  setShoppingProjectId: (id: string | null) => void;
+  shoppingLabel: string;
+  setShoppingLabel: (label: string) => void;
 }
 
 export const useSettings = create<SettingsState>()(
@@ -48,6 +55,10 @@ export const useSettings = create<SettingsState>()(
       setHideDockOnTray: (enabled) => set({ hideDockOnTray: enabled }),
       playSoundWhenDone: false,
       setPlaySoundWhenDone: (enabled) => set({ playSoundWhenDone: enabled }),
+      shoppingProjectId: null,
+      setShoppingProjectId: (id) => set({ shoppingProjectId: id }),
+      shoppingLabel: 'shopping',
+      setShoppingLabel: (label) => set({ shoppingLabel: label }),
     }),
     { name: 'cria:settings/v2' },
   ),

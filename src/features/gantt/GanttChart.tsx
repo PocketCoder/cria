@@ -4,7 +4,8 @@ import {
   DndContext,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
@@ -117,7 +118,8 @@ export function GanttChart({
   );
 
   const reorderSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
   const handleReorderEnd = useCallback(
@@ -395,7 +397,7 @@ export function GanttChart({
       >
         <div
           style={{ height: HEADER_HEIGHT }}
-          className="sticky top-0 z-10 flex items-end border-b border-[var(--color-border)] bg-[var(--color-background)] px-3 pb-1 text-[11px] font-medium text-[var(--color-muted-foreground)]"
+          className="sticky top-0 z-10 flex items-end border-b border-[var(--color-border)] bg-[var(--color-background)] px-3 pb-1 text-caption font-medium text-[var(--color-muted-foreground)]"
         >
           Task
         </div>
@@ -435,7 +437,7 @@ export function GanttChart({
                 <div
                   key={g.left}
                   style={{ left: g.left, width: g.width }}
-                  className="absolute truncate px-1 text-[11px] font-medium leading-5"
+                  className="absolute truncate px-1 text-caption font-medium leading-5"
                 >
                   {g.label}
                 </div>
@@ -451,7 +453,7 @@ export function GanttChart({
                     key={i}
                     style={{ left: i * DAY_WIDTH_PIXELS, width: DAY_WIDTH_PIXELS }}
                     className={cn(
-                      'absolute flex h-full flex-col items-center justify-center text-[10px] tabular-nums leading-none',
+                      'absolute flex h-full flex-col items-center justify-center text-footnote tabular-nums leading-none',
                       weekend && 'bg-[var(--color-muted)]/30',
                       isToday
                         ? 'font-semibold text-[var(--color-primary)]'

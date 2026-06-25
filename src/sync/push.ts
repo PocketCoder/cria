@@ -689,6 +689,29 @@ export async function retryDeadLetter(id: number): Promise<boolean> {
   return true;
 }
 
+/**
+ * Discard a single queued op. Removing the head row unblocks the FIFO drain
+ * so the rest of the queue can proceed. The local entity stays as-is (it just
+ * won't sync via this op), so this is a deliberate, destructive escape hatch
+ * for an op that's wedged the queue.
+ */
+export async function discardOutboxOp(id: number): Promise<void> {
+  await exec('DELETE FROM outbox WHERE id = ?', [id]);
+  notify('outbox');
+}
+
+/** Discard a single dead-lettered op (it already failed permanently). */
+export async function discardDeadLetter(id: number): Promise<void> {
+  await exec('DELETE FROM outbox_dead_letter WHERE id = ?', [id]);
+  notify('outbox');
+}
+
+/** Discard every dead-lettered op. */
+export async function clearDeadLetters(): Promise<void> {
+  await exec('DELETE FROM outbox_dead_letter', []);
+  notify('outbox');
+}
+
 export function taskToBody(
   task: TaskRow,
   projectServerId?: number,
@@ -1321,7 +1344,7 @@ async function executeViewOp(
     if (typeof cachedId === 'number') {
       await withTx(async (tx) => {
         await tx.execute(
-          `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+          `UPDATE project_views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
           [cachedId, new Date().toISOString(), localId],
         );
         await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
@@ -1345,7 +1368,7 @@ async function executeViewOp(
 
     await withTx(async (tx) => {
       await tx.execute(
-        `UPDATE views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
+        `UPDATE project_views SET server_id = ?, synced_at = ?, dirty = 0 WHERE local_id = ?`,
         [newServerId ?? null, new Date().toISOString(), localId],
       );
       await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);

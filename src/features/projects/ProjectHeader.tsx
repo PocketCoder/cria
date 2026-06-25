@@ -1,4 +1,5 @@
 import { ViewSwitcher } from './ViewSwitcher';
+import { useIsMobile } from '@/lib/useIsMobile';
 import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
 
@@ -15,14 +16,17 @@ export function ProjectHeader({
   activeViewLocalId,
   onSelectView,
 }: ProjectHeaderProps) {
+  const isMobile = useIsMobile();
+  // On mobile the project title lives in the app header and view-switching is a
+  // header action (MobileViewSwitcher), so this desktop chrome row is hidden.
+  if (isMobile) return null;
   return (
     <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
       <span
         aria-hidden="true"
         className="h-2.5 w-2.5 shrink-0 rounded-full"
         style={{
-          background:
-            project.hexColor || 'var(--color-muted-foreground)',
+          background: project.hexColor || 'var(--color-muted-foreground)',
         }}
       />
       <h1 className="text-base font-semibold tracking-tight">

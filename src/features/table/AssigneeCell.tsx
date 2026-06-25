@@ -52,7 +52,7 @@ export function AssigneeCell({ taskLocalId }: { taskLocalId: string }) {
         <span
           key={a.userServerId}
           title={a.username ?? `User ${a.userServerId}`}
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-card)] bg-[var(--color-muted)] text-[9px] font-medium text-[var(--color-foreground)]"
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-card)] bg-[var(--color-muted)] text-micro font-medium text-[var(--color-foreground)]"
         >
           {initials(a.username)}
         </span>

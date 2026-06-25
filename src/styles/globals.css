@@ -1,50 +1,69 @@
 @import "tailwindcss";
 
+/* Plus Jakarta Sans — Cria's branded geometric sans. Bundled via fontsource
+   (variable weight) so it renders identically on every platform and ships
+   offline. Imported in main.tsx; the family name is referenced below. */
+
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+    "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
 
-  --radius: 0.5rem;
+  /* Todoist-style rounded geometry — slightly softer than the old 0.5rem. */
+  --radius: 0.625rem;
 
-  /* Light theme tokens. */
-  --color-accent: oklch(55% 0.2 250);
+  /* Typography scale — semantic tiers for the metadata sizes that live
+     below Tailwind's text-xs (12px), where arbitrary text-[Npx] values had
+     proliferated. Font-size only (no paired line-height) so existing
+     leading-* utilities keep controlling line-height. text-sm (14px) stays
+     the body default; text-xs (12px) is the subhead tier. */
+  --text-caption: 11px;  /* metadata, timestamps, chip labels */
+  --text-footnote: 10px; /* badges, secondary indicators */
+  --text-micro: 9px;     /* dense badges, avatar initials, tiny glyphs */
+
+  /* ── Light theme — warm off-white canvas, violet accent ──────────
+     Cria's identity: a Todoist-like warm paper background with pure-white
+     grouped cards floating on top, and a violet/indigo accent that's
+     clearly its own (not Todoist's coral). Hues sit around 285 (violet)
+     for accents and a faint 70 (warm) for the neutrals so greys read warm
+     rather than clinical blue-grey. */
+  --color-accent: oklch(55% 0.18 285);
   --color-accent-foreground: oklch(99% 0 0);
-  --color-background: oklch(99% 0 0);
-  --color-foreground: oklch(20% 0.02 240);
-  --color-muted: oklch(96% 0.005 240);
-  --color-muted-foreground: oklch(45% 0.02 240);
+  --color-background: oklch(99.3% 0.004 95);
+  --color-foreground: oklch(24% 0.015 285);
+  --color-muted: oklch(97% 0.005 95);
+  --color-muted-foreground: oklch(50% 0.015 285);
   --color-card: oklch(100% 0 0);
-  --color-card-foreground: oklch(20% 0.02 240);
-  --color-border: oklch(90% 0.005 240);
-  --color-input: oklch(94% 0.005 240);
-  --color-ring: oklch(58% 0.18 250);
-  --color-primary: oklch(55% 0.2 250);
+  --color-card-foreground: oklch(24% 0.015 285);
+  --color-border: oklch(93% 0.004 95);
+  --color-input: oklch(97% 0.005 95);
+  --color-ring: oklch(58% 0.16 285);
+  --color-primary: oklch(55% 0.18 285);
   --color-primary-foreground: oklch(99% 0 0);
   --color-destructive: oklch(58% 0.22 27);
   --color-destructive-foreground: oklch(99% 0 0);
-  --color-success: oklch(62% 0.18 145);
+  --color-success: oklch(62% 0.16 150);
   --color-warning: oklch(75% 0.16 80);
 }
 
 @media (prefers-color-scheme: dark) {
   @theme {
-    --color-background: oklch(18% 0.015 250);
-    --color-foreground: oklch(96% 0.005 240);
-    --color-muted: oklch(24% 0.015 250);
-    --color-muted-foreground: oklch(70% 0.02 240);
-    --color-card: oklch(22% 0.015 250);
-    --color-card-foreground: oklch(96% 0.005 240);
-    --color-border: oklch(30% 0.015 250);
-    --color-input: oklch(28% 0.015 250);
-    --color-ring: oklch(72% 0.18 250);
-    --color-primary: oklch(72% 0.18 250);
-    --color-primary-foreground: oklch(18% 0.015 250);
-    --color-accent: oklch(72% 0.18 250);
-    --color-accent-foreground: oklch(18% 0.015 250);
+    --color-background: oklch(15% 0.012 285);
+    --color-foreground: oklch(95% 0.005 285);
+    --color-muted: oklch(23% 0.012 285);
+    --color-muted-foreground: oklch(66% 0.015 285);
+    --color-card: oklch(19% 0.012 285);
+    --color-card-foreground: oklch(95% 0.005 285);
+    --color-border: oklch(28% 0.012 285);
+    --color-input: oklch(24% 0.012 285);
+    --color-ring: oklch(70% 0.16 285);
+    --color-primary: oklch(70% 0.16 285);
+    --color-primary-foreground: oklch(15% 0.012 285);
+    --color-accent: oklch(70% 0.16 285);
+    --color-accent-foreground: oklch(15% 0.012 285);
   }
 }
 
@@ -54,13 +73,73 @@ body,
   height: 100%;
 }
 
+/* iOS safe-area helpers (notch / Dynamic Island / home indicator).
+   `viewport-fit=cover` in index.html exposes env(safe-area-inset-*); these
+   pad full-bleed surfaces (the mobile shell root, full-screen overlays) so
+   content clears the status bar and home indicator. They resolve to 0 on
+   platforms with no insets, so they're harmless on desktop. */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Bottom padding for scrollable task lists behind the fixed tab bar on
+   mobile. The 52px accounts for the tab bar body (~48px) plus a comfortable
+   gap so content doesn't sit flush against it. */
+.tab-bar-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 52px);
+}
+
+/* Reveal-on-hover affordances (row edit/delete buttons, label-chip remove)
+   that STAY visible on touch devices, which have no hover state. Replaces the
+   `opacity-0 group-hover:opacity-100` pattern: visible by default, and only
+   hidden-until-hover on pointers that actually support hovering. */
+.hover-reveal {
+  opacity: 1;
+  transition: opacity 150ms ease;
+}
+.chip-reveal {
+  opacity: 0.7;
+  transition: opacity 150ms ease;
+}
+@media (hover: hover) {
+  .hover-reveal {
+    opacity: 0;
+  }
+  .group:hover .hover-reveal,
+  .group:focus-within .hover-reveal {
+    opacity: 1;
+  }
+  .chip-reveal {
+    opacity: 0;
+  }
+  .group\/chip:hover .chip-reveal {
+    opacity: 0.7;
+  }
+  .chip-reveal:hover {
+    opacity: 1;
+  }
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.006em; /* Plus Jakarta reads a touch wide at body size */
 }
+
+/* Native Liquid Glass transparency is handled in the confined navigation-layer
+   block lower in this file (search "Native macOS Liquid Glass"). The body stays
+   opaque on every other platform / unsupported macOS, so a transparent window
+   never reveals the desktop. */
 
 /* Task-detail card entrance (right-docked inspector). Used via the
    arbitrary utility animate-[card-slide-in_…] on TaskDetail. The
@@ -74,6 +153,192 @@ body {
     opacity: 1;
     transform: translateX(0) scale(1);
   }
+}
+
+/* ── iOS spring curves ────────────────────────────────── */
+:root {
+  --spring-snappy: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── iOS-style large title ────────────────────────────── */
+.nav-title-large {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  transition: font-size 200ms var(--spring-snappy),
+              line-height 200ms var(--spring-snappy);
+}
+.nav-title-small {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.3;
+  transition: font-size 200ms var(--spring-snappy),
+              line-height 200ms var(--spring-snappy);
+}
+
+/* ── iOS floating tab bar (Todoist-style) ─────────────────
+   A rounded capsule card hovering above the bottom safe area, not an
+   edge-to-edge bar. Solid card surface with a soft drop shadow so it reads as
+   a floating control. */
+.tab-bar-dock {
+  background: var(--color-card);
+  border: 0.5px solid var(--color-border);
+  box-shadow:
+    0 8px 28px -8px oklch(0% 0 0 / 0.22),
+    0 2px 8px -2px oklch(0% 0 0 / 0.12);
+}
+.dark .tab-bar-dock {
+  box-shadow:
+    0 8px 28px -8px oklch(0% 0 0 / 0.6),
+    0 2px 8px -2px oklch(0% 0 0 / 0.4);
+}
+
+/* Tab bar item — iOS-style active state indicator */
+.tab-item {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.tab-item.active .tab-icon {
+  color: var(--color-primary);
+}
+.tab-item.active .tab-label {
+  color: var(--color-primary);
+}
+
+/* ── iOS sheet entrance ───────────────────────────────── */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sheet-backdrop {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 200ms ease-out;
+}
+
+/* ── iOS inset grouped list ───────────────────────────── */
+.inset-list {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-card);
+}
+.inset-list > li:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Liquid Glass tokens (iOS-material tuned) ─────────── */
+:root {
+  --glass-bg: oklch(99.3% 0.004 95 / 0.72);
+  --glass-bg-dark: oklch(22% 0.012 285 / 0.78);
+  --glass-blur: 14px;
+  --glass-border: oklch(93% 0.004 95 / 0.5);
+}
+
+.dark {
+  --glass-bg: oklch(19% 0.012 285 / 0.78);
+  --glass-bg-dark: oklch(99% 0 0 / 0.6);
+  --glass-border: oklch(40% 0.012 285 / 0.4);
+}
+
+/* Glass surface utility — semi-transparent bg + backdrop blur + subtle
+   border. Apply to any surface that should look like Liquid Glass. */
+.glass-surface {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+/* Nav-specific glass (sidebars, persistent headers). Tuned for
+   high-contrast labels on top of blur. */
+.glass-nav {
+  background: var(--glass-bg);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.2));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.2));
+  border-right: 1px solid var(--glass-border);
+}
+
+/* Register --sheen-angle as an animatable angle so both JS pointer tracking
+   and the mobile sweep animation can interpolate it smoothly. */
+@property --sheen-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 180deg;
+}
+
+/* Specular sheen pseudo-element — applied via ::after on glass surfaces.
+   A conic-gradient that gives the glass a glossy highlight. The
+   --sheen-angle (set by JS pointer tracking — Phase 5) makes it
+   interactive on desktop; on mobile/touch it uses the CSS animation. */
+.glass-specular::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: conic-gradient(
+    from calc(var(--sheen-angle) - 30deg) at 50% 0%,
+    transparent 0deg,
+    oklch(100% 0 0 / 0.08) 45deg,
+    transparent 90deg
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Scrolled-state glass — increased opacity + blur for surfaces that
+   gain visual weight when the page is scrolled (headers, nav). Applied
+   by JS toggling `.scrolled` on the element. */
+.glass-surface.scrolled,
+.glass-nav.scrolled {
+  background: oklch(98% 0 0 / 0.88);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5));
+  border-color: oklch(80% 0.005 240 / 0.6);
+}
+
+.dark .glass-surface.scrolled,
+.dark .glass-nav.scrolled {
+  background: oklch(25% 0.015 250 / 0.88);
+  border-color: oklch(35% 0.015 250 / 0.6);
+}
+
+/* Specular sheen sweep animation — a looping gradient shift for
+   touch devices where pointer tracking isn't available. */
+@keyframes sheen-sweep {
+  0% { --sheen-angle: 140deg; }
+  50% { --sheen-angle: 220deg; }
+  100% { --sheen-angle: 140deg; }
+}
+
+.glass-sheen-animate::after {
+  animation: sheen-sweep 6s ease-in-out infinite;
+}
+
+/* Refraction effect for sidebars — a subtle horizontal gradient shift
+   that mimics content bending through the glass. */
+.glass-refract {
+  mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 60%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 60%,
+    transparent 100%
+  );
 }
 
 /* Honour reduce-motion. */
@@ -90,35 +355,77 @@ body {
    have higher specificity than @theme inside @media so they win
    over the system preference when explicitly set. */
 .light {
-  --color-background: oklch(99% 0 0);
-  --color-foreground: oklch(20% 0.02 240);
-  --color-muted: oklch(96% 0.005 240);
-  --color-muted-foreground: oklch(45% 0.02 240);
+  --color-background: oklch(99.3% 0.004 95);
+  --color-foreground: oklch(24% 0.015 285);
+  --color-muted: oklch(97% 0.005 95);
+  --color-muted-foreground: oklch(50% 0.015 285);
   --color-card: oklch(100% 0 0);
-  --color-card-foreground: oklch(20% 0.02 240);
-  --color-border: oklch(90% 0.005 240);
-  --color-input: oklch(94% 0.005 240);
-  --color-ring: oklch(58% 0.18 250);
-  --color-primary: oklch(55% 0.2 250);
+  --color-card-foreground: oklch(24% 0.015 285);
+  --color-border: oklch(93% 0.004 95);
+  --color-input: oklch(97% 0.005 95);
+  --color-ring: oklch(58% 0.16 285);
+  --color-primary: oklch(55% 0.18 285);
   --color-primary-foreground: oklch(99% 0 0);
-  --color-accent: oklch(55% 0.2 250);
+  --color-accent: oklch(55% 0.18 285);
   --color-accent-foreground: oklch(99% 0 0);
 }
 
 .dark {
-  --color-background: oklch(18% 0.015 250);
-  --color-foreground: oklch(96% 0.005 240);
-  --color-muted: oklch(24% 0.015 250);
-  --color-muted-foreground: oklch(70% 0.02 240);
-  --color-card: oklch(22% 0.015 250);
-  --color-card-foreground: oklch(96% 0.005 240);
-  --color-border: oklch(30% 0.015 250);
-  --color-input: oklch(28% 0.015 250);
-  --color-ring: oklch(72% 0.18 250);
-  --color-primary: oklch(72% 0.18 250);
-  --color-primary-foreground: oklch(18% 0.015 250);
-  --color-accent: oklch(72% 0.18 250);
-  --color-accent-foreground: oklch(18% 0.015 250);
+  --color-background: oklch(15% 0.012 285);
+  --color-foreground: oklch(95% 0.005 285);
+  --color-muted: oklch(23% 0.012 285);
+  --color-muted-foreground: oklch(66% 0.015 285);
+  --color-card: oklch(19% 0.012 285);
+  --color-card-foreground: oklch(95% 0.005 285);
+  --color-border: oklch(28% 0.012 285);
+  --color-input: oklch(24% 0.012 285);
+  --color-ring: oklch(70% 0.16 285);
+  --color-primary: oklch(70% 0.16 285);
+  --color-primary-foreground: oklch(15% 0.012 285);
+  --color-accent: oklch(70% 0.16 285);
+  --color-accent-foreground: oklch(15% 0.012 285);
+}
+
+/* ── Scrollbars ───────────────────────────────────────────
+   Thin, rounded, translucent — tuned to recede into the glass
+   aesthetic rather than the chunky default OS bar. The thumb
+   only gains contrast on hover. Firefox uses the standardised
+   scrollbar-* properties; WebKit/Blink uses ::-webkit-scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(60% 0.01 250 / 0.35) transparent;
+}
+.dark * {
+  scrollbar-color: oklch(70% 0.01 250 / 0.3) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(60% 0.01 250 / 0.3);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(55% 0.01 250 / 0.5);
+  background-clip: padding-box;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(70% 0.01 250 / 0.28);
+  background-clip: padding-box;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(75% 0.01 250 / 0.45);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* TipTap task-list — zero the inner <p> margins so each checked item
@@ -130,4 +437,148 @@ body {
    TipTap editor DOM and the sanitised ReadView render. */
 ul[data-type="taskList"] li > div > p {
   margin: 0;
+}
+
+/* ── Todoist-style surfaces ───────────────────────────────
+   The visual signature of the redesign: a warm paper canvas with pure-white
+   grouped "cards" floating on it, rows that highlight softly on hover, and a
+   violet floating action button. These are composable utility classes layered
+   on top of the existing token system. */
+
+/* Grouped card — the white rounded container that holds a list section
+   (Search/Filters/Reporting, Favorites, a project's tasks). Mirrors Todoist's
+   inset grouped lists: rounded corners, hairline border, soft lifted shadow. */
+.surface-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px oklch(0% 0 0 / 0.04),
+    0 4px 16px oklch(0% 0 0 / 0.05);
+}
+.dark .surface-card {
+  box-shadow:
+    0 1px 2px oklch(0% 0 0 / 0.2),
+    0 4px 16px oklch(0% 0 0 / 0.25);
+}
+
+/* Rows inside a grouped card. Internal dividers are hairline and inset; the
+   last row has none. Hover gives a soft warm wash (not a hard block). */
+.surface-card > .list-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+.list-row {
+  transition: background-color 120ms ease;
+}
+@media (hover: hover) {
+  .list-row:hover {
+    background: var(--color-muted);
+  }
+}
+.list-row:active {
+  background: var(--color-muted);
+}
+
+/* Floating action button — the round violet "+" Todoist anchors bottom-right.
+   Sits above the tab bar via safe-area-aware offset at the call site. */
+.fab {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-radius: 9999px;
+  box-shadow:
+    0 4px 12px oklch(55% 0.18 285 / 0.35),
+    0 2px 4px oklch(0% 0 0 / 0.12);
+  transition: transform 140ms var(--spring-snappy), box-shadow 140ms ease,
+    filter 140ms ease;
+}
+.fab:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 6px 18px oklch(55% 0.18 285 / 0.42),
+    0 3px 6px oklch(0% 0 0 / 0.16);
+}
+.fab:active {
+  transform: scale(0.94);
+}
+
+/* Round task checkbox — Todoist's signature. A hollow circle that fills with
+   the violet accent and shows a white tick when checked. `appearance: none`
+   strips the native control; the tick is a background SVG (input elements don't
+   render ::after reliably in WebKit, so we can't use a pseudo-element). */
+.task-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+  border: 1.5px solid var(--color-muted-foreground);
+  border-radius: 9999px;
+  cursor: pointer;
+  opacity: 0.55;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 0.7rem;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    opacity 120ms ease;
+}
+.task-check:hover {
+  border-color: var(--color-primary);
+  opacity: 1;
+}
+.task-check:checked {
+  opacity: 1;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='white'%20stroke-width='3.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5%2013l4%204L19%207'/%3E%3C/svg%3E");
+}
+.task-check:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+/* ── Native macOS Liquid Glass — confined to the navigation layer ─────────
+   Apple's HIG: Liquid Glass is the material for the *navigation layer*
+   (sidebars, toolbars), NOT the content layer — content stays opaque and the
+   glass floats above it. In a Tauri webview the plugin's NSGlassEffectView sits
+   *behind* the web content, so any transparent region reveals the DESKTOP. We
+   therefore reveal it for the **desktop sidebar only** — the one surface macOS
+   renders as vibrant glass — and keep the content, toolbar, status bar, cards
+   and tab bar fully opaque so the desktop never shows through your tasks.
+
+   These rules only apply once JS has confirmed glass support and added
+   `.native-glass` (macOS 26+). Every other platform uses the CSS `.glass-*`
+   fallback, which blurs the app's own content (not the desktop). */
+html.native-glass,
+html.native-glass body,
+html.native-glass .app-root {
+  background: transparent;
+}
+
+/* Content layer stays fully opaque — no desktop bleed behind your tasks. */
+html.native-glass main {
+  background: var(--color-background);
+}
+
+/* Toolbar (header) and status bar (footer): opaque chrome, not glass — nothing
+   scrolls *under* them in the webview, so a glass blur there would sample the
+   desktop rather than content. */
+html.native-glass header.glass-surface,
+html.native-glass footer.glass-surface {
+  background: var(--color-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* The lone glass surface: the sidebar. Drop the CSS blur (the native
+   NSGlassEffectView does the blurring) and lay a frosted tint over it for
+   label legibility, so it reads as a glass material — not a clear window. */
+html.native-glass .glass-nav {
+  background: oklch(98% 0.004 70 / 0.62);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-right-color: oklch(80% 0.01 285 / 0.3);
+}
+html.native-glass.dark .glass-nav {
+  background: oklch(22% 0.012 285 / 0.62);
+  border-right-color: oklch(45% 0.012 285 / 0.3);
 }

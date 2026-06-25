@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDateFormatter, type DateFormatters } from '@/lib/dateFormat';
-import { Bell, ChevronDown, Plus, X } from 'lucide-react';
+import { Bell, Plus, X } from 'lucide-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import {
   listRemindersForTask,
   addReminder,
@@ -83,7 +84,7 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
 
   return (
     <section className="mb-4">
-      <h3 className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+      <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
         <Bell className="h-3 w-3" />
         Reminders
         {reminders.length > 0 ? (
@@ -306,33 +307,36 @@ function CustomForm({
           onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 0))}
           className="w-14 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
         />
-        <Select
-          value={unit}
-          onChange={(v) => setUnit(v as PeriodUnit)}
-          options={[
-            ['minutes', 'minutes'],
-            ['hours', 'hours'],
-            ['days', 'days'],
-            ['weeks', 'weeks'],
-          ]}
-        />
-        <Select
-          value={direction}
-          onChange={(v) => setDirection(v as 'before' | 'after')}
-          options={[
-            ['before', 'before'],
-            ['after', 'after'],
-          ]}
-        />
-        <Select
-          value={relativeTo}
-          onChange={(v) => setRelativeTo(v as ReminderRelation)}
-          options={[
-            ['due_date', 'due date'],
-            ['start_date', 'start date'],
-            ['end_date', 'end date'],
-          ]}
-        />
+        <Select value={unit} onValueChange={(v) => setUnit(v as PeriodUnit)}>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="minutes">minutes</SelectItem>
+            <SelectItem value="hours">hours</SelectItem>
+            <SelectItem value="days">days</SelectItem>
+            <SelectItem value="weeks">weeks</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={direction} onValueChange={(v) => setDirection(v as 'before' | 'after')}>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="before">before</SelectItem>
+            <SelectItem value="after">after</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={relativeTo} onValueChange={(v) => setRelativeTo(v as ReminderRelation)}>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="due_date">due date</SelectItem>
+            <SelectItem value="start_date">start date</SelectItem>
+            <SelectItem value="end_date">end date</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex items-center justify-end gap-1.5">
         <button
@@ -418,35 +422,6 @@ function AbsoluteForm({
         </button>
       </div>
     </form>
-  );
-}
-
-/** Tiny styled <select>. Inline because we use it in three places in
- * this file only. */
-function Select<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: readonly (readonly [T, string])[];
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="appearance-none rounded border border-[var(--color-border)] bg-[var(--color-input)] py-1 pl-1.5 pr-5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-      >
-        {options.map(([v, label]) => (
-          <option key={v} value={v}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
-    </div>
   );
 }
 

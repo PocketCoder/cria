@@ -63,14 +63,14 @@ export function Calendar({
         }}
         classNames={{
           root: 'rdp p-1 text-xs',
-          month_caption: 'flex items-center justify-center pb-1 text-[12px] font-medium',
+          month_caption: 'flex items-center justify-center pb-1 text-xs font-medium',
           caption_label: 'px-1',
           nav: 'absolute right-0 top-0 flex gap-0.5',
           month_grid: 'mt-2 w-full border-collapse',
           weekdays: 'flex',
-          weekday: 'w-7 text-[10px] font-medium text-[var(--color-muted-foreground)] uppercase',
+          weekday: 'w-7 text-footnote font-medium text-[var(--color-muted-foreground)] uppercase',
           week: 'flex w-full mt-0.5',
-          day: 'h-7 w-7 p-0 text-center text-[12px]',
+          day: 'h-7 w-7 p-0 text-center text-xs',
           day_button:
             'inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
           today: '[&_button]:font-semibold [&_button]:text-[var(--color-primary)]',
@@ -85,7 +85,7 @@ export function Calendar({
           <button
             type="button"
             onClick={onClear}
-            className="text-[11px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
+            className="text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
           >
             Clear
           </button>

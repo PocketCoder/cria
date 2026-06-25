@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos",
+  "description": "macOS-only capabilities: native Liquid Glass (NSGlassEffectView). The backing plugin is compiled on macOS only, so this capability is scoped to macOS to keep other platform builds valid.",
+  "platforms": ["macOS"],
+  "windows": ["main"],
+  "permissions": ["liquid-glass:default"]
+}

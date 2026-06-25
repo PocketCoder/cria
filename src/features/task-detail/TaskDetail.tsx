@@ -15,6 +15,8 @@ import { RelatedTasks } from './RelatedTasks';
 import { CommentSection } from './CommentSection';
 import type { Task } from '@/domain/task';
 import { getAuthSnapshot } from '@/auth/store';
+import { cn } from '@/lib/cn';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 /**
  * Task detail, rendered as a right-docked floating card rather than a
@@ -37,6 +39,7 @@ export function TaskDetail() {
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [copied, setCopied] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     return subscribe('tasks', () => {
@@ -72,8 +75,10 @@ export function TaskDetail() {
   //  - on another task row — let the row's own click swap the card's
   //    contents in place instead of close-then-reopen (no re-animation).
   // pointerdown (not click) so dismissal feels immediate.
+  // On mobile (sheet), click-away is replaced by interactive swipe-down.
   useEffect(() => {
     if (!selectedId) return;
+    if (isMobile) return; // sheet uses swipe-down dismiss instead
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target instanceof Element ? e.target : null;
       if (!target) return;
@@ -199,7 +204,7 @@ export function TaskDetail() {
         title="Click to edit"
       >
         {task.identifier ? (
-          <span className="mr-1.5 text-[10px] font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <span className="mr-1.5 text-footnote font-mono uppercase tracking-wide text-[var(--color-muted-foreground)]">
             {task.identifier}
           </span>
         ) : null}
@@ -218,7 +223,7 @@ export function TaskDetail() {
         <Copy className="h-3.5 w-3.5" />
       </button>
       {copied ? (
-        <span className="shrink-0 text-[10px] text-[var(--color-primary)] animate-in fade-in">
+        <span className="shrink-0 text-footnote text-[var(--color-primary)] animate-in fade-in">
           Copied!
         </span>
       ) : null}
@@ -238,7 +243,7 @@ export function TaskDetail() {
         ) : null}
 
         <section className="mb-4">
-          <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <h3 className="mb-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
             Description
           </h3>
           <RichTextEditor
@@ -288,31 +293,129 @@ function DetailCard({
   cardRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
+  const isMobile = useIsMobile();
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [sheetOffset, setSheetOffset] = useState(0);
+  const offsetRef = useRef(0);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Interactive sheet dismiss: pull DOWN from the top to close. It must not
+  // fight the inner scroll, so it only engages when the content is at the top
+  // and the gesture is a decisive *downward* drag (mirrors PullToRefresh's
+  // arbitration). Listeners stay attached for the whole gesture — `sheetOffset`
+  // is intentionally NOT a dep (it changes every move) and onClose is read via
+  // a ref, so the effect never re-runs mid-drag (which was causing the jank).
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = sheetRef.current;
+    if (!el) return;
+
+    const THRESHOLD = 8;
+    let startX = 0;
+    let startY = 0;
+    let atTop = false;
+    let dragging = false;
+    let decided = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0]!.clientX;
+      startY = e.touches[0]!.clientY;
+      atTop = el.scrollTop <= 0;
+      dragging = false;
+      decided = false;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (!dragging) {
+        if (decided || !atTop) return; // a scroll, not a dismiss
+        const dx = e.touches[0]!.clientX - startX;
+        const dy = e.touches[0]!.clientY - startY;
+        if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
+        // Only a downward, vertical drag dismisses; anything else is a scroll.
+        if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) {
+          decided = true;
+          return;
+        }
+        dragging = true;
+        decided = true;
+        startY = e.touches[0]!.clientY; // reset baseline so the offset starts at 0
+      }
+      // Committed to a dismiss drag — take over from native scroll.
+      e.preventDefault();
+      const dy = Math.max(0, e.touches[0]!.clientY - startY);
+      offsetRef.current = dy;
+      setSheetOffset(dy);
+    };
+
+    const onTouchEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      const dy = offsetRef.current;
+      offsetRef.current = 0;
+      if (dy > 120) onCloseRef.current();
+      else setSheetOffset(0);
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isMobile]);
+
   return (
-    <aside
-      ref={cardRef}
-      role="dialog"
-      aria-label="Task details"
-      className="m-4 flex w-[420px] max-w-[calc(100%-2rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]"
-    >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
-        <div className="min-w-0 flex-1">
-          {header ?? (
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Task
-            </span>
+    <>
+      {isMobile && (
+        <div className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
+      )}
+      <aside
+        ref={cardRef}
+        role="dialog"
+        aria-label="Task details"
+        className={cn(
+          'flex flex-col overflow-hidden',
+          isMobile
+            ? // iOS-style sheet: slides up from bottom with rounded top corners,
+              // a grab handle, and spring animation. Interactive pull-down dismiss.
+              'fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-2xl bg-[var(--color-card)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)] animate-[sheet-up_350ms_var(--spring-snappy)]'
+            : // Right-docked floating inspector on desktop (in-flow flex item).
+              'glass-surface glass-specular relative m-4 w-[420px] max-w-[calc(100%-2rem)] shrink-0 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.45)] animate-[card-slide-in_180ms_ease-out]',
+        )}
+        style={isMobile && sheetOffset > 0 ? { transform: `translateY(${sheetOffset}px)`, transition: 'none' } : undefined}
+      >
+        <div ref={sheetRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {isMobile && (
+            // Grab handle for interactive sheet dismiss
+            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
           )}
+          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              {header ?? (
+                <span className="text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  Task
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close details"
+              className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
+          {children}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close details"
-          className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </header>
-      {children}
-    </aside>
+      </aside>
+    </>
   );
 }

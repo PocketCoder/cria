@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ReorderErrorPill } from '@/components/ReorderErrorPill';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,7 +6,8 @@ import {
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
@@ -20,26 +21,41 @@ import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
 import { format } from 'date-fns';
 import { toCalendarDate } from '@/lib/dateFormat';
+import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
-import { createTask, updateTask, reorderTask, reindexTasks } from '@/db/tasks';
+import { createTask, updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, Filter, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight, X, Copy, ExternalLink } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
+import { useFilterSort } from '@/stores/filterSort';
+import { SORT_OPTIONS, type SortRule } from '@/lib/sortEngine';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { LabelChips } from './LabelChips';
 import { QuickAddPreview } from './QuickAddPreview';
 import { TaskHoverPreview } from './TaskHoverPreview';
 import { DatePicker } from '@/components/DatePicker';
+import { PrioritySelect } from '@/components/ui/priority-select';
+import { LabelPicker } from '@/components/ui/label-picker';
+import { RecurrencePicker } from '@/components/ui/recurrence-picker';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import type { TaskInput } from '@/domain/task';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 
@@ -69,12 +85,30 @@ interface TaskListProps {
 }
 
 export function TaskList({ project, view }: TaskListProps) {
+  const isMobile = useIsMobile();
+  const {
+    filterQuery,
+    sortRule,
+    showFilterBar,
+    showSortMenu,
+    setFilterQuery,
+    setSortRule,
+    setShowFilterBar,
+    setShowSortMenu,
+  } = useFilterSort();
+
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project);
+    useProjectTasks(project, filterQuery || undefined, sortRule);
 
   const [newTitle, setNewTitle] = useState('');
   const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
+  const [labelTitles, setLabelTitles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filterDraft, setFilterDraft] = useState(filterQuery);
+
+  useEffect(() => {
+    setFilterDraft(filterQuery);
+  }, [filterQuery]);
 
   // Tasks queued for deletion are hidden immediately while the undo
   // toast is live (issue #25). They're still deleted=0 in the DB until
@@ -90,8 +124,9 @@ export function TaskList({ project, view }: TaskListProps) {
   // a different project than the one currently open.
   const { data: allProjects = [] } = useProjects();
   const qc = useQueryClient();
-
-  const { data: subtaskMap = new Map() } = useQuery({
+  const {
+    data: subtaskMap = new Map()
+  } = useQuery({
     queryKey: ['subtasks', project.localId],
     queryFn: () => listSubtaskRelationsForProject(project.localId),
     staleTime: 30_000,
@@ -156,8 +191,12 @@ export function TaskList({ project, view }: TaskListProps) {
   }, [taskTree, sortableItems]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    // Touch: long-press to grab, so vertical scrolling still works on a phone.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
     }),
   );
 
@@ -256,12 +295,17 @@ export function TaskList({ project, view }: TaskListProps) {
 
       const created = await createTask(input);
 
-      // Apply parsed labels (the *label token): look up case-insensitively,
-      // create any that don't exist yet, then apply. Prefix per Vikunja
-      // default Quick Add Magic ('*' = label).
-      if (parsed.labelTitles.length > 0 && created.localId) {
+      // Apply labels from the picker plus any typed *label tokens
+      // (case-insensitive union); create-if-missing, then apply.
+      const allLabelTitles = [
+        ...labelTitles,
+        ...parsed.labelTitles.filter(
+          (t) => !labelTitles.some((s) => s.toLowerCase() === t.toLowerCase()),
+        ),
+      ];
+      if (allLabelTitles.length > 0 && created.localId) {
         try {
-          await applyLabelsByTitle(created.localId, parsed.labelTitles);
+          await applyLabelsByTitle(created.localId, allLabelTitles);
         } catch (err) {
           console.warn('[quick-add] label application failed:', err);
         }
@@ -277,6 +321,7 @@ export function TaskList({ project, view }: TaskListProps) {
 
       setNewTitle('');
       setMetadata({});
+      setLabelTitles([]);
     } catch (err) {
       console.error('Failed to create task:', err);
     } finally {
@@ -285,17 +330,113 @@ export function TaskList({ project, view }: TaskListProps) {
   };
 
   return (
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {reorderError && <ReorderErrorPill onClose={() => setReorderError(false)} />}
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-muted-foreground)]">
-        <span>
-          {activeTasks.length === 0 && completedTasks.length === 0
-            ? isLoading
-              ? 'Loading…'
-              : 'No tasks'
-            : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
-        </span>
-        {isFetching ? <span aria-live="polite">syncing…</span> : null}
+      <div className="border-b border-[var(--color-border)]">
+        <div className="flex items-center justify-between px-7 py-2 text-xs text-[var(--color-muted-foreground)]">
+          <div className="flex items-center gap-2">
+            <span>
+              {activeTasks.length === 0 && completedTasks.length === 0
+                ? isLoading
+                  ? 'Loading…'
+                  : 'No tasks'
+                : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
+            </span>
+            <button
+              onClick={() => { setShowFilterBar(!showFilterBar); setShowSortMenu(false); }}
+              className={cn(
+                'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer',
+                showFilterBar || filterQuery
+                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                  : 'hover:bg-[var(--color-accent)]/10',
+              )}
+              title="Filter tasks"
+            >
+              <Filter className="h-3 w-3" />
+              {filterQuery ? 'Filtered' : 'Filter'}
+            </button>
+            <button
+              onClick={() => { setShowSortMenu(!showSortMenu); setShowFilterBar(false); }}
+              className={cn(
+                'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer',
+                showSortMenu || sortRule
+                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                  : 'hover:bg-[var(--color-accent)]/10',
+              )}
+              title="Sort tasks"
+            >
+              <ArrowUpDown className="h-3 w-3" />
+              {sortRule
+                ? SORT_OPTIONS.find((o) => o.field === sortRule.field && o.direction === sortRule.direction)?.label ?? 'Sorted'
+                : 'Sort'}
+            </button>
+          </div>
+          {isFetching ? <span aria-live="polite">syncing…</span> : null}
+        </div>
+
+        {showFilterBar ? (
+          <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-7 py-1.5">
+            <input
+              type="text"
+              value={filterDraft}
+              onChange={(e) => setFilterDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setFilterQuery(filterDraft);
+                } else if (e.key === 'Escape') {
+                  setFilterDraft(filterQuery);
+                  setShowFilterBar(false);
+                }
+              }}
+              placeholder='e.g. priority >= 3 && dueDate <= now'
+              className="flex-1 bg-transparent text-xs placeholder-[var(--color-muted-foreground)] focus:outline-none"
+              autoFocus
+            />
+            <button
+              onClick={() => { setFilterQuery(filterDraft); }}
+              className="rounded px-2 py-0.5 text-xs bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              Apply
+            </button>
+            <button
+              onClick={() => {
+                setFilterDraft('');
+                setFilterQuery('');
+                setShowFilterBar(false);
+              }}
+              className="rounded px-1.5 py-0.5 text-xs hover:bg-[var(--color-accent)]/10 transition-colors cursor-pointer"
+              title="Clear filter"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : null}
+
+        {showSortMenu ? (
+          <div className="border-t border-[var(--color-border)] px-7 py-1.5">
+            <Select
+              value={sortRule ? `${sortRule.field}:${sortRule.direction}` : 'default'}
+              onValueChange={(val) => {
+                if (val === 'default') {
+                  setSortRule(null);
+                } else {
+                  const [field, dir] = val.split(':') as [SortRule['field'], SortRule['direction']];
+                  setSortRule({ field, direction: dir });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue placeholder="Default order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default order</SelectItem>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.label} value={`${opt.field}:${opt.direction}`}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       {/* Inline create — natural-language parsing on the title field
@@ -304,7 +445,7 @@ export function TaskList({ project, view }: TaskListProps) {
           syntax; they override the parsed values when set. */}
       <form
         onSubmit={handleSubmit}
-        className="border-b border-[var(--color-border)] px-6 py-3"
+        className="border-b border-[var(--color-border)] px-7 pt-3 pb-4"
       >
         <div className="flex items-center gap-3">
           <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
@@ -323,30 +464,36 @@ export function TaskList({ project, view }: TaskListProps) {
             className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
           />
         </div>
-        {/* Secondary row: explicit date + priority pickers. They override
-            the NL-parsed values when touched, but live below the title so
-            they don't crowd the primary input (issue #19). `pl-7` aligns
-            them under the title input, past the plus-icon column. */}
-        <div className="mt-2 flex items-center gap-3 pl-7 text-[var(--color-muted-foreground)]">
+        {/* Secondary row: explicit pickers for every NL-settable field (date,
+            priority, labels, recurrence). They override the NL-parsed values
+            when touched, but live below the title so they don't crowd the
+            primary input (issue #19). `pl-7` aligns them under the title input,
+            past the plus-icon column. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-[var(--color-muted-foreground)]">
           <DatePicker
             value={metadata.dueDate ?? null}
             onChange={(iso) => setMetadata({ ...metadata, dueDate: iso })}
             placeholder="Due date"
             disabled={isSubmitting}
           />
-          <select
-            onChange={(e) =>
-              setMetadata({ ...metadata, priority: Number(e.target.value) })
+          <PrioritySelect
+            className="w-auto"
+            value={metadata.priority ?? parsed.priority ?? 0}
+            onChange={(p) => setMetadata({ ...metadata, priority: p })}
+            compact
+          />
+          <LabelPicker value={labelTitles} onChange={setLabelTitles} />
+          <RecurrencePicker
+            repeatAfter={metadata.repeatAfter ?? parsed.repeatAfter ?? null}
+            repeatMode={metadata.repeatMode ?? parsed.repeatMode ?? null}
+            onChange={(after, mode) =>
+              setMetadata({
+                ...metadata,
+                repeatAfter: after ?? undefined,
+                repeatMode: mode ?? undefined,
+              })
             }
-            className="text-xs"
-          >
-            <option value="0">Priority 0</option>
-            <option value="1">Priority 1</option>
-            <option value="2">Priority 2</option>
-            <option value="3">Priority 3</option>
-            <option value="4">Priority 4</option>
-            <option value="5">Priority 5</option>
-          </select>
+          />
         </div>
         <QuickAddPreview parsed={parsed} />
       </form>
@@ -360,7 +507,7 @@ export function TaskList({ project, view }: TaskListProps) {
           items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="flex-1 overflow-y-auto">
+          <ul className={cn('min-h-0 flex-1 overflow-y-auto', isMobile && 'tab-bar-safe-bottom')}>
             {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
@@ -404,7 +551,7 @@ export function TaskList({ project, view }: TaskListProps) {
         </SortableContext>
         <DragOverlay>
           {activeId ? (
-            <li className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-6 py-3 shadow-lg opacity-90">
+            <li className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-7 py-3 shadow-lg opacity-90">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm">{tasks.find((t) => t.localId === activeId)?.title ?? ''}</p>
               </div>
@@ -414,7 +561,7 @@ export function TaskList({ project, view }: TaskListProps) {
       </DndContext>
 
       {isError ? (
-        <p className="border-t border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-warning)]">
+        <p className="border-t border-[var(--color-border)] px-7 py-2 text-xs text-[var(--color-warning)]">
           Couldn't refresh
           {error instanceof Error ? `: ${error.message}` : ''}.
         </p>
@@ -459,7 +606,7 @@ function buildTaskTree(tasks: Task[], parentMap: Map<string, string[]>): TaskTre
     .map((t) => ({ task: t, children: childrenOf(t.localId) }));
 }
 
-function TreeBranch({
+const TreeBranch = memo(function TreeBranch({
   node,
   depth,
   attachmentIds,
@@ -488,7 +635,7 @@ function TreeBranch({
       ))}
     </>
   );
-}
+});
 
 /* ─── Checklist progress from description HTML ─── */
 
@@ -503,7 +650,7 @@ function countChecklistItems(html: string | null | undefined): { checked: number
 }
 
 /* ─── Task row ─── */
-function TaskRow({
+const TaskRow = memo(function TaskRow({
   task,
   hasAttachments,
   depth = 0,
@@ -520,7 +667,26 @@ function TaskRow({
   const [draft, setDraft] = useState('');
   const { data: labels = [] } = useTaskLabels(task.localId);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
-  const checklist = countChecklistItems(task.description);
+  const checklist = useMemo(
+    () => countChecklistItems(task.description),
+    [task.description],
+  );
+  const dueLabel = useMemo(
+    () => (task.dueDate ? formatDate(task.dueDate) : null),
+    [task.dueDate],
+  );
+
+  const handleToggle = useCallback(async () => {
+    const nowDone = !task.done;
+    try {
+      await updateTask(task.localId, { done: nowDone });
+      if (nowDone) {
+        playCompletionSound();
+      }
+    } catch (err) {
+      console.error('Failed to update task:', err);
+    }
+  }, [task.localId, task.done]);
 
   const {
     attributes,
@@ -537,17 +703,10 @@ function TaskRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    paddingLeft: `${24 + depth * 28}px`,
-  };
-
-  const handleToggle = async () => {
-    const nowDone = !task.done;
-    try {
-      await updateTask(task.localId, { done: nowDone });
-      if (nowDone) playCompletionSound();
-    } catch (err) {
-      console.error('Failed to update task:', err);
-    }
+    paddingLeft: `${28 + depth * 28}px`,
+    paddingRight: 0,
+    overflow: 'hidden',
+    position: 'relative',
   };
 
   // Deferred delete: stash the task and show the undo toast. The real
@@ -582,127 +741,159 @@ function TaskRow({
   };
 
   return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      data-task-row=""
-      className={cn(
-        'group flex items-start gap-3 border-b border-[var(--color-border)] py-3 transition-colors hover:bg-[var(--color-accent)]/5',
-        'px-6',
-        task.done && 'opacity-60',
-        selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
-        isDragging && 'opacity-40',
-        sortable && 'cursor-grab active:cursor-grabbing',
-      )}
-      onClick={() => { if (!editing) setSelectedTask(task.localId); }}
-    >
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)] rounded border-[var(--color-border)] transition-all focus:ring-offset-0 focus:ring-0"
-      />
-      <div className="min-w-0 flex-1">
-        {editing ? (
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => void handleTitleSave()}
-            onKeyDown={handleTitleKeyDown}
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-          />
-        ) : (
-            <TaskHoverPreview task={task}>
-              <p
-                className={cn(
-                  'truncate rounded px-1 py-0.5 text-sm transition-all',
-                  task.done && 'line-through text-[var(--color-muted-foreground)]',
-                )}
-                onDoubleClick={handleTitleEdit}
-                title={task.title}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
+          data-task-row=""
+          className={cn(
+            'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
+            task.done && 'opacity-60',
+            selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+            isDragging && 'opacity-40',
+            sortable && 'cursor-grab active:cursor-grabbing',
+          )}
+          onClick={() => { if (!editing) setSelectedTask(task.localId); }}
+        >
+          <div className="flex w-full items-start gap-3 pr-6 py-3">
+            <input
+              type="checkbox"
+              checked={task.done}
+              onChange={handleToggle}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={task.done ? 'Done' : 'Not done'}
+              className="task-check mt-0.5"
+            />
+            <div className="min-w-0 flex-1">
+              {editing ? (
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => void handleTitleSave()}
+                  onKeyDown={handleTitleKeyDown}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+                />
+              ) : (
+                  <TaskHoverPreview task={task}>
+                    <p
+                      className={cn(
+                        'truncate rounded px-1 py-0.5 text-sm transition-all',
+                        task.done && 'line-through text-[var(--color-muted-foreground)]',
+                      )}
+                      onDoubleClick={handleTitleEdit}
+                      title={task.title}
+                    >
+                      {task.title}
+                    </p>
+                  </TaskHoverPreview>
+              )}
+              {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-[var(--color-muted-foreground)]">
+                  {task.dueDate ? (
+                    <span>Due {dueLabel}</span>
+                  ) : null}
+                  {hasAttachments ? (
+                    <Paperclip className="h-3 w-3" aria-label="Has attachments" />
+                  ) : null}
+                  {checklist.total > 0 ? (
+                    <span className="flex items-center gap-1">
+                      {checklist.checked === checklist.total ? (
+                        <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
+                      ) : (
+                        <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
+                      )}
+                      <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
+                    </span>
+                  ) : null}
+                  {task.priority > 0 ? (
+                    <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
+                      {'!'.repeat(Math.min(5, task.priority))}
+                    </span>
+                  ) : null}
+                  <LabelChips labels={labels} />
+                  {task.percentDone > 0 ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
+                        <span
+                          className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
+                          style={{ width: `${Math.min(100, task.percentDone)}%` }}
+                        />
+                      </span>
+                      <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
+                    </span>
+                  ) : null}
+                  {task.repeatAfter > 0 ? (
+                    <RefreshCw className="h-3 w-3" aria-label="Repeating" />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            {task.hexColor ? (
+              <span
+                aria-hidden="true"
+                className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                style={{ background: task.hexColor }}
+              />
+            ) : null}
+            {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
+                the title baseline (issue #21). Pencil enters inline rename —
+                the explicit affordance now that single-click on the title
+                opens detail instead of editing (issue #20). */}
+            <div className="mt-1 flex items-center gap-1">
+              <button
+                onClick={handleTitleEdit}
+                aria-label="Rename task"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
               >
-                {task.title}
-              </p>
-            </TaskHoverPreview>
-        )}
-        {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-            {task.dueDate ? (
-              <span>Due {formatDate(task.dueDate)}</span>
-            ) : null}
-            {hasAttachments ? (
-              <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-            ) : null}
-            {checklist.total > 0 ? (
-              <span className="flex items-center gap-1">
-                {checklist.checked === checklist.total ? (
-                  <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
-                ) : (
-                  <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
-                )}
-                <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
-              </span>
-            ) : null}
-            {task.priority > 0 ? (
-              <span aria-label={`Priority ${task.priority}`}>
-                {'!'.repeat(Math.min(5, task.priority))}
-              </span>
-            ) : null}
-            <LabelChips labels={labels} />
-            {task.percentDone > 0 ? (
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
-                  <span
-                    className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
-                    style={{ width: `${Math.min(100, task.percentDone)}%` }}
-                  />
-                </span>
-                <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
-              </span>
-            ) : null}
-            {task.repeatAfter > 0 ? (
-              <RefreshCw className="h-3 w-3" aria-label="Repeating" />
-            ) : null}
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={handleDelete}
+                aria-label="Delete task"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
-        ) : null}
-      </div>
-      {task.hexColor ? (
-        <span
-          aria-hidden="true"
-          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-          style={{ background: task.hexColor }}
-        />
-      ) : null}
-      {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
-          the title baseline (issue #21). Pencil enters inline rename —
-          the explicit affordance now that single-click on the title
-          opens detail instead of editing (issue #20). */}
-      <div className="mt-1 flex items-center gap-1">
-        <button
-          onClick={handleTitleEdit}
-          aria-label="Rename task"
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={handleDelete}
-          aria-label="Delete task"
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </li>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => setSelectedTask(task.localId)}>
+          <span className="flex items-center gap-2">
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { setDraft(task.title); setEditing(true); }}>
+          <span className="flex items-center gap-2">
+            <Pencil className="h-3.5 w-3.5" />
+            Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { duplicateTask(task.localId).catch(console.error); }}>
+          <span className="flex items-center gap-2">
+            <Copy className="h-3.5 w-3.5" />
+            Duplicate
+          </span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => enqueueDelete(task)}>
+          <span className="flex items-center gap-2">
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
-}
+});
 
 function formatDate(iso: string): string {
   try {

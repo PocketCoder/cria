@@ -75,7 +75,7 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
         />
         <div className="max-h-48 overflow-y-auto">
           {filtered.length === 0 && !term ? (
-            <p className="px-2 py-1 text-[11px] text-[var(--color-muted-foreground)]">
+            <p className="px-2 py-1 text-caption text-[var(--color-muted-foreground)]">
               No labels yet.
             </p>
           ) : null}
@@ -99,7 +99,7 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
                 />
                 <span className="flex-1 truncate">{label.title}</span>
                 {active ? (
-                  <span className="text-[10px] text-[var(--color-muted-foreground)]">✓</span>
+                  <span className="text-footnote text-[var(--color-muted-foreground)]">✓</span>
                 ) : null}
               </button>
             );
@@ -110,7 +110,7 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
               onClick={() => void createAndAdd()}
               className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs text-[var(--color-primary)] hover:bg-[var(--color-accent)]/5"
             >
-              <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[var(--color-primary)] text-[9px] leading-none">
+              <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[var(--color-primary)] text-micro leading-none">
                 +
               </span>
               <span className="flex-1 truncate">Create &ldquo;{search.trim()}&rdquo;</span>
