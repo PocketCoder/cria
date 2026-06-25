@@ -210,8 +210,10 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectId || submitting) return;
     if (!parsed.title) return;
+    // Need a project only when no +project token was typed (dropdown project).
+    if (!parsed.projectTitle && !projectId) return;
+    if (submitting) return;
 
     setSubmitting(true);
     try {
@@ -223,15 +225,19 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
             (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
           )
         : undefined;
-      const input: TaskInput = {
-        title: parsed.title,
-        projectLocalId: matchedProject?.localId ?? projectId,
-        ...(description.trim() ? { description: description.trim() } : {}),
-        ...(dueDate ? { dueDate } : {}),
-        ...(priority > 0 ? { priority } : {}),
-        ...(repeatAfter !== null ? { repeatAfter } : {}),
-        ...(repeatMode !== null ? { repeatMode } : {}),
-      };
+        const input: TaskInput = {
+          title: parsed.title,
+          // If a +project token was parsed but no matching project exists,
+          // omit the projectLocalId so the task falls back to the Inbox.
+          ...(matchedProject ? { projectLocalId: matchedProject.localId } : {}),
+          // If there is no +project token, keep the currently selected project.
+          ...(!parsed.projectTitle ? { projectLocalId: projectId } : {}),
+          ...(description.trim() ? { description: description.trim() } : {}),
+          ...(dueDate ? { dueDate } : {}),
+          ...(priority > 0 ? { priority } : {}),
+          ...(repeatAfter !== null ? { repeatAfter } : {}),
+          ...(repeatMode !== null ? { repeatMode } : {}),
+        };
       const created = await createTask(input);
 
       // Apply chosen labels (picker + any typed *tokens) — create-if-missing.
@@ -379,7 +385,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !parsed.title || !projectId}
+                  disabled={submitting || !parsed.title || (!parsed.projectTitle && !projectId)}
                   aria-label="Add task"
                   className="fab flex h-11 w-11 items-center justify-center disabled:opacity-40 disabled:shadow-none"
                 >
@@ -462,7 +468,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
                 <span>Enter to add · Esc to cancel</span>
                 <button
                   type="submit"
-                  disabled={submitting || !parsed.title || !projectId}
+                  disabled={submitting || !parsed.title || (!parsed.projectTitle && !projectId)}
                   className="rounded-md bg-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
                 >
                   {submitting ? 'Adding…' : 'Add'}

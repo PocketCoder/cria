@@ -14,13 +14,30 @@ import { getAuthSnapshot, useAuth } from '@/auth/store';
 export type ApiClient = Client<paths>;
 
 /**
- * The server rejected our token (expired or revoked). Drop the stored
- * credentials and return to the login screen — but only when we currently
- * think we're authenticated, so a stray 401 during the login handshake itself
- * can't trigger a sign-out loop.
+ * The server rejected our token. A *single* 401 is often transient — a request
+ * resumed after the app was backgrounded with a momentarily-stale token, a
+ * proxy/server hiccup, a clock-skew JWT rejection, or a race where the token
+ * wasn't attached yet. Signing out on the first one nukes the whole session and
+ * forces a re-login ("logged out after a short while"). So we only sign out
+ * after several *consecutive* 401s with no successful response in between: a
+ * genuinely expired/revoked token keeps 401ing — the 60s sync alone hits
+ * several endpoints — so real revocation still signs out within a tick or two,
+ * while a stray 401 is shrugged off and the next success resets the count.
  */
+const MAX_CONSECUTIVE_AUTH_FAILURES = 3;
+let consecutiveAuthFailures = 0;
+
+/** Any successful response proves the current token still works — reset. */
+function noteRequestAuthorized(): void {
+  consecutiveAuthFailures = 0;
+}
+
 function handleUnauthorized(): void {
-  if (useAuth.getState().status.kind === 'authenticated') {
+  // A stray 401 during the login handshake itself can't trigger a sign-out.
+  if (useAuth.getState().status.kind !== 'authenticated') return;
+  consecutiveAuthFailures += 1;
+  if (consecutiveAuthFailures >= MAX_CONSECUTIVE_AUTH_FAILURES) {
+    consecutiveAuthFailures = 0;
     void useAuth.getState().signOut();
   }
 }
@@ -97,6 +114,9 @@ export async function platformFetch(
     // A 5xx means the server is unhealthy; 2xx/4xx mean it's responding.
     if (response.status >= 500) recordRequestFailure();
     else recordRequestSuccess();
+    // A 2xx proves the current token is still accepted — clears any transient
+    // 401 streak so a single stray rejection can't accumulate into a sign-out.
+    if (response.ok) noteRequestAuthorized();
     return response;
   } catch (err) {
     recordRequestFailure();

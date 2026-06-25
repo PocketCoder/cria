@@ -16,6 +16,7 @@ import { priorityColor } from '@/components/ui/priority-select';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { forceSync } from '@/sync/forceSync';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { impactComplete, impactDeleted } from '@/utils/haptics';
 import {
@@ -88,6 +89,12 @@ function SmartView({
   const submittingRef = useRef(false);
   const qc = useQueryClient();
   const handleRefresh = useCallback(async () => {
+    // Pull-to-refresh must actually hit the server. The smart-view queries only
+    // read the local DB, so invalidating alone re-reads unchanged data and
+    // nothing appears to sync. forceSync drains the outbox + pulls every entity
+    // and notifies the bus; the invalidate is belt-and-braces for any query not
+    // covered by a bus topic.
+    await forceSync();
     await qc.invalidateQueries();
   }, [qc]);
   // Set default project once projects are loaded

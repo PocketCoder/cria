@@ -14,6 +14,7 @@ export interface Project {
   serverId: number | null;
   title: string;
   description: string | null;
+  identifier: string | null;
   parentLocalId: string | null;
   hexColor: string | null;
   isArchived: boolean;
@@ -32,6 +33,7 @@ export const projectResponseSchema = z
     id: z.number(),
     title: z.string(),
     description: z.string().nullable().optional(),
+    identifier: z.string().nullable().optional(),
     parent_project_id: z.number().nullable().optional(),
     hex_color: z.string().nullable().optional(),
     is_archived: z.boolean().nullable().optional(),

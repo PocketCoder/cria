@@ -19,9 +19,11 @@ export type ProjectUpdate = Partial<{
   isArchived: boolean;
   isFavorite: boolean;
   position: number;
+  identifier: string | null;
 }>;
 
 interface ProjectRow {
+  identifier: string | null;
   local_id: string;
   server_id: number | null;
   title: string;
@@ -41,6 +43,7 @@ function rowToProject(row: ProjectRow): Project {
     title: row.title,
     description: row.description,
     parentLocalId: row.parent_local_id,
+    identifier: row.identifier,
     hexColor: row.hex_color ? (row.hex_color.startsWith('#') ? row.hex_color : `#${row.hex_color}`) : null,
     isArchived: row.is_archived === 1,
     isFavorite: row.is_favorite === 1,
@@ -53,7 +56,7 @@ export async function listProjects(): Promise<Project[]> {
   const db = await getDb();
   const rows = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
-            hex_color, is_archived, is_favorite, position, updated_at
+            hex_color, is_archived, is_favorite, position, updated_at, identifier
        FROM projects
       WHERE deleted = 0
    ORDER BY position IS NULL, position ASC, title COLLATE NOCASE ASC`,
@@ -67,7 +70,7 @@ export async function getProjectByLocalId(
   const db = await getDb();
   const rows = await db.select<ProjectRow[]>(
     `SELECT local_id, server_id, title, description, parent_local_id,
-            hex_color, is_archived, is_favorite, position, updated_at
+            hex_color, is_archived, is_favorite, position, updated_at, identifier
        FROM projects
       WHERE local_id = ?
         AND deleted = 0
@@ -134,9 +137,9 @@ export async function upsertProjectFromServer(
     insert: (localId, lastSyncedJson) => ({
       sql: `INSERT INTO projects (
               local_id, server_id, title, description, parent_local_id,
-              hex_color, is_archived, is_favorite, position, updated_at,
+              hex_color, is_archived, is_favorite, position, updated_at, identifier,
               synced_at, last_synced, dirty, deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       params: [
         localId,
         serverId,
@@ -148,6 +151,7 @@ export async function upsertProjectFromServer(
         payload.is_favorite === true ? 1 : 0,
         payload.position ?? null,
         updatedAt,
+        payload.identifier ?? null,
         now,
         lastSyncedJson,
       ],
@@ -162,6 +166,7 @@ export async function upsertProjectFromServer(
               is_favorite     = ?,
               position        = ?,
               updated_at      = ?,
+              identifier      = ?,
               synced_at       = ?,
               last_synced     = ?,
               dirty           = 0,
@@ -176,6 +181,7 @@ export async function upsertProjectFromServer(
         payload.is_favorite === true ? 1 : 0,
         payload.position ?? null,
         updatedAt,
+        payload.identifier ?? null,
         now,
         lastSyncedJson,
         localId,

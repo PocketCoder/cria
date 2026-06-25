@@ -80,7 +80,7 @@ export async function pullProjects(
         query: {
           page,
           per_page: PER_PAGE,
-          is_archived: true,
+          
         },
       },
     });
@@ -185,7 +185,12 @@ export async function pullTasksForProject(
     await upsertTaskWithRelations(t);
   }
 
-  await stampSyncState('tasks_synced_at');
+  // Do NOT stamp tasks_synced_at here. That watermark drives the delta filter
+  // for the *cross-project* pullAllTasks ("all tasks up to T are mirrored"). A
+  // per-project pull only mirrors one project, so stamping it here would make
+  // the next pullAllTasks delta-skip every other project's tasks — the cause of
+  // "only the project I opened has tasks; Today/Upcoming/Inbox are empty". Only
+  // pullAllTasks may advance the watermark.
   return collected.length;
   });
 }
@@ -658,6 +663,18 @@ async function readSyncState(column: SyncColumn): Promise<string | null> {
 async function tasksDeltaFilter(): Promise<string | null> {
   const last = await readSyncState('tasks_synced_at');
   if (!last) return null;
+  // Self-heal a poisoned watermark. tasks_synced_at can get stamped to "now"
+  // by a pull that mirrored *zero* tasks — e.g. an early pull whose tasks were
+  // all skipped because their projects hadn't synced yet (see
+  // upsertTaskFromServer's project-not-synced skip). After that, a delta filter
+  // (`updated > <stamp>`) excludes every pre-existing task forever, so tasks
+  // never appear even once projects sync. If we hold a watermark but have no
+  // tasks stored, the watermark is provably wrong — do a full pull instead.
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    `SELECT COUNT(*) AS n FROM tasks WHERE deleted = 0`,
+  );
+  if ((rows[0]?.n ?? 0) === 0) return null;
   const ms = Date.parse(last);
   if (Number.isNaN(ms)) return `updated > '${last}'`;
   const since = new Date(ms - DELTA_OVERLAP_MS).toISOString();

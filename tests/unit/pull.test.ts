@@ -185,7 +185,15 @@ describe('sync/pull', () => {
       await db.execute(
         `UPDATE sync_state SET tasks_synced_at = '2026-06-20T12:00:00Z' WHERE id = 1`,
       );
-      await seedProject(42, 'Delta project');
+      const projLocal = await seedProject(42, 'Delta project');
+      // A local task must exist for the delta filter to apply: with an empty
+      // tasks table, tasksDeltaFilter self-heals to a full pull (no `updated`),
+      // recovering from a poisoned watermark.
+      await db.execute(
+        `INSERT INTO tasks (local_id, server_id, project_local_id, title, updated_at, dirty, deleted)
+         VALUES ('delta_seed_1', 9001, ?, 'Seed', '2026-06-19T00:00:00Z', 0, 0)`,
+        [projLocal],
+      );
       const get = vi.fn().mockResolvedValue({
         data: [],
         response: {
@@ -223,7 +231,14 @@ describe('sync/pull', () => {
       await db.execute(
         `UPDATE sync_state SET tasks_synced_at = '2026-06-20T12:00:00Z' WHERE id = 1`,
       );
-      await seedProject(50, 'Delta all project');
+      const projLocal = await seedProject(50, 'Delta all project');
+      // See note in pullTasksForProject: a local task must exist or the delta
+      // self-heals to a full pull.
+      await db.execute(
+        `INSERT INTO tasks (local_id, server_id, project_local_id, title, updated_at, dirty, deleted)
+         VALUES ('delta_seed_2', 9002, ?, 'Seed', '2026-06-19T00:00:00Z', 0, 0)`,
+        [projLocal],
+      );
       const get = vi.fn().mockResolvedValue({
         data: [
           {

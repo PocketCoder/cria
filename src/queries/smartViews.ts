@@ -12,6 +12,8 @@ import {
 import { getDb } from '@/db';
 import { useCurrentUser } from '@/queries/user';
 import { subscribe } from '@/db/bus';
+import { pullTasksForProject } from '@/sync/pull';
+import { throttledWarn } from '@/api/resilience';
 import { isMobilePlatform } from '@/lib/platform';
 
 // Foreground refresh cadence. The 60s periodic sync + `tasks` bus invalidation
@@ -163,6 +165,14 @@ export function useInboxTasks() {
     refetchInterval: SMART_REFETCH_MS(),
     queryFn: async () => {
       if (!user?.defaultProjectId) return [];
+      // Pull the inbox project's tasks on view (like useProjectTasks does for an
+      // opened project) so the Inbox populates immediately, independent of when
+      // the periodic cross-project pullAllTasks runs.
+      try {
+        await pullTasksForProject(user.defaultProjectId);
+      } catch (err) {
+        throttledWarn('queries/smartViews/inbox', '[smart-view] inbox pull failed:', err);
+      }
       const db = await getDb();
       const rows = await db.select<{ local_id: string; title: string }[]>(
         `SELECT local_id, title FROM projects WHERE server_id = ? LIMIT 1`,

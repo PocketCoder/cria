@@ -79,6 +79,15 @@ export function usePeriodicSync() {
     // "hidden" by design). Foreground resume is wired via onVisibilityChange.
     const shouldTick = () => !cancelled && (!isMobilePlatform() || isPageVisible());
 
+    // Run one sync immediately on mount instead of waiting a full INTERVAL_MS
+    // for the first tick. The on-mount query hooks only pull projects, labels,
+    // and the *currently open* project (useProjectTasks) — nothing pulls
+    // pullAllTasks on mount, so without this the cross-project data behind the
+    // smart views (Inbox/Today/Upcoming) and every not-yet-opened project stays
+    // empty for up to 60s after launch. Pulls are singleFlight-deduped, so this
+    // won't double-fetch alongside those hooks.
+    if (shouldTick()) void tick();
+
     const id = setInterval(() => {
       if (shouldTick()) void tick();
     }, INTERVAL_MS);

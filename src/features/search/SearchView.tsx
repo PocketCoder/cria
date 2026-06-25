@@ -5,11 +5,15 @@ import { useSearchTasks } from '@/queries/search';
 import { SmartTaskRow } from '@/features/smart-views/SmartViews';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { forceSync } from '@/sync/forceSync';
 import { SearchQueryPreview } from './SearchQueryPreview';
 
 export function SearchView({ query }: { query: string }) {
   const qc = useQueryClient();
   const handleRefresh = useCallback(async () => {
+    // Actually sync from the server before re-reading local results — see the
+    // note in SmartViews.handleRefresh.
+    await forceSync();
     await qc.invalidateQueries();
   }, [qc]);
   const { parsed, query: { data: results = [], isLoading } } = useSearchTasks(query);

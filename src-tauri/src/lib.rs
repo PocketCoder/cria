@@ -31,6 +31,8 @@ const MIGRATION_12_SQL: &str = include_str!("../../src/db/migrations/012_task_bu
 const MIGRATION_13_SQL: &str = include_str!("../../src/db/migrations/013_task_comments.sql");
 const MIGRATION_14_SQL: &str = include_str!("../../src/db/migrations/014_comment_reactions.sql");
 const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_indexes.sql");
+const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project_identifier.sql");
+const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -122,6 +124,18 @@ fn migrations() -> Vec<Migration> {
             version: 15,
             description: "performance indexes (active due-date scan)",
             sql: MIGRATION_15_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 16,
+            description: "project identifier column",
+            sql: MIGRATION_16_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 17,
+            description: "reset poisoned task delta watermark",
+            sql: MIGRATION_17_SQL,
             kind: MigrationKind::Up,
         },
     ]

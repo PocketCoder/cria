@@ -42,7 +42,7 @@ export function LoginScreen() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      serverUrl: 'https://try.vikunja.io',
+      serverUrl: '',
       token: '',
       username: '',
       password: '',
@@ -169,6 +169,8 @@ export function LoginScreen() {
             <Label htmlFor="serverUrl">Server URL</Label>
             <Input
               id="serverUrl"
+              type="url"
+              inputMode="url"
               autoComplete="url"
               autoCapitalize="off"
               spellCheck={false}
@@ -180,9 +182,9 @@ export function LoginScreen() {
 
           {authMethod === 'token' ? (
             <div className="space-y-2">
-              <Label htmlFor="token">API token</Label>
+              <Label htmlFor="apiToken">API token</Label>
               <Input
-                id="token"
+                id="apiToken"
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
@@ -220,11 +222,13 @@ export function LoginScreen() {
 
               {totpRequired && (
                 <div className="space-y-2">
-                  <Label htmlFor="totp">Two-factor code</Label>
+                  <Label htmlFor="token">Two-factor code</Label>
                   <Input
-                    id="totp"
+                    id="token"
+                    name="token"
                     type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     autoComplete="one-time-code"
                     autoFocus
                     placeholder="000000"

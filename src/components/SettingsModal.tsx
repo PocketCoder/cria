@@ -6,6 +6,7 @@ import { useUpdaterStore } from '@/stores/updater';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
 import { useSelectableProjects } from '@/queries/projects';
 import { pushUserSettings, type UserSettingsInput } from '@/api/userSettings';
+import { frontendSettingsWithCria } from '@/sync/settingsSync';
 import { notify } from '@/db/bus';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -57,7 +58,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       name: settings.name ?? user.name ?? undefined,
       ...settingsRef.current,
     };
-    if (user.name) setDisplayName(user.name);
+    const seededName = settings.name ?? user.name;
+    if (seededName) setDisplayName(seededName);
     if (settings.email_reminders_enabled === false) setEmailRemindersEnabled(false);
     if (settings.overdue_tasks_reminders_enabled === false) setOverdueRemindersEnabled(false);
     if (typeof settings.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(settings.overdue_tasks_reminders_time);
@@ -104,7 +106,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // object. Vikunja's /user/settings/general overwrites every column from
   // the body, so we must always send the complete settings.
   const pushSettings = (patch: UserSettingsInput) => {
-    settingsRef.current = { ...settingsRef.current, ...patch };
+    settingsRef.current = {
+      ...settingsRef.current,
+      ...patch,
+      // Always carry the live display prefs so saving the name/reminders never
+      // clobbers a frontend_settings change made through settingsSync.
+      frontend_settings: frontendSettingsWithCria(settingsRef.current.frontend_settings),
+    };
     return pushUserSettings(settingsRef.current);
   };
 

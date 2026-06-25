@@ -68,7 +68,7 @@ import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Plus, Search, Settings, X, Camera } from 'lucide-react';
+import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -487,6 +487,52 @@ export function Shell() {
                 onSelect={handleSelectView}
               />
             )}
+            {/* Sync status — surfaces what the desktop footer shows, so an
+                iOS user can actually see (and reach) a stalled outbox. Hidden
+                when everything's fine; tap opens the OutboxModal (or the
+                ConflictModal when conflicts are the only thing pending). */}
+            {(() => {
+              const needsAttention =
+                !isOnline || outboxCount > 0 || deadLetterCount > 0 || conflictCount > 0;
+              if (!needsAttention) return null;
+              const onlyConflicts =
+                conflictCount > 0 && outboxCount === 0 && deadLetterCount === 0 && isOnline;
+              const Icon = !isOnline
+                ? CloudOff
+                : deadLetterCount > 0 || conflictCount > 0
+                  ? CloudAlert
+                  : CloudUpload;
+              const tone = !isOnline || deadLetterCount > 0
+                ? 'text-red-500'
+                : 'text-amber-500';
+              const total = outboxCount + deadLetterCount + conflictCount;
+              const label = !isOnline
+                ? 'Offline'
+                : deadLetterCount > 0
+                  ? `${deadLetterCount} failed to sync`
+                  : outboxCount > 0
+                    ? `Syncing — ${outboxCount} pending`
+                    : `${conflictCount} conflicts pending`;
+              return (
+                <button
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  onClick={() => (onlyConflicts ? setShowConflicts(true) : setShowOutbox(true))}
+                  className={cn(
+                    'relative rounded-md p-2 transition-colors hover:bg-[var(--color-muted)]',
+                    tone,
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                  {total > 0 ? (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-[10px] font-semibold leading-[1.1rem] text-white">
+                      {total > 99 ? '99+' : total}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })()}
             <button
               type="button"
               aria-label="Search"
@@ -500,12 +546,11 @@ export function Shell() {
             </button>
             <button
               type="button"
-              aria-label="Add tasks from a photo"
-              title="Add tasks from a photo of a list"
-              onClick={() => setPhotoCaptureOpen(true)}
+              aria-label="Settings"
+              onClick={() => setShowSettings(true)}
               className="-mr-1 rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
             >
-              <Camera className="h-5 w-5" />
+              <Settings className="h-5 w-5" />
             </button>
           </div>
         ) : (
@@ -675,8 +720,8 @@ export function Shell() {
             type="button"
             aria-label="Add task"
             onClick={() => setShowQuickAdd(true)}
-            className="fab fixed right-5 z-30 flex h-14 w-14 items-center justify-center"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4.75rem)' }}
+            className="fab fixed right-5 z-40 flex h-14 w-14 items-center justify-center"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.75rem)' }}
           >
             <Plus className="h-7 w-7" strokeWidth={2.5} />
           </button>

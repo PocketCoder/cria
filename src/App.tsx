@@ -5,6 +5,7 @@ import { Shell } from '@/features/shell/Shell';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
 import { useReminderScheduler } from '@/sync/useReminderScheduler';
+import { startSettingsSync } from '@/sync/settingsSync';
 import { useDockBadge } from '@/queries/badge';
 
 export function App() {
@@ -16,6 +17,11 @@ export function App() {
       void hydrate();
     }
   }, [status.kind, hydrate]);
+
+  // Push display-pref changes (theme/date-format/…) to the server's
+  // frontend_settings so they survive an iOS localStorage eviction and sync
+  // across devices. Hydration on load happens in useCurrentUser.
+  useEffect(() => startSettingsSync(), []);
 
   usePeriodicSync();
   useReminderScheduler();
