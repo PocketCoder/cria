@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,110 +20,117 @@ const serverUrlSchema = z.string().trim().url().refine(
   'Use https:// or a loopback address (localhost/127.0.0.1) for http://',
 );
 
-const formSchema = z.object({
-  serverUrl: serverUrlSchema,
-  token: z.string().optional(),
-  username: z.string().optional(),
-  password: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof formSchema>;
 type AuthMethod = 'token' | 'password';
 
 export function LoginScreen() {
   const signIn = useAuth((s) => s.signIn);
   const [authMethod, setAuthMethod] = useState<AuthMethod>('token');
+  const [serverUrl, setServerUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [serverUrlError, setServerUrlError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [totpRequired, setTotpRequired] = useState(false);
   const [totpCode, setTotpCode] = useState('');
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      serverUrl: '',
-      token: '',
-      username: '',
-      password: '',
-    },
-  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const switchMethod = (method: AuthMethod) => {
     setAuthMethod(method);
     setSubmitError(null);
     setTotpRequired(false);
     setTotpCode('');
-    form.clearErrors();
+    setServerUrlError(undefined);
   };
 
   const doPasswordSignIn = async (
-    serverUrl: string,
-    username: string,
-    password: string,
+    url: string,
+    user: string,
+    pass: string,
     totp_passcode?: string,
   ) => {
-    const token = await loginWithPassword(serverUrl, {
-      username,
-      password,
+    const t = await loginWithPassword(url, {
+      username: user,
+      password: pass,
       long_token: true,
       totp_passcode,
     });
-    const client = createApiClient({ baseUrl: serverUrl, token });
-    const user = await fetchCurrentUser(client);
-    await signIn({ serverUrl, token, authMethod: 'password' }, user);
+    const client = createApiClient({ baseUrl: url, token: t });
+    const me = await fetchCurrentUser(client);
+    await signIn({ serverUrl: url, token: t, authMethod: 'password' }, me);
   };
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setSubmitError(null);
 
+    // Server URL is the only field with structural validation (the rest are
+    // checked per-method below). Reuse the trimmed/normalised value zod returns.
+    const parsed = serverUrlSchema.safeParse(serverUrl);
+    if (!parsed.success) {
+      setServerUrlError(parsed.error.issues[0]?.message ?? 'Enter a valid server URL.');
+      return;
+    }
+    setServerUrlError(undefined);
+    const url = parsed.data;
+
     if (authMethod === 'token') {
-      if (!values.token || values.token.trim().length < 8) {
+      if (!token || token.trim().length < 8) {
         setSubmitError('Paste your API token from Vikunja settings.');
         return;
       }
+      setIsSubmitting(true);
       try {
-        const client = createApiClient({ baseUrl: values.serverUrl, token: values.token });
+        const client = createApiClient({ baseUrl: url, token });
         const user = await fetchCurrentUser(client);
-        await signIn({ serverUrl: values.serverUrl, token: values.token, authMethod: 'token' }, user);
+        await signIn({ serverUrl: url, token, authMethod: 'token' }, user);
       } catch (err) {
         console.error('[login] token sign-in failed:', err);
         setSubmitError(messageFor(err));
+      } finally {
+        setIsSubmitting(false);
       }
       return;
     }
 
-    if (!values.username || !values.password) {
+    if (!username || !password) {
       setSubmitError('Enter your username and password.');
       return;
     }
 
-    if (totpRequired) {
-      try {
-        await doPasswordSignIn(values.serverUrl, values.username, values.password, totpCode || undefined);
-      } catch (err) {
-        console.error('[login] password+TOTP sign-in failed:', err);
-        if (isTotpRequired(err)) {
-          setSubmitError('Invalid two-factor code. Try again.');
-        } else {
-          setSubmitError(messageFor(err));
-          setTotpRequired(false);
-          setTotpCode('');
-        }
-      }
-      return;
-    }
-
+    setIsSubmitting(true);
     try {
-      await doPasswordSignIn(values.serverUrl, values.username, values.password);
-    } catch (err) {
-      if (isTotpRequired(err)) {
-        setTotpRequired(true);
-        setSubmitError(null);
+      if (totpRequired) {
+        try {
+          await doPasswordSignIn(url, username, password, totpCode || undefined);
+        } catch (err) {
+          console.error('[login] password+TOTP sign-in failed:', err);
+          if (isTotpRequired(err)) {
+            setSubmitError('Invalid two-factor code. Try again.');
+          } else {
+            setSubmitError(messageFor(err));
+            setTotpRequired(false);
+            setTotpCode('');
+          }
+        }
         return;
       }
-      console.error('[login] password sign-in failed:', err);
-      setSubmitError(messageFor(err));
+
+      try {
+        await doPasswordSignIn(url, username, password);
+      } catch (err) {
+        if (isTotpRequired(err)) {
+          setTotpRequired(true);
+          setSubmitError(null);
+          return;
+        }
+        console.error('[login] password sign-in failed:', err);
+        setSubmitError(messageFor(err));
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-  });
+  };
 
   return (
     <main className="flex min-h-full items-center justify-center p-6">
@@ -175,9 +180,10 @@ export function LoginScreen() {
               autoCapitalize="off"
               spellCheck={false}
               placeholder="https://vikunja.example.com"
-              {...form.register('serverUrl')}
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
             />
-            <FieldError message={form.formState.errors.serverUrl?.message as string | undefined} />
+            <FieldError message={serverUrlError} />
           </div>
 
           {authMethod === 'token' ? (
@@ -189,7 +195,8 @@ export function LoginScreen() {
                 autoComplete="off"
                 spellCheck={false}
                 placeholder="tk_…"
-                {...form.register('token')}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
               />
               <p className="text-xs text-[var(--color-muted-foreground)]">
                 Create one in Vikunja's web UI under Settings → API Tokens.
@@ -205,7 +212,8 @@ export function LoginScreen() {
                   autoCapitalize="off"
                   spellCheck={false}
                   placeholder="jane@example.com"
-                  {...form.register('username')}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
 
@@ -216,7 +224,8 @@ export function LoginScreen() {
                   type="password"
                   autoComplete="current-password"
                   spellCheck={false}
-                  {...form.register('password')}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
 
@@ -252,8 +261,8 @@ export function LoginScreen() {
             </div>
           ) : null}
 
-          <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
-            {form.formState.isSubmitting
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting
               ? 'Signing in…'
               : totpRequired
                 ? 'Verify'

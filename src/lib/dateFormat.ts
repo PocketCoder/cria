@@ -13,7 +13,7 @@ import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings
  * through here.
  *
  * Timezone is intentionally not applied yet — dates render in the OS local
- * zone, same as before. Wiring the `timezone` preference (via date-fns-tz)
+ * zone, same as before. Wiring the `timezone` preference (add a tz lib then)
  * is a separate follow-up.
  */
 
