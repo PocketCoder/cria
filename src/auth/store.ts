@@ -17,10 +17,13 @@ interface AuthState {
   status: AuthStatus;
   hydrate: () => Promise<void>;
   signIn: (credentials: Credentials, user: User) => Promise<void>;
+  /** Swap in a freshly-refreshed JWT (and rotated refresh token) without
+   *  touching the cached user. No-op if not currently authenticated. */
+  updateSession: (token: string, refreshToken: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
-export const useAuth = create<AuthState>((set) => ({
+export const useAuth = create<AuthState>((set, get) => ({
   status: { kind: 'unknown' },
   async hydrate() {
     const creds = await loadCredentials();
@@ -33,6 +36,17 @@ export const useAuth = create<AuthState>((set) => ({
   async signIn(credentials, user) {
     await saveCredentials(credentials);
     await upsertUser(user);
+    set({ status: { kind: 'authenticated', credentials } });
+  },
+  async updateSession(token, refreshToken) {
+    const s = get().status;
+    if (s.kind !== 'authenticated') return;
+    const credentials: Credentials = {
+      ...s.credentials,
+      token,
+      refreshToken: refreshToken ?? s.credentials.refreshToken,
+    };
+    await saveCredentials(credentials);
     set({ status: { kind: 'authenticated', credentials } });
   },
   async signOut() {

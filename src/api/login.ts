@@ -1,7 +1,7 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
-import { platformFetch, callApi } from './client';
-import { ApiError } from './errors';
+import { platformFetch, readRefreshCookie } from './client';
+import { ApiError, NetworkError, buildApiError } from './errors';
 
 export interface PasswordLoginInput {
   username: string;
@@ -10,27 +10,52 @@ export interface PasswordLoginInput {
   totp_passcode?: string;
 }
 
+export interface PasswordLoginResult {
+  /** Short-lived access JWT. */
+  token: string;
+  /** Refresh token from the login cookie, used to mint fresh JWTs as the access
+   *  token expires. Null if the server didn't set one (older Vikunja). */
+  refreshToken: string | null;
+}
+
 export async function loginWithPassword(
   serverUrl: string,
   input: PasswordLoginInput,
-): Promise<string> {
+): Promise<PasswordLoginResult> {
   const client = createClient<paths>({
     baseUrl: `${serverUrl.replace(/\/+$/, '')}/api/v1`,
     fetch: platformFetch,
   });
 
-  const result = await callApi(
-    client.POST('/login', {
+  // Inlined (not callApi) because we need the raw response to read the
+  // HttpOnly refresh-token cookie, which callApi discards.
+  let result;
+  try {
+    result = await client.POST('/login', {
       body: {
         username: input.username,
         password: input.password,
         long_token: input.long_token ?? true,
         totp_passcode: input.totp_passcode,
       },
-    }),
-  );
+    });
+  } catch (err) {
+    throw new NetworkError(
+      err instanceof Error ? err.message : 'Network request failed',
+      err,
+    );
+  }
 
-  return result.token!;
+  const { data, response } = result;
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw await buildApiError(response.status, bodyText);
+  }
+
+  return {
+    token: (data as { token?: string }).token!,
+    refreshToken: readRefreshCookie(response.headers),
+  };
 }
 
 export function isTotpRequired(err: unknown): boolean {

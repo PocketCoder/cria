@@ -14,15 +14,22 @@ import { getAuthSnapshot, useAuth } from '@/auth/store';
 export type ApiClient = Client<paths>;
 
 /**
- * The server rejected our token. A *single* 401 is often transient — a request
- * resumed after the app was backgrounded with a momentarily-stale token, a
- * proxy/server hiccup, a clock-skew JWT rejection, or a race where the token
- * wasn't attached yet. Signing out on the first one nukes the whole session and
- * forces a re-login ("logged out after a short while"). So we only sign out
- * after several *consecutive* 401s with no successful response in between: a
- * genuinely expired/revoked token keeps 401ing — the 60s sync alone hits
- * several endpoints — so real revocation still signs out within a tick or two,
- * while a stray 401 is shrugged off and the next success resets the count.
+ * The server rejected our token. For password sessions this is usually just the
+ * short-lived JWT expiring (Vikunja's `service.jwtttlshort` is 10min by
+ * default), so before counting a 401 as fatal `platformFetch` first tries to
+ * refresh the JWT from the stored refresh token and retry the request once (see
+ * refreshSession). A 401 only reaches `handleUnauthorized` when there's nothing
+ * to refresh (API-token logins) or the refresh itself failed.
+ *
+ * Even then a *single* 401 is often transient — a request resumed after the app
+ * was backgrounded with a momentarily-stale token, a proxy/server hiccup, a
+ * clock-skew JWT rejection, or a race where the token wasn't attached yet.
+ * Signing out on the first one nukes the whole session and forces a re-login
+ * ("logged out after a short while"). So we only sign out after several
+ * *consecutive* 401s with no successful response in between: a genuinely
+ * expired/revoked token keeps 401ing — the 60s sync alone hits several
+ * endpoints — so real revocation still signs out within a tick or two, while a
+ * stray 401 is shrugged off and the next success resets the count.
  */
 const MAX_CONSECUTIVE_AUTH_FAILURES = 3;
 let consecutiveAuthFailures = 0;
@@ -71,12 +78,148 @@ const isTauri =
 
 let cachedTauriFetch: typeof fetch | null = null;
 
+/** Vikunja's refresh-token cookie name (see pkg/modules/auth/auth.go). */
+const REFRESH_COOKIE = 'vikunja_refresh_token';
+
+/**
+ * Pull the refresh token out of a `Set-Cookie` response header. Works in the
+ * Tauri webview because plugin-http exposes `set-cookie` to JS (a real browser
+ * would hide it). Tolerant of a missing header so it's safe on any response.
+ */
+export function readRefreshCookie(headers: Headers | null | undefined): string | null {
+  if (!headers) return null;
+  const list: string[] =
+    typeof headers.getSetCookie === 'function'
+      ? headers.getSetCookie()
+      : headers.get('set-cookie')
+        ? [headers.get('set-cookie') as string]
+        : [];
+  for (const c of list) {
+    const m = new RegExp(`(?:^|;\\s*)${REFRESH_COOKIE}=([^;]+)`).exec(c);
+    if (m?.[1]) return decodeURIComponent(m[1]);
+  }
+  return null;
+}
+
+/** The current password session's refresh token, or null for any other state
+ *  (unauthenticated, or an API-token login that doesn't expire). */
+function passwordRefreshToken(): string | null {
+  const s = useAuth.getState().status;
+  if (s.kind !== 'authenticated') return null;
+  const c = s.credentials;
+  return c.authMethod === 'password' && c.refreshToken ? c.refreshToken : null;
+}
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+/**
+ * Exchange the stored refresh token for a fresh JWT and persist it. Concurrent
+ * callers (the sync hits several endpoints at once) share a single in-flight
+ * request. Returns the new access token, or null if there's nothing to refresh
+ * or the refresh failed (in which case the session is genuinely dead).
+ */
+export function refreshSession(): Promise<string | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<string | null> {
+  const s = useAuth.getState().status;
+  if (s.kind !== 'authenticated') return null;
+  const creds = s.credentials;
+  if (creds.authMethod !== 'password' || !creds.refreshToken) return null;
+
+  const base = `${normalizeBase(creds.serverUrl)}/api/v1`;
+  let res: Response;
+  try {
+    // Don't leak the refresh token over plaintext (same rule as Bearer tokens).
+    guardTokenDestination(base, creds.refreshToken);
+    // The refresh token rides as a cookie (not a Bearer header); the server
+    // rotates it and returns the new JWT in the body + a new cookie.
+    res = await fetchOnce(`${base}/user/token/refresh`, {
+      method: 'POST',
+      headers: { Cookie: `${REFRESH_COOKIE}=${creds.refreshToken}` },
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+
+  let body: { token?: string } | null = null;
+  try {
+    body = (await res.json()) as { token?: string };
+  } catch {
+    return null;
+  }
+  if (!body?.token) return null;
+
+  const rotated = readRefreshCookie(res.headers) ?? creds.refreshToken;
+  await useAuth.getState().updateSession(body.token, rotated);
+  return body.token;
+}
+
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  if (input instanceof Request) return input.url;
+  return '';
+}
+
+function requestHasAuth(input: RequestInfo | URL, init?: RequestInit): boolean {
+  if (init?.headers && new Headers(init.headers).has('authorization')) return true;
+  return input instanceof Request && input.headers.has('authorization');
+}
+
+function withAuthHeader(src: HeadersInit | undefined, token: string): Headers {
+  const h = new Headers(src);
+  h.set('Authorization', `Bearer ${token}`);
+  return h;
+}
+
 /**
  * Public so other modules that bypass openapi-fetch (e.g. multipart
  * uploads and blob downloads in `sync/attachments.ts`) can share the
  * same CORS-dodge + import-once cache instead of reimplementing it.
+ *
+ * On a 401 from a password session it transparently refreshes the JWT and
+ * retries the request once, so a routinely-expired access token never surfaces
+ * to callers (or trips the sign-out counter).
  */
 export async function platformFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  // Eligible to refresh-and-retry only when this is an authenticated password
+  // request (not the refresh call itself, and not an API-token / anonymous one).
+  const eligible =
+    passwordRefreshToken() !== null &&
+    requestHasAuth(input, init) &&
+    !requestUrl(input).includes('/user/token/refresh');
+  // A Request body is single-use, so snapshot it before the first send in case
+  // we need to replay with a fresh token.
+  const retrySource = eligible && input instanceof Request ? input.clone() : null;
+
+  const res = await fetchOnce(input, init);
+  if (res.status !== 401 || !eligible) return res;
+
+  const token = await refreshSession();
+  if (!token) return res;
+
+  if (retrySource) {
+    return fetchOnce(
+      new Request(retrySource, { headers: withAuthHeader(retrySource.headers, token) }),
+    );
+  }
+  return fetchOnce(input, { ...init, headers: withAuthHeader(init?.headers, token) });
+}
+
+/** Raw, single-shot network call: circuit breaker + timeout + CORS-dodge. No
+ *  auth-refresh logic (refreshSession calls this directly to avoid recursion). */
+async function fetchOnce(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
