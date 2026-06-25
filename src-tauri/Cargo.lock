@@ -839,7 +839,7 @@ dependencies = [
 
 [[package]]
 name = "cria"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "base64 0.22.1",
  "keyring",

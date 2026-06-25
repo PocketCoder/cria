@@ -30,11 +30,19 @@
 const LEGACY_KEY = 'cria:credentials/v1';
 const META_KEY = 'cria:credentials/v2';
 const TOKEN_FALLBACK_KEY = 'cria:token/v1';
+const REFRESH_FALLBACK_KEY = 'cria:refresh/v1';
 
 export interface Credentials {
   serverUrl: string;
   token: string;
   authMethod: 'token' | 'password';
+  /**
+   * Cookie-based refresh token, password sessions only. The access token from a
+   * password login is a short-lived JWT (Vikunja's `service.jwtttlshort`, 10min
+   * by default); this is exchanged for a fresh one when it expires. API-token
+   * logins don't expire, so they have no refresh token.
+   */
+  refreshToken?: string;
 }
 
 const isTauri =
@@ -93,6 +101,8 @@ function parseCreds(raw: string | null): Credentials | null {
         serverUrl: o.serverUrl,
         token: o.token,
         authMethod: o.authMethod === 'password' ? 'password' : 'token',
+        refreshToken:
+          typeof o.refreshToken === 'string' ? o.refreshToken : undefined,
       };
     }
   } catch {
@@ -181,26 +191,35 @@ export async function loadCredentials(): Promise<Credentials | null> {
   if (typeof localStorage === 'undefined') return null;
   const token = localStorage.getItem(TOKEN_FALLBACK_KEY);
   if (!token) return null;
-  return { serverUrl: meta.serverUrl, token, authMethod: meta.authMethod };
+  const refreshToken = localStorage.getItem(REFRESH_FALLBACK_KEY) ?? undefined;
+  return { serverUrl: meta.serverUrl, token, authMethod: meta.authMethod, refreshToken };
 }
 
 export async function saveCredentials(creds: Credentials): Promise<void> {
   if (await useSecureStore()) {
     // Everything in the keychain. Keep a non-secret meta copy in localStorage
-    // (harmless cache), but never the token, and scrub any stale fallback token.
+    // (harmless cache), but never the token, and scrub any stale fallback tokens.
     await writeSecureRaw(JSON.stringify(creds));
     writeMeta({ serverUrl: creds.serverUrl, authMethod: creds.authMethod });
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(TOKEN_FALLBACK_KEY);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(TOKEN_FALLBACK_KEY);
+      localStorage.removeItem(REFRESH_FALLBACK_KEY);
+    }
     return;
   }
   writeMeta({ serverUrl: creds.serverUrl, authMethod: creds.authMethod });
-  if (typeof localStorage !== 'undefined') localStorage.setItem(TOKEN_FALLBACK_KEY, creds.token);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(TOKEN_FALLBACK_KEY, creds.token);
+    if (creds.refreshToken) localStorage.setItem(REFRESH_FALLBACK_KEY, creds.refreshToken);
+    else localStorage.removeItem(REFRESH_FALLBACK_KEY);
+  }
 }
 
 export async function clearCredentials(): Promise<void> {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem(META_KEY);
     localStorage.removeItem(TOKEN_FALLBACK_KEY);
+    localStorage.removeItem(REFRESH_FALLBACK_KEY);
   }
   if (await useSecureStore()) await clearSecureRaw();
 }

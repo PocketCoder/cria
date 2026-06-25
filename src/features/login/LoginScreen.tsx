@@ -49,7 +49,7 @@ export function LoginScreen() {
     pass: string,
     totp_passcode?: string,
   ) => {
-    const t = await loginWithPassword(url, {
+    const { token: t, refreshToken } = await loginWithPassword(url, {
       username: user,
       password: pass,
       long_token: true,
@@ -57,7 +57,10 @@ export function LoginScreen() {
     });
     const client = createApiClient({ baseUrl: url, token: t });
     const me = await fetchCurrentUser(client);
-    await signIn({ serverUrl: url, token: t, authMethod: 'password' }, me);
+    await signIn(
+      { serverUrl: url, token: t, refreshToken: refreshToken ?? undefined, authMethod: 'password' },
+      me,
+    );
   };
 
   const onSubmit = async (e: React.FormEvent) => {

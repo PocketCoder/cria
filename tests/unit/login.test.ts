@@ -37,7 +37,7 @@ describe('loginWithPassword', () => {
   const serverUrl = 'https://vikunja.example.com';
 
   it('returns a token on successful login', async () => {
-    const token = await loginWithPassword(serverUrl, {
+    const { token } = await loginWithPassword(serverUrl, {
       username: 'jane',
       password: 'secret',
     });
