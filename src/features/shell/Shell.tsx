@@ -68,7 +68,12 @@ import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert } from 'lucide-react';
+import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert, MoreHorizontal } from 'lucide-react';
+import { DisplaySheet } from '@/features/shell/DisplaySheet';
+import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
+import { SelectionBar } from '@/features/tasks/SelectionBar';
+import { useDisplay } from '@/stores/display';
+import { viewKey } from '@/lib/displayConfig';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import pkg from '../../../package.json';
 
@@ -83,6 +88,8 @@ export function Shell() {
   const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
   const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
+  const openDisplaySheet = useDisplay((s) => s.openSheet);
+  const currentViewKey = viewKey(activeView);
   const displayName =
     user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
@@ -544,6 +551,16 @@ export function Shell() {
             >
               <Search className="h-5 w-5" />
             </button>
+            {currentViewKey && (
+              <button
+                type="button"
+                aria-label="Display options"
+                onClick={() => openDisplaySheet(currentViewKey)}
+                className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+            )}
             <button
               type="button"
               aria-label="Settings"
@@ -555,6 +572,24 @@ export function Shell() {
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-end gap-3">
+            <button
+              type="button"
+              aria-label="Add task"
+              onClick={() => setShowQuickAdd(true)}
+              className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            {currentViewKey && (
+              <button
+                type="button"
+                aria-label="Display options"
+                onClick={() => openDisplaySheet(currentViewKey)}
+                className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
             <span className="text-xs text-[var(--color-muted-foreground)]">
               {displayName}
             </span>
@@ -640,6 +675,9 @@ export function Shell() {
       )}
 {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
+      <DisplaySheet />
+      <TaskActionSheet />
+      <SelectionBar />
       {/* Lazy modals — null fallback is fine; they animate in on open, so a
           brief invisible gap while the chunk loads is imperceptible. */}
       {showQuickAdd && (
