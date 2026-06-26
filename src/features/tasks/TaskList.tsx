@@ -27,19 +27,18 @@ import type { Project } from '@/domain/project';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
-import { createTask, updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
+import { updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
-import { applyLabelsByTitle } from '@/db/labels';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { ArrowUpDown, Filter, Trash2, Plus, Loader2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, ChevronDown, ChevronRight, X, Copy, ExternalLink } from 'lucide-react';
+import { Trash2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, Copy, ExternalLink, Check, CheckCircle2 } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
-import { useProjects } from '@/queries/projects';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
-import { useFilterSort } from '@/stores/filterSort';
-import { SORT_OPTIONS, type SortRule } from '@/lib/sortEngine';
+import { useDisplay } from '@/stores/display';
+import { useDisplayCtx } from '@/queries/displayData';
+import { filterTasks, sortTasks, defaultConfigFor } from '@/lib/displayConfig';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -49,15 +48,7 @@ import {
 } from '@/components/ui/context-menu';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { LabelChips } from './LabelChips';
-import { QuickAddPreview } from './QuickAddPreview';
 import { TaskHoverPreview } from './TaskHoverPreview';
-import { DatePicker } from '@/components/DatePicker';
-import { PrioritySelect } from '@/components/ui/priority-select';
-import { LabelPicker } from '@/components/ui/label-picker';
-import { RecurrencePicker } from '@/components/ui/recurrence-picker';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import type { TaskInput } from '@/domain/task';
-import { parseQuickAdd } from '@/lib/quickAddParser';
 
 // Collect a task and all its descendants from the task tree
 function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {
@@ -86,43 +77,40 @@ interface TaskListProps {
 
 export function TaskList({ project, view }: TaskListProps) {
   const isMobile = useIsMobile();
-  const {
-    filterQuery,
-    sortRule,
-    showFilterBar,
-    showSortMenu,
-    setFilterQuery,
-    setSortRule,
-    setShowFilterBar,
-    setShowSortMenu,
-  } = useFilterSort();
+  const ctx = useDisplayCtx();
+  const vKey = `project:${project.localId}` as const;
+  const storedConfig = useDisplay((s) => s.configs[vKey]);
+  const config = useMemo(
+    () => storedConfig ?? defaultConfigFor(vKey),
+    [storedConfig, vKey],
+  );
+  // Manual order is the only mode where drag-to-reorder is the source of
+  // truth; any other sort renders in sorted order and disables dragging.
+  const sortable = config.sort.field === 'manual';
 
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project, filterQuery || undefined, sortRule);
-
-  const [newTitle, setNewTitle] = useState('');
-  const [metadata, setMetadata] = useState<Partial<TaskInput>>({});
-  const [labelTitles, setLabelTitles] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [filterDraft, setFilterDraft] = useState(filterQuery);
-
-  useEffect(() => {
-    setFilterDraft(filterQuery);
-  }, [filterQuery]);
+    useProjectTasks(project);
 
   // Tasks queued for deletion are hidden immediately while the undo
   // toast is live (issue #25). They're still deleted=0 in the DB until
   // the undo window elapses, so we filter them out of the rendered list
-  // here rather than touching the query data.
+  // here rather than touching the query data. Then the DisplayConfig
+  // filter/sort runs client-side — the same engine the smart views use.
   const pendingDeletes = usePendingDeletes((s) => s.pending);
-  const visibleTasks = tasks.filter((t) => !pendingDeletes[t.localId]);
-  const [showCompleted, setShowCompleted] = useState(false);
-  const activeTasks = useMemo(() => visibleTasks.filter((t) => !t.done), [visibleTasks]);
-  const completedTasks = useMemo(() => visibleTasks.filter((t) => t.done), [visibleTasks]);
+  const showCompleted = config.showCompleted;
+  const matched = useMemo(
+    () => filterTasks(tasks.filter((t) => !pendingDeletes[t.localId]), ctx, config.filters),
+    [tasks, pendingDeletes, ctx, config.filters],
+  );
+  const activeTasks = useMemo(
+    () => sortTasks(matched.filter((t) => !t.done), config.sort),
+    [matched, config.sort],
+  );
+  const completedTasks = useMemo(
+    () => sortTasks(matched.filter((t) => t.done), config.sort),
+    [matched, config.sort],
+  );
   const { data: attachmentIds } = useTasksWithAttachments();
-  // Full project list so a parsed `+project` token can route the task to
-  // a different project than the one currently open.
-  const { data: allProjects = [] } = useProjects();
   const qc = useQueryClient();
   const {
     data: subtaskMap = new Map()
@@ -262,241 +250,21 @@ export function TaskList({ project, view }: TaskListProps) {
     [view, taskTree],
   );
 
-  // Re-parsed on every keystroke. Pure function, cheap; no debounce
-  // needed at the scale of an input field.
-  const parsed = parseQuickAdd(newTitle);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!parsed.title && !metadata.dueDate && !metadata.priority) return;
-    if (isSubmitting) return;
-
-    try {
-      setIsSubmitting(true);
-
-      // Merge: the explicit date/priority pickers win over the parser if
-      // the user touched them; otherwise we lift from the parsed values.
-      // A parsed `+project` token (case-insensitive title match) routes
-      // the task to that project; otherwise it stays in the open one.
-      const matchedProject = parsed.projectTitle
-        ? allProjects.find(
-            (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
-          )
-        : undefined;
-      const input: TaskInput = {
-        title: parsed.title || newTitle.trim(),
-        projectLocalId: matchedProject?.localId ?? project.localId,
-        ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
-        ...(parsed.priority !== null ? { priority: parsed.priority } : {}),
-        ...(parsed.repeatAfter !== null ? { repeatAfter: parsed.repeatAfter } : {}),
-        ...(parsed.repeatMode !== null ? { repeatMode: parsed.repeatMode } : {}),
-        ...metadata,
-      };
-
-      const created = await createTask(input);
-
-      // Apply labels from the picker plus any typed *label tokens
-      // (case-insensitive union); create-if-missing, then apply.
-      const allLabelTitles = [
-        ...labelTitles,
-        ...parsed.labelTitles.filter(
-          (t) => !labelTitles.some((s) => s.toLowerCase() === t.toLowerCase()),
-        ),
-      ];
-      if (allLabelTitles.length > 0 && created.localId) {
-        try {
-          await applyLabelsByTitle(created.localId, allLabelTitles);
-        } catch (err) {
-          console.warn('[quick-add] label application failed:', err);
-        }
-      }
-
-      // +assignee tokens are not yet applied (no local users table)
-      if (parsed.assigneeUsernames.length > 0) {
-        console.info(
-          '[quick-add] +assignee tokens are parsed but not yet applied:',
-          parsed.assigneeUsernames,
-        );
-      }
-
-      setNewTitle('');
-      setMetadata({});
-      setLabelTitles([]);
-    } catch (err) {
-      console.error('Failed to create task:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {reorderError && <ReorderErrorPill onClose={() => setReorderError(false)} />}
       <div className="border-b border-[var(--color-border)]">
         <div className="flex items-center justify-between px-7 py-2 text-xs text-[var(--color-muted-foreground)]">
-          <div className="flex items-center gap-2">
-            <span>
-              {activeTasks.length === 0 && completedTasks.length === 0
-                ? isLoading
-                  ? 'Loading…'
-                  : 'No tasks'
-                : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
-            </span>
-            <button
-              onClick={() => { setShowFilterBar(!showFilterBar); setShowSortMenu(false); }}
-              className={cn(
-                'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer',
-                showFilterBar || filterQuery
-                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-                  : 'hover:bg-[var(--color-accent)]/10',
-              )}
-              title="Filter tasks"
-            >
-              <Filter className="h-3 w-3" />
-              {filterQuery ? 'Filtered' : 'Filter'}
-            </button>
-            <button
-              onClick={() => { setShowSortMenu(!showSortMenu); setShowFilterBar(false); }}
-              className={cn(
-                'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer',
-                showSortMenu || sortRule
-                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-                  : 'hover:bg-[var(--color-accent)]/10',
-              )}
-              title="Sort tasks"
-            >
-              <ArrowUpDown className="h-3 w-3" />
-              {sortRule
-                ? SORT_OPTIONS.find((o) => o.field === sortRule.field && o.direction === sortRule.direction)?.label ?? 'Sorted'
-                : 'Sort'}
-            </button>
-          </div>
+          <span>
+            {activeTasks.length === 0 && completedTasks.length === 0
+              ? isLoading
+                ? 'Loading…'
+                : 'No tasks'
+              : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
+          </span>
           {isFetching ? <span aria-live="polite">syncing…</span> : null}
         </div>
-
-        {showFilterBar ? (
-          <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-7 py-1.5">
-            <input
-              type="text"
-              value={filterDraft}
-              onChange={(e) => setFilterDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setFilterQuery(filterDraft);
-                } else if (e.key === 'Escape') {
-                  setFilterDraft(filterQuery);
-                  setShowFilterBar(false);
-                }
-              }}
-              placeholder='e.g. priority >= 3 && dueDate <= now'
-              className="flex-1 bg-transparent text-xs placeholder-[var(--color-muted-foreground)] focus:outline-none"
-              autoFocus
-            />
-            <button
-              onClick={() => { setFilterQuery(filterDraft); }}
-              className="rounded px-2 py-0.5 text-xs bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity cursor-pointer"
-            >
-              Apply
-            </button>
-            <button
-              onClick={() => {
-                setFilterDraft('');
-                setFilterQuery('');
-                setShowFilterBar(false);
-              }}
-              className="rounded px-1.5 py-0.5 text-xs hover:bg-[var(--color-accent)]/10 transition-colors cursor-pointer"
-              title="Clear filter"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ) : null}
-
-        {showSortMenu ? (
-          <div className="border-t border-[var(--color-border)] px-7 py-1.5">
-            <Select
-              value={sortRule ? `${sortRule.field}:${sortRule.direction}` : 'default'}
-              onValueChange={(val) => {
-                if (val === 'default') {
-                  setSortRule(null);
-                } else {
-                  const [field, dir] = val.split(':') as [SortRule['field'], SortRule['direction']];
-                  setSortRule({ field, direction: dir });
-                }
-              }}
-            >
-              <SelectTrigger className="w-full text-xs">
-                <SelectValue placeholder="Default order" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default order</SelectItem>
-                {SORT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.label} value={`${opt.field}:${opt.direction}`}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
       </div>
-
-      {/* Inline create — natural-language parsing on the title field
-          (dates / @label / !priority / +assignee / #project). Explicit date
-          + priority controls stay for users who'd rather not type the
-          syntax; they override the parsed values when set. */}
-      <form
-        onSubmit={handleSubmit}
-        className="border-b border-[var(--color-border)] px-7 pt-3 pb-4"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-4 w-4 items-center justify-center text-[var(--color-muted-foreground)]">
-            {isSubmitting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-          </span>
-          <input
-            type="text"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Add a task… e.g. Buy milk tomorrow *groceries !2"
-            disabled={isSubmitting}
-            className="flex-1 bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none disabled:opacity-50"
-          />
-        </div>
-        {/* Secondary row: explicit pickers for every NL-settable field (date,
-            priority, labels, recurrence). They override the NL-parsed values
-            when touched, but live below the title so they don't crowd the
-            primary input (issue #19). `pl-7` aligns them under the title input,
-            past the plus-icon column. */}
-        <div className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-[var(--color-muted-foreground)]">
-          <DatePicker
-            value={metadata.dueDate ?? null}
-            onChange={(iso) => setMetadata({ ...metadata, dueDate: iso })}
-            placeholder="Due date"
-            disabled={isSubmitting}
-          />
-          <PrioritySelect
-            className="w-auto"
-            value={metadata.priority ?? parsed.priority ?? 0}
-            onChange={(p) => setMetadata({ ...metadata, priority: p })}
-            compact
-          />
-          <LabelPicker value={labelTitles} onChange={setLabelTitles} />
-          <RecurrencePicker
-            repeatAfter={metadata.repeatAfter ?? parsed.repeatAfter ?? null}
-            repeatMode={metadata.repeatMode ?? parsed.repeatMode ?? null}
-            onChange={(after, mode) =>
-              setMetadata({
-                ...metadata,
-                repeatAfter: after ?? undefined,
-                repeatMode: mode ?? undefined,
-              })
-            }
-          />
-        </div>
-        <QuickAddPreview parsed={parsed} />
-      </form>
 
       <DndContext
         sensors={sensors}
@@ -514,37 +282,27 @@ export function TaskList({ project, view }: TaskListProps) {
                 node={node}
                 depth={0}
                 attachmentIds={attachmentIds}
-                sortable
+                sortable={sortable}
               />
             ))}
-            {completedTasks.length > 0 ? (
+            {/* Completed tasks show inline (greyed) when the Display sheet's
+                "Completed Tasks" toggle is on, and are hidden otherwise. */}
+            {showCompleted && completedTasks.length > 0 ? (
               <li className="border-t border-[var(--color-border)]">
-                <div className="mx-6 my-2 overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-accent)]/5">
-                  <button
-                    type="button"
-                    onClick={() => setShowCompleted((s) => !s)}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-                  >
-                    {showCompleted ? (
-                      <ChevronDown className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3 shrink-0" />
-                    )}
-                    {showCompleted ? 'Hide' : 'Show'} completed ({completedTasks.length})
-                  </button>
-                  {showCompleted ? (
-                    <ul>
-                      {completedTree.map((node) => (
-                        <TreeBranch
-                          key={node.task.localId}
-                          node={node}
-                          depth={0}
-                          attachmentIds={attachmentIds}
-                        />
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+                <h2 className="px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  Completed
+                  <span className="ml-2 font-normal normal-case">{completedTasks.length}</span>
+                </h2>
+                <ul>
+                  {completedTree.map((node) => (
+                    <TreeBranch
+                      key={node.task.localId}
+                      node={node}
+                      depth={0}
+                      attachmentIds={attachmentIds}
+                    />
+                  ))}
+                </ul>
               </li>
             ) : null}
           </ul>
@@ -663,6 +421,10 @@ const TaskRow = memo(function TaskRow({
 }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
+  const selecting = useDisplay((s) => s.selecting);
+  const isSelected = useDisplay((s) => !!s.selected[task.localId]);
+  const toggleSelected = useDisplay((s) => s.toggleSelected);
+  const startSelecting = useDisplay((s) => s.startSelecting);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const { data: labels = [] } = useTaskLabels(task.localId);
@@ -697,7 +459,7 @@ const TaskRow = memo(function TaskRow({
     isDragging,
   } = useSortable({
     id: task.localId,
-    disabled: !sortable || editing,
+    disabled: !sortable || editing || selecting,
   });
 
   const style: React.CSSProperties = {
@@ -752,21 +514,42 @@ const TaskRow = memo(function TaskRow({
           className={cn(
             'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
             task.done && 'opacity-60',
-            selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+            isSelected && 'bg-[var(--color-primary)]/10',
+            !isSelected && selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
             isDragging && 'opacity-40',
-            sortable && 'cursor-grab active:cursor-grabbing',
+            sortable && !selecting && 'cursor-grab active:cursor-grabbing',
           )}
-          onClick={() => { if (!editing) setSelectedTask(task.localId); }}
+          onClick={() => {
+            if (editing) return;
+            if (selecting) toggleSelected(task.localId);
+            else setSelectedTask(task.localId);
+          }}
         >
           <div className="flex w-full items-start gap-3 pr-6 py-3">
-            <input
-              type="checkbox"
-              checked={task.done}
-              onChange={handleToggle}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={task.done ? 'Done' : 'Not done'}
-              className="task-check mt-0.5"
-            />
+            {selecting ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleSelected(task.localId); }}
+                aria-label={isSelected ? 'Deselect' : 'Select'}
+                className={cn(
+                  'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
+                  isSelected
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                    : 'border-[var(--color-muted-foreground)]',
+                )}
+              >
+                {isSelected && <Check className="h-3 w-3" />}
+              </button>
+            ) : (
+              <input
+                type="checkbox"
+                checked={task.done}
+                onChange={handleToggle}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={task.done ? 'Done' : 'Not done'}
+                className="task-check mt-0.5"
+              />
+            )}
             <div className="min-w-0 flex-1">
               {editing ? (
                 <input
@@ -881,6 +664,12 @@ const TaskRow = memo(function TaskRow({
           <span className="flex items-center gap-2">
             <Copy className="h-3.5 w-3.5" />
             Duplicate
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => startSelecting(task.localId)}>
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Select
           </span>
         </ContextMenuItem>
         <ContextMenuSeparator />
