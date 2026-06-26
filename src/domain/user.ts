@@ -18,6 +18,9 @@ export interface User {
   language: string;
   /** IANA timezone identifier from server settings (e.g. 'UTC', 'Europe/Berlin'). */
   timezone: string;
+  /** First day of the week: 0=Sunday … 6=Saturday (Vikunja `week_start`).
+   * Falls back to 1 (Monday) when the server hasn't sent one. */
+  weekStart: number;
 }
 
 /**
@@ -49,5 +52,6 @@ export function userFromResponse(payload: unknown): User {
     defaultProjectId: (settings?.default_project_id as number | undefined) ?? null,
     language: (settings?.language as string | undefined) ?? 'en',
     timezone: (settings?.timezone as string | undefined) ?? 'UTC',
+    weekStart: (settings?.week_start as number | undefined) ?? 1,
   };
 }

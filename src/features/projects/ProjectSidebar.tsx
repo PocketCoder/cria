@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type ComponentType } from 'react';
+import { useEffect, useState, useRef, useMemo, type ComponentType } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
@@ -8,6 +8,7 @@ import { createLabel, updateLabel, deleteLabel } from '@/db/labels';
 import { listActiveTaskCounts } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
 import { cn } from '@/lib/cn';
+import { childProjectsOf, useProjectExpand } from './projectTree';
 import {
   Plus,
   MoreHorizontal,
@@ -20,6 +21,8 @@ import {
   Inbox,
   GripVertical,
   Palette,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import {
   Popover,
@@ -116,6 +119,15 @@ export function ProjectSidebar({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const visibleProjects = projects.filter((p) => p.title !== 'Favorites');
+
+  // Sub-project tree (built client-side from parentLocalId — see projectTree).
+  const visibleIds = useMemo(
+    () => new Set(visibleProjects.map((p) => p.localId)),
+    [visibleProjects],
+  );
+  const childrenOf = (parentId: string | null) =>
+    childProjectsOf(visibleProjects, visibleIds, parentId);
+  const { isOpen: isProjectOpen, toggle: toggleProjectOpen } = useProjectExpand();
 
   const handleDragStart = (localId: string) => {
     draggedIdRef.current = localId;
@@ -374,55 +386,67 @@ export function ProjectSidebar({
             </p>
           ) : (
             <ul className="space-y-0.5">
-              {visibleProjects.map((p, i) => (
-                <ProjectRow
-                  key={p.localId}
-                  project={p}
-                  taskCount={taskCounts.get(p.localId) ?? 0}
-                  isSelected={
-                    activeView?.kind === 'project' &&
-                    activeView.localId === p.localId
-                  }
-                  isEditing={editingId === p.localId}
-                  editingTitle={editingTitle}
-                  isDragOver={dragOverIndex === i}
-                  onSelect={() =>
-                    setActiveView({
-                      kind: 'project',
-                      localId: p.localId,
-                    })
-                  }
-                  onStartRename={() => {
-                    setEditingId(p.localId);
-                    setEditingTitle(p.title);
-                  }}
-                  onChangeRename={setEditingTitle}
-                  onSaveRename={() => void handleRenameSave(p.localId)}
-                  onCancelRename={() => {
-                    setEditingId(null);
-                    setEditingTitle('');
-                  }}
-                  onDelete={async () => {
-                    try {
-                      await deleteProject(p.localId);
-                      if (
+              {(function renderTree(parentId: string | null, depth: number): React.ReactNode[] {
+                return childrenOf(parentId).flatMap((p) => {
+                  const i = visibleProjects.indexOf(p);
+                  const kids = childrenOf(p.localId);
+                  const open = isProjectOpen(p.localId);
+                  return [
+                    <ProjectRow
+                      key={p.localId}
+                      project={p}
+                      depth={depth}
+                      hasChildren={kids.length > 0}
+                      expanded={open}
+                      onToggleExpand={() => toggleProjectOpen(p.localId)}
+                      taskCount={taskCounts.get(p.localId) ?? 0}
+                      isSelected={
                         activeView?.kind === 'project' &&
                         activeView.localId === p.localId
-                      )
-                        setActiveView(null);
-                    } catch (err) {
-                      console.error(
-                        '[sidebar] deleteProject failed:',
-                        err,
-                      );
-                    }
-                  }}
-                  onDragStart={() => handleDragStart(p.localId)}
-                  onDragOver={(e) => handleDragOver(e, i)}
-                  onDrop={(e) => void handleDrop(e, i)}
-                  onDragEnd={handleDragEnd}
-                />
-              ))}
+                      }
+                      isEditing={editingId === p.localId}
+                      editingTitle={editingTitle}
+                      isDragOver={dragOverIndex === i}
+                      onSelect={() =>
+                        setActiveView({
+                          kind: 'project',
+                          localId: p.localId,
+                        })
+                      }
+                      onStartRename={() => {
+                        setEditingId(p.localId);
+                        setEditingTitle(p.title);
+                      }}
+                      onChangeRename={setEditingTitle}
+                      onSaveRename={() => void handleRenameSave(p.localId)}
+                      onCancelRename={() => {
+                        setEditingId(null);
+                        setEditingTitle('');
+                      }}
+                      onDelete={async () => {
+                        try {
+                          await deleteProject(p.localId);
+                          if (
+                            activeView?.kind === 'project' &&
+                            activeView.localId === p.localId
+                          )
+                            setActiveView(null);
+                        } catch (err) {
+                          console.error(
+                            '[sidebar] deleteProject failed:',
+                            err,
+                          );
+                        }
+                      }}
+                      onDragStart={() => handleDragStart(p.localId)}
+                      onDragOver={(e) => handleDragOver(e, i)}
+                      onDrop={(e) => void handleDrop(e, i)}
+                      onDragEnd={handleDragEnd}
+                    />,
+                    ...(open && kids.length > 0 ? renderTree(p.localId, depth + 1) : []),
+                  ];
+                });
+              })(null, 0)}
             </ul>
           )}
 
@@ -482,6 +506,10 @@ const PROJECT_COLORS = [
 
 function ProjectRow({
   project,
+  depth,
+  hasChildren,
+  expanded,
+  onToggleExpand,
   taskCount,
   isSelected,
   isEditing,
@@ -499,6 +527,10 @@ function ProjectRow({
   onDragEnd,
 }: {
   project: Project;
+  depth: number;
+  hasChildren: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
   taskCount: number;
   isSelected: boolean;
   isEditing: boolean;
@@ -556,37 +588,63 @@ function ProjectRow({
             isDragOver && 'border-t-2 border-[var(--color-primary)]',
           )}
         >
-          <button
-            type="button"
-            onClick={onSelect}
-            className={cn(
-              'flex w-full items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
-              'hover:bg-[var(--color-muted)]',
-              isSelected && 'bg-[var(--color-muted)] font-medium',
-            )}
+          <div
+            className="flex items-center"
+            style={depth > 0 ? { paddingLeft: depth * 14 } : undefined}
           >
-            <GripVertical
-              aria-hidden="true"
-              className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-            />
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{
-                background: project.hexColor || 'var(--color-muted-foreground)',
-              }}
-            />
-            <span className="truncate">{project.title}</span>
-            {project.isArchived ? (
-              <span className="ml-auto text-footnote uppercase text-[var(--color-muted-foreground)]">
-                archived
-              </span>
-            ) : taskCount > 0 ? (
-              <span className="ml-auto text-footnote text-[var(--color-muted-foreground)]">
-                {taskCount}
-              </span>
-            ) : null}
-          </button>
+            {/* Expand/collapse toggle — own button so it never nests inside the
+                row's select button. A spacer keeps childless rows aligned. */}
+            {hasChildren ? (
+              <button
+                type="button"
+                aria-label={expanded ? 'Collapse sub-projects' : 'Expand sub-projects'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand();
+                }}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+              >
+                {expanded ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </button>
+            ) : (
+              <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+            )}
+            <button
+              type="button"
+              onClick={onSelect}
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
+                'hover:bg-[var(--color-muted)]',
+                isSelected && 'bg-[var(--color-muted)] font-medium',
+              )}
+            >
+              <GripVertical
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+              />
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{
+                  background: project.hexColor || 'var(--color-muted-foreground)',
+                }}
+              />
+              <span className="truncate">{project.title}</span>
+              {project.isArchived ? (
+                <span className="ml-auto text-footnote uppercase text-[var(--color-muted-foreground)]">
+                  archived
+                </span>
+              ) : taskCount > 0 ? (
+                <span className="ml-auto text-footnote text-[var(--color-muted-foreground)]">
+                  {taskCount}
+                </span>
+              ) : null}
+            </button>
+          </div>
 
           <Popover open={menuOpen} onOpenChange={setMenuOpen}>
             <PopoverTrigger asChild>

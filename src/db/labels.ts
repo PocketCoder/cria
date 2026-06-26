@@ -80,6 +80,26 @@ export async function listTaskLabelLinksForProject(
   return map;
 }
 
+/** Task→label-id map across every project, for the global Display filter on
+ * smart views (which span projects). Project-scoped form above. */
+export async function listAllTaskLabelLinks(): Promise<Map<string, string[]>> {
+  const db = await getDb();
+  const rows = await db.select<{ task_local_id: string; label_local_id: string }[]>(
+    `SELECT tl.task_local_id, tl.label_local_id
+       FROM task_labels tl
+       JOIN tasks t ON t.local_id = tl.task_local_id
+      WHERE tl.deleted = 0
+        AND t.deleted = 0`,
+  );
+  const map = new Map<string, string[]>();
+  for (const r of rows) {
+    const arr = map.get(r.task_local_id) ?? [];
+    arr.push(r.label_local_id);
+    map.set(r.task_local_id, arr);
+  }
+  return map;
+}
+
 /**
  * Upsert a label payload from the server (keyed by server_id). Sync-path
  * upsert — does not call `notify()` (see the matching note in

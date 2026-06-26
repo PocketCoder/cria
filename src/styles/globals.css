@@ -226,6 +226,21 @@ body {
   animation: fade-in 200ms ease-out;
 }
 
+/* Upcoming month grid: a dot under days that have tasks (react-day-picker
+   modifier class). */
+.day-has-tasks { position: relative; }
+.day-has-tasks::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-muted-foreground);
+}
+
 /* ── iOS inset grouped list ───────────────────────────── */
 .inset-list {
   border-radius: 10px;

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Star } from 'lucide-react';
+import { Search, Star, ChevronRight, ChevronDown } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { listActiveTaskCounts } from '@/db/tasks';
+import { childProjectsOf, useProjectExpand } from './projectTree';
 
 /**
  * Searchable project + label browser for mobile navigation. Rows show a colour
@@ -33,6 +34,11 @@ export function ProjectPickerList({
   const fp = term ? projects.filter((p) => p.title.toLowerCase().includes(term)) : projects;
   const fl = term ? labels.filter((l) => l.title.toLowerCase().includes(term)) : labels;
 
+  // Sub-project tree for the unfiltered list (search stays flat). Shared
+  // expand state + tree builder with the desktop sidebar.
+  const visibleIds = new Set(projects.map((p) => p.localId));
+  const { isOpen, toggle } = useProjectExpand();
+
   const openProject = (id: string) => {
     setActiveView({ kind: 'project', localId: id });
     onPick?.();
@@ -45,6 +51,52 @@ export function ProjectPickerList({
     setActiveView({ kind: 'favorites' });
     onPick?.();
   };
+
+  const projectButton = (p: (typeof projects)[number]) => {
+    const c = counts.get(p.localId) ?? 0;
+    return (
+      <button
+        type="button"
+        onClick={() => openProject(p.localId)}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--color-accent)]/10"
+      >
+        <span
+          className="h-3 w-3 shrink-0 rounded-full border border-[var(--color-border)]"
+          style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
+        />
+        <span className="flex-1 truncate text-sm">{p.title}</span>
+        {c > 0 ? (
+          <span className="text-caption tabular-nums text-[var(--color-muted-foreground)]">{c}</span>
+        ) : null}
+      </button>
+    );
+  };
+
+  const renderProjectTree = (parentId: string | null, depth: number): React.ReactNode[] =>
+    childProjectsOf(projects, visibleIds, parentId).flatMap((p) => {
+      const kids = childProjectsOf(projects, visibleIds, p.localId);
+      const open = isOpen(p.localId);
+      return [
+        <li key={p.localId}>
+          <div className="flex items-center" style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}>
+            {kids.length > 0 ? (
+              <button
+                type="button"
+                aria-label={open ? 'Collapse sub-projects' : 'Expand sub-projects'}
+                onClick={() => toggle(p.localId)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)]"
+              >
+                {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+            ) : (
+              <span className="h-7 w-7 shrink-0" aria-hidden="true" />
+            )}
+            {projectButton(p)}
+          </div>
+        </li>,
+        ...(open && kids.length > 0 ? renderProjectTree(p.localId, depth + 1) : []),
+      ];
+    });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -84,27 +136,13 @@ export function ProjectPickerList({
               Projects
             </p>
             <ul>
-              {fp.map((p) => {
-                const c = counts.get(p.localId) ?? 0;
-                return (
-                  <li key={p.localId}>
-                    <button
-                      type="button"
-                      onClick={() => openProject(p.localId)}
-                      className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--color-accent)]/10"
-                    >
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-full border border-[var(--color-border)]"
-                        style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
-                      />
-                      <span className="flex-1 truncate text-sm">{p.title}</span>
-                      {c > 0 ? (
-                        <span className="text-caption tabular-nums text-[var(--color-muted-foreground)]">{c}</span>
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
+              {term
+                ? fp.map((p) => (
+                    <li key={p.localId} className="flex items-center">
+                      {projectButton(p)}
+                    </li>
+                  ))
+                : renderProjectTree(null, 0)}
             </ul>
           </>
         )}

@@ -4,6 +4,7 @@ import { applyLabelsByTitle } from '@/db/labels';
 import { addReminder, type AddReminderInput } from '@/db/reminders';
 import { useUi } from '@/stores/ui';
 import { useSelectableProjects } from '@/queries/projects';
+import { useCurrentUser } from '@/queries/user';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import { QuickAddPreview } from '@/features/tasks/QuickAddPreview';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -32,6 +33,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
   const selectedProjectId =
     activeView?.kind === 'project' ? activeView.localId : null;
   const { data: projects = [] } = useSelectableProjects();
+  const { data: user } = useCurrentUser();
   const [projectId, setProjectId] = useState<string | null>(
     selectedProjectId ?? null,
   );
@@ -139,15 +141,20 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  // Pick the target project once: the open project wins, else the user's
+  // configured default project (#61, server `default_project_id`), else the
+  // first project. One effect so the fallbacks can't race each other.
   useEffect(() => {
-    if (!projectId && selectedProjectId) setProjectId(selectedProjectId);
-  }, [selectedProjectId, projectId]);
-
-  useEffect(() => {
-    if (!projectId && projects.length > 0) {
-      setProjectId(projects[0]!.localId);
+    if (projectId || projects.length === 0) return;
+    if (selectedProjectId) {
+      setProjectId(selectedProjectId);
+      return;
     }
-  }, [projects, projectId]);
+    const def = user?.defaultProjectId
+      ? projects.find((p) => p.serverId === user.defaultProjectId)
+      : undefined;
+    setProjectId((def ?? projects[0]!).localId);
+  }, [projectId, projects, selectedProjectId, user?.defaultProjectId]);
 
   // Resolve #project token — match case-insensitive against project titles
   const parsed = useMemo(() => parseQuickAdd(text), [text]);

@@ -32,6 +32,24 @@ export async function listAssigneesForTask(
   return rows.map(rowToAssignee);
 }
 
+/** Task→assignee-user-id map across every task, for the global Assignee
+ * filter on smart views. Empty arrays are simply absent from the map. */
+export async function listAllTaskAssignees(): Promise<Map<string, number[]>> {
+  const db = await getDb();
+  const rows = await db.select<AssigneeRow[]>(
+    `SELECT task_local_id, user_server_id, username, deleted
+       FROM task_assignees
+      WHERE deleted = 0`,
+  );
+  const map = new Map<string, number[]>();
+  for (const r of rows) {
+    const arr = map.get(r.task_local_id) ?? [];
+    arr.push(r.user_server_id);
+    map.set(r.task_local_id, arr);
+  }
+  return map;
+}
+
 export async function upsertTaskAssigneesFromServer(
   taskLocalId: string,
   assignees: AssigneeResponse[],

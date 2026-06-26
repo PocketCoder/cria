@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { startOfDay, isBefore, isSameDay, addDays, format } from 'date-fns';
+import { startOfDay, isBefore, isSameDay } from 'date-fns';
 import { toCalendarDate } from '@/lib/dateFormat';
 import {
   listTasksWithDueDate,
@@ -25,10 +25,6 @@ export interface TaskGroup {
   key: string;
   label: string;
   tasks: TaskWithProject[];
-}
-
-export function groupTotal(groups: TaskGroup[]): number {
-  return groups.reduce((n, g) => n + g.tasks.length, 0);
 }
 
 /** Bucket a flat task list into one group per project (using its title
@@ -84,7 +80,8 @@ export function useTodayTasks() {
   });
 }
 
-/** Upcoming = next 7 days, one group per day that has tasks. */
+/** Upcoming = every task due today or later (the day-bucketing + calendar
+ * strip happen in the view). Returned as one group; the view re-sections it. */
 export function useUpcomingTasks() {
   const qc = useQueryClient();
   useEffect(
@@ -102,20 +99,10 @@ export function useUpcomingTasks() {
     queryFn: async () => {
       const all = await listTasksWithDueDate();
       const today = startOfDay(new Date());
-      const groups: TaskGroup[] = [];
-      for (let i = 1; i <= 7; i++) {
-        const day = addDays(today, i);
-        const tasks = all.filter(
-          (t) => t.dueDate && isSameDay(toCalendarDate(t.dueDate), day),
-        );
-        if (tasks.length === 0) continue;
-        groups.push({
-          key: format(day, 'yyyy-MM-dd'),
-          label: i === 1 ? 'Tomorrow' : format(day, 'EEEE d MMM'),
-          tasks,
-        });
-      }
-      return groups;
+      const tasks = all.filter(
+        (t) => t.dueDate && !isBefore(startOfDay(toCalendarDate(t.dueDate)), today),
+      );
+      return [{ key: 'upcoming', label: '', tasks }];
     },
   });
 }

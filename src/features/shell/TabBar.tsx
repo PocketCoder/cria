@@ -3,12 +3,14 @@ import { Calendar, CalendarDays, Inbox, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { useDisplay } from '@/stores/display';
 import { ProjectPickerList } from '@/features/projects/ProjectPickerList';
 
 export function TabBar() {
   const isMobile = useIsMobile();
   const activeView = useUi((s) => s.activeView);
   const setActiveView = useUi((s) => s.setActiveView);
+  const selecting = useDisplay((s) => s.selecting);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Close sheet when active view changes (user picked something)
@@ -76,7 +78,8 @@ export function TabBar() {
     };
   }, [sheetOpen]);
 
-  if (!isMobile) return null;
+  // While multi-selecting, the SelectionBar replaces the tab bar.
+  if (!isMobile || selecting) return null;
 
   const tabs: {
     key: string;

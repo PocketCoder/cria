@@ -63,6 +63,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     if (settings.email_reminders_enabled === false) setEmailRemindersEnabled(false);
     if (settings.overdue_tasks_reminders_enabled === false) setOverdueRemindersEnabled(false);
     if (typeof settings.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(settings.overdue_tasks_reminders_time);
+    if (typeof settings.week_start === 'number') setWeekStart(settings.week_start);
+    if (typeof settings.default_project_id === 'number') setDefaultProjectId(settings.default_project_id || null);
   }, [user]);
 
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
@@ -71,6 +73,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(true);
   const [overdueRemindersEnabled, setOverdueRemindersEnabled] = useState(true);
   const [overdueRemindersTime, setOverdueRemindersTime] = useState('08:00');
+  const [weekStart, setWeekStart] = useState(1);
+  const [defaultProjectId, setDefaultProjectId] = useState<number | null>(null);
 
   const notificationsEnabled = useSettings((s) => s.notificationsEnabled);
   const setNotificationsEnabled = useSettings((s) => s.setNotificationsEnabled);
@@ -122,6 +126,24 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleTimeFormatChange = (fmt: string) => {
     setTimeFormat(fmt as TimeFormat);
+  };
+
+  const handleWeekStartChange = (v: string) => {
+    const n = Number(v);
+    setWeekStart(n);
+    // notify('user') refetches the cached user so the Upcoming calendar picks
+    // up the new first-day immediately rather than after the 60s staleTime.
+    void pushSettings({ week_start: n })
+      .then(() => notify('user'))
+      .catch((e) => console.error('Failed to sync week start', e));
+  };
+
+  const handleDefaultProjectChange = (v: string) => {
+    const n = v === 'none' ? 0 : Number(v); // 0 = Vikunja's "no default" → Inbox
+    setDefaultProjectId(n || null);
+    void pushSettings({ default_project_id: n })
+      .then(() => notify('user'))
+      .catch((e) => console.error('Failed to sync default project', e));
   };
 
   const handleNameSave = () => {
@@ -261,6 +283,44 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <SelectContent>
                       <SelectItem value="24h">24-hour</SelectItem>
                       <SelectItem value="12h">12-hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Start week on</Label>
+                  <Select value={String(weekStart)} onValueChange={handleWeekStartChange}>
+                    <SelectTrigger className="w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sunday</SelectItem>
+                      <SelectItem value="1">Monday</SelectItem>
+                      <SelectItem value="2">Tuesday</SelectItem>
+                      <SelectItem value="3">Wednesday</SelectItem>
+                      <SelectItem value="4">Thursday</SelectItem>
+                      <SelectItem value="5">Friday</SelectItem>
+                      <SelectItem value="6">Saturday</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Default project</Label>
+                  <Select
+                    value={defaultProjectId ? String(defaultProjectId) : 'none'}
+                    onValueChange={handleDefaultProjectChange}
+                  >
+                    <SelectTrigger className="w-44">
+                      <SelectValue placeholder="Inbox" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Inbox (default)</SelectItem>
+                      {projects
+                        .filter((p) => p.serverId != null)
+                        .map((p) => (
+                          <SelectItem key={p.localId} value={String(p.serverId)}>
+                            {p.title}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
