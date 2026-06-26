@@ -51,6 +51,29 @@ export function toCalendarDate(iso: string): Date {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
+/**
+ * True when a due/date ISO carries a real time-of-day. All-day values are
+ * stored at UTC midnight (the DatePicker convention); anything else is timed.
+ * Lets list rows show the time only when one was actually set.
+ */
+export function hasTimeOfDay(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return !(d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0);
+}
+
+/**
+ * The calendar-day key (yyyy-MM-dd) a due date belongs to, for day bucketing
+ * (Upcoming agenda + calendar dots). All-day values (UTC midnight) use their
+ * UTC day so they land on the day picked regardless of timezone; timed values
+ * use the *local* day so "Friday 9am" shows on Friday. This keeps the agenda
+ * and the calendar's local week-strip cells in lockstep.
+ */
+export function dueDayKey(iso: string): string {
+  return format(hasTimeOfDay(iso) ? new Date(iso) : toCalendarDate(iso), 'yyyy-MM-dd');
+}
+
 export interface DateFormatters {
   /** Full numeric date per the user's `dateFormat` preference. */
   formatDate: (value: string | number | Date) => string;

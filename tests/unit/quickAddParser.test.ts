@@ -211,4 +211,22 @@ describe('parseQuickAdd', () => {
     expect(r.repeatMode).toBeNull();
     expect(r.title).toBe('Review every detail');
   });
+
+  it('stores a bare date as all-day (UTC midnight), not now-time', () => {
+    const r = parseQuickAdd('Pay rent tomorrow', NOW);
+    expect(r.title).toBe('Pay rent');
+    const d = new Date(r.dueDate!);
+    expect(d.getUTCFullYear()).toBe(2026);
+    expect(d.getUTCMonth()).toBe(4); // May (0-based)
+    expect(d.getUTCDate()).toBe(28);
+    expect(d.getUTCHours()).toBe(0);
+    expect(d.getUTCMinutes()).toBe(0);
+  });
+
+  it('preserves an explicit time of day', () => {
+    const r = parseQuickAdd('Call mum tomorrow at 5pm', NOW);
+    expect(r.title).toBe('Call mum');
+    // Local 17:00 regardless of the runner's timezone.
+    expect(new Date(r.dueDate!).getHours()).toBe(17);
+  });
 });

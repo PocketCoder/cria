@@ -214,13 +214,24 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     const end = r.index + r.text.length;
     if (overlaps(start, end, claimed)) continue;
     const date = r.start.date();
+    // Only a phrase that named a time of day ("at 5pm", "17:00") is "timed";
+    // a bare date ("tomorrow") is all-day. chrono otherwise fills the hour
+    // from `now`, which would leak the current clock time onto every date.
+    // All-day → UTC midnight of the calendar day (matches DatePicker); timed →
+    // local datetime ISO.
+    const timed = r.start.isCertain('hour');
+    const iso = timed
+      ? date.toISOString()
+      : new Date(
+          Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+        ).toISOString();
     claimed.push({
       kind: 'date',
       start,
       end,
       text: r.text,
       payload: 0,
-      iso: date.toISOString(),
+      iso,
     });
     break;
   }

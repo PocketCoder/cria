@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
 import { format } from 'date-fns';
-import { toCalendarDate } from '@/lib/dateFormat';
+import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
@@ -686,7 +686,8 @@ const TaskRow = memo(function TaskRow({
 
 function formatDate(iso: string): string {
   try {
-    return format(toCalendarDate(iso), 'd MMM');
+    const base = format(toCalendarDate(iso), 'd MMM');
+    return hasTimeOfDay(iso) ? `${base}, ${formatTime(iso)}` : base;
   } catch {
     return iso;
   }

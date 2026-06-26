@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import { format, startOfDay, isBefore, isSameDay, addDays } from 'date-fns';
-import { toCalendarDate } from '@/lib/dateFormat';
+import { toCalendarDate, hasTimeOfDay, formatTime, dueDayKey } from '@/lib/dateFormat';
 import { Check, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
 import { useLabels } from '@/queries/labels';
+import { useCurrentUser } from '@/queries/user';
 import { priorityColor } from '@/components/ui/priority-select';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
@@ -132,10 +133,11 @@ function SmartView({
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        <PullToRefresh onRefresh={handleRefresh}>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* headerSlot (e.g. the Upcoming calendar) sits outside PullToRefresh
+              so it stays pinned while the agenda below it scrolls. */}
           {headerSlot}
-
+          <PullToRefresh onRefresh={handleRefresh}>
           {isLoading && total === 0 ? (
             <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
               Loading…
@@ -166,8 +168,8 @@ function SmartView({
               );
             })
           )}
+          </PullToRefresh>
         </section>
-        </PullToRefresh>
         <TaskDetail />
       </div>
     </>
@@ -363,7 +365,8 @@ export const SmartTaskRow = memo(function SmartTaskRow({
 
 function formatDue(iso: string): string {
   try {
-    return format(toCalendarDate(iso), 'd MMM');
+    const base = format(toCalendarDate(iso), 'd MMM');
+    return hasTimeOfDay(iso) ? `${base}, ${formatTime(iso)}` : base;
   } catch {
     return iso;
   }
@@ -402,22 +405,26 @@ function upcomingDayLabel(d: Date, today: Date): string {
 }
 
 export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[] {
+  // Bucket by the due date's calendar day (dueDayKey: timezone-correct for both
+  // all-day and timed tasks). Day keys are yyyy-MM-dd, so string comparison is
+  // a valid date comparison — no Date math needed for the range bounds.
+  const todayKey = format(ctx.today, 'yyyy-MM-dd');
   const byDay = new Map<string, TaskWithProject[]>();
-  let lastDay = ctx.today;
+  let lastKey = todayKey;
   for (const t of visible) {
     if (!t.dueDate) continue;
-    const d = startOfDay(toCalendarDate(t.dueDate));
-    if (isBefore(d, ctx.today)) continue;
-    const key = format(d, 'yyyy-MM-dd');
+    const key = dueDayKey(t.dueDate);
+    if (key < todayKey) continue; // Upcoming starts today; overdue lives in Today
     const arr = byDay.get(key) ?? [];
     arr.push(t);
     byDay.set(key, arr);
-    if (d > lastDay) lastDay = d;
+    if (key > lastKey) lastKey = key;
   }
-  const minEnd = addDays(ctx.today, 13);
-  const end = lastDay > minEnd ? lastDay : minEnd;
+  // Show today through the later of (today + 13d) or the last task's day.
+  const minEndKey = format(addDays(ctx.today, 13), 'yyyy-MM-dd');
+  const endKey = lastKey > minEndKey ? lastKey : minEndKey;
   const groups: TaskGroup[] = [];
-  for (let d = ctx.today; !isBefore(end, d); d = addDays(d, 1)) {
+  for (let d = ctx.today; format(d, 'yyyy-MM-dd') <= endKey; d = addDays(d, 1)) {
     const key = format(d, 'yyyy-MM-dd');
     groups.push({ key, label: upcomingDayLabel(d, ctx.today), tasks: byDay.get(key) ?? [] });
   }
@@ -442,6 +449,7 @@ export function TodayView() {
 
 export function UpcomingView() {
   const { data: groups = [], isLoading } = useUpcomingTasks();
+  const { data: user } = useCurrentUser();
   const tasks = useMemo(() => flatten(groups), [groups]);
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -449,7 +457,7 @@ export function UpcomingView() {
   const taskDays = useMemo(() => {
     const s = new Set<string>();
     for (const t of tasks) {
-      if (t.dueDate) s.add(format(startOfDay(toCalendarDate(t.dueDate)), 'yyyy-MM-dd'));
+      if (t.dueDate) s.add(dueDayKey(t.dueDate));
     }
     return s;
   }, [tasks]);
@@ -479,6 +487,7 @@ export function UpcomingView() {
           today={today}
           selected={selected}
           onPickDay={handlePickDay}
+          weekStartsOn={user?.weekStart ?? 1}
         />
       }
     />
