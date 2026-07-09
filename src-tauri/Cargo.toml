@@ -1,6 +1,6 @@
 [package]
 name = "cria"
-version = "0.12.0"
+version = "0.12.1"
 description = "A native desktop client for Vikunja"
 authors = ["jake"]
 license = "MIT"
