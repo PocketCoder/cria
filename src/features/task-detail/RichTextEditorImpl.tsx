@@ -1,5 +1,6 @@
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { buildMentionExtension, type MentionSearch } from './mentionExtension';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -48,6 +49,9 @@ export interface RichTextEditorProps {
   /** If true, start in edit mode immediately instead of read mode.
    * Intended for create forms where there is no content to preview. */
   autoEdit?: boolean;
+  /** When set, "@" opens a mention picker fed by this search (project
+   * members). Mentions serialize to Vikunja's <mention-user> element. */
+  mentionSearch?: MentionSearch;
 }
 
 let _triggerImagePicker: (() => void) | null = null;
@@ -181,6 +185,7 @@ export function RichTextEditorImpl({
   taskLocalId,
   taskServerId,
   autoEdit,
+  mentionSearch,
 }: RichTextEditorProps) {
   const [editing, setEditing] = useState(autoEdit ?? false);
 
@@ -209,6 +214,7 @@ export function RichTextEditorImpl({
       }}
       taskLocalId={taskLocalId}
       taskServerId={taskServerId}
+      mentionSearch={mentionSearch}
     />
   );
 }
@@ -386,12 +392,14 @@ function EditView({
   onSave,
   taskLocalId,
   taskServerId,
+  mentionSearch,
 }: {
   initial: string;
   onCancel: () => void;
   onSave: (html: string) => Promise<void>;
   taskLocalId: string;
   taskServerId: number | null;
+  mentionSearch?: MentionSearch;
 }) {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -574,6 +582,7 @@ function EditView({
         nested: true,
         HTMLAttributes: { class: 'flex items-start gap-2' },
       }),
+      ...(mentionSearch ? [buildMentionExtension(mentionSearch)] : []),
       VikunjaImage.configure({
         inline: false,
         // allowBase64 stays on so legacy descriptions with data: URIs

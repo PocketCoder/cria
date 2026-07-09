@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { searchUsers } from '@/api/users';
+import { searchUsers, searchProjectUsers } from '@/api/users';
 
 const { mockCallApi, mockCreateApiClient } = vi.hoisted(() => ({
   mockCallApi: vi.fn(),
@@ -37,5 +37,16 @@ describe('searchUsers', () => {
   it('returns [] for a null response', async () => {
     mockCallApi.mockResolvedValue(null);
     expect(await searchUsers('x')).toEqual([]);
+  });
+});
+
+describe('searchProjectUsers', () => {
+  it('GETs /projects/{id}/projectusers with the search string', async () => {
+    mockCallApi.mockResolvedValue([{ id: 3, username: 'carol', name: 'Carol' }]);
+    const users = await searchProjectUsers(7, 'ca');
+    expect(mockClient.GET).toHaveBeenCalledWith('/projects/{id}/projectusers', {
+      params: { path: { id: 7 }, query: { s: 'ca' } },
+    });
+    expect(users).toEqual([{ serverId: 3, username: 'carol', name: 'Carol' }]);
   });
 });

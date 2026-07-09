@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { onShortcut } from '@/lib/shortcutBus';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
+import { getProjectByLocalId } from '@/db/projects';
+import { searchProjectUsers } from '@/api/users';
 import { toggleTaskLabel } from '@/db/labels';
 import { subscribe } from '@/db/bus';
 import { useTaskLabels } from '@/queries/taskLabels';
@@ -100,6 +102,24 @@ export function TaskDetail() {
   });
 
   const { data: labels = [] } = useTaskLabels(selectedId);
+
+  // Mention picker source: users with access to the task's project
+  // (upstream /projects/{id}/projectusers). Off for unsynced projects.
+  const { data: taskProject } = useQuery({
+    queryKey: ['project-of-task', task?.projectLocalId ?? null],
+    queryFn: async () =>
+      task ? getProjectByLocalId(task.projectLocalId) : null,
+    enabled: !!task,
+    staleTime: 60_000,
+  });
+  const projectServerId = taskProject?.serverId ?? null;
+  const mentionSearch = useMemo(
+    () =>
+      projectServerId != null && projectServerId > 0
+        ? (q: string) => searchProjectUsers(projectServerId, q)
+        : undefined,
+    [projectServerId],
+  );
 
   if (!selectedId) return null;
 
@@ -275,10 +295,15 @@ export function TaskDetail() {
             onSave={handleDescriptionSave}
             taskLocalId={task.localId}
             taskServerId={task.serverId}
+            mentionSearch={mentionSearch}
           />
         </section>
 
-        <CommentSection taskLocalId={task.localId} taskServerId={task.serverId} />
+        <CommentSection
+          taskLocalId={task.localId}
+          taskServerId={task.serverId}
+          mentionSearch={mentionSearch}
+        />
 
         <ReminderList taskLocalId={task.localId} />
 
