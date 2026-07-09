@@ -24,6 +24,7 @@ import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
+import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
@@ -88,8 +89,10 @@ export function TaskList({ project, view }: TaskListProps) {
   // truth; any other sort renders in sorted order and disables dragging.
   const sortable = config.sort.field === 'manual';
 
+  // Vikunja views can carry their own filter (project_views.filter).
+  const vf = view ? viewFilterParams(view) : null;
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project);
+    useProjectTasks(project, vf?.filter, undefined, vf?.includeNulls ?? false);
 
   // Tasks queued for deletion are hidden immediately while the undo
   // toast is live (issue #25). They're still deleted=0 in the DB until

@@ -37,9 +37,10 @@ export function useProjectTasks(
   project: Project | null,
   filterQuery?: string,
   sortRule?: SortRule | null,
+  includeNulls = false,
 ) {
   const queryClient = useQueryClient();
-  const queryKey = ['tasks', project?.localId ?? null, filterQuery, sortRule] as const;
+  const queryKey = ['tasks', project?.localId ?? null, filterQuery, sortRule, includeNulls] as const;
 
   useEffect(() => {
     const unsubTasks = subscribe('tasks', () => {
@@ -60,8 +61,8 @@ export function useProjectTasks(
   );
 
   const compiled = useMemo(
-    () => compileFilterAndSort(parsed.ast, false, sortRule ?? null),
-    [parsed.ast, sortRule],
+    () => compileFilterAndSort(parsed.ast, includeNulls, sortRule ?? null),
+    [parsed.ast, sortRule, includeNulls],
   );
 
   const isSavedFilter = project?.serverId != null && project.serverId < -1;
