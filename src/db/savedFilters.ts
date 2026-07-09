@@ -62,7 +62,7 @@ export async function getSavedFilterByServerId(
     `SELECT ${SELECT_COLS} FROM saved_filters WHERE server_id = ?`,
     [serverId],
   );
-  return rows.length ? rowToFilter(rows[0]) : null;
+  return rows.length ? rowToFilter(rows[0]!) : null;
 }
 
 export async function upsertSavedFilterFromServer(

@@ -26,9 +26,9 @@ describe('db/savedFilters', () => {
 
     const filters = await listSavedFilters();
     expect(filters.map((f) => f.title)).toEqual(['Alpha', 'Zebra']);
-    expect(filters[0].serverId).toBe(1);
-    expect(filters[0].filterQuery).toBe('priority >= 3');
-    expect(filters[0].filterIncludeNulls).toBe(false);
+    expect(filters[0]!.serverId).toBe(1);
+    expect(filters[0]!.filterQuery).toBe('priority >= 3');
+    expect(filters[0]!.filterIncludeNulls).toBe(false);
   });
 
   it('updates in place on repeated upsert of the same server id', async () => {
@@ -37,8 +37,8 @@ describe('db/savedFilters', () => {
 
     const filters = await listSavedFilters();
     expect(filters).toHaveLength(1);
-    expect(filters[0].title).toBe('New title');
-    expect(filters[0].filterQuery).toBe('done = true');
+    expect(filters[0]!.title).toBe('New title');
+    expect(filters[0]!.filterQuery).toBe('done = true');
   });
 
   it('gets a filter by server id', async () => {

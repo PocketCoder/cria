@@ -47,7 +47,7 @@ export async function createSavedFilter(
   client: ApiClient = createApiClient(),
 ): Promise<SavedFilter> {
   const data = (await callApi(
-    client.PUT('/filters', { body: toBody(input) }),
+    client.PUT('/filters', { body: toBody(input) as never }),
   )) as SavedFilterPayload;
   await mirrorLocally(data);
   return {
@@ -68,7 +68,9 @@ export async function updateSavedFilter(
   const data = (await callApi(
     client.POST('/filters/{id}', {
       params: { path: { id: serverId } },
-      body: toBody(input),
+      // Generated schema says `requestBody?: never` for the /filters
+      // endpoints (upstream swagger gap) — the API does take this body.
+      body: toBody(input) as never,
     }),
   )) as SavedFilterPayload;
   await mirrorLocally({ ...data, id: data.id ?? serverId });

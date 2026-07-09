@@ -90,8 +90,8 @@ describe('api/savedFilters', () => {
       },
     });
     const filters = await listSavedFilters();
-    expect(filters[0].title).toBe('New title');
-    expect(filters[0].filterIncludeNulls).toBe(true);
+    expect(filters[0]!.title).toBe('New title');
+    expect(filters[0]!.filterIncludeNulls).toBe(true);
   });
 
   it('deleteSavedFilter DELETEs /filters/{id} and removes local rows', async () => {

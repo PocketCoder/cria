@@ -177,7 +177,7 @@ describe('sync/pull', () => {
         [4, 'Filter four', 'done = false'],
         [7, 'Filter seven', 'priority >= 3'],
       ]);
-      expect(filters[1].filterIncludeNulls).toBe(true);
+      expect(filters[1]!.filterIncludeNulls).toBe(true);
     });
 
     it('prunes stale local filters no longer on the server', async () => {

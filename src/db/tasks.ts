@@ -127,6 +127,41 @@ export async function listTasksForProjectFiltered(
   return rows.map(rowToTask);
 }
 
+/**
+ * Cross-project variant of listTasksForProjectFiltered, for saved-filter
+ * views (Vikunja pseudo-projects): the compiled filter IS the task source.
+ * Rows carry the owning project's title like the smart-view queries.
+ */
+export async function listTasksFilteredAllProjects(
+  preFilterDone: boolean,
+  filterWhere?: string,
+  filterParams?: unknown[],
+  orderBy?: string,
+): Promise<TaskWithProject[]> {
+  const db = await getDb();
+
+  const conditions: string[] = ['t.deleted = 0', 'p.deleted = 0'];
+  const allParams: unknown[] = [];
+
+  if (preFilterDone) {
+    conditions.push('t.done = 0');
+  }
+  if (filterWhere) {
+    conditions.push(`(${filterWhere})`);
+    if (filterParams) allParams.push(...filterParams);
+  }
+
+  const rows = await db.select<TaskWithProjectRow[]>(
+    `SELECT ${SELECT_TASK_COLS_T}, p.title AS project_title
+       FROM tasks t
+       JOIN projects p ON p.local_id = t.project_local_id
+      WHERE ${conditions.join(' AND ')}
+   ORDER BY ${orderBy || DEFAULT_ORDER_BY}`,
+    allParams,
+  );
+  return rows.map(rowToTaskWithProject);
+}
+
 export async function getTaskByLocalId(localId: string): Promise<Task | null> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
