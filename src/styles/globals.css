@@ -597,3 +597,18 @@ html.native-glass.dark .glass-nav {
   background: oklch(22% 0.012 285 / 0.62);
   border-right-color: oklch(45% 0.012 285 / 0.3);
 }
+
+/* ── Cursor pointer over all clickable actions ────────────
+   Default is arrow; interactive elements get the hand cursor
+   so the user knows they're actionable. Radix-managed items
+   with their own cursor (SelectItem, etc.) keep their explicit
+   setting due to higher specificity. */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+label,
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+summary {
+  cursor: pointer;
+}
