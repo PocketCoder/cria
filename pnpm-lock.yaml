@@ -104,6 +104,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      cria:
+        specifier: 'link:'
+        version: 'link:'
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
