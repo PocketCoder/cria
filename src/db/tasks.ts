@@ -162,6 +162,17 @@ export async function listTasksFilteredAllProjects(
   return rows.map(rowToTaskWithProject);
 }
 
+/** Locate a task by its server id (notification click-through). */
+export async function getTaskByServerId(serverId: number): Promise<Task | null> {
+  const db = await getDb();
+  const rows = await db.select<TaskRow[]>(
+    `SELECT ${SELECT_TASK_COLS} FROM tasks
+      WHERE server_id = ? AND deleted = 0 LIMIT 1`,
+    [serverId],
+  );
+  return rows[0] ? rowToTask(rows[0]) : null;
+}
+
 export async function getTaskByLocalId(localId: string): Promise<Task | null> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(

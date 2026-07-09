@@ -4,6 +4,7 @@ import { register, unregister } from '@/tauri/globalShortcut';
 import { useOnline } from '@/hooks/useOnline';
 import { useShortcuts } from '@/hooks/useShortcuts';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
@@ -553,6 +554,7 @@ export function Shell() {
                 <MoreHorizontal className="h-5 w-5" />
               </button>
             )}
+            <NotificationBell />
             <button
               type="button"
               aria-label="Settings"
@@ -582,6 +584,7 @@ export function Shell() {
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             )}
+            <NotificationBell />
             <span className="text-xs text-[var(--color-muted-foreground)]">
               {displayName}
             </span>
