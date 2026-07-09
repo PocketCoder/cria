@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 
 import { register, unregister } from '@/tauri/globalShortcut';
 import { useOnline } from '@/hooks/useOnline';
+import { useShortcuts } from '@/hooks/useShortcuts';
+import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
@@ -249,17 +251,17 @@ export function Shell() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Cmd/Ctrl+K → command palette (always on, not just dev)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowCommandPalette((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  // Fixed Vikunja shortcut set (⌘K palette, ⌘E sidebar, g-sequences,
+  // task-detail keys via the shortcut bus). See lib/shortcuts.ts.
+  const [showLabelManager, setShowLabelManager] = useState(false);
+  useShortcuts({
+    switchView: (kind) => {
+      const target = projectViews.find((v) => v.viewKind === kind);
+      if (target) handleSelectView(target.localId);
+    },
+    openQuickSearch: () => setShowCommandPalette((v) => !v),
+    openLabelManager: () => setShowLabelManager(true),
+  });
 
   /* ── search handlers ──────────────────────────────────── */
   const handleSearchFocus = () => {
@@ -679,6 +681,9 @@ export function Shell() {
         <Suspense fallback={null}>
           <SettingsModal onClose={() => setShowSettings(false)} />
         </Suspense>
+      )}
+      {showLabelManager && (
+        <LabelManagerModal onClose={() => setShowLabelManager(false)} />
       )}
       {showCommandPalette && (
         <Suspense fallback={null}>

@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, type ButtonHTMLAttributes } from 'react';
+import { onShortcut } from '@/lib/shortcutBus';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -103,6 +104,25 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     await updateTask(task.localId, { [field]: value } as any);
     setExpanded(null);
   };
+
+  // Fixed shortcut set (upstream task-detail keys): run the action or open
+  // the matching section. Re-subscribes each render on purpose so closures
+  // always see the current task; only live while the card is mounted, and
+  // useShortcuts additionally gates on a selected task.
+  useEffect(() => {
+    const subs = [
+      onShortcut('task.done', () => void handleToggleDone()),
+      onShortcut('task.favorite', () => void handleToggleFavorite()),
+      onShortcut('task.delete', () => setConfirmDelete(true)),
+      onShortcut('task.assign', () => setExpanded('assignees')),
+      onShortcut('task.labels', () => setExpanded('labels')),
+      onShortcut('task.dueDate', () => setExpanded('dueDate')),
+      onShortcut('task.move', () => setExpanded('move')),
+      onShortcut('task.color', () => setExpanded('color')),
+      onShortcut('task.priority', () => setExpanded('priority')),
+    ];
+    return () => subs.forEach((u) => u());
+  });
 
   return (
     <div className="flex flex-col gap-1">

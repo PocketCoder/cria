@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
+import { onShortcut } from '@/lib/shortcutBus';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
 import { toggleTaskLabel } from '@/db/labels';
 import { subscribe } from '@/db/bus';
@@ -169,12 +170,14 @@ export function TaskDetail() {
     }
   };
 
-  const handleCopyLink = async () => {
+  const taskUrl = () => {
     const { serverUrl } = getAuthSnapshot();
-    let text = task.title;
-    if (task.serverId && serverUrl) {
-      text = `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`;
-    }
+    return task.serverId && serverUrl
+      ? `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`
+      : null;
+  };
+
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -183,6 +186,27 @@ export function TaskDetail() {
       // Clipboard access may be denied in some contexts — silently ignore.
     }
   };
+
+  const handleCopyLink = async () => {
+    await copyToClipboard(taskUrl() ?? task.title);
+  };
+
+  // Fixed shortcut set: copy family + "open project" (upstream u / . / ⌘.).
+  useEffect(() => {
+    const id = task.identifier ?? task.title;
+    const subs = [
+      onShortcut('task.copyId', () => void copyToClipboard(id)),
+      onShortcut('task.copyIdTitle', () => void copyToClipboard(`${id} ${task.title}`)),
+      onShortcut('task.copyIdTitleUrl', () =>
+        void copyToClipboard(`${id} ${task.title} ${taskUrl() ?? ''}`.trim()),
+      ),
+      onShortcut('task.copyUrl', () => void copyToClipboard(taskUrl() ?? task.title)),
+      onShortcut('task.openProject', () =>
+        useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
+      ),
+    ];
+    return () => subs.forEach((u) => u());
+  });
 
   // The title lives in the card header (sticky context as the body
   // scrolls), still click-to-edit inline.
