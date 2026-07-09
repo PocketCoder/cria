@@ -19,7 +19,6 @@ import {
   CalendarDays,
   Star,
   Inbox,
-  GripVertical,
   Palette,
   ChevronRight,
   ChevronDown,
@@ -602,7 +601,7 @@ function ProjectRow({
                   e.stopPropagation();
                   onToggleExpand();
                 }}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+                className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
               >
                 {expanded ? (
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -611,21 +610,17 @@ function ProjectRow({
                 )}
               </button>
             ) : (
-              <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="h-5 w-4 shrink-0" aria-hidden="true" />
             )}
             <button
               type="button"
               onClick={onSelect}
               className={cn(
-                'flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1.5 pr-8 text-left text-sm',
+                'flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 pr-8 text-left text-sm',
                 'hover:bg-[var(--color-muted)]',
                 isSelected && 'bg-[var(--color-muted)] font-medium',
               )}
             >
-              <GripVertical
-                aria-hidden="true"
-                className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-              />
               <span
                 aria-hidden="true"
                 className="h-2 w-2 shrink-0 rounded-full"

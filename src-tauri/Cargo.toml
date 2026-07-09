@@ -1,6 +1,6 @@
 [package]
 name = "cria"
-version = "0.12.0"
+version = "0.12.1"
 description = "A native desktop client for Vikunja"
 authors = ["jake"]
 license = "MIT"
@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # `tray-icon` feature is desktop-only inside Tauri (the tray-icon crate is
 # target-gated to desktop), so leaving it enabled is a no-op on iOS/Android.
-tauri = { version = "2", features = ["image-png", "tray-icon"] }
+tauri = { version = "2", features = ["macos-private-api", "image-png", "tray-icon"] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"

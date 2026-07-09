@@ -31,12 +31,18 @@ export function useProjects() {
     queryFn: async () => {
       const cached = await listProjects();
       if (!isAuthed) return cached;
-      try {
-        await pullProjects();
-      } catch (err) {
-        throttledWarn('queries/projects', '[queries/projects] pull failed, using cache:', err);
-      }
-      return listProjects();
+
+      // Fire the server refresh in the background instead of gating the
+      // sidebar's first render on it — a full project pull is a network
+      // round-trip, and the cached list is already on disk. On success, push
+      // the fresh read into the cache directly (not via notify('projects'),
+      // which would invalidate this query and re-fire this same pull forever).
+      void pullProjects()
+        .then(() => listProjects())
+        .then((fresh) => queryClient.setQueryData(KEY, fresh))
+        .catch((err) => throttledWarn('queries/projects', '[queries/projects] pull failed, using cache:', err));
+
+      return cached;
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
