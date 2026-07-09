@@ -73,6 +73,12 @@ function NotificationRow({
 /** In-app notification inbox (Vikunja GET /notifications), own 60s poll. */
 export function NotificationBell() {
   const isAuthed = useAuth((s) => s.status.kind === 'authenticated');
+  // Link-share sessions are pseudo-users with no notification inbox.
+  const isLinkShare = useAuth(
+    (s) =>
+      s.status.kind === 'authenticated' &&
+      s.status.credentials.authMethod === 'linkShare',
+  );
   const online = useOnline();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -80,7 +86,7 @@ export function NotificationBell() {
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => listNotifications(),
-    enabled: isAuthed && online,
+    enabled: isAuthed && online && !isLinkShare,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -94,6 +100,8 @@ export function NotificationBell() {
       void qc.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
+
+  if (isLinkShare) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -7,6 +7,9 @@ import { useAuth } from '@/auth/store';
 import { createApiClient } from '@/api/client';
 import { fetchCurrentUser } from '@/api/user';
 import { loginWithPassword, isTotpRequired } from '@/api/login';
+import { authLinkShare, SHARE_PASSWORD_REQUIRED_CODE } from '@/api/shareAuth';
+import { parseShareInput } from '@/lib/shareInput';
+import type { User } from '@/domain/user';
 import { ApiError, NetworkError } from '@/api/errors';
 
 const serverUrlSchema = z.string().trim().url().refine(
@@ -20,7 +23,7 @@ const serverUrlSchema = z.string().trim().url().refine(
   'Use https:// or a loopback address (localhost/127.0.0.1) for http://',
 );
 
-type AuthMethod = 'token' | 'password';
+type AuthMethod = 'token' | 'password' | 'share';
 
 export function LoginScreen() {
   const signIn = useAuth((s) => s.signIn);
@@ -34,6 +37,9 @@ export function LoginScreen() {
   const [totpRequired, setTotpRequired] = useState(false);
   const [totpCode, setTotpCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [sharePassword, setSharePassword] = useState('');
+  const [sharePasswordRequired, setSharePasswordRequired] = useState(false);
 
   const switchMethod = (method: AuthMethod) => {
     setAuthMethod(method);
@@ -96,6 +102,52 @@ export function LoginScreen() {
       return;
     }
 
+    if (authMethod === 'share') {
+      const hash = parseShareInput(shareLink);
+      if (!hash) {
+        setSubmitError('Paste a share link or its code.');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        const { token: shareToken } = await authLinkShare(
+          url,
+          hash,
+          sharePassword || undefined,
+        );
+        // Link-share sessions have no real account behind them — a
+        // synthetic user keeps the rest of the app (which expects one)
+        // working; account-only chrome is hidden via isLinkShareSession.
+        const shareUser: User = {
+          serverId: 0,
+          username: `link-share-${hash}`,
+          email: null,
+          name: 'Shared project',
+          raw: {},
+          fetchedAt: new Date().toISOString(),
+          defaultProjectId: null,
+          language: '',
+          timezone: '',
+          weekStart: 1,
+        };
+        await signIn(
+          { serverUrl: url, token: shareToken, authMethod: 'linkShare' },
+          shareUser,
+        );
+      } catch (err) {
+        if (err instanceof ApiError && err.code === SHARE_PASSWORD_REQUIRED_CODE) {
+          setSharePasswordRequired(true);
+          setSubmitError(sharePassword ? 'Wrong password for this share.' : 'This share needs a password.');
+        } else {
+          console.error('[login] share sign-in failed:', err);
+          setSubmitError(messageFor(err));
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!username || !password) {
       setSubmitError('Enter your username and password.');
       return;
@@ -143,7 +195,9 @@ export function LoginScreen() {
           <p className="text-sm text-[var(--color-muted-foreground)]">
             {authMethod === 'token'
               ? 'Connect Cria to your Vikunja instance with an API token.'
-              : 'Sign in with your Vikunja username or email and password.'}
+              : authMethod === 'password'
+                ? 'Sign in with your Vikunja username or email and password.'
+                : 'Open a project someone shared with you via a link.'}
           </p>
         </div>
 
@@ -169,6 +223,17 @@ export function LoginScreen() {
             }`}
           >
             Username &amp; Password
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMethod('share')}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+              authMethod === 'share'
+                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+            }`}
+          >
+            Share link
           </button>
         </div>
 
@@ -205,6 +270,32 @@ export function LoginScreen() {
                 Create one in Vikunja's web UI under Settings → API Tokens.
               </p>
             </div>
+          ) : authMethod === 'share' ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="shareLink">Share link or code</Label>
+                <Input
+                  id="shareLink"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="https://vikunja.example.com/share/…/auth"
+                  value={shareLink}
+                  onChange={(e) => setShareLink(e.target.value)}
+                />
+              </div>
+              {sharePasswordRequired && (
+                <div className="space-y-2">
+                  <Label htmlFor="sharePassword">Share password</Label>
+                  <Input
+                    id="sharePassword"
+                    type="password"
+                    autoComplete="off"
+                    value={sharePassword}
+                    onChange={(e) => setSharePassword(e.target.value)}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             <>
               <div className="space-y-2">
