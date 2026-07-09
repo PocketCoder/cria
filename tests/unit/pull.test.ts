@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { getDb } from '@/db';
 import { initSchema, clearTables, seedProject } from './_helpers';
-import { pullProjects, pullTasksForProject, pullAllTasks, pullLabels, pullAll } from '@/sync/pull';
+import { pullProjects, pullSavedFilters, pullTasksForProject, pullAllTasks, pullLabels, pullAll } from '@/sync/pull';
+import { listSavedFilters, upsertSavedFilterFromServer } from '@/db/savedFilters';
 
 function mockGet(responseData: unknown[], totalPages = 1, status = 200) {
   return vi.fn().mockResolvedValue({
@@ -90,6 +91,22 @@ describe('sync/pull', () => {
       await expect(pullProjects(client)).rejects.toThrow('HTTP 500');
     });
 
+    it('skips the Favorites pseudo-project (id -1) but keeps saved-filter pseudo-projects (id < -1)', async () => {
+      const client = mockClient({
+        get: mockGet([
+          { id: -1, title: 'Favorites', updated: now(), is_archived: false },
+          { id: -5, title: 'My filter', updated: now(), is_archived: false },
+          { id: 3, title: 'Real project', updated: now(), is_archived: false },
+        ]),
+      });
+      await pullProjects(client);
+      const db = await getDb();
+      const rows = await db.select<{ server_id: number }[]>(
+        `SELECT server_id FROM projects WHERE deleted = 0 ORDER BY server_id ASC`,
+      );
+      expect(rows.map((r) => r.server_id)).toEqual([-5, 3]);
+    });
+
     it('re-links parent projects on second pass', async () => {
       const db = await getDb();
       const client = mockClient({
@@ -112,6 +129,75 @@ describe('sync/pull', () => {
       // (We can't assert the string because the local IDs are allocated
       // inside the function.)
       expect(rows[0]!.parent_local_id).toBeTruthy();
+    });
+  });
+
+  describe('pullSavedFilters', () => {
+    async function seedPseudoProjects(serverIds: number[]) {
+      const db = await getDb();
+      for (const id of serverIds) {
+        await db.execute(
+          `INSERT INTO projects (local_id, server_id, title, updated_at, dirty, deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+          [`proj_${id}`, id, `P${id}`, now()],
+        );
+      }
+    }
+
+    function filterGet(filtersById: Record<number, unknown>) {
+      return vi.fn().mockImplementation(async (path: string, opts: any) => {
+        if (path === '/filters/{id}') {
+          const id = opts?.params?.path?.id;
+          const data = filtersById[id];
+          return {
+            data,
+            response: {
+              ok: !!data,
+              status: data ? 200 : 404,
+              headers: new Map(),
+              text: vi.fn().mockResolvedValue(''),
+            },
+          };
+        }
+        throw new Error(`unexpected GET ${path}`);
+      });
+    }
+
+    it('fetches filter details for pseudo-projects (filterId = -serverId - 1)', async () => {
+      await seedPseudoProjects([3, -5, -8]);
+      const get = filterGet({
+        4: { id: 4, title: 'Filter four', filters: { filter: 'done = false' }, updated: now() },
+        7: { id: 7, title: 'Filter seven', filters: { filter: 'priority >= 3', filter_include_nulls: true }, updated: now() },
+      });
+      const count = await pullSavedFilters(mockClient({ get }));
+      expect(count).toBe(2);
+      expect(get).toHaveBeenCalledTimes(2);
+
+      const filters = await listSavedFilters();
+      expect(filters.map((f) => [f.serverId, f.title, f.filterQuery])).toEqual([
+        [4, 'Filter four', 'done = false'],
+        [7, 'Filter seven', 'priority >= 3'],
+      ]);
+      expect(filters[1].filterIncludeNulls).toBe(true);
+    });
+
+    it('prunes stale local filters no longer on the server', async () => {
+      await upsertSavedFilterFromServer({ id: 99, title: 'Stale', filters: { filter: 'done = false' } });
+      await seedPseudoProjects([-5]);
+      const get = filterGet({
+        4: { id: 4, title: 'Fresh', filters: { filter: 'done = false' }, updated: now() },
+      });
+      await pullSavedFilters(mockClient({ get }));
+      expect((await listSavedFilters()).map((f) => f.serverId)).toEqual([4]);
+    });
+
+    it('is a no-op with no pseudo-projects and prunes everything', async () => {
+      await upsertSavedFilterFromServer({ id: 1, title: 'Gone', filters: { filter: 'done = false' } });
+      await seedPseudoProjects([3]);
+      const get = vi.fn();
+      const count = await pullSavedFilters(mockClient({ get }));
+      expect(count).toBe(0);
+      expect(get).not.toHaveBeenCalled();
+      expect(await listSavedFilters()).toEqual([]);
     });
   });
 

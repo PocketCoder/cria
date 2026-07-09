@@ -11,6 +11,11 @@ import { replaceTaskRemindersFromServer } from '@/db/reminders';
 import { replaceTaskCommentsFromServer } from '@/db/comments';
 import { replaceTaskRelationsFromServer } from '@/db/relations';
 import { replaceViewsForProjectFromServer } from '@/db/views';
+import {
+  upsertSavedFilterFromServer,
+  pruneSavedFilters,
+  type SavedFilterPayload,
+} from '@/db/savedFilters';
 import { replaceBucketsForViewFromServer } from '@/db/buckets';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import {
@@ -62,6 +67,7 @@ export async function pullAll(
 ): Promise<PullResult> {
   return singleFlight('pullAll', async () => {
   const projects = await pullProjects(client);
+  await pullSavedFilters(client);
   const views = await pullAllViews(client);
   const buckets = await pullAllBuckets(client);
   return { projects, views, buckets };
@@ -92,6 +98,10 @@ export async function pullProjects(
     for (const raw of batch) {
       const parsed = projectResponseSchema.safeParse(raw);
       if (parsed.success) {
+        // id -1 is the server's Favorites pseudo-project — Cria has its own
+        // Favorites smart view. ids < -1 are saved-filter pseudo-projects
+        // (kept: they drive the sidebar Filters section, views and buckets).
+        if (parsed.data.id === -1) continue;
         collected.push(parsed.data);
       } else {
         console.warn('[pullProjects] skipping invalid project:', parsed.error);
@@ -120,6 +130,38 @@ export async function pullProjects(
 
   await stampSyncState('projects_synced_at');
   return collected.length;
+  });
+}
+
+/**
+ * Pull saved-filter details for every saved-filter pseudo-project already in
+ * the local projects table (server_id < -1; filterId = -server_id - 1,
+ * mirroring upstream's GetSavedFilterIDFromProjectID). Prunes local filters
+ * that no longer have a pseudo-project. Returns the number upserted.
+ */
+export async function pullSavedFilters(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  return singleFlight('pullSavedFilters', async () => {
+    const db = await getDb();
+    const rows = await db.select<{ server_id: number }[]>(
+      'SELECT server_id FROM projects WHERE server_id < -1 AND deleted = 0',
+    );
+    const keep: number[] = [];
+    for (const row of rows) {
+      const filterId = -row.server_id - 1;
+      const { data, response } = await client.GET('/filters/{id}', {
+        params: { path: { id: filterId } },
+      });
+      if (!response.ok || !data) {
+        console.warn(`[pullSavedFilters] HTTP ${response.status} for filter ${filterId}`);
+        continue;
+      }
+      await upsertSavedFilterFromServer(data as SavedFilterPayload);
+      keep.push(filterId);
+    }
+    await pruneSavedFilters(keep);
+    return keep.length;
   });
 }
 
