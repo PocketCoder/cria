@@ -10,6 +10,7 @@ import { PhotoCaptureTab } from '@/components/settings/PhotoCaptureTab';
 import { ShortcutsTab } from '@/components/settings/ShortcutsTab';
 import { NotificationsTab } from '@/components/settings/NotificationsTab';
 import { SecurityTab } from '@/components/settings/SecurityTab';
+import { TeamsTab } from '@/components/settings/TeamsTab';
 import { TokensTab } from '@/components/settings/TokensTab';
 import { DataTab } from '@/components/settings/DataTab';
 import { AdvancedTab } from '@/components/settings/AdvancedTab';
@@ -17,6 +18,7 @@ import { X, Settings } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
+  initialTab?: TabId;
 }
 
 type TabId =
@@ -27,6 +29,7 @@ type TabId =
   | 'shortcuts'
   | 'notifications'
   | 'security'
+  | 'teams'
   | 'tokens'
   | 'data'
   | 'advanced';
@@ -39,13 +42,14 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'shortcuts', label: 'Shortcuts' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'security', label: 'Security' },
+  { id: 'teams', label: 'Teams' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'data', label: 'Data' },
   { id: 'advanced', label: 'Advanced' },
 ];
 
-export function SettingsModal({ onClose }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('account');
+export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'account');
   const isOnline = useOnline();
   const { data: user } = useCurrentUser();
 
@@ -88,6 +92,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         return <NotificationsTab disabled={!isOnline} />;
       case 'security':
         return <SecurityTab disabled={!isOnline} />;
+      case 'teams':
+        return <TeamsTab disabled={!isOnline} />;
       case 'tokens':
         return <TokensTab disabled={!isOnline} />;
       case 'data':

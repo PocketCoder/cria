@@ -34,6 +34,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'nav.today', keys: ['g', 'o'], context: 'global', group: 'Navigation', label: 'Go to Today' },
   { id: 'nav.upcoming', keys: ['g', 'u'], context: 'global', group: 'Navigation', label: 'Go to Upcoming' },
   { id: 'nav.labels', keys: ['g', 'a'], context: 'global', group: 'Navigation', label: 'Manage labels' },
+  { id: 'nav.teams', keys: ['g', 'm'], context: 'global', group: 'Navigation', label: 'Manage teams' },
 
   // ── Project views (g then …) ──
   { id: 'view.list', keys: ['g', 'l'], context: 'project', group: 'Project views', label: 'Switch to List' },

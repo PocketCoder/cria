@@ -210,6 +210,7 @@ export function Shell() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'teams' | undefined>(undefined);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   /* ── mobile layout ────────────────────────────────────── */
@@ -261,6 +262,10 @@ export function Shell() {
     },
     openQuickSearch: () => setShowCommandPalette((v) => !v),
     openLabelManager: () => setShowLabelManager(true),
+    openTeams: () => {
+      setSettingsTab('teams');
+      setShowSettings(true);
+    },
   });
 
   /* ── search handlers ──────────────────────────────────── */
@@ -679,7 +684,13 @@ export function Shell() {
       )}
       {showSettings && (
         <Suspense fallback={null}>
-          <SettingsModal onClose={() => setShowSettings(false)} />
+          <SettingsModal
+            initialTab={settingsTab}
+            onClose={() => {
+              setShowSettings(false);
+              setSettingsTab(undefined);
+            }}
+          />
         </Suspense>
       )}
       {showLabelManager && (

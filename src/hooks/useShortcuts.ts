@@ -11,6 +11,7 @@ interface ShortcutHandlers {
   switchView: (kind: ViewKind) => void;
   openQuickSearch: () => void;
   openLabelManager: () => void;
+  openTeams: () => void;
 }
 
 /**
@@ -60,6 +61,9 @@ export function useShortcuts(handlers: ShortcutHandlers) {
           return;
         case 'nav.labels':
           h.openLabelManager();
+          return;
+        case 'nav.teams':
+          h.openTeams();
           return;
         case 'view.list':
         case 'view.gantt':
