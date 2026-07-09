@@ -62,7 +62,7 @@ import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { SpecularTracker } from '@/components/SpecularTracker';
-import { useUpdater } from '@/queries/updater';
+import { useUpdaterStore } from '@/stores/updater';
 import { UpdateBanner } from '@/features/shell/UpdateBanner';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -126,7 +126,11 @@ export function Shell() {
   const { data: conflictCount = 0 } = useConflictsCount();
   const { data: deadLetterCount = 0 } = useDeadLettersCount();
   const { data: serverVersion } = useServerVersion();
-  const updater = useUpdater();
+  const updaterState = useUpdaterStore((s) => s.state);
+  const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
+  const installUpdate = useUpdaterStore((s) => s.install);
+  // Auto-check for updates on mount (silent failure is fine).
+  useEffect(() => { void runUpdaterCheck(); }, [runUpdaterCheck]);
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );
@@ -663,8 +667,8 @@ export function Shell() {
               <Settings className="h-3.5 w-3.5" />
             </button>
             <UpdateBanner
-              state={updater.state}
-              onInstall={() => void updater.install()}
+              state={updaterState}
+              onInstall={() => void installUpdate()}
             />
             <span>
               Cria {pkg.version}
