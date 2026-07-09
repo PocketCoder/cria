@@ -130,7 +130,7 @@ export function Shell() {
   const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
   const installUpdate = useUpdaterStore((s) => s.install);
   // Auto-check for updates on mount (silent failure is fine).
-  useEffect(() => { void runUpdaterCheck(); }, [runUpdaterCheck]);
+  useEffect(() => { void runUpdaterCheck(true); }, [runUpdaterCheck]);
   const [isOnline, setIsOnline] = useState(
       typeof navigator !== 'undefined' ? navigator.onLine : true
     );

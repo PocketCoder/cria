@@ -569,8 +569,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     {updaterState.kind === 'installing' && (
                       <span className="text-xs text-[var(--color-muted-foreground)]">Installing v{updaterState.update.version}…</span>
                     )}
+                    {updaterState.kind === 'upToDate' && (
+                      <span className="text-xs text-green-500">Up to date</span>
+                    )}
                     {updaterState.kind === 'error' && (
-                      <span className="text-xs text-red-500">Check failed</span>
+                      <span className="text-xs text-red-500" title={updaterState.message}>Check failed</span>
                     )}
                     {updaterState.kind === 'available' ? (
                       <Button
