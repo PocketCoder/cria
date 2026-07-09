@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { parseFilterQuery } from '@/lib/filterQueryParser';
+import { FilterInput } from '@/components/FilterInput';
 import { createSavedFilter, updateSavedFilter } from '@/api/savedFilters';
 import { useOnline } from '@/hooks/useOnline';
 import { Switch } from '@/components/ui/switch';
@@ -107,13 +108,11 @@ export function SavedFilterModal({
             <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Filter query
             </label>
-            <textarea
+            <FilterInput
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="done = false && priority >= 3"
+              onChange={setQuery}
               rows={3}
-              spellCheck={false}
-              className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 font-mono text-xs outline-none focus:border-[var(--color-primary)]"
+              placeholder="done = false && priority >= 3"
             />
             {parseError ? (
               <p className="mt-1 text-xs text-[var(--color-destructive)]">{parseError}</p>

@@ -6,6 +6,7 @@ import {
   PopoverContent,
 } from '@/components/ui/popover';
 import { parseFilterQuery } from '@/lib/filterQueryParser';
+import { FilterInput } from '@/components/FilterInput';
 import { updateView } from '@/db/views';
 import { viewFilterParams, type ProjectView } from '@/domain/view';
 import { Switch } from '@/components/ui/switch';
@@ -73,13 +74,12 @@ export function ViewFilterButton({ view }: { view: ProjectView }) {
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
           View filter
         </p>
-        <textarea
+        <FilterInput
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="done = false && priority >= 3"
+          onChange={setQuery}
           rows={2}
-          spellCheck={false}
-          className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 font-mono text-xs outline-none focus:border-[var(--color-primary)]"
+          autoFocus
+          placeholder="done = false && priority >= 3"
         />
         {parseError && (
           <p className="mt-1 text-xs text-[var(--color-destructive)]">{parseError}</p>
