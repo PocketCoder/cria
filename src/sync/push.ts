@@ -488,13 +488,12 @@ async function executeOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ? AND updated_at = ?`,
+         WHERE local_id = ?`,
         [
           newServerId ?? null,
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
-          task.updated_at,
         ],
       );
       await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
@@ -506,7 +505,21 @@ async function executeOp(
     if (op.op === 'update') {
       if (task.deleted === 1) return; // delete op will handle it
       if (task.server_id === null) {
-        throw new ApiError(408, null, 'Cannot update a task without server id', true, true);
+        // Create was lost (race in create handler) — re-enqueue so the
+        // full current state (including pending user changes) gets sent.
+        const [pendingCreate] = await db.select<{ id: number }[]>(
+          `SELECT id FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND op = 'create' LIMIT 1`,
+          [localId],
+        );
+        if (!pendingCreate) {
+          await db.execute(
+            `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+             VALUES ('task', ?, 'create', ?, ?)`,
+            [localId, JSON.stringify(task), new Date().toISOString()],
+          );
+          notify('outbox');
+        }
+        return;
       }
 
       // Don't push updates while a conflict is unresolved — the user is
@@ -587,12 +600,11 @@ async function executeOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ? AND updated_at = ?`,
+         WHERE local_id = ?`,
         [
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
-          task.updated_at,
         ],
       );
     });
