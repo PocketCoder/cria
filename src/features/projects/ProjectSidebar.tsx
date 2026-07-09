@@ -2,6 +2,10 @@ import { useEffect, useState, useRef, useMemo, type ComponentType } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
+import { useSavedFilters } from '@/queries/savedFilters';
+import { deleteSavedFilter } from '@/api/savedFilters';
+import { SavedFilterModal } from '@/features/smart-views/SavedFilterModal';
+import type { SavedFilter } from '@/db/savedFilters';
 import { useUi } from '@/stores/ui';
 import { createProject, updateProject, deleteProject } from '@/db/projects';
 import { createLabel, updateLabel, deleteLabel } from '@/db/labels';
@@ -19,6 +23,7 @@ import {
   CalendarDays,
   Star,
   Inbox,
+  ListFilter,
   Palette,
   ChevronRight,
   ChevronDown,
@@ -106,6 +111,11 @@ export function ProjectSidebar({
   const [busy, setBusy] = useState(false);
   const creatingRef = useRef(false);
 
+  const { data: savedFilters = [] } = useSavedFilters();
+  const [filterModal, setFilterModal] = useState<
+    { mode: 'create' } | { mode: 'edit'; filter: SavedFilter } | null
+  >(null);
+
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [newLabelTitle, setNewLabelTitle] = useState('');
   const [labelEditingId, setLabelEditingId] = useState<string | null>(null);
@@ -117,7 +127,12 @@ export function ProjectSidebar({
   const draggedIdRef = useRef<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const visibleProjects = projects.filter((p) => p.title !== 'Favorites');
+  // Negative server ids are Vikunja pseudo-projects: -1 Favorites (also
+  // filtered by title for rows pulled before the sync-side guard), < -1
+  // saved filters (rendered in the Filters section, not the tree).
+  const visibleProjects = projects.filter(
+    (p) => (p.serverId == null || p.serverId > 0) && p.title !== 'Favorites',
+  );
 
   // Sub-project tree (built client-side from parentLocalId — see projectTree).
   const visibleIds = useMemo(
@@ -267,6 +282,71 @@ export function ProjectSidebar({
                 isSelected={activeView?.kind === 'inbox'}
                 onClick={() => setActiveView({ kind: 'inbox' })}
               />
+            </div>
+          </div>
+        )}
+
+        {/* ── Saved filters (Vikunja pseudo-projects) ── */}
+        {/* Header always shows (the + is the only create entry point). */}
+        {showSmartViews && (
+          <div className="mb-1">
+            <div className="flex items-center justify-between pr-1">
+              <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                Filters
+              </p>
+              <button
+                type="button"
+                onClick={() => setFilterModal({ mode: 'create' })}
+                className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                aria-label="New filter"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="space-y-0.5">
+              {savedFilters.map((f) => {
+                const pseudo = projects.find(
+                  (p) => p.serverId === -f.serverId - 1,
+                );
+                if (!pseudo) return null;
+                return (
+                  <ContextMenu key={f.serverId}>
+                    <ContextMenuTrigger asChild>
+                      <div>
+                        <NavItem
+                          icon={ListFilter}
+                          label={f.title}
+                          isSelected={
+                            activeView?.kind === 'project' &&
+                            activeView.localId === pseudo.localId
+                          }
+                          onClick={() =>
+                            setActiveView({ kind: 'project', localId: pseudo.localId })
+                          }
+                        />
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        onClick={() => setFilterModal({ mode: 'edit', filter: f })}
+                      >
+                        <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        className="text-[var(--color-destructive)]"
+                        onClick={() => {
+                          void deleteSavedFilter(f.serverId).catch((err) =>
+                            console.error('[sidebar] deleteSavedFilter failed:', err),
+                          );
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                );
+              })}
             </div>
           </div>
         )}
@@ -494,6 +574,13 @@ export function ProjectSidebar({
           </button>
         )}
       </footer>
+
+      {filterModal && (
+        <SavedFilterModal
+          existing={filterModal.mode === 'edit' ? filterModal.filter : null}
+          onClose={() => setFilterModal(null)}
+        />
+      )}
     </aside>
   );
 }

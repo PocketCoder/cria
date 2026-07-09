@@ -24,6 +24,9 @@ src-tauri/gen/
 # Generated API types are committed (see SPEC §6.1). Regenerate with
 # `pnpm generate:api`; review the diff in code review.
 
+# Compiled JS from tsc (noEmit: false — safety)
+*.js
+
 # Test
 coverage/
 .aider*
