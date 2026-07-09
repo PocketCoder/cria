@@ -372,11 +372,14 @@ export async function callApi<T>(
  */
 export async function probeServer(
   serverUrl: string,
-): Promise<{ version: string | null }> {
+): Promise<{ version: string | null; frontendUrl: string | null }> {
   const client = createClient<paths>({
     baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
     fetch: platformFetch,
   });
   const info = await callApi(client.GET('/info'));
-  return { version: info.version ?? null };
+  return {
+    version: info.version ?? null,
+    frontendUrl: (info as { frontend_url?: string }).frontend_url || null,
+  };
 }

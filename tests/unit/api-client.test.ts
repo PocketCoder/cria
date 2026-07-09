@@ -157,17 +157,22 @@ describe('createApiClient', () => {
 });
 
 describe('probeServer', () => {
-  it('returns version from /info', async () => {
-    mockClient.GET.mockReturnValue(mockResponse({ version: '1.2.3' }));
+  it('returns version and frontend_url from /info', async () => {
+    mockClient.GET.mockReturnValue(
+      mockResponse({ version: '1.2.3', frontend_url: 'https://vikunja.example.com/' }),
+    );
     const result = await probeServer('https://example.com');
-    expect(result).toEqual({ version: '1.2.3' });
+    expect(result).toEqual({
+      version: '1.2.3',
+      frontendUrl: 'https://vikunja.example.com/',
+    });
     expect(mockClient.GET).toHaveBeenCalledWith('/info');
   });
 
-  it('returns null version when not present', async () => {
+  it('returns nulls when not present', async () => {
     mockClient.GET.mockReturnValue(mockResponse({}));
     const result = await probeServer('https://example.com');
-    expect(result).toEqual({ version: null });
+    expect(result).toEqual({ version: null, frontendUrl: null });
   });
 
   it('normalises trailing slash', async () => {

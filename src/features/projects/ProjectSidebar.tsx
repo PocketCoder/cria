@@ -5,6 +5,7 @@ import { useLabels } from '@/queries/labels';
 import { useSavedFilters } from '@/queries/savedFilters';
 import { deleteSavedFilter } from '@/api/savedFilters';
 import { SavedFilterModal } from '@/features/smart-views/SavedFilterModal';
+import { ShareProjectModal } from '@/features/projects/ShareProjectModal';
 import type { SavedFilter } from '@/db/savedFilters';
 import { useUi } from '@/stores/ui';
 import { createProject, updateProject, deleteProject } from '@/db/projects';
@@ -24,6 +25,7 @@ import {
   Star,
   Inbox,
   ListFilter,
+  Share2,
   Palette,
   ChevronRight,
   ChevronDown,
@@ -115,6 +117,7 @@ export function ProjectSidebar({
   const [filterModal, setFilterModal] = useState<
     { mode: 'create' } | { mode: 'edit'; filter: SavedFilter } | null
   >(null);
+  const [shareProject, setShareProject] = useState<Project | null>(null);
 
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [newLabelTitle, setNewLabelTitle] = useState('');
@@ -502,6 +505,7 @@ export function ProjectSidebar({
                         setEditingId(null);
                         setEditingTitle('');
                       }}
+                      onShare={() => setShareProject(p)}
                       onDelete={async () => {
                         try {
                           await deleteProject(p.localId);
@@ -581,6 +585,12 @@ export function ProjectSidebar({
           onClose={() => setFilterModal(null)}
         />
       )}
+      {shareProject && (
+        <ShareProjectModal
+          project={shareProject}
+          onClose={() => setShareProject(null)}
+        />
+      )}
     </aside>
   );
 }
@@ -607,6 +617,7 @@ function ProjectRow({
   onSaveRename,
   onCancelRename,
   onDelete,
+  onShare,
   onDragStart,
   onDragOver,
   onDrop,
@@ -628,6 +639,7 @@ function ProjectRow({
   onSaveRename: () => void;
   onCancelRename: () => void;
   onDelete: () => Promise<void> | void;
+  onShare: () => void;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -784,6 +796,21 @@ function ProjectRow({
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Rename
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      disabled={project.serverId == null}
+                      title={project.serverId == null ? 'Sync this project first' : undefined}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-muted)] disabled:opacity-50"
+                      onClick={() => {
+                        onShare();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
                     </button>
                   </li>
                   <li>
