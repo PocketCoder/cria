@@ -127,7 +127,8 @@ export function Shell() {
   const { data: conflictCount = 0 } = useConflictsCount();
   const { data: deadLetterCount = 0 } = useDeadLettersCount();
   const { data: serverVersion } = useServerVersion();
-  const updater = useUpdater();
+  const updaterState = useUpdaterStore((s) => s.state);
+  const installUpdate = useUpdaterStore((s) => s.install);
   const isOnline = useOnline();
 
   // Notify only on sync conflicts (not routine outbox drain)
