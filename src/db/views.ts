@@ -139,13 +139,18 @@ async function claimPlaceholderView(
  */
 export async function upsertViewFromServer(
   payload: ViewResponse,
+  /** Parent already known to the caller (replaceViewsForProjectFromServer)
+   * — skips re-resolving payload.project_id, which for saved-filter
+   * pseudo-projects is NEGATIVE and used to be rejected outright. */
+  knownProjectLocalId?: string,
 ): Promise<string> {
   const now = new Date().toISOString();
   const updatedAt = payload.updated ?? now;
   const projectLocalId =
-    typeof payload.project_id === 'number' && payload.project_id > 0
+    knownProjectLocalId ??
+    (typeof payload.project_id === 'number' && payload.project_id !== 0
       ? await projectLocalIdForServerId(payload.project_id)
-      : null;
+      : null);
   if (!projectLocalId) {
     throw new Error(
       `upsertViewFromServer: parent project ${payload.project_id} not found locally`,
@@ -241,7 +246,7 @@ export async function replaceViewsForProjectFromServer(
   const upserted = new Set<string>();
 
   for (const payload of payloads) {
-    const localId = await upsertViewFromServer(payload);
+    const localId = await upsertViewFromServer(payload, projectLocalId);
     upserted.add(localId);
   }
 

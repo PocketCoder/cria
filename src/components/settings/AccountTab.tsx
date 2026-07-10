@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { getAvatarSettings, setAvatarProvider, uploadAvatar, fetchAvatarBlob } from '@/api/account';
@@ -21,6 +21,7 @@ interface Props {
 }
 
 export function AccountTab({ disabled, onPushSettings }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: user } = useCurrentUser();
   const signOut = useAuth((s) => s.signOut);
   const status = useAuth((s) => s.status);
@@ -122,13 +123,25 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
           </Select>
         </div>
         {avatarProvider === 'upload' && (
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleUpload}
-            disabled={disabled}
-            className="w-full text-sm"
-          />
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleUpload}
+              disabled={disabled}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={disabled}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Choose image…
+            </Button>
+          </>
         )}
         <Button variant="destructive" size="sm" className="mt-1 w-full" onClick={() => void signOut()}>
           Sign Out

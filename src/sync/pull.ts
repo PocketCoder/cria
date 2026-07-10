@@ -148,11 +148,20 @@ export async function pullSavedFilters(
       'SELECT server_id FROM projects WHERE server_id < -1 AND deleted = 0',
     );
     const keep: number[] = [];
+    let removedStale = false;
     for (const row of rows) {
       const filterId = -row.server_id - 1;
       const { data, response } = await client.GET('/filters/{id}', {
         params: { path: { id: filterId } },
       });
+      if (response.status === 404) {
+        // Filter is gone server-side but its pseudo-project row lingers —
+        // without this it 404s (and drags a views 404 along) every tick.
+        console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
+        await db.execute('DELETE FROM projects WHERE server_id = ?', [row.server_id]);
+        removedStale = true;
+        continue;
+      }
       if (!response.ok || !data) {
         console.warn(`[pullSavedFilters] HTTP ${response.status} for filter ${filterId}`);
         continue;
@@ -161,6 +170,7 @@ export async function pullSavedFilters(
       keep.push(filterId);
     }
     await pruneSavedFilters(keep);
+    if (removedStale) notify('projects');
     return keep.length;
   });
 }
@@ -495,7 +505,13 @@ export async function pullAllViews(
   let total = 0;
   for (const p of projectRows) {
     if (p.server_id == null) continue;
-    total += await pullViewsForProject(p.server_id, p.local_id, client);
+    try {
+      total += await pullViewsForProject(p.server_id, p.local_id, client);
+    } catch (err) {
+      // One stale/broken project (e.g. deleted server-side, 404) must not
+      // abort the views refresh for every project after it.
+      console.warn(`[pullAllViews] skipping project ${p.server_id}:`, err);
+    }
   }
   await stampSyncState('views_synced_at');
   return total;

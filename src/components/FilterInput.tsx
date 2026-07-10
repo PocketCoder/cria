@@ -98,7 +98,12 @@ export function FilterInput({
     });
   };
 
-  const syncCursor = () => {
+  const [focused, setFocused] = useState(false);
+
+  const syncCursor = (e?: React.KeyboardEvent) => {
+    // Arrow up/down drive the suggestion list (handled in onKeyDown) —
+    // re-syncing on their keyup would reset the highlight every press.
+    if (e && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) return;
     setCursor(taRef.current?.selectionStart ?? 0);
     setDismissed(false);
     setHighlightIdx(0);
@@ -148,8 +153,13 @@ export function FilterInput({
           onChange(e.target.value);
           setDismissed(false);
         }}
-        onKeyUp={syncCursor}
-        onClick={syncCursor}
+        onKeyUp={(e) => syncCursor(e)}
+        onClick={() => syncCursor()}
+        onFocus={() => setFocused(true)}
+        onBlur={() =>
+          // Delay so a mousedown on a suggestion can land first.
+          setTimeout(() => setFocused(false), 150)
+        }
         onScroll={() => {
           if (overlayRef.current && taRef.current) {
             overlayRef.current.scrollTop = taRef.current.scrollTop;
@@ -172,7 +182,7 @@ export function FilterInput({
           }
         }}
       />
-      {suggestions.length > 0 && (
+      {focused && suggestions.length > 0 && (
         <ul className="absolute left-0 top-full z-50 mt-1 max-h-48 w-56 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-card)] py-1 shadow-md">
           {suggestions.map((s, i) => (
             <li key={s}>

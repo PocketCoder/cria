@@ -121,6 +121,41 @@ export function TaskDetail() {
     [projectServerId],
   );
 
+  // Fixed shortcut set: copy family + "open project" (upstream u / . / ⌘.).
+  // MUST run before the early returns below — hooks can't be conditional
+  // (this exact effect being below them blanked the app on list-Enter).
+  useEffect(() => {
+    if (!task) return;
+    const copyText = async (text: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        /* clipboard may be unavailable */
+      }
+    };
+    const url = () => {
+      const { serverUrl } = getAuthSnapshot();
+      return task.serverId && serverUrl
+        ? `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`
+        : null;
+    };
+    const id = task.identifier ?? task.title;
+    const subs = [
+      onShortcut('task.copyId', () => void copyText(id)),
+      onShortcut('task.copyIdTitle', () => void copyText(`${id} ${task.title}`)),
+      onShortcut('task.copyIdTitleUrl', () =>
+        void copyText(`${id} ${task.title} ${url() ?? ''}`.trim()),
+      ),
+      onShortcut('task.copyUrl', () => void copyText(url() ?? task.title)),
+      onShortcut('task.openProject', () =>
+        useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
+      ),
+    ];
+    return () => subs.forEach((u) => u());
+  });
+
   if (!selectedId) return null;
 
   const close = () => setSelectedTask(null);
@@ -210,23 +245,6 @@ export function TaskDetail() {
   const handleCopyLink = async () => {
     await copyToClipboard(taskUrl() ?? task.title);
   };
-
-  // Fixed shortcut set: copy family + "open project" (upstream u / . / ⌘.).
-  useEffect(() => {
-    const id = task.identifier ?? task.title;
-    const subs = [
-      onShortcut('task.copyId', () => void copyToClipboard(id)),
-      onShortcut('task.copyIdTitle', () => void copyToClipboard(`${id} ${task.title}`)),
-      onShortcut('task.copyIdTitleUrl', () =>
-        void copyToClipboard(`${id} ${task.title} ${taskUrl() ?? ''}`.trim()),
-      ),
-      onShortcut('task.copyUrl', () => void copyToClipboard(taskUrl() ?? task.title)),
-      onShortcut('task.openProject', () =>
-        useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
-      ),
-    ];
-    return () => subs.forEach((u) => u());
-  });
 
   // The title lives in the card header (sticky context as the body
   // scrolls), still click-to-edit inline.

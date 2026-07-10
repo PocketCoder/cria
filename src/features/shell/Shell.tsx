@@ -86,6 +86,7 @@ export function Shell() {
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
   const activeView = useUi((s) => s.activeView);
+  const sidebarCollapsed = useUi((s) => s.sidebarCollapsed);
   const setActiveView = useUi((s) => s.setActiveView);
   const setSelectedProject = useUi((s) => s.setSelectedProject);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
@@ -596,9 +597,9 @@ export function Shell() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* Desktop: sidebar is a permanent left column. Mobile: it lives in
-            the slide-over drawer below instead. */}
-        {!isMobile && <ProjectSidebar />}
+        {/* Desktop: sidebar is a left column, collapsible via ⌘E. Mobile: it
+            lives in the slide-over drawer below instead. */}
+        {!isMobile && !sidebarCollapsed && <ProjectSidebar />}
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div ref={scrollSentinelRef} className="pointer-events-none h-px w-full shrink-0" />

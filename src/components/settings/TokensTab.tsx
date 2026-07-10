@@ -27,6 +27,8 @@ export function TokensTab({ disabled }: Props) {
   const [newExpiry, setNewExpiry] = useState('');
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
   const [newTokenValue, setNewTokenValue] = useState<string | null>(null);
+  const [newCaldavToken, setNewCaldavToken] = useState<string | null>(null);
+  const [caldavCopied, setCaldavCopied] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,9 +44,15 @@ export function TokensTab({ disabled }: Props) {
     setError('');
     try {
       const permissions = selectionToPermissions([...selectedPerms]);
+      // Go's time.Time needs RFC3339, not the bare yyyy-mm-dd the date input
+      // yields (the server 400s on it). No date picked → 30 days, matching
+      // upstream's default.
+      const expiresAt = newExpiry
+        ? new Date(`${newExpiry}T23:59:59`).toISOString()
+        : new Date(Date.now() + 30 * 86_400_000).toISOString();
       const result = await createApiToken({
         title: newTitle,
-        expires_at: newExpiry || undefined,
+        expires_at: expiresAt,
         permissions: Object.keys(permissions).length ? permissions : undefined,
       });
       setNewTokenValue(result.token ?? null);
@@ -67,7 +75,10 @@ export function TokensTab({ disabled }: Props) {
   const handleCaldavCreate = async () => {
     try {
       const result = await createCaldavToken();
-      setNewTokenValue(result.token ?? null);
+      // Shown once in the CalDAV section below — the server never returns
+      // the token value again after creation.
+      setNewCaldavToken(result.token ?? null);
+      setCaldavCopied(false);
       await listCaldavTokens().then(setCaldavTokens).catch(() => {});
     } catch (e) {
       setError((e as Error).message);
@@ -203,6 +214,27 @@ export function TokensTab({ disabled }: Props) {
                 </Button>
               </div>
             ))}
+          {newCaldavToken && (
+            <div className="space-y-2">
+              <p className="text-xs text-green-500">Token created — copy it now, it won't be shown again.</p>
+              <div className="flex gap-2">
+                <code className="flex-1 rounded bg-[var(--color-muted)] px-2 py-1 text-xs break-all">{newCaldavToken}</code>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(newCaldavToken);
+                    setCaldavCopied(true);
+                    setTimeout(() => setCaldavCopied(false), 2000);
+                  }}
+                >
+                  {caldavCopied ? 'Copied!' : 'Copy'}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setNewCaldavToken(null)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={() => void handleCaldavCreate()} disabled={disabled}>
             + Generate CalDAV Token
           </Button>
