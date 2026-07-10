@@ -31,3 +31,6 @@ src-tauri/gen/
 coverage/
 .aider*
 PROJECT-VIEWS-REMAINING.md
+
+# session working notes — never commit
+temp.md
