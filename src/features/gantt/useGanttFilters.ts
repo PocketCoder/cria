@@ -4,7 +4,8 @@ import { dayToIso } from './buildGanttTaskTree';
 /**
  * Gantt date-range + dateless visibility, persisted globally to
  * localStorage (matching Vikunja, which syncs these to the URL/query). The
- * default window is today−15d … today+55d.
+ * default window is today−7d … today+55d; the chart scrolls to centre on
+ * today on first render.
  */
 export interface GanttFilters {
   /** Inclusive range start, midnight-UTC ISO. */
@@ -24,7 +25,7 @@ function todayDay(): number {
 function defaults(): GanttFilters {
   const t = todayDay();
   return {
-    dateFrom: dayToIso(t - 15),
+    dateFrom: dayToIso(t - 7),
     dateTo: dayToIso(t + 55),
     // Default on: many local tasks lack start/end, and an empty chart reads
     // as broken. Users can hide them with the toggle.
