@@ -33,15 +33,16 @@ describe('authLinkShare', () => {
   });
 
   it('throws ApiError with the password-required code on 13001', async () => {
+    // openapi-fetch already parses the error body for us — the Response
+    // stream is consumed by then, so re-reading response.text() would throw.
     mockPost.mockReturnValue(
       Promise.resolve({
         data: undefined,
+        error: { code: 13001, message: 'password required' },
         response: {
           ok: false,
           status: 412,
-          text: vi.fn().mockResolvedValue(
-            JSON.stringify({ code: 13001, message: 'password required' }),
-          ),
+          text: vi.fn().mockRejectedValue(new Error('body stream already read')),
         },
       }),
     );

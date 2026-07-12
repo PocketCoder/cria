@@ -1,4 +1,5 @@
 import { createApiClient, type ApiClient } from '@/api/client';
+import { buildApiError } from '@/api/errors';
 import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
 import {
@@ -81,18 +82,19 @@ export async function pullProjects(
   const collected: ProjectResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/projects', {
+    const { data, error, response } = await client.GET('/projects', {
       params: {
         query: {
           page,
           per_page: PER_PAGE,
-          
+
         },
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`pullProjects: HTTP ${response.status} ${text}`);
+      // openapi-fetch already read+parsed the body into `error` — the
+      // Response stream is consumed, so response.text() here would throw.
+      throw new Error(`pullProjects: HTTP ${response.status} ${buildApiError(response.status, error).message}`);
     }
     const batch = data ?? [];
     for (const raw of batch) {
@@ -196,7 +198,7 @@ export async function pullTasksForProject(
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/tasks', {
+    const { data, error, response } = await client.GET('/tasks', {
       params: {
         query: {
           page,
@@ -211,9 +213,8 @@ export async function pullTasksForProject(
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullTasksForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullTasksForProject: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch = data ?? [];
@@ -414,7 +415,7 @@ export async function pullAllTasks(
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/tasks', {
+    const { data, error, response } = await client.GET('/tasks', {
       // No `expand: 'comments'` — see pullTasksForProject. The cross-project
       // pull runs every 60s, so dropping inline comments here is the bigger
       // payload/battery win; comments load per-task on detail open.
@@ -427,9 +428,8 @@ export async function pullAllTasks(
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullAllTasks: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullAllTasks: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch = data ?? [];
@@ -465,12 +465,11 @@ export async function pullLabels(
   return singleFlight('pullLabels', async () => {
   const collected: LabelResponse[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/labels', {
+    const { data, error, response } = await client.GET('/labels', {
       params: { query: { page, per_page: PER_PAGE } },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`pullLabels: HTTP ${response.status} ${text.slice(0, 200)}`);
+      throw new Error(`pullLabels: HTTP ${response.status} ${buildApiError(response.status, error).message}`);
     }
     const batch = data ?? [];
     for (const raw of batch) {
@@ -573,7 +572,7 @@ export async function pullViewsForProject(
   const collected: ViewResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await (client.GET as any)(
+    const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views',
       {
         params: {
@@ -583,9 +582,8 @@ export async function pullViewsForProject(
       },
     );
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullViewsForProject: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch: unknown[] = data ?? [];
@@ -656,7 +654,7 @@ async function pullBucketsForView(
   const collected: BucketResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await (client.GET as any)(
+    const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views/{view}/buckets',
       {
         params: {
@@ -666,9 +664,8 @@ async function pullBucketsForView(
       },
     );
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullBucketsForView: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch: unknown[] = data ?? [];

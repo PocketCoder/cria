@@ -72,7 +72,7 @@ import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, PanelLeft } from 'lucide-react';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
 import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
 import { SelectionBar } from '@/features/tasks/SelectionBar';
@@ -92,6 +92,7 @@ export function Shell() {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const toggleSidebar = useUi((s) => s.toggleSidebar);
   const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
   const openDisplaySheet = useDisplay((s) => s.openSheet);
   const currentViewKey = viewKey(activeView);
@@ -452,7 +453,19 @@ export function Shell() {
             </h1>
           </div>
         ) : (
-          <div className="flex-1" />
+          // pl-[76px] clears the macOS traffic lights (this window uses
+          // titleBarStyle "Overlay" + hiddenTitle — see tauri.conf.json).
+          <div className="flex flex-1 items-center gap-1 pl-[76px]">
+            <button
+              type="button"
+              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              title={sidebarCollapsed ? 'Show sidebar (⌘E)' : 'Hide sidebar (⌘E)'}
+              onClick={toggleSidebar}
+              className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
+          </div>
         )}
         {isMobile ? null : (
           <div className="mx-4 flex max-w-md flex-1">

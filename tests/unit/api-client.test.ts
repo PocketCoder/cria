@@ -81,15 +81,18 @@ describe('callApi', () => {
   });
 
   it('throws ApiError with Vikunja envelope on 4xx', async () => {
+    // openapi-fetch already reads+parses the body into `error` before we
+    // ever see the Response — the stream is consumed, so callApi must use
+    // `error`, not re-read `response.text()` (which throws on a drained body).
     await expect(
       callApi(
         Promise.resolve({
           data: undefined,
-          error: {},
+          error: { message: 'invalid', code: 3001 },
           response: {
             ok: false,
             status: 400,
-            text: () => Promise.resolve(JSON.stringify({ message: 'invalid', code: 3001 })),
+            text: () => Promise.reject(new Error('body stream already read')),
           } as unknown as Response,
         }),
       ),

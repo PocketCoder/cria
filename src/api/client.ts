@@ -355,15 +355,16 @@ export async function callApi<T>(
     );
   }
 
-  const { data, response } = result;
+  const { data, error, response } = result;
   // Any 2xx is success. `data` may be undefined for 204 No Content (e.g.
   // DELETE endpoints) — callers that don't use the return value get
   // `undefined` cast as T, which is fine for `await callApi(...)`.
   if (response.ok) return data as T;
 
   if (response.status === 401) handleUnauthorized();
-  const bodyText = await response.text().catch(() => '');
-  throw await buildApiError(response.status, bodyText);
+  // openapi-fetch already read+parsed the body into `error` — the Response
+  // stream is consumed, so re-reading response.text() here would throw.
+  throw buildApiError(response.status, error);
 }
 
 /**
