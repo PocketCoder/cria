@@ -49,7 +49,9 @@ function ownRange(task: Task): {
   hasOwn: boolean;
 } {
   const start = isoToDay(task.startDate);
-  const end = isoToDay(task.endDate);
+  // No end date → fall back to the due date rather than a guessed span, so a
+  // task with a due date always draws through its actual deadline.
+  const end = isoToDay(task.endDate) ?? isoToDay(task.dueDate);
   return { start, end, hasOwn: start !== null || end !== null };
 }
 

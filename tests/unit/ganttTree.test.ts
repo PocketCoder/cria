@@ -20,7 +20,7 @@ function mkTask(partial: Partial<Task>): Task {
     description: null,
     done: partial.done ?? false,
     doneAt: null,
-    dueDate: null,
+    dueDate: partial.dueDate ?? null,
     startDate: partial.startDate ?? null,
     endDate: partial.endDate ?? null,
     priority: 0,
@@ -50,6 +50,14 @@ describe('buildGanttTaskTree', () => {
     expect(nodes[0]!.hasOwnDates).toBe(true);
     expect(nodes[1]!.startDay).toBeNull();
     expect(nodes[1]!.hasOwnDates).toBe(false);
+  });
+
+  it('falls back to the due date when there is no end date', () => {
+    const a = mkTask({ localId: 'a', startDate: '2024-03-01T00:00:00Z', dueDate: '2024-03-10T00:00:00Z' });
+    const nodes = buildGanttTaskTree([a], new Map());
+
+    expect(nodes[0]!.endDay).toBe(isoToDay('2024-03-10T00:00:00Z'));
+    expect(nodes[0]!.hasOwnDates).toBe(true);
   });
 
   it('derives a dateless parent range from its children, depth-first', () => {
