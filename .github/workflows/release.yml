@@ -41,12 +41,49 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
+  # Gate: the four version sources must all match the tag before we
+  # spend 45 min building. A mismatch here means someone hand-edited
+  # instead of `pnpm bump` — the exact failure that shipped a perpetual
+  # update banner in v0.4.x and v0.12.5 (see AGENTS.md "Current state").
+  # ------------------------------------------------------------------
+  verify-version:
+    name: Verify version matches tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: Check all version sources equal the tag
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          WANT="${TAG#v}"
+
+          pkg=$(jq -r .version package.json)
+          conf=$(jq -r .version src-tauri/tauri.conf.json)
+          cargo=$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          lock=$(grep -A1 '^name = "cria"$' src-tauri/Cargo.lock | grep '^version = ' | sed -E 's/.*"(.*)".*/\1/')
+
+          echo "tag=$WANT package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo Cargo.lock=$lock"
+
+          fail=0
+          for pair in "package.json:$pkg" "tauri.conf.json:$conf" "Cargo.toml:$cargo" "Cargo.lock:$lock"; do
+            if [ "${pair#*:}" != "$WANT" ]; then
+              echo "::error::${pair%%:*} is ${pair#*:}, expected $WANT — bump with 'pnpm bump $WANT'"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  # ------------------------------------------------------------------
   # Build signed bundles per macOS arch.
   # ------------------------------------------------------------------
   build:
     name: Build (${{ matrix.target }})
     runs-on: macos-latest
     timeout-minutes: 45
+    needs: verify-version
     strategy:
       fail-fast: false
       matrix:
