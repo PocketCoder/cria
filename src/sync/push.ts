@@ -2,6 +2,7 @@ import { createApiClient, callApi, type ApiClient } from '@/api/client';
 import { getDb, withTx, exec, type Database } from '@/db';
 import { notify, subscribe } from '@/db/bus';
 import { ApiError, NetworkError } from '@/api/errors';
+import { normaliseDate } from '@/domain/task';
 
 /**
  * Subscribe the current user to a task by calling the Vikunja API,
@@ -568,25 +569,34 @@ async function executeOp(
         `SELECT last_synced FROM tasks WHERE local_id = ? LIMIT 1`,
         [localId],
       );
+      let hasNewConflict = false;
       if (lastSyncedRow?.last_synced) {
         try {
           const serverPayload = await callApi(
             client.GET('/tasks/{id}', { params: { path: { id: task.server_id } } }),
           ) as Record<string, unknown> | undefined;
           if (serverPayload) {
-            const conflicted = await checkDivergence(
+            hasNewConflict = await checkDivergence(
               lastSyncedRow.last_synced,
               serverPayload,
               TASK_CONFLICT_FIELDS as unknown as readonly string[],
               'task',
               localId,
             );
-            if (conflicted) return;
           }
         } catch {
           // GET failed (network, 404, etc.) — skip divergence check and
           // proceed with push; the push itself may fail and retry.
         }
+      }
+      // Don't delete the outbox op here — a plain `return` would look like
+      // success to drainLoop and drop this edit for good. Throw the same
+      // retryable error as the pendingConflict check above (outside the
+      // try/catch above, which only guards the GET itself) so the op stays
+      // queued; once the user resolves the conflict (keep-mine), that same
+      // queued op is what actually pushes it.
+      if (hasNewConflict) {
+        throw new ApiError(408, null, 'task has unresolved conflict', true, true);
       }
 
       const res = await callApi(
@@ -595,18 +605,47 @@ async function executeOp(
           body: taskToBody(task, projRow?.server_id ?? undefined, reminders),
         }),
       );
-    const newUpdated = (res as { updated?: string }).updated;
+    const r = res as Record<string, unknown> | undefined;
+    const newUpdated = r?.updated as string | undefined;
+    const nowIso = new Date().toISOString();
 
     await withTx(async (tx) => {
-      await tx.execute(
-        `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ?`,
-        [
-          new Date().toISOString(),
-          newUpdated ?? new Date().toISOString(),
-          localId,
-        ],
-      );
+      // Apply the server's authoritative result of our own write — don't just
+      // stamp sync metadata. Vikunja recomputes fields when a task is marked
+      // done; most importantly it ROLLS A REPEATING TASK FORWARD (flips done
+      // back to false and advances due/start/end by repeat_after) instead of
+      // completing it. Discarding the response left the roll-forward unseen:
+      // the task got stuck done=1 (vanishing from every due view) or overdue,
+      // and never reappeared on its next date. Refresh last_synced to the
+      // response so the next pull doesn't read a phantom divergence.
+      if (r && typeof r === 'object') {
+        await tx.execute(
+          `UPDATE tasks SET
+             done = ?, done_at = ?, due_date = ?, start_date = ?, end_date = ?,
+             percent_done = ?, repeat_after = ?, repeat_mode = ?,
+             synced_at = ?, dirty = 0, updated_at = ?, last_synced = ?
+           WHERE local_id = ?`,
+          [
+            r.done === true ? 1 : 0,
+            normaliseDate(r.done_at as string | null | undefined),
+            normaliseDate(r.due_date as string | null | undefined),
+            normaliseDate(r.start_date as string | null | undefined),
+            normaliseDate(r.end_date as string | null | undefined),
+            (r.percent_done as number | undefined) ?? 0,
+            (r.repeat_after as number | undefined) ?? 0,
+            (r.repeat_mode as number | undefined) ?? 0,
+            nowIso,
+            newUpdated ?? nowIso,
+            JSON.stringify(r),
+            localId,
+          ],
+        );
+      } else {
+        await tx.execute(
+          `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?`,
+          [nowIso, newUpdated ?? nowIso, localId],
+        );
+      }
     });
     notify('tasks');
     return;
