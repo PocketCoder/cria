@@ -21,7 +21,13 @@ tauri = { version = "2", features = ["macos-private-api", "image-png", "tray-ico
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
-tauri-plugin-http = "2"
+# `unsafe-headers`: lets us set the `Cookie` header on the refresh-token
+# request (client.ts doRefresh) — Vikunja's refresh token rides as a cookie,
+# not a Bearer header, and the plugin drops it per the fetch spec's forbidden-
+# header list otherwise. "unsafe" = not browser-fetch-spec-compliant, not a
+# security downgrade: we're setting it ourselves to talk to a trusted,
+# user-configured server, not letting page JS forge it.
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-opener = "2"
 # Platform detection (used by the frontend via @tauri-apps/plugin-os).
 tauri-plugin-os = "2"
