@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react';
-import type { UpdaterState } from '@/queries/updater';
+import type { UpdaterState } from '@/stores/updater';
 
 interface UpdateBannerProps {
   state: UpdaterState;

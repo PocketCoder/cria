@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 
 import { register, unregister } from '@/tauri/globalShortcut';
+import { useOnline } from '@/hooks/useOnline';
+import { useShortcuts } from '@/hooks/useShortcuts';
+import { LabelManagerModal } from '@/components/LabelManagerModal';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
@@ -62,13 +66,13 @@ import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { SpecularTracker } from '@/components/SpecularTracker';
-import { useUpdater } from '@/queries/updater';
+import { useUpdaterStore } from '@/stores/updater';
 import { UpdateBanner } from '@/features/shell/UpdateBanner';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, PanelLeft } from 'lucide-react';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
 import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
 import { SelectionBar } from '@/features/tasks/SelectionBar';
@@ -82,11 +86,13 @@ export function Shell() {
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
   const activeView = useUi((s) => s.activeView);
+  const sidebarCollapsed = useUi((s) => s.sidebarCollapsed);
   const setActiveView = useUi((s) => s.setActiveView);
   const setSelectedProject = useUi((s) => s.setSelectedProject);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const toggleSidebar = useUi((s) => s.toggleSidebar);
   const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
   const openDisplaySheet = useDisplay((s) => s.openSheet);
   const currentViewKey = viewKey(activeView);
@@ -126,11 +132,9 @@ export function Shell() {
   const { data: conflictCount = 0 } = useConflictsCount();
   const { data: deadLetterCount = 0 } = useDeadLettersCount();
   const { data: serverVersion } = useServerVersion();
-  const updater = useUpdater();
-  const [isOnline, setIsOnline] = useState(
-      typeof navigator !== 'undefined' ? navigator.onLine : true
-    );
-
+  const updaterState = useUpdaterStore((s) => s.state);
+  const installUpdate = useUpdaterStore((s) => s.install);
+  const isOnline = useOnline();
 
   // Notify only on sync conflicts (not routine outbox drain)
   const prevConflicts = useRef<number>(conflictCount);
@@ -209,6 +213,7 @@ export function Shell() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'teams' | undefined>(undefined);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   /* ── mobile layout ────────────────────────────────────── */
@@ -222,20 +227,6 @@ export function Shell() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prevViewRef = useRef<ActiveView | null>(null);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
 
   // Register global shortcut Cmd+Shift+A for Quick Add
   useEffect(() => {
@@ -264,17 +255,21 @@ export function Shell() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Cmd/Ctrl+K → command palette (always on, not just dev)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowCommandPalette((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  // Fixed Vikunja shortcut set (⌘K palette, ⌘E sidebar, g-sequences,
+  // task-detail keys via the shortcut bus). See lib/shortcuts.ts.
+  const [showLabelManager, setShowLabelManager] = useState(false);
+  useShortcuts({
+    switchView: (kind) => {
+      const target = projectViews.find((v) => v.viewKind === kind);
+      if (target) handleSelectView(target.localId);
+    },
+    openQuickSearch: () => setShowCommandPalette((v) => !v),
+    openLabelManager: () => setShowLabelManager(true),
+    openTeams: () => {
+      setSettingsTab('teams');
+      setShowSettings(true);
+    },
+  });
 
   /* ── search handlers ──────────────────────────────────── */
   const handleSearchFocus = () => {
@@ -458,7 +453,19 @@ export function Shell() {
             </h1>
           </div>
         ) : (
-          <div className="flex-1" />
+          // pl-[76px] clears the macOS traffic lights (this window uses
+          // titleBarStyle "Overlay" + hiddenTitle — see tauri.conf.json).
+          <div className="flex flex-1 items-center gap-1 pl-[76px]">
+            <button
+              type="button"
+              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              title={sidebarCollapsed ? 'Show sidebar (⌘E)' : 'Hide sidebar (⌘E)'}
+              onClick={toggleSidebar}
+              className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
+          </div>
         )}
         {isMobile ? null : (
           <div className="mx-4 flex max-w-md flex-1">
@@ -561,6 +568,7 @@ export function Shell() {
                 <MoreHorizontal className="h-5 w-5" />
               </button>
             )}
+            <NotificationBell />
             <button
               type="button"
               aria-label="Settings"
@@ -590,6 +598,7 @@ export function Shell() {
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             )}
+            <NotificationBell />
             <span className="text-xs text-[var(--color-muted-foreground)]">
               {displayName}
             </span>
@@ -601,9 +610,9 @@ export function Shell() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* Desktop: sidebar is a permanent left column. Mobile: it lives in
-            the slide-over drawer below instead. */}
-        {!isMobile && <ProjectSidebar />}
+        {/* Desktop: sidebar is a left column, collapsible via ⌘E. Mobile: it
+            lives in the slide-over drawer below instead. */}
+        {!isMobile && !sidebarCollapsed && <ProjectSidebar />}
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div ref={scrollSentinelRef} className="pointer-events-none h-px w-full shrink-0" />
@@ -663,8 +672,8 @@ export function Shell() {
               <Settings className="h-3.5 w-3.5" />
             </button>
             <UpdateBanner
-              state={updater.state}
-              onInstall={() => void updater.install()}
+              state={updaterState}
+              onInstall={() => void installUpdate()}
             />
             <span>
               Cria {pkg.version}
@@ -692,8 +701,17 @@ export function Shell() {
       )}
       {showSettings && (
         <Suspense fallback={null}>
-          <SettingsModal onClose={() => setShowSettings(false)} />
+          <SettingsModal
+            initialTab={settingsTab}
+            onClose={() => {
+              setShowSettings(false);
+              setSettingsTab(undefined);
+            }}
+          />
         </Suspense>
+      )}
+      {showLabelManager && (
+        <LabelManagerModal onClose={() => setShowLabelManager(false)} />
       )}
       {showCommandPalette && (
         <Suspense fallback={null}>

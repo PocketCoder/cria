@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listTasksForProject, listTasksForProjectFiltered } from '@/db/tasks';
+import { listTasksForProject, listTasksForProjectFiltered, listTasksFilteredAllProjects } from '@/db/tasks';
+import { getSavedFilterByServerId } from '@/db/savedFilters';
 import { subscribe } from '@/db/bus';
 import { throttledWarn } from '@/api/resilience';
 import { pullTasksForProject } from '@/sync/pull';
@@ -36,13 +37,22 @@ export function useProjectTasks(
   project: Project | null,
   filterQuery?: string,
   sortRule?: SortRule | null,
+  includeNulls = false,
 ) {
   const queryClient = useQueryClient();
+  const queryKey = ['tasks', project?.localId ?? null, filterQuery, sortRule, includeNulls] as const;
 
   useEffect(() => {
-    return subscribe('tasks', () => {
+    const unsubTasks = subscribe('tasks', () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
     });
+    const unsubFilters = subscribe('saved_filters', () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    });
+    return () => {
+      unsubTasks();
+      unsubFilters();
+    };
   }, [queryClient]);
 
   const parsed = useMemo(
@@ -51,40 +61,65 @@ export function useProjectTasks(
   );
 
   const compiled = useMemo(
-    () => compileFilterAndSort(parsed.ast, false, sortRule ?? null),
-    [parsed.ast, sortRule],
+    () => compileFilterAndSort(parsed.ast, includeNulls, sortRule ?? null),
+    [parsed.ast, sortRule, includeNulls],
   );
 
+  const isSavedFilter = project?.serverId != null && project.serverId < -1;
+
+  const readLocal = () => {
+    if (!project) return Promise.resolve([]);
+    if (compiled.where) {
+      return listTasksForProjectFiltered(
+        project.localId,
+        !parsed.hasDoneFilter,
+        compiled.where,
+        compiled.params,
+        compiled.orderBy || undefined,
+      );
+    }
+    if (compiled.orderBy) {
+      return listTasksForProjectFiltered(
+        project.localId,
+        !parsed.hasDoneFilter,
+        undefined,
+        undefined,
+        compiled.orderBy,
+      );
+    }
+    return listTasksForProject(project.localId);
+  };
+
   return useQuery<Task[]>({
-    queryKey: ['tasks', project?.localId ?? null, filterQuery, sortRule],
+    queryKey,
     queryFn: async () => {
       if (!project) return [];
+
+      if (isSavedFilter) {
+        const saved = await getSavedFilterByServerId(-project.serverId! - 1);
+        const parsedSaved = saved ? parseFilter(saved.filterQuery) : { ast: null, hasDoneFilter: false };
+        const compiledSaved = compileFilterAndSort(
+          parsedSaved.ast,
+          saved?.filterIncludeNulls ?? false,
+          sortRule ?? null,
+        );
+        return listTasksFilteredAllProjects(
+          !parsedSaved.hasDoneFilter,
+          compiledSaved.where || undefined,
+          compiledSaved.params,
+          compiledSaved.orderBy || undefined,
+        );
+      }
+
+      // Fire the server refresh in the background
       if (project.serverId != null) {
-        try {
-          await pullTasksForProject(project.serverId);
-        } catch (err) {
-          throttledWarn('queries/tasks', '[queries/tasks] pull failed, using cache:', err);
-        }
+        void pullTasksForProject(project.serverId)
+          .then(() => readLocal())
+          .then((fresh) => queryClient.setQueryData(queryKey, fresh))
+          .catch((err) => throttledWarn('queries/tasks', '[queries/tasks] pull failed, using cache:', err));
       }
-      if (compiled.where) {
-        return listTasksForProjectFiltered(
-          project.localId,
-          !parsed.hasDoneFilter,
-          compiled.where,
-          compiled.params,
-          compiled.orderBy || undefined,
-        );
-      }
-      if (compiled.orderBy) {
-        return listTasksForProjectFiltered(
-          project.localId,
-          !parsed.hasDoneFilter,
-          undefined,
-          undefined,
-          compiled.orderBy,
-        );
-      }
-      return listTasksForProject(project.localId);
+
+      return readLocal();
     },
     enabled: project != null,
     staleTime: 30_000,

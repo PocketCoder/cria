@@ -25,13 +25,16 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { getAuthSnapshot } from '@/auth/store';
 import { pullCommentsForTask } from '@/sync/pull';
 import { RichTextEditor } from './RichTextEditor';
+import type { MentionSearch } from './mentionExtension';
 
 export function CommentSection({
   taskLocalId,
   taskServerId,
+  mentionSearch,
 }: {
   taskLocalId: string;
   taskServerId: number | null;
+  mentionSearch?: MentionSearch;
 }) {
   const { data: comments = [] } = useTaskComments(taskLocalId);
   const { data: unreadCount = 0 } = useTaskUnreadCount(taskLocalId);
@@ -197,6 +200,7 @@ export function CommentSection({
             onSave={handleCreateComment}
             taskLocalId={taskLocalId}
             taskServerId={taskServerId}
+            mentionSearch={mentionSearch}
           />
         </div>
       ) : null}
@@ -436,10 +440,12 @@ function CommentCreateForm({
   onSave,
   taskLocalId,
   taskServerId,
+  mentionSearch,
 }: {
   onSave: (html: string) => Promise<void>;
   taskLocalId: string;
   taskServerId: number | null;
+  mentionSearch?: MentionSearch;
 }) {
   const [open, setOpen] = useState(false);
   const [createKey, setCreateKey] = useState(0);
@@ -470,6 +476,7 @@ function CommentCreateForm({
         }}
         taskLocalId={taskLocalId}
         taskServerId={taskServerId}
+        mentionSearch={mentionSearch}
       />
     </div>
   );

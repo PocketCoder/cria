@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getDb, withTx } from './index';
+import { getDb, exec, withTx } from './index';
 import { notify } from './bus';
 import { mergeFromServer } from './syncMerge';
 import type { ProjectView, ViewKind, BucketConfigMode, ViewResponse } from '@/domain/view';
@@ -107,6 +107,28 @@ async function projectLocalIdForServerId(
 }
 
 /**
+ * A brand-new project's views start as local-only placeholders (see
+ * `createDefaultViews`) with `server_id = NULL`. Point the matching
+ * placeholder at the incoming server view *before* the server_id
+ * lookup in `mergeFromServer` runs, so it updates that row in place
+ * instead of minting a new `local_id` and soft-deleting the
+ * placeholder out from under anything (e.g. buckets) already created
+ * against it.
+ */
+async function claimPlaceholderView(
+  projectLocalId: string,
+  viewKind: string,
+  serverId: number,
+): Promise<void> {
+  await exec(
+    `UPDATE project_views SET server_id = ?
+       WHERE project_local_id = ? AND view_kind = ?
+         AND server_id IS NULL AND dirty = 0 AND deleted = 0`,
+    [serverId, projectLocalId, viewKind],
+  );
+}
+
+/**
  * Upsert a view payload that came from the server.
  *
  * Lookup is by `server_id`. If a row already exists we update in place;
@@ -117,18 +139,25 @@ async function projectLocalIdForServerId(
  */
 export async function upsertViewFromServer(
   payload: ViewResponse,
+  /** Parent already known to the caller (replaceViewsForProjectFromServer)
+   * — skips re-resolving payload.project_id, which for saved-filter
+   * pseudo-projects is NEGATIVE and used to be rejected outright. */
+  knownProjectLocalId?: string,
 ): Promise<string> {
   const now = new Date().toISOString();
   const updatedAt = payload.updated ?? now;
   const projectLocalId =
-    typeof payload.project_id === 'number' && payload.project_id > 0
+    knownProjectLocalId ??
+    (typeof payload.project_id === 'number' && payload.project_id !== 0
       ? await projectLocalIdForServerId(payload.project_id)
-      : null;
+      : null);
   if (!projectLocalId) {
     throw new Error(
       `upsertViewFromServer: parent project ${payload.project_id} not found locally`,
     );
   }
+
+  await claimPlaceholderView(projectLocalId, payload.view_kind, payload.id);
 
   const filterJson =
     payload.filter && typeof payload.filter === 'object'
@@ -217,7 +246,7 @@ export async function replaceViewsForProjectFromServer(
   const upserted = new Set<string>();
 
   for (const payload of payloads) {
-    const localId = await upsertViewFromServer(payload);
+    const localId = await upsertViewFromServer(payload, projectLocalId);
     upserted.add(localId);
   }
 

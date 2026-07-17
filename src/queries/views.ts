@@ -42,15 +42,20 @@ export function useProjectViews(projectLocalId: string) {
       // Seed local defaults first so the view pane always has something.
       // Server views will replace these via replaceViewsForProjectFromServer.
       await createDefaultViews(projectLocalId);
+      const views = await listViewsForProject(projectLocalId);
 
-      // Best-effort server refresh — don't block the UI on it.
-      try {
-        await pullViewsForProjectLocal(projectLocalId);
-      } catch (err) {
-        console.warn('[queries/views] pull failed, using cache:', err);
-      }
+      // Best-effort server refresh, actually non-blocking: fire it and
+      // return the local list immediately. On success, push the fresh local
+      // read straight into the cache with setQueryData — NOT notify('views'),
+      // which would invalidate this same query and re-trigger this same pull
+      // in a self-sustaining loop. notify('views') stays reserved for actual
+      // mutations (rename/reorder) elsewhere in db/views.ts.
+      void pullViewsForProjectLocal(projectLocalId)
+        .then(() => listViewsForProject(projectLocalId))
+        .then((fresh) => queryClient.setQueryData(viewKey(projectLocalId), fresh))
+        .catch((err) => console.warn('[queries/views] pull failed, using cache:', err));
 
-      return listViewsForProject(projectLocalId);
+      return views;
     },
     enabled: projectLocalId !== '',
     staleTime: 30_000,

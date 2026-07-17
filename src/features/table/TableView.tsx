@@ -28,6 +28,7 @@ import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { cn } from '@/lib/cn';
 import type { Project } from '@/domain/project';
+import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
 import type { Task, TaskUpdate } from '@/domain/task';
 import {
@@ -152,8 +153,9 @@ const SortableTableRow = memo(function SortableTableRow({
  * task detail card, like the list view.
  */
 export function TableView({ project, view }: TableViewProps) {
+  const vf = view ? viewFilterParams(view) : null;
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project);
+    useProjectTasks(project, vf?.filter, undefined, vf?.includeNulls ?? false);
   const { data: allProjects = [] } = useProjects();
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const { columns, visible, sortBy, toggleColumn, onSort, clearSort } = useTableConfig();

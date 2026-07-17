@@ -10,15 +10,18 @@ vi.mock('openapi-fetch', () => ({
   default: mockCreateClient,
 }));
 
-function mockResponse(status: number, data: unknown, bodyText?: string) {
+function mockResponse(status: number, data: unknown) {
   const ok = status >= 200 && status < 300;
   return Promise.resolve({
     data: ok ? data : undefined,
-    error: ok ? undefined : {},
+    // openapi-fetch already reads+parses the body into `error` before we
+    // see the Response — its stream is consumed, so `text()` rejects like
+    // a real drained body would (see api/errors.ts buildApiError).
+    error: ok ? undefined : data,
     response: {
       ok,
       status,
-      text: () => Promise.resolve(bodyText ?? (ok ? '' : JSON.stringify(data))),
+      text: () => Promise.reject(new Error('body stream already read')),
     } as unknown as Response,
   });
 }

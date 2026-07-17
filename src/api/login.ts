@@ -46,10 +46,11 @@ export async function loginWithPassword(
     );
   }
 
-  const { data, response } = result;
+  const { data, error, response } = result;
   if (!response.ok) {
-    const bodyText = await response.text().catch(() => '');
-    throw await buildApiError(response.status, bodyText);
+    // openapi-fetch already consumed the body into `error` — re-reading
+    // response.text() here would throw on the drained stream.
+    throw buildApiError(response.status, error);
   }
 
   return {

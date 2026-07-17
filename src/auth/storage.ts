@@ -32,10 +32,12 @@ const META_KEY = 'cria:credentials/v2';
 const TOKEN_FALLBACK_KEY = 'cria:token/v1';
 const REFRESH_FALLBACK_KEY = 'cria:refresh/v1';
 
+export type AuthMethod = 'token' | 'password' | 'linkShare';
+
 export interface Credentials {
   serverUrl: string;
   token: string;
-  authMethod: 'token' | 'password';
+  authMethod: AuthMethod;
   /**
    * Cookie-based refresh token, password sessions only. The access token from a
    * password login is a short-lived JWT (Vikunja's `service.jwtttlshort`, 10min
@@ -100,7 +102,7 @@ function parseCreds(raw: string | null): Credentials | null {
       return {
         serverUrl: o.serverUrl,
         token: o.token,
-        authMethod: o.authMethod === 'password' ? 'password' : 'token',
+        authMethod: normalizeAuthMethod(o.authMethod),
         refreshToken:
           typeof o.refreshToken === 'string' ? o.refreshToken : undefined,
       };
@@ -115,7 +117,11 @@ function parseCreds(raw: string | null): Credentials | null {
 
 interface Meta {
   serverUrl: string;
-  authMethod: 'token' | 'password';
+  authMethod: AuthMethod;
+}
+
+function normalizeAuthMethod(v: unknown): AuthMethod {
+  return v === 'password' || v === 'linkShare' ? v : 'token';
 }
 
 function readMeta(): Meta | null {
@@ -127,7 +133,7 @@ function readMeta(): Meta | null {
     if (typeof parsed.serverUrl !== 'string') return null;
     return {
       serverUrl: parsed.serverUrl,
-      authMethod: parsed.authMethod === 'password' ? 'password' : 'token',
+      authMethod: normalizeAuthMethod(parsed.authMethod),
     };
   } catch {
     return null;
@@ -150,7 +156,7 @@ async function migrateLegacy(): Promise<void> {
       await saveCredentials({
         serverUrl: parsed.serverUrl,
         token: parsed.token,
-        authMethod: parsed.authMethod === 'password' ? 'password' : 'token',
+        authMethod: normalizeAuthMethod(parsed.authMethod),
       });
     }
   } catch {

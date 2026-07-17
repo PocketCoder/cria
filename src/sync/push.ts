@@ -488,13 +488,12 @@ async function executeOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ? AND updated_at = ?`,
+         WHERE local_id = ?`,
         [
           newServerId ?? null,
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
-          task.updated_at,
         ],
       );
       await tx.execute('DELETE FROM outbox WHERE id = ?', [op.id]);
@@ -506,7 +505,21 @@ async function executeOp(
     if (op.op === 'update') {
       if (task.deleted === 1) return; // delete op will handle it
       if (task.server_id === null) {
-        throw new ApiError(408, null, 'Cannot update a task without server id', true, true);
+        // Create was lost (race in create handler) — re-enqueue so the
+        // full current state (including pending user changes) gets sent.
+        const [pendingCreate] = await db.select<{ id: number }[]>(
+          `SELECT id FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND op = 'create' LIMIT 1`,
+          [localId],
+        );
+        if (!pendingCreate) {
+          await db.execute(
+            `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+             VALUES ('task', ?, 'create', ?, ?)`,
+            [localId, JSON.stringify(task), new Date().toISOString()],
+          );
+          notify('outbox');
+        }
+        return;
       }
 
       // Don't push updates while a conflict is unresolved — the user is
@@ -587,12 +600,11 @@ async function executeOp(
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ?
-         WHERE local_id = ? AND updated_at = ?`,
+         WHERE local_id = ?`,
         [
           new Date().toISOString(),
           newUpdated ?? new Date().toISOString(),
           localId,
-          task.updated_at,
         ],
       );
     });
@@ -1290,6 +1302,7 @@ interface ViewRow {
   title: string;
   view_kind: string;
   position: number | null;
+  filter: string | null;
   bucket_configuration_mode: string;
   done_bucket_server_id: number | null;
   default_bucket_server_id: number | null;
@@ -1299,11 +1312,26 @@ interface ViewRow {
 type ViewKindLiteral = 'list' | 'gantt' | 'table' | 'kanban';
 type BucketModeLiteral = 'none' | 'manual' | 'filter';
 
+function viewFilterForBody(raw: string | null): unknown {
+  if (!raw) return undefined;
+  // Stored as the server's TaskCollection JSON; a bare string is wrapped.
+  if (raw.trimStart().startsWith('{')) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return { filter: raw };
+}
+
 function viewBody(row: ViewRow): Record<string, unknown> {
+  const filter = viewFilterForBody(row.filter);
   return {
     title: row.title,
     view_kind: row.view_kind as ViewKindLiteral,
     ...(row.position != null ? { position: row.position } : {}),
+    ...(filter !== undefined ? { filter } : {}),
     bucket_configuration_mode: row.bucket_configuration_mode as BucketModeLiteral,
     // Vikunja uses 0 for "no done/default bucket".
     done_bucket_id: row.done_bucket_server_id ?? 0,
@@ -1319,7 +1347,7 @@ async function executeViewOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ViewRow[]>(
     `SELECT local_id, server_id, project_local_id, title, view_kind,
-            position, bucket_configuration_mode,
+            position, filter, bucket_configuration_mode,
             done_bucket_server_id, default_bucket_server_id, deleted
        FROM project_views WHERE local_id = ? LIMIT 1`,
     [localId],
