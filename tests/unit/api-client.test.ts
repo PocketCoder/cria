@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { callApi, createApiClient, probeServer } from '@/api/client';
+import { callApi, createApiClient, guardDestination, probeServer } from '@/api/client';
 import { ApiError, NetworkError } from '@/api/errors';
 
 const { mockGetAuthSnapshot, mockCreateClient } = vi.hoisted(() => ({
@@ -153,6 +153,32 @@ describe('createApiClient', () => {
     createApiClient();
     const opts = mockCreateClient.mock.calls[0]![0]!;
     expect(typeof opts.fetch).toBe('function');
+  });
+});
+
+describe('guardDestination', () => {
+  it('allows https destinations', () => {
+    expect(() => guardDestination('https://example.com')).not.toThrow();
+  });
+
+  it('allows loopback http destinations', () => {
+    expect(() => guardDestination('http://localhost:3456')).not.toThrow();
+    expect(() => guardDestination('http://127.0.0.1:3456')).not.toThrow();
+  });
+
+  it('refuses plaintext http to a non-loopback host', () => {
+    expect(() => guardDestination('http://example.com')).toThrow(/Refusing/);
+  });
+
+  it('fails closed on an unparseable URL instead of silently allowing it', () => {
+    expect(() => guardDestination('not a url')).toThrow(/Refusing/);
+  });
+});
+
+describe('createApiClient destination guard', () => {
+  it('throws instead of sending a token to a plaintext non-loopback host', () => {
+    mockGetAuthSnapshot.mockReturnValue({ serverUrl: 'http://example.com', token: 'test-token' });
+    expect(() => createApiClient()).toThrow(/Refusing/);
   });
 });
 

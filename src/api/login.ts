@@ -1,6 +1,6 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
-import { platformFetch, readRefreshCookie } from './client';
+import { guardDestination, platformFetch, readRefreshCookie } from './client';
 import { ApiError, NetworkError, buildApiError } from './errors';
 
 export interface PasswordLoginInput {
@@ -22,8 +22,14 @@ export async function loginWithPassword(
   serverUrl: string,
   input: PasswordLoginInput,
 ): Promise<PasswordLoginResult> {
+  const baseUrl = `${serverUrl.replace(/\/+$/, '')}/api/v1`;
+  // Independent of whatever URL validation the caller (e.g. the login form)
+  // already did — this is the last line of defense before the password goes
+  // out over the wire.
+  guardDestination(baseUrl);
+
   const client = createClient<paths>({
-    baseUrl: `${serverUrl.replace(/\/+$/, '')}/api/v1`,
+    baseUrl,
     fetch: platformFetch,
   });
 

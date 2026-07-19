@@ -276,22 +276,32 @@ async function fetchOnce(
  * sync work, call `createApiClient()` once per cycle so token rotation takes
  * effect on the next cycle without restarting the app.
  */
+/**
+ * Refuse to send credentials (Bearer token, password, refresh cookie) to a
+ * non-https, non-loopback origin. Fails closed: an unparseable URL is
+ * refused too, rather than silently let through.
+ */
+export function guardDestination(baseUrl: string): void {
+  let u: URL;
+  try {
+    u = new URL(baseUrl);
+  } catch {
+    throw new Error(`Refusing to send credentials to an unparseable URL: ${baseUrl}`);
+  }
+  if (u.protocol !== 'https:') {
+    const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
+    if (!loopbacks.includes(u.hostname)) {
+      throw new Error(
+        `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
+      );
+    }
+  }
+}
+
 /** Refuse to send a Bearer token to a non-https, non-loopback origin. */
 function guardTokenDestination(baseUrl: string, token: string): void {
   if (!token) return;
-  try {
-    const u = new URL(baseUrl);
-    if (u.protocol !== 'https:') {
-      const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
-      if (!loopbacks.includes(u.hostname)) {
-        throw new Error(
-          `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
-        );
-      }
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith('Refusing')) throw err;
-  }
+  guardDestination(baseUrl);
 }
 
 export function createApiClient(opts?: {
