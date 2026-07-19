@@ -22,7 +22,9 @@ import { playCompletionSound } from '@/utils/sound';
 import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
-import { listProjects } from '@/db/projects';
+import { listProjects, getProjectByLocalId } from '@/db/projects';
+import { searchProjectUsers } from '@/api/users';
+import { UserSearchCombobox } from '@/components/ui/user-search';
 import { listAssigneesForTask, addTaskAssignee, removeTaskAssignee } from '@/db/task-assignees';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useLabels } from '@/queries/labels';
@@ -61,6 +63,14 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     queryKey: ['task-assignees', task.localId],
     queryFn: () => listAssigneesForTask(task.localId),
     staleTime: 30_000,
+  });
+
+  // Owning project's server id — scopes the assignee search to project
+  // members (same endpoint upstream uses for its assignee picker).
+  const { data: taskProject } = useQuery({
+    queryKey: ['project-of-task', task.projectLocalId],
+    queryFn: () => getProjectByLocalId(task.projectLocalId),
+    staleTime: 60_000,
   });
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -195,6 +205,7 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
         onToggle={() => setExpanded(expanded === 'assignees' ? null : 'assignees')}
         onRemove={handleRemoveAssignee}
         onAdd={handleAddAssignee}
+        projectServerId={taskProject?.serverId ?? null}
       />
 
       <InlineMove projects={projects} expanded={expanded === 'move'} onToggle={() => setExpanded(expanded === 'move' ? null : 'move')} onMove={handleMove} />
@@ -686,17 +697,22 @@ function InlineAssignees({
   assignees,
   expanded,
   onToggle,
-  onRemove: _onRemove,
-  onAdd: _onAdd,
+  onRemove,
+  onAdd,
+  projectServerId,
 }: {
   assignees: TaskAssignee[];
   expanded: boolean;
   onToggle: () => void;
   onRemove: (userServerId: number) => void;
   onAdd: (userServerId: number, username?: string) => void;
+  projectServerId: number | null;
 }) {
+  // Search scoped to users with access to the project (upstream behavior).
+  // Unsynced projects have no server-side members to search.
+  const canSearch = projectServerId != null && projectServerId > 0;
   return (
-    <div className="pointer-events-none opacity-50">
+    <div>
       <ActionButton
         icon={<User className="h-4 w-4" />}
         label={
@@ -714,11 +730,25 @@ function InlineAssignees({
               className="flex items-center gap-2 rounded bg-[var(--color-accent)]/5 px-2 py-1 text-caption"
             >
               <span className="flex-1 truncate">{a.username ?? `User #${a.userServerId}`}</span>
+              <button
+                type="button"
+                aria-label={`Remove assignee ${a.username ?? a.userServerId}`}
+                onClick={() => onRemove(a.userServerId)}
+                className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
           ))}
-          {assignees.length === 0 && (
+          {canSearch ? (
+            <UserSearchCombobox
+              placeholder="Assign a user…"
+              search={(q) => searchProjectUsers(projectServerId, q)}
+              onSelect={(u) => onAdd(u.serverId, u.username)}
+            />
+          ) : (
             <p className="py-1 text-caption text-[var(--color-muted-foreground)]">
-              User search coming soon
+              Sync this project first to assign users
             </p>
           )}
         </div>

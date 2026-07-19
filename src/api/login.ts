@@ -1,6 +1,6 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
-import { guardDestination, platformFetch, readRefreshCookie } from './client';
+import { platformFetch, readRefreshCookie } from './client';
 import { ApiError, NetworkError, buildApiError } from './errors';
 
 export interface PasswordLoginInput {
@@ -22,14 +22,8 @@ export async function loginWithPassword(
   serverUrl: string,
   input: PasswordLoginInput,
 ): Promise<PasswordLoginResult> {
-  const baseUrl = `${serverUrl.replace(/\/+$/, '')}/api/v1`;
-  // Independent of whatever URL validation the caller (e.g. the login form)
-  // already did — this is the last line of defense before the password goes
-  // out over the wire.
-  guardDestination(baseUrl);
-
   const client = createClient<paths>({
-    baseUrl,
+    baseUrl: `${serverUrl.replace(/\/+$/, '')}/api/v1`,
     fetch: platformFetch,
   });
 
@@ -52,10 +46,11 @@ export async function loginWithPassword(
     );
   }
 
-  const { data, response } = result;
+  const { data, error, response } = result;
   if (!response.ok) {
-    const bodyText = await response.text().catch(() => '');
-    throw await buildApiError(response.status, bodyText);
+    // openapi-fetch already consumed the body into `error` — re-reading
+    // response.text() here would throw on the drained stream.
+    throw buildApiError(response.status, error);
   }
 
   return {

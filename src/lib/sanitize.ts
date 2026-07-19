@@ -23,7 +23,15 @@ const CONFIG = {
     'hr', 'span', 'img',
     'input', 'label',
     'ul', 'ol', 'li',       // task-list uses <ul data-type="taskList">
+    // Vikunja-web mention serialization; the server parses this element
+    // out of stored HTML to create mention notifications.
+    'mention-user',
   ],
+  CUSTOM_ELEMENT_HANDLING: {
+    tagNameCheck: /^mention-user$/,
+    attributeNameCheck: /^data-id$/,
+    allowCustomizedBuiltInElements: false,
+  },
   // `data-src` is allowed because our VikunjaImage TipTap extension (and
   // Vikunja-web's matching one) store the real attachment URL there and
   // set `src="#"` to suppress the browser's unauthenticated fetch. The
@@ -35,7 +43,7 @@ const CONFIG = {
   // every checked item back to unchecked on the next pull because
   // TaskItem's parseHTML reads `el.dataset.checked === "true"`. Both
   // Cria and Vikunja-web rely on this attribute being preserved.
-  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type', 'data-src', 'data-checked'],
+  ALLOWED_ATTR: ['href', 'title', 'class', 'rel', 'target', 'src', 'alt', 'type', 'checked', 'data-type', 'data-src', 'data-checked', 'data-id'],
   ALLOW_DATA_ATTR: false,
   // Defence in depth: DOMPurify already blocks `javascript:`/`data:` hrefs by
   // default, but pin the allowed URI schemes explicitly so a version bump
