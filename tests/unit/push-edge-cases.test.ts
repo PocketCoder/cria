@@ -64,6 +64,113 @@ describe('sync/push edge cases', () => {
     });
   });
 
+  describe('drainOutbox — recurring task roll-forward', () => {
+    it('applies the server response so a repeating task marked done rolls forward instead of staying done', async () => {
+      const db = await getDb();
+      const oldDue = '2026-06-29T00:00:00.000Z';
+      const newDue = '2026-07-06T00:00:00.000Z';
+      await db.execute(
+        `INSERT INTO projects (local_id, server_id, title, updated_at, dirty, deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+        ['proj1', 1, 'Project', now()],
+      );
+      // The user marked a weekly-repeating task done: locally done=1, dirty=1,
+      // last_synced NULL (so the pre-push divergence GET is skipped).
+      await db.execute(
+        `INSERT INTO tasks
+           (local_id, project_local_id, server_id, title, done, due_date,
+            repeat_after, repeat_mode, updated_at, dirty, deleted)
+         VALUES (?, ?, ?, ?, 1, ?, 604800, 2, ?, 1, 0)`,
+        ['task1', 'proj1', 100, 'Log Weight', oldDue, now()],
+      );
+      await db.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at) VALUES (?, ?, ?, ?, ?)`,
+        ['task', 'task1', 'update', JSON.stringify({ done: true }), now()],
+      );
+
+      // Vikunja rolls a repeating task forward on completion: it returns the
+      // task with done back to false and the due date advanced by the interval.
+      const client = mockClient();
+      client.POST = vi.fn().mockResolvedValue({
+        data: {
+          id: 100,
+          done: false,
+          due_date: newDue,
+          repeat_after: 604800,
+          repeat_mode: 2,
+          percent_done: 0,
+          updated: now(),
+        },
+        response: { ok: true, status: 200, text: vi.fn().mockResolvedValue('') },
+      });
+
+      await drainOutbox(client);
+
+      const row = await db.select<{ done: number; due_date: string; dirty: number }[]>(
+        `SELECT done, due_date, dirty FROM tasks WHERE local_id = ?`,
+        ['task1'],
+      );
+      // Before the fix this stayed done=1 with the old due date; now the
+      // roll-forward from the response lands locally.
+      expect(row[0]!.done).toBe(0);
+      expect(row[0]!.due_date).toBe(newDue);
+      expect(row[0]!.dirty).toBe(0);
+    });
+
+    it('changing repeat mode on a task with a stale last_synced still reaches the server (does not silently vanish)', async () => {
+      const db = await getDb();
+      // last_synced captures the task's state as of the last clean sync.
+      // The live server has since diverged on `done` (e.g. an earlier
+      // completion round-trip that a client without the roll-forward fix
+      // never applied) — this is exactly the state that previously caused
+      // the pre-push divergence check to swallow a repeat-mode edit outright.
+      const lastSynced = JSON.stringify({ title: 'Log Weight', done: false });
+      await db.execute(
+        `INSERT INTO projects (local_id, server_id, title, updated_at, dirty, deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+        ['proj1', 1, 'Project', now()],
+      );
+      await db.execute(
+        `INSERT INTO tasks
+           (local_id, project_local_id, server_id, title, done, repeat_after,
+            repeat_mode, updated_at, dirty, last_synced, deleted)
+         VALUES (?, ?, ?, ?, 0, 0, 0, ?, 1, ?, 0)`,
+        ['task1', 'proj1', 100, 'Log Weight', now(), lastSynced],
+      );
+      // User removed the repeat via the task detail UI.
+      await db.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at) VALUES (?, ?, ?, ?, ?)`,
+        ['task', 'task1', 'update', JSON.stringify({ repeatAfter: 0, repeatMode: 0 }), now()],
+      );
+
+      const client = mockClient();
+      // The pre-push GET sees the server has already moved on (`done: true`)
+      // relative to our last_synced snapshot — a genuine conflict.
+      client.GET = vi.fn().mockResolvedValue({
+        data: { title: 'Log Weight', done: true },
+        response: { ok: true, status: 200, text: vi.fn().mockResolvedValue('') },
+      });
+      client.POST = vi.fn();
+
+      await drainOutbox(client);
+
+      // The conflict was recorded, and the update must NOT have been sent —
+      // the divergence has to be resolved first.
+      expect(client.POST).not.toHaveBeenCalled();
+      const conflicts = await db.select<unknown[]>(
+        `SELECT * FROM conflicts WHERE entity_type = 'task' AND entity_local_id = ? AND resolved_at IS NULL`,
+        ['task1'],
+      );
+      expect(conflicts.length).toBe(1);
+      // Previously the outbox row was deleted here too, as if the edit had
+      // been pushed — silently dropping the user's repeat-mode change for
+      // good. It must stay queued so resolving the conflict actually pushes it.
+      const outbox = await db.select<unknown[]>(
+        `SELECT * FROM outbox WHERE entity_type = 'task' AND entity_local_id = ?`,
+        ['task1'],
+      );
+      expect(outbox.length).toBe(1);
+    });
+  });
+
   describe('drainOutbox — re-entrancy guard', () => {
     it('does nothing when already draining', async () => {
       (globalThis as any).__cria_isDraining__ = true;

@@ -38,13 +38,14 @@ done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.9.0` (in `package.json`,
+shipped in `v0.4.0`. Current version is `0.12.6` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
-keep all in sync). **`v0.4.0`/`v0.4.1` were tagged without bumping
-these files, leaving them stuck at `0.3.1` → running builds reported
-the wrong version and the updater offered a perpetual update. Always
-verify all four match the tag before releasing (see "Cutting a
-release").**
+keep all in sync). **Bump only via `pnpm bump` (see "Cutting a
+release") — never hand-edit these files.** This has bitten twice:
+`v0.4.0`/`v0.4.1` were tagged without bumping (stuck at `0.3.1`), and
+`v0.12.5` bumped only `package.json` (Tauri/Cargo stuck at `0.12.4`).
+Both times the running build reported the wrong version and the updater
+offered a perpetual update. `pnpm bump` touches all four at once.
 
 | Milestone | Status |
 |---|---|

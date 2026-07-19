@@ -330,6 +330,17 @@ export function GanttChart({
     }
   };
 
+  // Centre the initial scroll position on today, once per mount.
+  const centered = useRef(false);
+  useEffect(() => {
+    if (centered.current) return;
+    const el = rightRef.current;
+    if (!el || !el.clientWidth) return;
+    centered.current = true;
+    const todayLeft = (today - lo) * DAY_WIDTH_PIXELS;
+    el.scrollLeft = Math.max(0, todayLeft - el.clientWidth / 2 + DAY_WIDTH_PIXELS / 2);
+  });
+
   const todayInRange = today >= lo && today <= hi;
   const baseColor = normalizeColor(projectColor) ?? 'var(--color-primary)';
 

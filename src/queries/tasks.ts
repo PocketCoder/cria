@@ -38,6 +38,7 @@ export function useProjectTasks(
   sortRule?: SortRule | null,
 ) {
   const queryClient = useQueryClient();
+  const queryKey = ['tasks', project?.localId ?? null, filterQuery, sortRule] as const;
 
   useEffect(() => {
     return subscribe('tasks', () => {
@@ -55,36 +56,47 @@ export function useProjectTasks(
     [parsed.ast, sortRule],
   );
 
+  const readLocal = () => {
+    if (!project) return Promise.resolve([]);
+    if (compiled.where) {
+      return listTasksForProjectFiltered(
+        project.localId,
+        !parsed.hasDoneFilter,
+        compiled.where,
+        compiled.params,
+        compiled.orderBy || undefined,
+      );
+    }
+    if (compiled.orderBy) {
+      return listTasksForProjectFiltered(
+        project.localId,
+        !parsed.hasDoneFilter,
+        undefined,
+        undefined,
+        compiled.orderBy,
+      );
+    }
+    return listTasksForProject(project.localId);
+  };
+
   return useQuery<Task[]>({
-    queryKey: ['tasks', project?.localId ?? null, filterQuery, sortRule],
+    queryKey,
     queryFn: async () => {
       if (!project) return [];
+
+      // Fire the server refresh in the background instead of gating the
+      // task list's first render on a network round-trip — the local list
+      // is already on disk. On success, push the fresh read into the cache
+      // directly (not via notify('tasks'), which would invalidate this same
+      // query and re-fire this same pull forever).
       if (project.serverId != null) {
-        try {
-          await pullTasksForProject(project.serverId);
-        } catch (err) {
-          throttledWarn('queries/tasks', '[queries/tasks] pull failed, using cache:', err);
-        }
+        void pullTasksForProject(project.serverId)
+          .then(() => readLocal())
+          .then((fresh) => queryClient.setQueryData(queryKey, fresh))
+          .catch((err) => throttledWarn('queries/tasks', '[queries/tasks] pull failed, using cache:', err));
       }
-      if (compiled.where) {
-        return listTasksForProjectFiltered(
-          project.localId,
-          !parsed.hasDoneFilter,
-          compiled.where,
-          compiled.params,
-          compiled.orderBy || undefined,
-        );
-      }
-      if (compiled.orderBy) {
-        return listTasksForProjectFiltered(
-          project.localId,
-          !parsed.hasDoneFilter,
-          undefined,
-          undefined,
-          compiled.orderBy,
-        );
-      }
-      return listTasksForProject(project.localId);
+
+      return readLocal();
     },
     enabled: project != null,
     staleTime: 30_000,

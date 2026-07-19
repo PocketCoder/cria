@@ -154,8 +154,9 @@ export function PrioritySelect({
                   : undefined
             }
             className={cn(
-              'flex flex-1 items-center justify-center gap-1 rounded-[5px] font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
-              compact ? 'px-1.5 py-0.5 text-footnote' : 'px-1.5 py-1 text-caption',
+              'flex items-center justify-center gap-1 rounded-[5px] font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
+              compact ? 'px-1.5 py-0.5 text-footnote' : 'px-1 py-1 text-caption',
+              compact || !selected ? 'min-w-0 flex-1' : 'shrink-0',
               selected
                 ? 'text-white shadow-sm'
                 : compact
@@ -164,28 +165,27 @@ export function PrioritySelect({
             )}
           >
             {isNone ? (
-              // "None" is a muted dash when compact (just a number row), the
-              // word otherwise.
+
               <span
                 className={cn(
                   'leading-none',
-                  compact && !selected && 'text-[var(--color-muted-foreground)]',
+                  !selected && 'text-[var(--color-muted-foreground)]',
                 )}
               >
-                {compact ? '–' : 'None'}
+                {selected ? 'None' : '–'}
               </span>
             ) : compact ? (
-              // Compact non-None: number only, text coloured like its flag
-              // (the colour is applied via the button's inline style above).
+
               <span className="leading-none tabular-nums">{meta.value}</span>
             ) : (
+
               <>
                 <Flag
                   className="h-3 w-3 shrink-0"
                   style={selected ? undefined : { color: meta.color }}
                   fill={selected ? 'currentColor' : 'none'}
                 />
-                <span className="leading-none">{meta.label}</span>
+                {selected && <span className="whitespace-nowrap leading-none">{meta.label}</span>}
               </>
             )}
           </button>

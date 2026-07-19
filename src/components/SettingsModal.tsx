@@ -35,6 +35,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const { data: serverVersion } = useServerVersion();
   const updaterState = useUpdaterStore((s) => s.state);
   const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
+  const installUpdate = useUpdaterStore((s) => s.install);
 
   const serverUrl = status.kind === 'authenticated' ? status.credentials.serverUrl : null;
 
@@ -563,19 +564,35 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <span className="text-xs text-[var(--color-muted-foreground)]">Checking…</span>
                     )}
                     {updaterState.kind === 'available' && (
-                      <span className="text-xs text-green-500">Update available!</span>
+                      <span className="text-xs text-green-500">Update v{updaterState.update.version} ready</span>
+                    )}
+                    {updaterState.kind === 'installing' && (
+                      <span className="text-xs text-[var(--color-muted-foreground)]">Installing v{updaterState.update.version}…</span>
+                    )}
+                    {updaterState.kind === 'upToDate' && (
+                      <span className="text-xs text-green-500">Up to date</span>
                     )}
                     {updaterState.kind === 'error' && (
-                      <span className="text-xs text-red-500">Check failed</span>
+                      <span className="text-xs text-red-500" title={updaterState.message}>Check failed</span>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void runUpdaterCheck()}
-                      disabled={updaterState.kind === 'checking'}
-                    >
-                      Check for Updates
-                    </Button>
+                    {updaterState.kind === 'available' ? (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => void installUpdate()}
+                      >
+                        Install & Restart
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void runUpdaterCheck()}
+                        disabled={updaterState.kind === 'checking' || updaterState.kind === 'installing'}
+                      >
+                        {updaterState.kind === 'installing' ? 'Installing…' : 'Check for Updates'}
+                      </Button>
+                    )}
                   </div>
                 </div>
                 )}
