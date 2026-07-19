@@ -1,4 +1,5 @@
 import { createApiClient, type ApiClient } from '@/api/client';
+import { buildApiError } from '@/api/errors';
 import { upsertProjectFromServer } from '@/db/projects';
 import { upsertTaskFromServer } from '@/db/tasks';
 import {
@@ -11,6 +12,11 @@ import { replaceTaskRemindersFromServer } from '@/db/reminders';
 import { replaceTaskCommentsFromServer } from '@/db/comments';
 import { replaceTaskRelationsFromServer } from '@/db/relations';
 import { replaceViewsForProjectFromServer } from '@/db/views';
+import {
+  upsertSavedFilterFromServer,
+  pruneSavedFilters,
+  type SavedFilterPayload,
+} from '@/db/savedFilters';
 import { replaceBucketsForViewFromServer } from '@/db/buckets';
 import { projectResponseSchema, type ProjectResponse } from '@/domain/project';
 import {
@@ -62,6 +68,7 @@ export async function pullAll(
 ): Promise<PullResult> {
   return singleFlight('pullAll', async () => {
   const projects = await pullProjects(client);
+  await pullSavedFilters(client);
   const views = await pullAllViews(client);
   const buckets = await pullAllBuckets(client);
   return { projects, views, buckets };
@@ -75,23 +82,28 @@ export async function pullProjects(
   const collected: ProjectResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/projects', {
+    const { data, error, response } = await client.GET('/projects', {
       params: {
         query: {
           page,
           per_page: PER_PAGE,
-          
+
         },
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`pullProjects: HTTP ${response.status} ${text}`);
+      // openapi-fetch already read+parsed the body into `error` — the
+      // Response stream is consumed, so response.text() here would throw.
+      throw new Error(`pullProjects: HTTP ${response.status} ${buildApiError(response.status, error).message}`);
     }
     const batch = data ?? [];
     for (const raw of batch) {
       const parsed = projectResponseSchema.safeParse(raw);
       if (parsed.success) {
+        // id -1 is the server's Favorites pseudo-project — Cria has its own
+        // Favorites smart view. ids < -1 are saved-filter pseudo-projects
+        // (kept: they drive the sidebar Filters section, views and buckets).
+        if (parsed.data.id === -1) continue;
         collected.push(parsed.data);
       } else {
         console.warn('[pullProjects] skipping invalid project:', parsed.error);
@@ -124,6 +136,48 @@ export async function pullProjects(
 }
 
 /**
+ * Pull saved-filter details for every saved-filter pseudo-project already in
+ * the local projects table (server_id < -1; filterId = -server_id - 1,
+ * mirroring upstream's GetSavedFilterIDFromProjectID). Prunes local filters
+ * that no longer have a pseudo-project. Returns the number upserted.
+ */
+export async function pullSavedFilters(
+  client: ApiClient = createApiClient(),
+): Promise<number> {
+  return singleFlight('pullSavedFilters', async () => {
+    const db = await getDb();
+    const rows = await db.select<{ server_id: number }[]>(
+      'SELECT server_id FROM projects WHERE server_id < -1 AND deleted = 0',
+    );
+    const keep: number[] = [];
+    let removedStale = false;
+    for (const row of rows) {
+      const filterId = -row.server_id - 1;
+      const { data, response } = await client.GET('/filters/{id}', {
+        params: { path: { id: filterId } },
+      });
+      if (response.status === 404) {
+        // Filter is gone server-side but its pseudo-project row lingers —
+        // without this it 404s (and drags a views 404 along) every tick.
+        console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
+        await db.execute('DELETE FROM projects WHERE server_id = ?', [row.server_id]);
+        removedStale = true;
+        continue;
+      }
+      if (!response.ok || !data) {
+        console.warn(`[pullSavedFilters] HTTP ${response.status} for filter ${filterId}`);
+        continue;
+      }
+      await upsertSavedFilterFromServer(data as SavedFilterPayload);
+      keep.push(filterId);
+    }
+    await pruneSavedFilters(keep);
+    if (removedStale) notify('projects');
+    return keep.length;
+  });
+}
+
+/**
  * Pull tasks for a single project from GET /tasks, filtered server-side.
  * Returns the number of tasks upserted.
  *
@@ -144,7 +198,7 @@ export async function pullTasksForProject(
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/tasks', {
+    const { data, error, response } = await client.GET('/tasks', {
       params: {
         query: {
           page,
@@ -159,9 +213,8 @@ export async function pullTasksForProject(
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullTasksForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullTasksForProject: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch = data ?? [];
@@ -362,7 +415,7 @@ export async function pullAllTasks(
   const collected: TaskResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/tasks', {
+    const { data, error, response } = await client.GET('/tasks', {
       // No `expand: 'comments'` — see pullTasksForProject. The cross-project
       // pull runs every 60s, so dropping inline comments here is the bigger
       // payload/battery win; comments load per-task on detail open.
@@ -375,9 +428,8 @@ export async function pullAllTasks(
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullAllTasks: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullAllTasks: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch = data ?? [];
@@ -413,12 +465,11 @@ export async function pullLabels(
   return singleFlight('pullLabels', async () => {
   const collected: LabelResponse[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await client.GET('/labels', {
+    const { data, error, response } = await client.GET('/labels', {
       params: { query: { page, per_page: PER_PAGE } },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`pullLabels: HTTP ${response.status} ${text.slice(0, 200)}`);
+      throw new Error(`pullLabels: HTTP ${response.status} ${buildApiError(response.status, error).message}`);
     }
     const batch = data ?? [];
     for (const raw of batch) {
@@ -453,7 +504,13 @@ export async function pullAllViews(
   let total = 0;
   for (const p of projectRows) {
     if (p.server_id == null) continue;
-    total += await pullViewsForProject(p.server_id, p.local_id, client);
+    try {
+      total += await pullViewsForProject(p.server_id, p.local_id, client);
+    } catch (err) {
+      // One stale/broken project (e.g. deleted server-side, 404) must not
+      // abort the views refresh for every project after it.
+      console.warn(`[pullAllViews] skipping project ${p.server_id}:`, err);
+    }
   }
   await stampSyncState('views_synced_at');
   return total;
@@ -515,7 +572,7 @@ export async function pullViewsForProject(
   const collected: ViewResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await (client.GET as any)(
+    const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views',
       {
         params: {
@@ -525,9 +582,8 @@ export async function pullViewsForProject(
       },
     );
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullViewsForProject: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullViewsForProject: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch: unknown[] = data ?? [];
@@ -598,7 +654,7 @@ async function pullBucketsForView(
   const collected: BucketResponse[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, response } = await (client.GET as any)(
+    const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views/{view}/buckets',
       {
         params: {
@@ -608,9 +664,8 @@ async function pullBucketsForView(
       },
     );
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
       throw new Error(
-        `pullBucketsForView: HTTP ${response.status} ${text.slice(0, 200)}`,
+        `pullBucketsForView: HTTP ${response.status} ${buildApiError(response.status, error).message}`,
       );
     }
     const batch: unknown[] = data ?? [];

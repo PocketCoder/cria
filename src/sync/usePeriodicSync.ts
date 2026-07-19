@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
 import { throttledWarn } from '@/api/resilience';
-import { pullProjects, pullLabels, pullAllTasks, pullAllViews, pullAllBuckets } from './pull';
+import { pullProjects, pullSavedFilters, pullLabels, pullAllTasks, pullAllViews, pullAllBuckets } from './pull';
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
 import { notify } from '@/db/bus';
@@ -47,6 +47,12 @@ export function usePeriodicSync() {
         notify('projects');
       } catch (err) {
         throttledWarn('periodic-sync/projects', '[periodic-sync] project pull failed:', err);
+      }
+      try {
+        // Saved-filter details for pseudo-projects pulled just above.
+        await pullSavedFilters();
+      } catch (err) {
+        throttledWarn('periodic-sync/saved-filters', '[periodic-sync] saved-filter pull failed:', err);
       }
       try {
         await pullLabels();

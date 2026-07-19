@@ -10,13 +10,14 @@ import {
 import { subscribe } from '@/db/bus';
 import { buildGanttTaskTree, type GanttTaskNode } from './buildGanttTaskTree';
 import type { Project } from '@/domain/project';
+import { viewFilterParams, type ProjectView } from '@/domain/view';
 
 /**
  * Gantt data: the same local task set the list view reads, assembled into a
  * parent/child tree via the project's subtask relations. Pulls on mount
  * through `useProjectTasks`; rebuilds when tasks or relations change.
  */
-export function useGanttData(project: Project, showCompleted?: boolean): {
+export function useGanttData(project: Project, showCompleted?: boolean, view?: ProjectView): {
   nodes: GanttTaskNode[];
   relations: GanttRelationEdge[];
   isLoading: boolean;
@@ -24,8 +25,9 @@ export function useGanttData(project: Project, showCompleted?: boolean): {
   isError: boolean;
   error: unknown;
 } {
+  const vf = view ? viewFilterParams(view) : null;
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project);
+    useProjectTasks(project, vf?.filter, undefined, vf?.includeNulls ?? false);
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const queryClient = useQueryClient();
 

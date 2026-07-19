@@ -2,7 +2,6 @@ import { createApiClient, callApi, type ApiClient } from '@/api/client';
 import { getDb, withTx, exec, type Database } from '@/db';
 import { notify, subscribe } from '@/db/bus';
 import { ApiError, NetworkError } from '@/api/errors';
-import { normaliseDate } from '@/domain/task';
 
 /**
  * Subscribe the current user to a task by calling the Vikunja API,
@@ -569,34 +568,25 @@ async function executeOp(
         `SELECT last_synced FROM tasks WHERE local_id = ? LIMIT 1`,
         [localId],
       );
-      let hasNewConflict = false;
       if (lastSyncedRow?.last_synced) {
         try {
           const serverPayload = await callApi(
             client.GET('/tasks/{id}', { params: { path: { id: task.server_id } } }),
           ) as Record<string, unknown> | undefined;
           if (serverPayload) {
-            hasNewConflict = await checkDivergence(
+            const conflicted = await checkDivergence(
               lastSyncedRow.last_synced,
               serverPayload,
               TASK_CONFLICT_FIELDS as unknown as readonly string[],
               'task',
               localId,
             );
+            if (conflicted) return;
           }
         } catch {
           // GET failed (network, 404, etc.) — skip divergence check and
           // proceed with push; the push itself may fail and retry.
         }
-      }
-      // Don't delete the outbox op here — a plain `return` would look like
-      // success to drainLoop and drop this edit for good. Throw the same
-      // retryable error as the pendingConflict check above (outside the
-      // try/catch above, which only guards the GET itself) so the op stays
-      // queued; once the user resolves the conflict (keep-mine), that same
-      // queued op is what actually pushes it.
-      if (hasNewConflict) {
-        throw new ApiError(408, null, 'task has unresolved conflict', true, true);
       }
 
       const res = await callApi(
@@ -605,47 +595,18 @@ async function executeOp(
           body: taskToBody(task, projRow?.server_id ?? undefined, reminders),
         }),
       );
-    const r = res as Record<string, unknown> | undefined;
-    const newUpdated = r?.updated as string | undefined;
-    const nowIso = new Date().toISOString();
+    const newUpdated = (res as { updated?: string }).updated;
 
     await withTx(async (tx) => {
-      // Apply the server's authoritative result of our own write — don't just
-      // stamp sync metadata. Vikunja recomputes fields when a task is marked
-      // done; most importantly it ROLLS A REPEATING TASK FORWARD (flips done
-      // back to false and advances due/start/end by repeat_after) instead of
-      // completing it. Discarding the response left the roll-forward unseen:
-      // the task got stuck done=1 (vanishing from every due view) or overdue,
-      // and never reappeared on its next date. Refresh last_synced to the
-      // response so the next pull doesn't read a phantom divergence.
-      if (r && typeof r === 'object') {
-        await tx.execute(
-          `UPDATE tasks SET
-             done = ?, done_at = ?, due_date = ?, start_date = ?, end_date = ?,
-             percent_done = ?, repeat_after = ?, repeat_mode = ?,
-             synced_at = ?, dirty = 0, updated_at = ?, last_synced = ?
-           WHERE local_id = ?`,
-          [
-            r.done === true ? 1 : 0,
-            normaliseDate(r.done_at as string | null | undefined),
-            normaliseDate(r.due_date as string | null | undefined),
-            normaliseDate(r.start_date as string | null | undefined),
-            normaliseDate(r.end_date as string | null | undefined),
-            (r.percent_done as number | undefined) ?? 0,
-            (r.repeat_after as number | undefined) ?? 0,
-            (r.repeat_mode as number | undefined) ?? 0,
-            nowIso,
-            newUpdated ?? nowIso,
-            JSON.stringify(r),
-            localId,
-          ],
-        );
-      } else {
-        await tx.execute(
-          `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?`,
-          [nowIso, newUpdated ?? nowIso, localId],
-        );
-      }
+      await tx.execute(
+        `UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ?
+         WHERE local_id = ?`,
+        [
+          new Date().toISOString(),
+          newUpdated ?? new Date().toISOString(),
+          localId,
+        ],
+      );
     });
     notify('tasks');
     return;
@@ -1341,6 +1302,7 @@ interface ViewRow {
   title: string;
   view_kind: string;
   position: number | null;
+  filter: string | null;
   bucket_configuration_mode: string;
   done_bucket_server_id: number | null;
   default_bucket_server_id: number | null;
@@ -1350,11 +1312,26 @@ interface ViewRow {
 type ViewKindLiteral = 'list' | 'gantt' | 'table' | 'kanban';
 type BucketModeLiteral = 'none' | 'manual' | 'filter';
 
+function viewFilterForBody(raw: string | null): unknown {
+  if (!raw) return undefined;
+  // Stored as the server's TaskCollection JSON; a bare string is wrapped.
+  if (raw.trimStart().startsWith('{')) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return { filter: raw };
+}
+
 function viewBody(row: ViewRow): Record<string, unknown> {
+  const filter = viewFilterForBody(row.filter);
   return {
     title: row.title,
     view_kind: row.view_kind as ViewKindLiteral,
     ...(row.position != null ? { position: row.position } : {}),
+    ...(filter !== undefined ? { filter } : {}),
     bucket_configuration_mode: row.bucket_configuration_mode as BucketModeLiteral,
     // Vikunja uses 0 for "no done/default bucket".
     done_bucket_id: row.done_bucket_server_id ?? 0,
@@ -1370,7 +1347,7 @@ async function executeViewOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ViewRow[]>(
     `SELECT local_id, server_id, project_local_id, title, view_kind,
-            position, bucket_configuration_mode,
+            position, filter, bucket_configuration_mode,
             done_bucket_server_id, default_bucket_server_id, deleted
        FROM project_views WHERE local_id = ? LIMIT 1`,
     [localId],

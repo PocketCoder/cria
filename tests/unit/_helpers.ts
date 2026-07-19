@@ -38,6 +38,7 @@ export async function initSchema(): Promise<void> {
     '015_perf_indexes.sql',
     '016_project_identifier.sql',
     '017_reset_task_watermark.sql',
+    '018_saved_filters.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),
@@ -81,6 +82,7 @@ export async function clearTables(): Promise<void> {
     'labels',
     'project_views',
     'projects',
+    'saved_filters',
     'sync_state',
   ];
   for (const t of tables) {

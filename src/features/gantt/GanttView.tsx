@@ -25,7 +25,7 @@ interface GanttViewProps {
  */
 export function GanttView({ project, view }: GanttViewProps) {
   const { filters, setDateFrom, setDateTo, toggleDateless, toggleCompleted, reset } = useGanttFilters();
-  const { nodes, relations, isLoading, isFetching, isError, error } = useGanttData(project, filters.showCompleted);
+  const { nodes, relations, isLoading, isFetching, isError, error } = useGanttData(project, filters.showCompleted, view);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
 
   const handleUpdateDates = useCallback(
