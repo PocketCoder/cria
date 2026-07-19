@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { onShortcut } from '@/lib/shortcutBus';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
+import { getProjectByLocalId } from '@/db/projects';
+import { searchProjectUsers } from '@/api/users';
 import { toggleTaskLabel } from '@/db/labels';
 import { subscribe } from '@/db/bus';
 import { useTaskLabels } from '@/queries/taskLabels';
@@ -124,6 +126,24 @@ export function TaskDetail() {
     return () => subs.forEach((u) => u());
   });
 
+  // Mention picker source: users with access to the task's project
+  // (upstream /projects/{id}/projectusers). Off for unsynced projects.
+  const { data: taskProject } = useQuery({
+    queryKey: ['project-of-task', task?.projectLocalId ?? null],
+    queryFn: async () =>
+      task ? getProjectByLocalId(task.projectLocalId) : null,
+    enabled: !!task,
+    staleTime: 60_000,
+  });
+  const projectServerId = taskProject?.serverId ?? null;
+  const mentionSearch = useMemo(
+    () =>
+      projectServerId != null && projectServerId > 0
+        ? (q: string) => searchProjectUsers(projectServerId, q)
+        : undefined,
+    [projectServerId],
+  );
+
   if (!selectedId) return null;
 
   const close = () => setSelectedTask(null);
@@ -193,12 +213,14 @@ export function TaskDetail() {
     }
   };
 
-  const handleCopyLink = async () => {
+  const taskUrl = () => {
     const { serverUrl } = getAuthSnapshot();
-    let text = task.title;
-    if (task.serverId && serverUrl) {
-      text = `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`;
-    }
+    return task.serverId && serverUrl
+      ? `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`
+      : null;
+  };
+
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -206,6 +228,10 @@ export function TaskDetail() {
     } catch {
       // Clipboard access may be denied in some contexts — silently ignore.
     }
+  };
+
+  const handleCopyLink = async () => {
+    await copyToClipboard(taskUrl() ?? task.title);
   };
 
   // The title lives in the card header (sticky context as the body
@@ -275,10 +301,15 @@ export function TaskDetail() {
             onSave={handleDescriptionSave}
             taskLocalId={task.localId}
             taskServerId={task.serverId}
+            mentionSearch={mentionSearch}
           />
         </section>
 
-        <CommentSection taskLocalId={task.localId} taskServerId={task.serverId} />
+        <CommentSection
+          taskLocalId={task.localId}
+          taskServerId={task.serverId}
+          mentionSearch={mentionSearch}
+        />
 
         <ReminderList taskLocalId={task.localId} />
 

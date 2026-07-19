@@ -276,32 +276,22 @@ async function fetchOnce(
  * sync work, call `createApiClient()` once per cycle so token rotation takes
  * effect on the next cycle without restarting the app.
  */
-/**
- * Refuse to send credentials (Bearer token, password, refresh cookie) to a
- * non-https, non-loopback origin. Fails closed: an unparseable URL is
- * refused too, rather than silently let through.
- */
-export function guardDestination(baseUrl: string): void {
-  let u: URL;
-  try {
-    u = new URL(baseUrl);
-  } catch {
-    throw new Error(`Refusing to send credentials to an unparseable URL: ${baseUrl}`);
-  }
-  if (u.protocol !== 'https:') {
-    const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
-    if (!loopbacks.includes(u.hostname)) {
-      throw new Error(
-        `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
-      );
-    }
-  }
-}
-
 /** Refuse to send a Bearer token to a non-https, non-loopback origin. */
 function guardTokenDestination(baseUrl: string, token: string): void {
   if (!token) return;
-  guardDestination(baseUrl);
+  try {
+    const u = new URL(baseUrl);
+    if (u.protocol !== 'https:') {
+      const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
+      if (!loopbacks.includes(u.hostname)) {
+        throw new Error(
+          `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Refusing')) throw err;
+  }
 }
 
 export function createApiClient(opts?: {
@@ -365,15 +355,16 @@ export async function callApi<T>(
     );
   }
 
-  const { data, response } = result;
+  const { data, error, response } = result;
   // Any 2xx is success. `data` may be undefined for 204 No Content (e.g.
   // DELETE endpoints) — callers that don't use the return value get
   // `undefined` cast as T, which is fine for `await callApi(...)`.
   if (response.ok) return data as T;
 
   if (response.status === 401) handleUnauthorized();
-  const bodyText = await response.text().catch(() => '');
-  throw await buildApiError(response.status, bodyText);
+  // openapi-fetch already read+parsed the body into `error` — the Response
+  // stream is consumed, so re-reading response.text() here would throw.
+  throw buildApiError(response.status, error);
 }
 
 /**
@@ -382,11 +373,31 @@ export async function callApi<T>(
  */
 export async function probeServer(
   serverUrl: string,
-): Promise<{ version: string | null }> {
+): Promise<{ version: string | null; frontendUrl: string | null }> {
   const client = createClient<paths>({
     baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
     fetch: platformFetch,
   });
   const info = await callApi(client.GET('/info'));
-  return { version: info.version ?? null };
+  return {
+    version: info.version ?? null,
+    frontendUrl: (info as { frontend_url?: string }).frontend_url || null,
+  };
+}
+
+export function guardDestination(baseUrl: string): void {
+  let u: URL;
+  try {
+    u = new URL(baseUrl);
+  } catch {
+    throw new Error(`Refusing to send credentials to an unparseable URL: ${baseUrl}`);
+  }
+  if (u.protocol !== 'https:') {
+    const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
+    if (!loopbacks.includes(u.hostname)) {
+      throw new Error(
+        `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
+      );
+    }
+  }
 }
