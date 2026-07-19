@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 
 import { register, unregister } from '@/tauri/globalShortcut';
+import { useOnline } from '@/hooks/useOnline';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
@@ -135,9 +136,7 @@ export function Shell() {
   const installUpdate = useUpdaterStore((s) => s.install);
   // Auto-check for updates on mount (silent failure is fine).
   useEffect(() => { void runUpdaterCheck(true); }, [runUpdaterCheck]);
-  const [isOnline, setIsOnline] = useState(
-      typeof navigator !== 'undefined' ? navigator.onLine : true
-    );
+  const isOnline = useOnline();
 
 
   // Notify only on sync conflicts (not routine outbox drain)
@@ -230,20 +229,6 @@ export function Shell() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prevViewRef = useRef<ActiveView | null>(null);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
 
   // Register global shortcut Cmd+Shift+A for Quick Add
   useEffect(() => {

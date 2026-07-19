@@ -16,6 +16,7 @@
  */
 import { getAuthSnapshot } from '@/auth/store';
 import { platformFetch } from '@/api/client';
+import { saveBlob } from '@/lib/download';
 import {
   upsertAttachmentLocal,
   deleteAttachmentLocal,
@@ -185,15 +186,5 @@ export async function downloadAttachment(
   fileName: string,
 ): Promise<void> {
   const blob = await fetchAttachmentBlob(taskServerId, attachmentServerId);
-  const objUrl = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement('a');
-    a.href = objUrl;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } finally {
-    URL.revokeObjectURL(objUrl);
-  }
+  saveBlob(blob, fileName);
 }
