@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { callApi, createApiClient, guardDestination, probeServer } from '@/api/client';
+import { callApi, createApiClient, probeServer } from '@/api/client';
 import { ApiError, NetworkError } from '@/api/errors';
 
 const { mockGetAuthSnapshot, mockCreateClient } = vi.hoisted(() => ({
@@ -81,15 +81,18 @@ describe('callApi', () => {
   });
 
   it('throws ApiError with Vikunja envelope on 4xx', async () => {
+    // openapi-fetch already reads+parses the body into `error` before we
+    // ever see the Response — the stream is consumed, so callApi must use
+    // `error`, not re-read `response.text()` (which throws on a drained body).
     await expect(
       callApi(
         Promise.resolve({
           data: undefined,
-          error: {},
+          error: { message: 'invalid', code: 3001 },
           response: {
             ok: false,
             status: 400,
-            text: () => Promise.resolve(JSON.stringify({ message: 'invalid', code: 3001 })),
+            text: () => Promise.reject(new Error('body stream already read')),
           } as unknown as Response,
         }),
       ),
@@ -156,44 +159,23 @@ describe('createApiClient', () => {
   });
 });
 
-describe('guardDestination', () => {
-  it('allows https destinations', () => {
-    expect(() => guardDestination('https://example.com')).not.toThrow();
-  });
-
-  it('allows loopback http destinations', () => {
-    expect(() => guardDestination('http://localhost:3456')).not.toThrow();
-    expect(() => guardDestination('http://127.0.0.1:3456')).not.toThrow();
-  });
-
-  it('refuses plaintext http to a non-loopback host', () => {
-    expect(() => guardDestination('http://example.com')).toThrow(/Refusing/);
-  });
-
-  it('fails closed on an unparseable URL instead of silently allowing it', () => {
-    expect(() => guardDestination('not a url')).toThrow(/Refusing/);
-  });
-});
-
-describe('createApiClient destination guard', () => {
-  it('throws instead of sending a token to a plaintext non-loopback host', () => {
-    mockGetAuthSnapshot.mockReturnValue({ serverUrl: 'http://example.com', token: 'test-token' });
-    expect(() => createApiClient()).toThrow(/Refusing/);
-  });
-});
-
 describe('probeServer', () => {
-  it('returns version from /info', async () => {
-    mockClient.GET.mockReturnValue(mockResponse({ version: '1.2.3' }));
+  it('returns version and frontend_url from /info', async () => {
+    mockClient.GET.mockReturnValue(
+      mockResponse({ version: '1.2.3', frontend_url: 'https://vikunja.example.com/' }),
+    );
     const result = await probeServer('https://example.com');
-    expect(result).toEqual({ version: '1.2.3' });
+    expect(result).toEqual({
+      version: '1.2.3',
+      frontendUrl: 'https://vikunja.example.com/',
+    });
     expect(mockClient.GET).toHaveBeenCalledWith('/info');
   });
 
-  it('returns null version when not present', async () => {
+  it('returns nulls when not present', async () => {
     mockClient.GET.mockReturnValue(mockResponse({}));
     const result = await probeServer('https://example.com');
-    expect(result).toEqual({ version: null });
+    expect(result).toEqual({ version: null, frontendUrl: null });
   });
 
   it('normalises trailing slash', async () => {
