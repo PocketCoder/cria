@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, X } from 'lucide-react';
 import { useUi } from '@/stores/ui';
+import { onShortcut } from '@/lib/shortcutBus';
 import { getTaskByLocalId, updateTask } from '@/db/tasks';
 import { toggleTaskLabel } from '@/db/labels';
 import { subscribe } from '@/db/bus';
@@ -99,6 +100,29 @@ export function TaskDetail() {
   });
 
   const { data: labels = [] } = useTaskLabels(selectedId);
+
+  // Fixed shortcut set: copy family + "open project". MUST run before the
+  // early returns below — hooks can't be conditional.
+  useEffect(() => {
+    const copyText = async (text: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch { /* clipboard may be unavailable */ }
+    };
+    if (!task) return;
+    const id = task.identifier ?? task.title;
+    const subs = [
+      onShortcut('task.copyId', () => void copyText(id)),
+      onShortcut('task.copyIdTitle', () => void copyText(`${id} ${task.title}`)),
+      onShortcut('task.copyUrl', () => void copyText(task.serverId ? `${window.location.origin}/tasks/${task.serverId}` : task.title)),
+      onShortcut('task.openProject', () =>
+        useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
+      ),
+    ];
+    return () => subs.forEach((u) => u());
+  });
 
   if (!selectedId) return null;
 
