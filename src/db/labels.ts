@@ -249,16 +249,15 @@ export async function toggleTaskLabel(
   taskLocalId: string,
   labelLocalId: string,
 ): Promise<boolean> {
-  const db = await getDb();
   const now = new Date().toISOString();
 
-  const existing = await db.select<{ deleted: number }[]>(
-    `SELECT deleted FROM task_labels WHERE task_local_id = ? AND label_local_id = ? LIMIT 1`,
-    [taskLocalId, labelLocalId],
-  );
+  const added = await withTx(async (tx) => {
+    const existing = await tx.select<{ deleted: number }[]>(
+      `SELECT deleted FROM task_labels WHERE task_local_id = ? AND label_local_id = ? LIMIT 1`,
+      [taskLocalId, labelLocalId],
+    );
 
-  if (existing.length === 0) {
-    await withTx(async (tx) => {
+    if (existing.length === 0) {
       await tx.execute(
         `INSERT INTO task_labels (task_local_id, label_local_id, updated_at, dirty, deleted)
          VALUES (?, ?, ?, 1, 0)`,
@@ -269,17 +268,14 @@ export async function toggleTaskLabel(
          VALUES ('task_label', ?, 'add', ?, ?)`,
         [taskLocalId, JSON.stringify({ labelLocalId }), now],
       );
-    });
-    notify('task_labels');
-    notify('outbox');
-    return true;
-  }
+      return true;
+    }
 
-  const existingRow = existing[0];
-  if (!existingRow) return false;
-  const wasDeleted = existingRow.deleted === 1;
-  if (wasDeleted) {
-    await withTx(async (tx) => {
+    const existingRow = existing[0];
+    if (!existingRow) return false;
+    const wasDeleted = existingRow.deleted === 1;
+
+    if (wasDeleted) {
       await tx.execute(
         `UPDATE task_labels SET deleted = 0, dirty = 1, updated_at = ? WHERE task_local_id = ? AND label_local_id = ?`,
         [now, taskLocalId, labelLocalId],
@@ -289,13 +285,9 @@ export async function toggleTaskLabel(
          VALUES ('task_label', ?, 'add', ?, ?)`,
         [taskLocalId, JSON.stringify({ labelLocalId }), now],
       );
-    });
-    notify('task_labels');
-    notify('outbox');
-    return true;
-  }
+      return true;
+    }
 
-  await withTx(async (tx) => {
     await tx.execute(
       `UPDATE task_labels SET deleted = 1, dirty = 1, updated_at = ? WHERE task_local_id = ? AND label_local_id = ?`,
       [now, taskLocalId, labelLocalId],
@@ -305,10 +297,12 @@ export async function toggleTaskLabel(
        VALUES ('task_label', ?, 'remove', ?, ?)`,
       [taskLocalId, JSON.stringify({ labelLocalId }), now],
     );
+    return false;
   });
+
   notify('task_labels');
   notify('outbox');
-  return false;
+  return added;
 }
 
 /* ───────────────────────── user mutations on labels themselves ─────── */

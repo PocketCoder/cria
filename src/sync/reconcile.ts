@@ -1,5 +1,5 @@
 import { createApiClient, type ApiClient } from '@/api/client';
-import { getDb, exec } from '@/db';
+import { getDb, withTx } from '@/db';
 import { notify } from '@/db/bus';
 
 const PER_PAGE = 50;
@@ -14,7 +14,7 @@ async function fetchAllServerIds(
   while (true) {
     const { data, response } = await api.GET(path, {
       params: {
-        query: { fields: 'id', page, per_page: PER_PAGE },
+        query: { page, per_page: PER_PAGE },
       },
     });
     if (!response.ok) {
@@ -44,15 +44,17 @@ async function fetchAllServerIds(
 }
 
 async function deleteTaskCascade(localId: string): Promise<void> {
-  await exec('DELETE FROM task_labels WHERE task_local_id = ?', [localId]);
-  await exec('DELETE FROM task_buckets WHERE task_local_id = ?', [localId]);
-  await exec('DELETE FROM task_reminders WHERE task_local_id = ?', [localId]);
-  await exec('DELETE FROM task_assignees WHERE task_local_id = ?', [localId]);
-  await exec(
-    'DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?',
-    [localId, localId],
-  );
-  await exec('DELETE FROM tasks WHERE local_id = ?', [localId]);
+  await withTx(async (tx) => {
+    await tx.execute('DELETE FROM task_labels WHERE task_local_id = ?', [localId]);
+    await tx.execute('DELETE FROM task_buckets WHERE task_local_id = ?', [localId]);
+    await tx.execute('DELETE FROM task_reminders WHERE task_local_id = ?', [localId]);
+    await tx.execute('DELETE FROM task_assignees WHERE task_local_id = ?', [localId]);
+    await tx.execute(
+      'DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?',
+      [localId, localId],
+    );
+    await tx.execute('DELETE FROM tasks WHERE local_id = ?', [localId]);
+  });
 }
 
 export async function reconcileDeletions(api: ApiClient = createApiClient()) {
@@ -85,13 +87,23 @@ export async function reconcileDeletions(api: ApiClient = createApiClient()) {
     if (!serverProjectIds.has(row.server_id)) {
       if (row.dirty === 1) continue;
       const childTasks = await db.select<{ local_id: string }[]>(
-        `SELECT local_id FROM tasks WHERE project_local_id = ?`,
+        `SELECT local_id FROM tasks WHERE project_local_id = ? AND dirty = 0`,
         [row.local_id],
       );
-      for (const t of childTasks) {
-        await deleteTaskCascade(t.local_id);
-      }
-      await exec('DELETE FROM projects WHERE local_id = ?', [row.local_id]);
+      await withTx(async (tx) => {
+        for (const t of childTasks) {
+          await tx.execute('DELETE FROM task_labels WHERE task_local_id = ?', [t.local_id]);
+          await tx.execute('DELETE FROM task_buckets WHERE task_local_id = ?', [t.local_id]);
+          await tx.execute('DELETE FROM task_reminders WHERE task_local_id = ?', [t.local_id]);
+          await tx.execute('DELETE FROM task_assignees WHERE task_local_id = ?', [t.local_id]);
+          await tx.execute(
+            'DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?',
+            [t.local_id, t.local_id],
+          );
+          await tx.execute('DELETE FROM tasks WHERE local_id = ?', [t.local_id]);
+        }
+        await tx.execute('DELETE FROM projects WHERE local_id = ?', [row.local_id]);
+      });
     }
   }
 

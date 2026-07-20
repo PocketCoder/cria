@@ -217,7 +217,8 @@ export async function listTasksWithDueDate(): Promise<TaskWithProject[]> {
        JOIN projects p ON p.local_id = t.project_local_id
       WHERE t.deleted = 0 AND t.done = 0 AND t.due_date IS NOT NULL
         AND p.deleted = 0
-   ORDER BY t.due_date ASC, t.priority DESC`,
+   ORDER BY t.due_date ASC, t.priority DESC
+      LIMIT 500`,
   );
   return rows.map(rowToTaskWithProject);
 }

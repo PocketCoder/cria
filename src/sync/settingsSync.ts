@@ -15,7 +15,7 @@
  */
 
 import { useSettings, type ColorScheme, type DateFormat, type TimeFormat } from '@/stores/settings';
-import { pushUserSettings, type UserSettingsInput } from '@/api/userSettings';
+import { pushUserSettings, SETTINGS_DEFAULTS, type UserSettingsInput } from '@/api/userSettings';
 import { getCachedUser } from '@/db/user';
 import type { User } from '@/domain/user';
 
@@ -97,9 +97,12 @@ export async function pushSyncedPrefs(): Promise<void> {
     | Record<string, unknown>
     | undefined;
   const body: UserSettingsInput = {
-    // Round-trip the server's current settings untouched (the endpoint
-    // overwrites every column), only replacing frontend_settings.
-    ...(serverSettings as UserSettingsInput | undefined),
+    // Seed with defaults so any field missing from the server response
+    // (e.g. a new field added server-side after the client was built) sends
+    // a safe fallback instead of Go's zero value — which the endpoint's
+    // forceOverride=true would otherwise persist silently.
+    ...SETTINGS_DEFAULTS,
+    ...(serverSettings as Partial<UserSettingsInput> | undefined),
     frontend_settings: frontendSettingsWithCria(serverSettings?.frontend_settings),
   };
   await pushUserSettings(body);
