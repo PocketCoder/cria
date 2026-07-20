@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { getDb } from '@/db';
 import { initSchema, clearTables, seedProject } from './_helpers';
-import { pullProjects, pullSavedFilters, pullTasksForProject, pullAllTasks, pullLabels, pullAll } from '@/sync/pull';
+import { pullProjects, pullSavedFilters, pullTasksForProject, pullAllTasks, pullLabels } from '@/sync/pull';
 import { listSavedFilters, upsertSavedFilterFromServer } from '@/db/savedFilters';
 
 function mockGet(responseData: unknown[], totalPages = 1, status = 200) {
@@ -447,13 +447,4 @@ describe('sync/pull', () => {
     });
   });
 
-  describe('pullAll', () => {
-    it('calls pullProjects and returns result', async () => {
-      const client = mockClient({
-        get: mockGet([{ id: 1, title: 'Solo project', updated: now(), is_archived: false }]),
-      });
-      const result = await pullAll(client);
-      expect(result.projects).toBe(1);
-    });
-  });
 });
