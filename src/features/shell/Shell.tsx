@@ -64,6 +64,7 @@ import { useConflictsCount } from '@/queries/conflicts';
 import { useServerVersion } from '@/queries/server';
 import { useShortcuts } from '@/hooks/useShortcuts';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { SpecularTracker } from '@/components/SpecularTracker';
 import { useUpdaterStore } from '@/stores/updater';
 import { UpdateBanner } from '@/features/shell/UpdateBanner';
@@ -216,6 +217,7 @@ export function Shell() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'teams' | undefined>(undefined);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   /* ── mobile layout ────────────────────────────────────── */
@@ -267,7 +269,10 @@ export function Shell() {
     },
     openQuickSearch: () => setShowCommandPalette((v) => !v),
     openLabelManager: () => setShowLabelManager(true),
-    openTeams: () => {}, // ponytail: teams in D workstream
+    openTeams: () => {
+      setSettingsTab('teams');
+      setShowSettings(true);
+    },
   });
 
   /* ── search handlers ──────────────────────────────────── */
@@ -565,6 +570,7 @@ export function Shell() {
                 <MoreHorizontal className="h-5 w-5" />
               </button>
             )}
+            <NotificationBell />
             <button
               type="button"
               aria-label="Settings"
@@ -594,6 +600,7 @@ export function Shell() {
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             )}
+            <NotificationBell />
             <span className="text-xs text-[var(--color-muted-foreground)]">
               {displayName}
             </span>
@@ -696,7 +703,13 @@ export function Shell() {
       )}
       {showSettings && (
         <Suspense fallback={null}>
-          <SettingsModal onClose={() => setShowSettings(false)} />
+          <SettingsModal
+            initialTab={settingsTab}
+            onClose={() => {
+              setShowSettings(false);
+              setSettingsTab(undefined);
+            }}
+          />
         </Suspense>
       )}
       {showCommandPalette && (

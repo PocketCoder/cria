@@ -7,8 +7,10 @@ import { AccountTab } from '@/components/settings/AccountTab';
 import { GeneralTab } from '@/components/settings/GeneralTab';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
 import { PhotoCaptureTab } from '@/components/settings/PhotoCaptureTab';
+import { ShortcutsTab } from '@/components/settings/ShortcutsTab';
 import { NotificationsTab } from '@/components/settings/NotificationsTab';
 import { SecurityTab } from '@/components/settings/SecurityTab';
+import { TeamsTab } from '@/components/settings/TeamsTab';
 import { TokensTab } from '@/components/settings/TokensTab';
 import { DataTab } from '@/components/settings/DataTab';
 import { AdvancedTab } from '@/components/settings/AdvancedTab';
@@ -24,8 +26,10 @@ type TabId =
   | 'general'
   | 'appearance'
   | 'photo-capture'
+  | 'shortcuts'
   | 'notifications'
   | 'security'
+  | 'teams'
   | 'tokens'
   | 'data'
   | 'advanced';
@@ -35,8 +39,10 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'photo-capture', label: 'Photo capture' },
+  { id: 'shortcuts', label: 'Shortcuts' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'security', label: 'Security' },
+  { id: 'teams', label: 'Teams' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'data', label: 'Data' },
   { id: 'advanced', label: 'Advanced' },
@@ -80,10 +86,14 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
         return <AppearanceTab />;
       case 'photo-capture':
         return <PhotoCaptureTab />;
+      case 'shortcuts':
+        return <ShortcutsTab />;
       case 'notifications':
         return <NotificationsTab disabled={!isOnline} />;
       case 'security':
         return <SecurityTab disabled={!isOnline} />;
+      case 'teams':
+        return <TeamsTab disabled={!isOnline} />;
       case 'tokens':
         return <TokensTab disabled={!isOnline} />;
       case 'data':

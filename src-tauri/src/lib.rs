@@ -33,6 +33,7 @@ const MIGRATION_14_SQL: &str = include_str!("../../src/db/migrations/014_comment
 const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_indexes.sql");
 const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project_identifier.sql");
 const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
+const MIGRATION_18_SQL: &str = include_str!("../../src/db/migrations/018_saved_filters.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -136,6 +137,12 @@ fn migrations() -> Vec<Migration> {
             version: 17,
             description: "reset poisoned task delta watermark",
             sql: MIGRATION_17_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 18,
+            description: "saved filters",
+            sql: MIGRATION_18_SQL,
             kind: MigrationKind::Up,
         },
     ]

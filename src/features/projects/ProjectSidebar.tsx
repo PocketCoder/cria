@@ -4,6 +4,7 @@ import { useProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { useSavedFilters } from '@/queries/savedFilters';
 import { deleteSavedFilter } from '@/api/savedFilters';
+import { ShareProjectModal } from '@/features/projects/ShareProjectModal';
 import { SavedFilterModal } from '@/features/smart-views/SavedFilterModal';
 import type { SavedFilter } from '@/db/savedFilters';
 import { useUi } from '@/stores/ui';
@@ -24,6 +25,7 @@ import {
   Star,
   Inbox,
   ListFilter,
+  Share2,
   Palette,
   ChevronRight,
   ChevronDown,
@@ -115,6 +117,7 @@ export function ProjectSidebar({
   const [filterModal, setFilterModal] = useState<
     { mode: 'create' } | { mode: 'edit'; filter: SavedFilter } | null
   >(null);
+  const [shareProject, setShareProject] = useState<Project | null>(null);
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [newLabelTitle, setNewLabelTitle] = useState('');
   const [labelEditingId, setLabelEditingId] = useState<string | null>(null);
@@ -501,7 +504,8 @@ export function ProjectSidebar({
                         setEditingId(null);
                         setEditingTitle('');
                       }}
-                        onDelete={async () => {
+                      onShare={() => setShareProject(p)}
+                      onDelete={async () => {
                         try {
                           await deleteProject(p.localId);
                           if (
@@ -580,6 +584,12 @@ export function ProjectSidebar({
           onClose={() => setFilterModal(null)}
         />
       )}
+      {shareProject && (
+        <ShareProjectModal
+          project={shareProject}
+          onClose={() => setShareProject(null)}
+        />
+      )}
     </aside>
   );
 }
@@ -605,10 +615,11 @@ function ProjectRow({
   onChangeRename,
   onSaveRename,
   onCancelRename,
+  onShare,
   onDelete,
-    onDragStart,
-    onDragOver,
-    onDrop,
+  onDragStart,
+  onDragOver,
+  onDrop,
   onDragEnd,
 }: {
   project: Project;
@@ -626,8 +637,9 @@ function ProjectRow({
   onChangeRename: (v: string) => void;
   onSaveRename: () => void;
   onCancelRename: () => void;
+  onShare: () => void;
   onDelete: () => Promise<void> | void;
-    onDragStart: () => void;
+  onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
@@ -861,6 +873,12 @@ function ProjectRow({
           <span className="flex items-center gap-2">
             <Pencil className="h-3.5 w-3.5" />
             Rename
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { onShare(); }}>
+          <span className="flex items-center gap-2">
+            <Share2 className="h-3.5 w-3.5" />
+            Share
           </span>
         </ContextMenuItem>
         <ContextMenuSeparator />

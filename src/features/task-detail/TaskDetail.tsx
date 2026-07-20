@@ -103,22 +103,33 @@ export function TaskDetail() {
 
   const { data: labels = [] } = useTaskLabels(selectedId);
 
-  // Fixed shortcut set: copy family + "open project". MUST run before the
-  // early returns below — hooks can't be conditional.
+  // Fixed shortcut set: copy family + "open project" (upstream u / . / ⌘.).
+  // MUST run before the early returns below — hooks can't be conditional.
   useEffect(() => {
+    if (!task) return;
     const copyText = async (text: string) => {
       try {
         await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
-      } catch { /* clipboard may be unavailable */ }
+      } catch {
+        /* clipboard may be unavailable */
+      }
     };
-    if (!task) return;
+    const url = () => {
+      const { serverUrl } = getAuthSnapshot();
+      return task.serverId && serverUrl
+        ? `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`
+        : null;
+    };
     const id = task.identifier ?? task.title;
     const subs = [
       onShortcut('task.copyId', () => void copyText(id)),
       onShortcut('task.copyIdTitle', () => void copyText(`${id} ${task.title}`)),
-      onShortcut('task.copyUrl', () => void copyText(task.serverId ? `${window.location.origin}/tasks/${task.serverId}` : task.title)),
+      onShortcut('task.copyIdTitleUrl', () =>
+        void copyText(`${id} ${task.title} ${url() ?? ''}`.trim()),
+      ),
+      onShortcut('task.copyUrl', () => void copyText(url() ?? task.title)),
       onShortcut('task.openProject', () =>
         useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
       ),
