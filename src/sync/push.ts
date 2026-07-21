@@ -12,35 +12,38 @@ export async function subscribeToTask(
   taskLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<void> {
-  await callApi(
-    client.PUT('/subscriptions/{entity}/{entityID}', {
-      params: { path: { entity: 'task', entityID: String(taskServerId) } },
-    }),
-  );
-  await exec(
-    `UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`,
-    [new Date().toISOString(), taskLocalId],
-  );
+  const now = new Date().toISOString();
+  await exec(`UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+  try {
+    await callApi(
+      client.PUT('/subscriptions/{entity}/{entityID}', {
+        params: { path: { entity: 'task', entityID: String(taskServerId) } },
+      }),
+    );
+  } catch (err) {
+    await exec(`UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+    throw err;
+  }
   notify('tasks');
 }
 
-/**
- * Unsubscribe the current user from a task.
- */
 export async function unsubscribeFromTask(
   taskServerId: number,
   taskLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<void> {
-  await callApi(
-    client.DELETE('/subscriptions/{entity}/{entityID}', {
-      params: { path: { entity: 'task', entityID: String(taskServerId) } },
-    }),
-  );
-  await exec(
-    `UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`,
-    [new Date().toISOString(), taskLocalId],
-  );
+  const now = new Date().toISOString();
+  await exec(`UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+  try {
+    await callApi(
+      client.DELETE('/subscriptions/{entity}/{entityID}', {
+        params: { path: { entity: 'task', entityID: String(taskServerId) } },
+      }),
+    );
+  } catch (err) {
+    await exec(`UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+    throw err;
+  }
   notify('tasks');
 }
 
@@ -143,10 +146,13 @@ export async function drainOutbox(
   }
 }
 
+const MAX_OPS_PER_DRAIN = 100;
+
 async function drainLoop(client: ApiClient): Promise<void> {
   const db = await getDb();
+  let ops = 0;
 
-  while (true) {
+  while (ops < MAX_OPS_PER_DRAIN) {
     // Always pick the oldest row regardless of next_attempt_at. If the head
     // row is backing off, stop the drain — skipping it would break FIFO.
     const rows = await db.select<OutboxRow[]>(
@@ -166,6 +172,7 @@ async function drainLoop(client: ApiClient): Promise<void> {
       await executeOp(client, db, op);
       await exec('DELETE FROM outbox WHERE id = ?', [op.id]);
       notify('outbox');
+      ops++;
     } catch (err) {
       const isDependency =
         err instanceof ApiError && err.dependency;

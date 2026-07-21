@@ -195,7 +195,7 @@ const VIKUNJA_ZERO_DATE = '0001-01-01T00:00:00Z';
 /** Vikunja serialises "no date" as 0001-01-01; treat that as null locally. */
 export function normaliseDate(value: string | null | undefined): string | null {
   if (!value) return null;
-  if (value === VIKUNJA_ZERO_DATE) return null;
+  if (value === VIKUNJA_ZERO_DATE || value.startsWith('0001-01-01')) return null;
   return value;
 }
 

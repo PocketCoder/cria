@@ -28,7 +28,8 @@ function parseFilter(expr: string): {
   try {
     const { ast } = parseFilterQuery(expr);
     return { ast, hasDoneFilter: astReferencesField(ast, 'done') };
-  } catch {
+  } catch (err) {
+    console.warn('parseFilter: invalid filter expression', expr, err);
     return { ast: null, hasDoneFilter: false };
   }
 }
