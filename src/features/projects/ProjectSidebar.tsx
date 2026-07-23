@@ -310,7 +310,6 @@ export function ProjectSidebar({
                 const pseudo = projects.find(
                   (p) => p.serverId === -f.serverId - 1,
                 );
-                if (!pseudo) return null;
                 return (
                   <ContextMenu key={f.serverId}>
                     <ContextMenuTrigger asChild>
@@ -319,12 +318,14 @@ export function ProjectSidebar({
                           icon={ListFilter}
                           label={f.title}
                           isSelected={
+                            !!pseudo &&
                             activeView?.kind === 'project' &&
                             activeView.localId === pseudo.localId
                           }
-                          onClick={() =>
-                            setActiveView({ kind: 'project', localId: pseudo.localId })
-                          }
+                          onClick={() => {
+                            if (!pseudo) return;
+                            setActiveView({ kind: 'project', localId: pseudo.localId });
+                          }}
                         />
                       </div>
                     </ContextMenuTrigger>

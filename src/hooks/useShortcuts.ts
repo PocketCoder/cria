@@ -100,7 +100,7 @@ export function useShortcuts(handlers: ShortcutHandlers) {
         timer = setTimeout(() => {
           const late = matcher.tick(at + SEQUENCE_TIMEOUT_MS + 1);
           if (late) dispatch(late);
-        }, SEQUENCE_TIMEOUT_MS + 50);
+        }, SEQUENCE_TIMEOUT_MS + 1);
       }
     };
 

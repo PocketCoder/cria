@@ -107,16 +107,27 @@ export async function pullSavedFilters(
     const rows = await db.select<{ server_id: number }[]>(
       'SELECT server_id FROM projects WHERE server_id < -1 AND deleted = 0',
     );
+
+    const filterEntries = rows.map((r) => ({ serverId: r.server_id, filterId: -r.server_id - 1 }));
+
+    const results = await Promise.allSettled(
+      filterEntries.map(({ filterId }) =>
+        client.GET('/filters/{id}', { params: { path: { id: filterId } } })
+          .then(({ data, response }) => ({ filterId, data, response })),
+      ),
+    );
+
     const keep: number[] = [];
     let removedStale = false;
-    for (const row of rows) {
-      const filterId = -row.server_id - 1;
-      const { data, response } = await client.GET('/filters/{id}', {
-        params: { path: { id: filterId } },
-      });
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('[pullSavedFilters] fetch rejected:', result.reason);
+        continue;
+      }
+      const { filterId, data, response } = result.value;
       if (response.status === 404) {
         console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
-        await db.execute('DELETE FROM projects WHERE server_id = ?', [row.server_id]);
+        await db.execute('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
         removedStale = true;
         continue;
       }

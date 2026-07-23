@@ -42,15 +42,17 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
   }, []);
 
   useEffect(() => {
-    if (user?.username) {
-      fetchAvatarBlob(user.username)
-        .then((blob) => {
-          const url = URL.createObjectURL(blob);
-          setAvatarPreviewUrl(url);
-          return () => URL.revokeObjectURL(url);
-        })
-        .catch(() => {});
-    }
+    if (!user?.username) return;
+    let url: string | null = null;
+    fetchAvatarBlob(user.username)
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        setAvatarPreviewUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
   }, [user?.username]);
 
   const handleNameSave = () => {

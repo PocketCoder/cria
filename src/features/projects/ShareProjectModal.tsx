@@ -66,7 +66,30 @@ export function ShareProjectModal({
   const [tab, setTab] = useState<Tab>('users');
   const online = useOnline();
   const qc = useQueryClient();
-  const projectId = project.serverId!;
+  const projectId = project.serverId;
+
+  if (projectId == null) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={onClose}
+      >
+        <div
+          className="glass-surface rounded-lg p-6 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-sm">Sync this project before sharing it.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-3 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: ['project-shares', projectId] });
 
