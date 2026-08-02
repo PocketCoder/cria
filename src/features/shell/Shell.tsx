@@ -519,8 +519,8 @@ export function Shell() {
                   ? CloudAlert
                   : CloudUpload;
               const tone = !isOnline || deadLetterCount > 0
-                ? 'text-red-500'
-                : 'text-amber-500';
+                ? 'text-[var(--color-destructive)]'
+                : 'text-[var(--color-warning)]';
               const total = outboxCount + deadLetterCount + conflictCount;
               const label = !isOnline
                 ? 'Offline'
@@ -628,7 +628,7 @@ export function Shell() {
             <span
               className={cn(
                 'h-2 w-2 rounded-full transition-colors duration-300',
-                !isOnline ? 'bg-red-500 animate-pulse' : outboxCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
+                !isOnline ? 'bg-[var(--color-destructive)] animate-pulse' : outboxCount > 0 ? 'bg-[var(--color-warning)] animate-pulse' : 'bg-[var(--color-success)]'
               )}
             />
              <span>
@@ -656,10 +656,10 @@ export function Shell() {
              </span>
              {deadLetterCount > 0 && (
                <button
-                 className="ml-2 flex items-center gap-1 text-red-500 underline"
+                 className="ml-2 flex items-center gap-1 text-[var(--color-destructive)] underline"
                  onClick={() => setShowOutbox(true)}
                >
-                 <span className="h-2 w-2 rounded-full bg-red-500" />
+                  <span className="h-2 w-2 rounded-full bg-[var(--color-destructive)]" />
                  {deadLetterCount} failed to sync
                </button>
              )}

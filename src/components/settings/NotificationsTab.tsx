@@ -41,7 +41,7 @@ export function NotificationsTab({ disabled }: Props) {
           />
         </div>
         {osPermissionGranted === false && notificationsEnabled && (
-          <p className="text-xs text-amber-500">
+          <p className="text-xs text-[var(--color-warning)]">
             Notifications are disabled in System Settings. Turn them on below.
           </p>
         )}

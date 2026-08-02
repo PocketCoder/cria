@@ -237,11 +237,11 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
 
       {/* DELETE */}
       {confirmDelete ? (
-        <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="text-xs text-red-600">Delete forever?</span>
+        <div className="flex items-center gap-2 rounded-md border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 px-3 py-2">
+          <span className="text-xs text-[var(--color-destructive)]">Delete forever?</span>
           <button
             onClick={handleDelete}
-            className="ml-auto rounded bg-red-600 px-2 py-0.5 text-caption text-white hover:bg-red-700"
+            className="ml-auto rounded bg-[var(--color-destructive)] px-2 py-0.5 text-caption text-[var(--color-destructive-foreground)] hover:opacity-90"
           >
             Confirm
           </button>
@@ -887,7 +887,7 @@ function InlineRepeat({
           {task.repeatAfter > 0 && (
             <button
               onClick={() => save(0, 0)}
-              className="self-start rounded px-2 py-0.5 text-footnote text-red-500 hover:bg-red-500/10"
+              className="self-start rounded px-2 py-0.5 text-footnote text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
             >
               Remove repeat
             </button>

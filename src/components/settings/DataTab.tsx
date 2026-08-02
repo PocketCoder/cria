@@ -93,7 +93,7 @@ export function DataTab({ disabled }: Props) {
               {exportStatus.size ? ` (${(exportStatus.size / 1024).toFixed(0)} KB)` : ''}
             </p>
           )}
-          {exportError && <p className="text-xs text-red-500">{exportError}</p>}
+          {exportError && <p className="text-xs text-[var(--color-destructive)]">{exportError}</p>}
           <div className="flex gap-2">
             <Button size="sm" onClick={() => void handleRequestExport()} disabled={disabled || exportLoading}>
               {exportLoading ? 'Requesting…' : 'Request Export'}
@@ -110,7 +110,7 @@ export function DataTab({ disabled }: Props) {
         <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
           {hasDeletionScheduled ? (
             <div>
-              <p className="mb-2 text-sm text-amber-500">
+              <p className="mb-2 text-sm text-[var(--color-warning)]">
                 Deletion scheduled for {new Date(deletionScheduledAt).toLocaleString()}.
                 Check your email to confirm.
               </p>
@@ -129,7 +129,7 @@ export function DataTab({ disabled }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm text-red-500">Enter your password to confirm:</p>
+              <p className="text-sm text-[var(--color-destructive)]">Enter your password to confirm:</p>
               <input
                 type="password"
                 value={delPassword}
@@ -137,7 +137,7 @@ export function DataTab({ disabled }: Props) {
                 placeholder="Current password"
                 className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
-              {delError && <p className="text-xs text-red-500">{delError}</p>}
+              {delError && <p className="text-xs text-[var(--color-destructive)]">{delError}</p>}
               <div className="flex gap-2">
                 <Button variant="destructive" size="sm" onClick={() => void handleRequestDeletion()} disabled={disabled || !delPassword}>
                   Confirm Deletion

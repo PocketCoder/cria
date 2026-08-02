@@ -155,8 +155,8 @@ export function SecurityTab({ disabled }: Props) {
             placeholder="Confirm new password"
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
           />
-          {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
-          {passwordSuccess && <p className="text-xs text-green-500">{passwordSuccess}</p>}
+          {passwordError && <p className="text-xs text-[var(--color-destructive)]">{passwordError}</p>}
+          {passwordSuccess && <p className="text-xs text-[var(--color-success)]">{passwordSuccess}</p>}
           <Button onClick={handlePasswordChange} size="sm" disabled={disabled}>Change Password</Button>
         </div>
       </section>
@@ -178,8 +178,8 @@ export function SecurityTab({ disabled }: Props) {
             placeholder="Current password"
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
           />
-          {emailError && <p className="text-xs text-red-500">{emailError}</p>}
-          {emailSuccess && <p className="text-xs text-green-500">{emailSuccess}</p>}
+          {emailError && <p className="text-xs text-[var(--color-destructive)]">{emailError}</p>}
+          {emailSuccess && <p className="text-xs text-[var(--color-success)]">{emailSuccess}</p>}
           <Button onClick={handleEmailChange} size="sm" disabled={disabled}>Update Email</Button>
         </div>
       </section>
@@ -217,7 +217,7 @@ export function SecurityTab({ disabled }: Props) {
                 maxLength={6}
                 className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
-              {totpError && <p className="text-xs text-red-500">{totpError}</p>}
+              {totpError && <p className="text-xs text-[var(--color-destructive)]">{totpError}</p>}
               <Button onClick={handleEnable} size="sm" disabled={disabled || totpPasscode.length !== 6}>
                 Confirm & Enable
               </Button>
@@ -226,7 +226,7 @@ export function SecurityTab({ disabled }: Props) {
 
           {totpPhase === 'enabled' && (
             <div>
-              <p className="mb-2 text-sm text-green-500">TOTP is enabled</p>
+              <p className="mb-2 text-sm text-[var(--color-success)]">TOTP is enabled</p>
               {!showDisableDialog ? (
                 <Button variant="destructive" size="sm" onClick={() => setShowDisableDialog(true)} disabled={disabled}>
                   Disable TOTP
@@ -240,7 +240,7 @@ export function SecurityTab({ disabled }: Props) {
                     placeholder="Current password"
                     className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
                   />
-                  {totpError && <p className="text-xs text-red-500">{totpError}</p>}
+                  {totpError && <p className="text-xs text-[var(--color-destructive)]">{totpError}</p>}
                   <div className="flex gap-2">
                     <Button variant="destructive" size="sm" onClick={handleDisable} disabled={disabled || !disablePassword}>
                       Confirm Disable
