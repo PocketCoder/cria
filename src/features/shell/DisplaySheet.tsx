@@ -147,7 +147,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Display options">
         <div className="sheet-backdrop absolute inset-0" onClick={close} />
-        <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--color-background)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)]">
+        <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--color-background)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">{body}</div>
         </div>
@@ -159,7 +159,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={close}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
         onClick={(e) => e.stopPropagation()}
       >
         {header}
