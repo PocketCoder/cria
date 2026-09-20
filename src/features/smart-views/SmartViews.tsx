@@ -1,22 +1,19 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import { format, startOfDay, isBefore, isSameDay, addDays } from 'date-fns';
-import { toCalendarDate, hasTimeOfDay, formatTime, dueDayKey } from '@/lib/dateFormat';
-import { Check, Trash2, Paperclip } from 'lucide-react';
+import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
+import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { useUi } from '@/stores/ui';
-import { useQueryClient } from '@tanstack/react-query';
-import { updateTask } from '@/db/tasks';
-import { playCompletionSound } from '@/utils/sound';
-import { useLabels } from '@/queries/labels';
-import { useCurrentUser } from '@/queries/user';
+import { useNow, useUi } from '@/stores/ui';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { priorityColor } from '@/components/ui/priority-select';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSwipeGesture, SWIPE_COMPLETE_THRESHOLD, SWIPE_DELETE_THRESHOLD } from '@/lib/useSwipeGesture';
 import { useLongPress } from '@/lib/useLongPress';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { forceSync } from '@/sync/forceSync';
-import { useIsMobile } from '@/lib/useIsMobile';
-import { impactComplete, impactDeleted } from '@/utils/haptics';
+import { impactDeleted } from '@/utils/haptics';
 import {
   useTodayTasks,
   useUpcomingTasks,
@@ -36,11 +33,14 @@ import {
   type ViewKey,
 } from '@/lib/displayConfig';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
-import { LabelChips } from '@/features/tasks/LabelChips';
-import { TaskHoverPreview } from '@/features/tasks/TaskHoverPreview';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
-import type { TaskWithProject } from '@/db/tasks';
+import {
+  TaskRowCore,
+  countChecklistItems,
+  toggleTaskDone,
+} from '@/features/tasks/TaskRowCore';
+import { updateTask, type TaskWithProject } from '@/db/tasks';
 
 /* ─────────────────────────── shared chrome ─────────────────────────── */
 
@@ -53,7 +53,6 @@ import type { TaskWithProject } from '@/db/tasks';
  * create input pre-fills.
  */
 function SmartView({
-  title,
   viewKey: vKey,
   tasks,
   isLoading,
@@ -61,14 +60,17 @@ function SmartView({
   showProject,
   sectioner,
   headerSlot,
+  topSlot,
   keepEmptyGroups,
+  agendaHeadings,
 }: {
-  title: string;
   viewKey: ViewKey;
   tasks: TaskWithProject[];
   isLoading: boolean;
   emptyMessage: string;
   showProject: boolean;
+  /** Rendered inside the scroller, above the first group (e.g. the Now block). */
+  topSlot?: React.ReactNode;
   /** Date-scoped views (Today) own their section layout; given the
    * filtered+sorted tasks they return the groups to render. When absent,
    * grouping comes from the DisplayConfig. */
@@ -77,12 +79,40 @@ function SmartView({
   headerSlot?: React.ReactNode;
   /** Keep empty groups (Upcoming shows every day, even ones with no tasks). */
   keepEmptyGroups?: boolean;
+  /** Render group headings as real 16px/600 agenda headings separated by a
+   * hairline, and empty-run groups as a single muted line. */
+  agendaHeadings?: boolean;
 }) {
-  const isMobile = useIsMobile();
   const pendingDeletes = usePendingDeletes((s) => s.pending);
   const ctx = useDisplayCtx();
   const stored = useDisplay((s) => s.configs[vKey]);
   const config = useMemo(() => stored ?? defaultConfigFor(vKey), [stored, vKey]);
+
+  // Rows that just completed are kept rendered (from a snapshot) so the
+  // collapse animation plays before the refetch moves them to a completed
+  // group. Each entry remembers the group it belonged to.
+  const [completing, setCompleting] = useState<
+    Record<string, { task: TaskWithProject; groupKey: string }>
+  >({});
+
+  const handleRowToggle = useCallback((t: TaskWithProject, groupKey: string) => {
+    if (t.done) {
+      void toggleTaskDone(t);
+      return;
+    }
+    setCompleting((prev) =>
+      prev[t.localId] ? prev : { ...prev, [t.localId]: { task: t, groupKey } },
+    );
+    window.setTimeout(() => {
+      setCompleting((prev) => {
+        if (!prev[t.localId]) return prev;
+        const next = { ...prev };
+        delete next[t.localId];
+        return next;
+      });
+    }, 650);
+    void toggleTaskDone(t);
+  }, []);
 
   const liveTasks = useMemo(
     () => tasks.filter((t) => !pendingDeletes[t.localId]),
@@ -99,10 +129,6 @@ function SmartView({
 
   const filtered = keepEmptyGroups ? rawGroups : rawGroups.filter((g) => g.tasks.length > 0);
   const total = filtered.reduce((n, g) => n + g.tasks.length, 0);
-  const activeTotal = filtered.reduce(
-    (n, g) => n + g.tasks.filter((t) => !t.done).length,
-    0,
-  );
 
   // Task creation lives in the global quick-add (the + FAB / ⌘⇧A), not an
   // inline input — see Shell.
@@ -119,49 +145,72 @@ function SmartView({
 
   return (
     <>
-      {/* On mobile the title is shown by the app header (large title), so this
-          in-content header would duplicate it — desktop only. */}
-      {!isMobile && (
-        <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-7 py-3">
-          <h1 className="text-base font-semibold tracking-tight">{title}</h1>
-          {activeTotal > 0 ? (
-            <span className="text-xs text-[var(--color-muted-foreground)]">
-              {activeTotal}
-            </span>
-          ) : null}
-        </header>
-      )}
-
       <div className="flex min-h-0 min-w-0 flex-1">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* headerSlot (e.g. the Upcoming calendar) sits outside PullToRefresh
               so it stays pinned while the agenda below it scrolls. */}
           {headerSlot}
           <PullToRefresh onRefresh={handleRefresh}>
+          {topSlot ? <div className="px-7 pt-4">{topSlot}</div> : null}
           {isLoading && total === 0 ? (
             <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
               Loading…
             </p>
           ) : total === 0 && !keepEmptyGroups ? (
-            <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
-              {emptyMessage}
-            </p>
+            emptyMessage ? (
+              <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
+                {emptyMessage}
+              </p>
+            ) : null
           ) : (
             filtered.map((g) => {
               const activeCount = g.tasks.filter((t) => !t.done).length;
+              const completingHere = Object.values(completing).filter(
+                (c) => c.groupKey === g.key,
+              );
               return (
                 <div key={g.key} data-day={g.key}>
-                  {g.label ? (
-                    <h2 className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  {g.tasks.length === 0 && agendaHeadings ? (
+                    <p className="px-7 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)]">
+                      {g.label}
+                    </p>
+                  ) : g.label ? (
+                    <h2
+                      className={
+                        agendaHeadings
+                          ? 'border-t border-[var(--color-border)] px-7 pb-1 pt-2.5 text-base font-semibold text-[var(--color-foreground)]'
+                          : cn(
+                              'group-label px-7 py-1.5',
+                              g.key === 'overdue'
+                                ? 'text-[var(--color-destructive)]'
+                                : 'text-[var(--color-muted-foreground)]',
+                            )
+                      }
+                    >
                       {g.label}
                       {activeCount > 0 ? (
-                        <span className="font-normal normal-case">{activeCount}</span>
+                        <span className="ml-2 text-xs font-normal normal-case text-[var(--color-muted-foreground)]">
+                          {activeCount}
+                        </span>
                       ) : null}
                     </h2>
                   ) : null}
                   <ul>
                     {g.tasks.map((t) => (
-                      <SmartTaskRow key={t.localId} task={t} showProject={showProject} />
+                      <SmartTaskRow
+                        key={t.localId}
+                        task={t}
+                        showProject={showProject}
+                        onToggle={() => handleRowToggle(t, g.key)}
+                      />
+                    ))}
+                    {completingHere.map((c) => (
+                      <SmartTaskRow
+                        key={c.task.localId}
+                        task={c.task}
+                        showProject={showProject}
+                        collapse
+                      />
                     ))}
                   </ul>
                 </div>
@@ -179,9 +228,14 @@ function SmartView({
 export const SmartTaskRow = memo(function SmartTaskRow({
   task,
   showProject,
+  onToggle,
+  collapse,
 }: {
   task: TaskWithProject;
   showProject: boolean;
+  onToggle?: () => void;
+  /** Renders the row collapsing away after a completion toggle. */
+  collapse?: boolean;
 }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
@@ -194,26 +248,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
   const { data: labels = [] } = useTaskLabels(task.localId);
   const { data: attachmentIds } = useTasksWithAttachments();
   const hasAttachments = attachmentIds?.has(task.localId) ?? false;
-
-  // Date formatting is the most expensive per-row work; memoize it so it
-  // only recomputes when the due date itself changes, not on every render.
-  const dueLabel = useMemo(
-    () => (task.dueDate ? formatDue(task.dueDate) : null),
-    [task.dueDate],
-  );
-
-  const handleToggle = useCallback(async () => {
-    const nowDone = !task.done;
-    try {
-      await updateTask(task.localId, { done: nowDone });
-      if (nowDone) {
-        playCompletionSound();
-        impactComplete();
-      }
-    } catch (err) {
-      console.error('Failed to toggle task:', err);
-    }
-  }, [task.localId, task.done]);
+  const checklist = useMemo(() => countChecklistItems(task.description), [task.description]);
 
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
@@ -224,8 +259,9 @@ export const SmartTaskRow = memo(function SmartTaskRow({
   );
 
   const handleSwipeComplete = useCallback(() => {
-    void handleToggle();
-  }, [handleToggle]);
+    if (onToggle) onToggle();
+    else void toggleTaskDone(task);
+  }, [onToggle, task]);
 
   const handleSwipeDelete = useCallback(() => {
     enqueueDelete(task);
@@ -237,21 +273,23 @@ export const SmartTaskRow = memo(function SmartTaskRow({
     onDelete: handleSwipeDelete,
   });
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (isSwiping || longPress.consumeLongPress()) return;
     if (selecting) toggleSelected(task.localId);
     else setSelectedTask(task.localId);
-  };
+  }, [isSwiping, longPress, selecting, toggleSelected, task.localId, setSelectedTask]);
+
+  const handleToggleSelect = useCallback(
+    () => toggleSelected(task.localId),
+    [toggleSelected, task.localId],
+  );
 
   return (
     <li
-      data-task-row=""
       onClick={handleClick}
       className={cn(
-        'group flex cursor-pointer items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
-        task.done && 'opacity-60',
-        isSelected && 'bg-[var(--color-primary)]/10',
-        !isSelected && selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+        'border-b border-[var(--color-border)]',
+        collapse && 'completion-collapse',
       )}
       style={{ overflow: 'hidden', position: 'relative' }}
     >
@@ -286,91 +324,40 @@ export const SmartTaskRow = memo(function SmartTaskRow({
         );
       })()}
 
-
       <div
         ref={swipeRef as React.Ref<HTMLDivElement>}
-        className="flex w-full items-start gap-3 px-7 py-3"
+        className="w-full"
         style={{ position: 'relative', zIndex: 1, background: 'var(--color-card)' }}
         {...longPress.handlers}
       >
-        {selecting ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); toggleSelected(task.localId); }}
-            aria-label={isSelected ? 'Deselect' : 'Select'}
-            className={cn(
-              'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
-              isSelected
-                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                : 'border-[var(--color-muted-foreground)]',
-            )}
-          >
-            {isSelected && <Check className="h-3 w-3" />}
-          </button>
-        ) : (
-          <input
-            type="checkbox"
-            checked={task.done}
-            onChange={handleToggle}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={task.done ? 'Done' : 'Not done'}
-            className="task-check mt-0.5"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <TaskHoverPreview task={task}>
-            <p
-              className={cn(
-                'truncate text-sm',
-                task.done && 'text-[var(--color-muted-foreground)] line-through',
-              )}
-            >
-              {task.title}
-            </p>
-          </TaskHoverPreview>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-[var(--color-muted-foreground)]">
-            {showProject ? <span>{task.projectTitle}</span> : null}
-            {dueLabel ? <span>{dueLabel}</span> : null}
-            {task.priority > 0 ? (
-              <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
-                {'!'.repeat(Math.min(5, task.priority))}
-              </span>
-            ) : null}
-            {hasAttachments ? (
-              <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-            ) : null}
-            <LabelChips labels={labels} />
-          </div>
-        </div>
-        {task.hexColor ? (
-          <span
-            aria-hidden="true"
-            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-            style={{ background: task.hexColor }}
-          />
-        ) : null}
-        <div className="mt-1 flex items-center gap-1">
-          <button
-            onClick={handleDelete}
-            aria-label="Delete task"
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <TaskRowCore
+          task={task}
+          labels={labels}
+          hasAttachments={hasAttachments}
+          checklist={checklist}
+          projectTitle={showProject ? task.projectTitle : null}
+          selecting={selecting}
+          isSelected={isSelected}
+          isOpen={!isSelected && selectedTaskId === task.localId}
+          onToggle={onToggle}
+          onToggleSelect={handleToggleSelect}
+          className="px-7 py-3"
+          actions={
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleDelete}
+                aria-label="Delete task"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          }
+        />
       </div>
     </li>
   );
 });
-
-function formatDue(iso: string): string {
-  try {
-    const base = format(toCalendarDate(iso), 'd MMM');
-    return hasTimeOfDay(iso) ? `${base}, ${formatTime(iso)}` : base;
-  } catch {
-    return iso;
-  }
-}
 
 /* ───────────────────────────── view wrappers ───────────────────────── */
 
@@ -378,17 +365,20 @@ function flatten(groups: TaskGroup[]): TaskWithProject[] {
   return groups.flatMap((g) => g.tasks);
 }
 
-/** Today keeps its Overdue / Today split regardless of DisplayConfig. */
+/** Today keeps its Overdue / Today / Completed split regardless of DisplayConfig. */
 function todaySectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[] {
   const overdue: TaskWithProject[] = [];
   const today: TaskWithProject[] = [];
+  const completed: TaskWithProject[] = [];
   for (const t of visible) {
-    if (t.dueDate && isBefore(startOfDay(toCalendarDate(t.dueDate)), ctx.today)) overdue.push(t);
+    if (t.done) completed.push(t);
+    else if (t.dueDate && isBefore(startOfDay(toCalendarDate(t.dueDate)), ctx.today)) overdue.push(t);
     else today.push(t);
   }
   const out: TaskGroup[] = [];
   if (overdue.length) out.push({ key: 'overdue', label: 'Overdue', tasks: overdue });
-  out.push({ key: 'today', label: 'Today', tasks: today });
+  if (today.length) out.push({ key: 'today', label: 'Today', tasks: today });
+  if (completed.length) out.push({ key: 'completed', label: 'Completed', tasks: completed });
   return out;
 }
 
@@ -398,10 +388,22 @@ function todaySectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[
  * The calendar strip in the header navigates within this range.
  */
 function upcomingDayLabel(d: Date, today: Date): string {
-  const date = format(d, 'd MMM');
-  if (isSameDay(d, today)) return `${date} · Today · ${format(d, 'EEEE')}`;
-  if (isSameDay(d, addDays(today, 1))) return `${date} · Tomorrow · ${format(d, 'EEEE')}`;
-  return `${date} · ${format(d, 'EEEE')}`;
+  const date = format(d, 'EEE d MMM');
+  if (isSameDay(d, today)) return `Today · ${date}`;
+  if (isSameDay(d, addDays(today, 1))) return `Tomorrow · ${date}`;
+  return date;
+}
+
+/** Collapse a run of consecutive empty agenda days into one muted line. */
+function emptyRunLabel(groups: TaskGroup[], start: number, end: number): string {
+  const first = groups[start]!;
+  const last = groups[end]!;
+  const a = first.label;
+  const b = last.label;
+  if (start === end) return `${a} · nothing scheduled`;
+  const dayA = a.replace(/^Today · |^Tomorrow · /, '');
+  const dayB = b.replace(/^Today · |^Tomorrow · /, '');
+  return `${dayA} – ${dayB} · nothing scheduled`;
 }
 
 export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[] {
@@ -428,7 +430,330 @@ export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): 
     const key = format(d, 'yyyy-MM-dd');
     groups.push({ key, label: upcomingDayLabel(d, ctx.today), tasks: byDay.get(key) ?? [] });
   }
-  return groups;
+  // Collapse runs of consecutive empty days into a single muted line.
+  const out: TaskGroup[] = [];
+  let runStart = -1;
+  const flush = (end: number) => {
+    if (runStart === -1) return;
+    out.push({
+      key: `empty-${groups[runStart]!.key}-${groups[end]!.key}`,
+      label: emptyRunLabel(groups, runStart, end),
+      tasks: [],
+    });
+    runStart = -1;
+  };
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i]!;
+    if (g.tasks.length === 0) {
+      if (runStart === -1) runStart = i;
+      continue;
+    }
+    flush(i - 1);
+    out.push(g);
+  }
+  flush(groups.length - 1);
+  return out;
+}
+
+/* ─────────────────────────────── Now block ──────────────────────────── */
+
+/** A stripped Now-block row: priority bar · checkbox · title(500) · project. */
+function NowRow({ task }: { task: TaskWithProject }) {
+  const setSelectedTask = useUi((s) => s.setSelectedTask);
+  const unpick = useNow((s) => s.unpick);
+  const handleToggle = useCallback(() => {
+    void toggleTaskDone(task); // completing removes it from the block
+    unpick(task.localId);
+  }, [task, unpick]);
+  return (
+    <div
+      onClick={() => setSelectedTask(task.localId)}
+      className="flex cursor-pointer items-center gap-3 rounded-md px-1 py-[9px] hover:bg-[var(--color-accent)]/5"
+    >
+      <span
+        aria-hidden="true"
+        className="h-5 w-[3px] shrink-0 rounded-full"
+        style={{ background: task.priority > 2 ? priorityColor(task.priority) : 'transparent' }}
+      />
+      <input
+        type="checkbox"
+        checked={task.done}
+        onChange={handleToggle}
+        onClick={(e) => e.stopPropagation()}
+        aria-label={task.done ? 'Done' : 'Not done'}
+        className="task-check"
+      />
+      <p className="min-w-0 flex-1 truncate text-[14.5px] font-medium leading-snug">{task.title}</p>
+      {task.projectTitle ? (
+        <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{task.projectTitle}</span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A checklist sheet over a task list — used both to pick the Now block (max 3)
+ * and to pull a future task forward. Selection is capped at `max`; `onConfirm`
+ * receives the chosen ids.
+ */
+function PickerSheet({
+  tasks,
+  initialSelected = [],
+  max = 3,
+  title,
+  subtitle,
+  confirmLabel,
+  onConfirm,
+  onClose,
+}: {
+  tasks: TaskWithProject[];
+  initialSelected?: string[];
+  max?: number;
+  title: string;
+  subtitle: string;
+  confirmLabel: (n: number) => string;
+  onConfirm: (ids: string[]) => void;
+  onClose: () => void;
+}) {
+  const isMobile = useIsMobile();
+  const [chosen, setChosen] = useState<string[]>(() =>
+    initialSelected.filter((id) => tasks.some((t) => t.localId === id)),
+  );
+
+  const toggle = (id: string) => {
+    setChosen((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= max ? prev : [...prev, id],
+    );
+  };
+  const confirm = () => {
+    onConfirm(chosen);
+    onClose();
+  };
+
+  const header = (
+    <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-3.5">
+      <div className="min-w-0 flex-1">
+        <h2 className="text-base font-semibold text-[var(--color-foreground)]">{title}</h2>
+        <p className="text-xs text-[var(--color-muted-foreground)]">{subtitle} · {chosen.length}/{max}</p>
+      </div>
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+      >
+        <X className="h-5 w-5" />
+      </button>
+    </div>
+  );
+
+  const body = (
+    <>
+      {tasks.length === 0 ? (
+        <p className="px-5 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
+          Nothing to pick from today.
+        </p>
+      ) : (
+        <ul className="py-1">
+          {tasks.map((t) => {
+            const on = chosen.includes(t.localId);
+            const full = !on && chosen.length >= max;
+            return (
+              <li key={t.localId}>
+                <button
+                  onClick={() => toggle(t.localId)}
+                  disabled={full}
+                  className={cn(
+                    'flex w-full items-center gap-3 px-5 py-2.5 text-left disabled:opacity-40',
+                    on && 'bg-[var(--color-accent)]/5',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
+                      on
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                        : 'border-[var(--color-muted-foreground)]',
+                    )}
+                  >
+                    {on && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+                  {t.projectTitle ? (
+                    <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{t.projectTitle}</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="border-t border-[var(--color-border)] px-5 py-3">
+        <button
+          onClick={confirm}
+          className="w-full rounded-lg bg-[var(--color-inverse)] px-4 py-2.5 text-sm font-medium text-[var(--color-inverse-foreground)]"
+        >
+          {confirmLabel(chosen.length)}
+        </button>
+      </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
+        <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
+          {header}
+          <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
+      <div
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {header}
+        <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Now block: up to three user-picked tasks for today. Local device state
+ * (`useNow`); a task leaves the block when it's completed or rescheduled off
+ * today (both drop it out of `livePicks`). Renders its empty state when nothing
+ * live is picked for today.
+ */
+function NowBlock({ tasks }: { tasks: TaskWithProject[] }) {
+  const isMobile = useIsMobile();
+  const { nowTaskIds, pickedOn, pick } = useNow();
+  const [picking, setPicking] = useState(false);
+
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const active = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
+  const livePicks = useMemo(() => {
+    if (pickedOn !== todayKey) return [];
+    const byId = new Map(active.map((t) => [t.localId, t]));
+    return nowTaskIds.map((id) => byId.get(id)).filter(Boolean) as TaskWithProject[];
+  }, [pickedOn, todayKey, nowTaskIds, active]);
+
+  return (
+    <div className={cn('mb-[34px] bg-[var(--color-background)] p-5', isMobile ? 'rounded-[18px]' : 'rounded-[14px]')}>
+      <div className="mb-3 flex items-baseline gap-2.5">
+        <h2 className="group-label !tracking-[0.11em] text-[var(--color-primary)]">Now</h2>
+        <span className="text-xs text-[var(--color-muted-foreground)]">three things, then stop</span>
+        {livePicks.length > 0 ? (
+          <button
+            onClick={() => setPicking(true)}
+            className="ml-auto text-xs text-[var(--color-primary)]"
+          >
+            Re-pick
+          </button>
+        ) : null}
+      </div>
+      {livePicks.length > 0 ? (
+        <div className="flex flex-col gap-0.5">
+          {livePicks.map((t) => (
+            <NowRow key={t.localId} task={t} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-[var(--color-muted-foreground)]">Pick up to three things for today</span>
+          <button
+            onClick={() => setPicking(true)}
+            className="shrink-0 rounded-lg bg-[var(--color-inverse)] px-3.5 py-2 text-xs font-medium text-[var(--color-inverse-foreground)]"
+          >
+            Pick
+          </button>
+        </div>
+      )}
+      {picking ? (
+        <PickerSheet
+          tasks={active}
+          initialSelected={nowTaskIds}
+          max={3}
+          title="Pick for Now"
+          subtitle="Up to three things, then stop"
+          confirmLabel={(n) => (n ? `Pick ${n}` : 'Clear')}
+          onConfirm={pick}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Today's empty state: no incomplete tasks left. Shows how many got done, the
+ * next scheduled day, and a "Pull something forward" picker over the next
+ * 7 days that reschedules the chosen tasks to today.
+ */
+function NothingDue({ doneCount }: { doneCount: number }) {
+  const { data: groups = [] } = useUpcomingTasks();
+  const [picking, setPicking] = useState(false);
+
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const horizonKey = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+  const upcoming = useMemo(() => {
+    const out: TaskWithProject[] = [];
+    for (const t of groups.flatMap((g) => g.tasks)) {
+      if (t.done || !t.dueDate) continue;
+      const key = dueDayKey(t.dueDate);
+      if (key > todayKey && key <= horizonKey) out.push(t);
+    }
+    return out.sort((a, b) => dueDayKey(a.dueDate!).localeCompare(dueDayKey(b.dueDate!)));
+  }, [groups, todayKey, horizonKey]);
+
+  const nextLine = useMemo(() => {
+    if (upcoming.length === 0) return 'Nothing scheduled this week.';
+    const done = doneCount > 0 ? `${doneCount} done. ` : '';
+    return `${done}Next thing is ${upcomingDayLabel(toCalendarDate(upcoming[0]!.dueDate!), startOfDay(new Date())).replace(/ · .*/, '')}.`;
+  }, [upcoming, doneCount]);
+
+  const pullForward = useCallback((ids: string[]) => {
+    const iso = new Date().toISOString();
+    for (const id of ids) void updateTask(id, { dueDate: iso });
+  }, []);
+
+  return (
+    <div className="mb-6 rounded-[14px] bg-[var(--color-background)] px-5 py-6 text-center">
+      <p className="text-base font-medium">Nothing left today.</p>
+      <p className="mt-1 text-[13.5px] text-[var(--color-muted-foreground)]">{nextLine}</p>
+      {upcoming.length > 0 ? (
+        <button
+          onClick={() => setPicking(true)}
+          className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-[13px] font-medium"
+        >
+          Pull something forward
+        </button>
+      ) : null}
+      {picking ? (
+        <PickerSheet
+          tasks={upcoming}
+          max={upcoming.length}
+          title="Pull forward"
+          subtitle="Move to today"
+          confirmLabel={(n) => (n ? `Pull ${n} forward` : 'Cancel')}
+          onConfirm={pullForward}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Today's header region: the Now block when there's work, else Nothing-due. */
+function TodayTop({ tasks }: { tasks: TaskWithProject[] }) {
+  const active = tasks.filter((t) => !t.done);
+  if (active.length === 0) {
+    return <NothingDue doneCount={tasks.filter((t) => t.done).length} />;
+  }
+  return <NowBlock tasks={tasks} />;
 }
 
 export function TodayView() {
@@ -436,13 +761,13 @@ export function TodayView() {
   const tasks = useMemo(() => flatten(groups), [groups]);
   return (
     <SmartView
-      title="Today"
       viewKey="today"
       tasks={tasks}
       isLoading={isLoading}
-      emptyMessage="Nothing due today. 🎉"
+      emptyMessage=""
       showProject
       sectioner={todaySectioner}
+      topSlot={<TodayTop tasks={tasks} />}
     />
   );
 }
@@ -473,7 +798,6 @@ export function UpcomingView() {
 
   return (
     <SmartView
-      title="Upcoming"
       viewKey="upcoming"
       tasks={tasks}
       isLoading={isLoading}
@@ -481,6 +805,7 @@ export function UpcomingView() {
       showProject
       sectioner={upcomingSectioner}
       keepEmptyGroups
+      agendaHeadings
       headerSlot={
         <UpcomingCalendar
           taskDays={taskDays}
@@ -496,12 +821,9 @@ export function UpcomingView() {
 
 export function LabelView({ labelLocalId }: { labelLocalId: string }) {
   const { data: groups = [], isLoading } = useLabelTasks(labelLocalId);
-  const { data: labels = [] } = useLabels();
   const tasks = useMemo(() => flatten(groups), [groups]);
-  const title = labels.find((l) => l.localId === labelLocalId)?.title ?? 'Label';
   return (
     <SmartView
-      title={`#${title}`}
       viewKey={`label:${labelLocalId}`}
       tasks={tasks}
       isLoading={isLoading}
@@ -516,7 +838,6 @@ export function FavoritesView() {
   const tasks = useMemo(() => flatten(groups), [groups]);
   return (
     <SmartView
-      title="Favorites"
       viewKey="favorites"
       tasks={tasks}
       isLoading={isLoading}
@@ -529,10 +850,8 @@ export function FavoritesView() {
 export function InboxView() {
   const { data: groups = [], isLoading } = useInboxTasks();
   const tasks = useMemo(() => flatten(groups), [groups]);
-  const title = groups[0]?.label ?? 'Inbox';
   return (
     <SmartView
-      title={title}
       viewKey="inbox"
       tasks={tasks}
       isLoading={isLoading}

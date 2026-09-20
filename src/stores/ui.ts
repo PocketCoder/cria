@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { format } from 'date-fns';
 
 /**
  * What the main pane is currently showing. Either a project's task list
@@ -13,7 +14,8 @@ export type ActiveView =
   | { kind: 'label'; localId: string }
   | { kind: 'search' }
   | { kind: 'favorites' }
-  | { kind: 'inbox' };
+  | { kind: 'inbox' }
+  | { kind: 'browse' };
 
 interface UiState {
   activeView: ActiveView | null;
@@ -60,6 +62,43 @@ export const useUi = create<UiState>()(
         activeView: s.activeView,
         sidebarCollapsed: s.sidebarCollapsed,
       }),
+    },
+  ),
+);
+
+/* ─────────────────────────── Now block (M7) ─────────────────────────── */
+
+/**
+ * The "Now" block's state: up to three tasks picked for today, plus the day
+ * they were picked for (a `yyyy-MM-dd` key). Local, device-scoped UI state —
+ * no server round-trip. Persisted separately under `cria:now` so it doesn't
+ * share the `cria:ui/v2` lifecycle.
+ */
+interface NowState {
+  nowTaskIds: string[];
+  pickedOn: string | null;
+  /** Store the picked task ids for today (max 3). */
+  pick: (ids: string[]) => void;
+  /** Drop a single task (completion/reschedule removes it). */
+  unpick: (id: string) => void;
+  /** Clear the whole block (start over). */
+  reset: () => void;
+}
+
+export const useNow = create<NowState>()(
+  persist(
+    (set) => ({
+      nowTaskIds: [],
+      pickedOn: null,
+      pick: (ids) =>
+        set({ nowTaskIds: ids.slice(0, 3), pickedOn: format(new Date(), 'yyyy-MM-dd') }),
+      unpick: (id) =>
+        set((s) => ({ nowTaskIds: s.nowTaskIds.filter((x) => x !== id) })),
+      reset: () => set({ nowTaskIds: [], pickedOn: null }),
+    }),
+    {
+      name: 'cria:now',
+      partialize: (s) => ({ nowTaskIds: s.nowTaskIds, pickedOn: s.pickedOn }),
     },
   ),
 );

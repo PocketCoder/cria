@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Star, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, Star, ChevronRight, ChevronDown, Inbox, SlidersHorizontal, Plus } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { listActiveTaskCounts } from '@/db/tasks';
 import { childProjectsOf, useProjectExpand } from './projectTree';
+import { useDisplay } from '@/stores/display';
+import { viewKey } from '@/lib/displayConfig';
+import { useInboxTasks } from '@/queries/smartViews';
 
 /**
- * Searchable project + label browser for mobile navigation. Rows show a colour
- * dot, the title, and (for projects) the open-task count. Picking one routes
- * the main view and calls `onPick` so the host (full-screen page or bottom
- * sheet) can dismiss. Shared by both Projects-nav variants.
+ * The mobile Browse screen: a searchable project + label browser. Inbox /
+ * Favourites / Filters are pinned rows at the top; PROJECTS renders as a
+ * collapsible tree; LABELS as a wrapping chip row. Picking one routes the
+ * main view.
  */
 export function ProjectPickerList({
   onPick,
@@ -21,6 +24,8 @@ export function ProjectPickerList({
   autoFocus?: boolean;
 }) {
   const setActiveView = useUi((s) => s.setActiveView);
+  const activeView = useUi((s) => s.activeView);
+  const openSheet = useDisplay((s) => s.openSheet);
   const { data: projects = [] } = useSelectableProjects();
   const { data: labels = [] } = useLabels();
   const { data: counts = new Map<string, number>() } = useQuery({
@@ -28,14 +33,18 @@ export function ProjectPickerList({
     staleTime: 30_000,
     queryFn: listActiveTaskCounts,
   });
+  const { data: inboxGroups = [] } = useInboxTasks();
+  const inboxCount = inboxGroups.reduce(
+    (n, g) => n + g.tasks.filter((t) => !t.done).length,
+    0,
+  );
 
   const [q, setQ] = useState('');
   const term = q.trim().toLowerCase();
   const fp = term ? projects.filter((p) => p.title.toLowerCase().includes(term)) : projects;
   const fl = term ? labels.filter((l) => l.title.toLowerCase().includes(term)) : labels;
 
-  // Sub-project tree for the unfiltered list (search stays flat). Shared
-  // expand state + tree builder with the desktop sidebar.
+  // Sub-project tree for the unfiltered list (search stays flat).
   const visibleIds = new Set(projects.map((p) => p.localId));
   const { isOpen, toggle } = useProjectExpand();
 
@@ -51,6 +60,10 @@ export function ProjectPickerList({
     setActiveView({ kind: 'favorites' });
     onPick?.();
   };
+  const openInbox = () => {
+    setActiveView({ kind: 'inbox' });
+    onPick?.();
+  };
 
   const projectButton = (p: (typeof projects)[number]) => {
     const c = counts.get(p.localId) ?? 0;
@@ -58,10 +71,10 @@ export function ProjectPickerList({
       <button
         type="button"
         onClick={() => openProject(p.localId)}
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--color-accent)]/10"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-[9px] text-left hover:bg-[var(--color-accent)]/10"
       >
         <span
-          className="h-3 w-3 shrink-0 rounded-full border border-[var(--color-border)]"
+          className="h-[7px] w-[7px] shrink-0 rounded-full border border-[var(--color-border)]"
           style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
         />
         <span className="flex-1 truncate text-sm">{p.title}</span>
@@ -78,7 +91,7 @@ export function ProjectPickerList({
       const open = isOpen(p.localId);
       return [
         <li key={p.localId}>
-          <div className="flex items-center" style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}>
+          <div className="flex items-center" style={depth > 0 ? { paddingLeft: depth * 32 } : undefined}>
             {kids.length > 0 ? (
               <button
                 type="button"
@@ -101,7 +114,7 @@ export function ProjectPickerList({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-4 pb-2">
-        <div className="flex items-center gap-2 rounded-lg bg-[var(--color-input)] px-3 py-2">
+        <div className="flex items-center gap-2 rounded-[11px] bg-[var(--color-input)] px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
           <input
             autoFocus={autoFocus}
@@ -113,28 +126,61 @@ export function ProjectPickerList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {!term && (
-          <ul>
+          <ul className="mb-2 divide-y divide-[var(--color-border)]">
+            <li>
+              <button
+                type="button"
+                onClick={openInbox}
+                className="flex w-full items-center gap-3 py-[13px] text-left"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                  <Inbox className="h-5 w-5 text-[var(--color-primary)]" />
+                </span>
+                <span className="flex-1 truncate text-[15px]">Inbox</span>
+                {inboxCount > 0 ? (
+                  <span className="min-w-[20px] rounded-full bg-[var(--color-inverse)] px-1.5 py-0.5 text-center text-[10.5px] font-semibold tabular-nums text-[var(--color-inverse-foreground)]">
+                    {inboxCount > 99 ? '99+' : inboxCount}
+                  </span>
+                ) : null}
+              </button>
+            </li>
             <li>
               <button
                 type="button"
                 onClick={openFavorites}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--color-accent)]/10"
+                className="flex w-full items-center gap-3 py-[13px] text-left"
               >
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                  <Star className="h-4 w-4 text-[var(--color-primary)]" />
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                  <Star className="h-5 w-5 text-[var(--color-primary)]" />
                 </span>
-                <span className="flex-1 truncate text-sm">Favorites</span>
+                <span className="flex-1 truncate text-[15px]">Favourites</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => openSheet(viewKey(activeView) ?? 'today')}
+                className="flex w-full items-center gap-3 py-[13px] text-left"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                  <SlidersHorizontal className="h-5 w-5 text-[var(--color-primary)]" />
+                </span>
+                <span className="flex-1 truncate text-[15px]">Filters</span>
               </button>
             </li>
           </ul>
         )}
+
         {fp.length > 0 && (
           <>
-            <p className="sticky top-0 bg-[var(--color-card)] px-2 pb-1 pt-2 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Projects
-            </p>
+            <div className="flex items-center justify-between pr-1">
+              <p className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+                Projects
+              </p>
+              <Plus className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
+            </div>
             <ul>
               {term
                 ? fp.map((p) => (
@@ -149,26 +195,25 @@ export function ProjectPickerList({
 
         {fl.length > 0 && (
           <>
-            <p className="sticky top-0 bg-[var(--color-card)] px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            <p className="px-2 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
               Labels
             </p>
-            <ul>
+            <div className="flex flex-wrap gap-2 px-2">
               {fl.map((l) => (
-                <li key={l.localId}>
-                  <button
-                    type="button"
-                    onClick={() => openLabel(l.localId)}
-                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--color-accent)]/10"
-                  >
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full border border-[var(--color-border)]"
-                      style={l.hexColor ? { backgroundColor: l.hexColor } : undefined}
-                    />
-                    <span className="flex-1 truncate text-sm">{l.title}</span>
-                  </button>
-                </li>
+                <button
+                  key={l.localId}
+                  type="button"
+                  onClick={() => openLabel(l.localId)}
+                  className="flex items-center gap-2 rounded-[10px] bg-[var(--color-background)] px-[13px] py-[9px] text-[14.5px] hover:bg-[var(--color-muted)]"
+                >
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full border border-[var(--color-border)]"
+                    style={l.hexColor ? { backgroundColor: l.hexColor } : undefined}
+                  />
+                  <span className="truncate">{l.title}</span>
+                </button>
               ))}
-            </ul>
+            </div>
           </>
         )}
 
