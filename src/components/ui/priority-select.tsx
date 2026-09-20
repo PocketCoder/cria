@@ -3,10 +3,11 @@ import { Flag } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
-/* Vikunja priority scale (0–5) with a heat ramp: calm at the low end,
-   escalating through amber/orange to red at the top. `color` drives both
-   the selected-segment fill and the unselected glyph tint. Anchored on the
-   theme's --color-destructive (27 hue) at level 5 for consistency. */
+/* Vikunja priority scale (0–5) with an ink-on-paper ramp: 0–2 carry no
+   colour at all (the ledger renders nothing for them); High is the warm
+   warning hue, Urgent a burnt orange, Critical the destructive red.
+   `color` drives both the selected-segment fill and the unselected glyph
+   tint. */
 export interface PriorityMeta {
   value: number;
   label: string;
@@ -14,12 +15,13 @@ export interface PriorityMeta {
 }
 
 export const PRIORITY_META: readonly PriorityMeta[] = [
-  { value: 0, label: 'None', color: 'var(--color-muted-foreground)' },
-  { value: 1, label: 'Low', color: 'oklch(62% 0.12 240)' },
-  { value: 2, label: 'Medium', color: 'oklch(68% 0.14 150)' },
-  { value: 3, label: 'High', color: 'oklch(76% 0.15 75)' },
-  { value: 4, label: 'Urgent', color: 'oklch(68% 0.19 45)' },
-  { value: 5, label: 'Critical', color: 'oklch(58% 0.22 27)' },
+  { value: 0, label: 'None', color: 'transparent' },
+  { value: 1, label: 'Low', color: 'transparent' },
+  { value: 2, label: 'Medium', color: 'transparent' },
+  // Tokens (not literals) so the ramp lifts in dark — see --prio-* in globals.css.
+  { value: 3, label: 'High', color: 'var(--prio-high)' },
+  { value: 4, label: 'Urgent', color: 'var(--prio-urgent)' },
+  { value: 5, label: 'Critical', color: 'var(--prio-critical)' },
 ];
 
 export const PRIORITY_LABELS = PRIORITY_META.map((m) => m.label);

@@ -23,9 +23,11 @@ function truncate(text: string, max: number): string {
 interface TaskHoverPreviewProps {
   task: Task;
   children: ReactNode;
+  /** Applied to the trigger wrapper (e.g. `min-w-0 flex-1` for truncation). */
+  className?: string;
 }
 
-export function TaskHoverPreview({ task, children }: TaskHoverPreviewProps) {
+export function TaskHoverPreview({ task, children, className }: TaskHoverPreviewProps) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const [isOpen, setIsOpen] = useState(false);
@@ -96,6 +98,7 @@ export function TaskHoverPreview({ task, children }: TaskHoverPreviewProps) {
     <>
       <div
         ref={triggerRef}
+        className={className}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
