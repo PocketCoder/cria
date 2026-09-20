@@ -1,42 +1,31 @@
-import { useState, useEffect, forwardRef, type ButtonHTMLAttributes } from 'react';
-import { onShortcut } from '@/lib/shortcutBus';
+import { useEffect, useState, forwardRef, type ButtonHTMLAttributes } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  CheckCircle2,
-  Tags,
-  AlertTriangle,
   Percent,
   Palette,
-  Calendar,
-  Play,
-  Square,
   ArrowLeftFromLine,
   Copy,
   Trash2,
-  Star,
   Bell,
   User,
   RefreshCw,
+  Tags,
 } from 'lucide-react';
 import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
-import { playCompletionSound } from '@/utils/sound';
-import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects, getProjectByLocalId } from '@/db/projects';
 import { searchProjectUsers } from '@/api/users';
 import { UserSearchCombobox } from '@/components/ui/user-search';
 import { listAssigneesForTask, addTaskAssignee, removeTaskAssignee } from '@/db/task-assignees';
-import { useTaskLabels } from '@/queries/taskLabels';
-import { useLabels } from '@/queries/labels';
 import type { Task } from '@/domain/task';
 import type { TaskAssignee } from '@/domain/task-assignee';
 import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
 import { cn } from '@/lib/cn';
+import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { PrioritySelect, PRIORITY_LABELS } from '@/components/ui/priority-select';
 import { Calendar as CalendarGrid } from '@/components/ui/calendar';
 
 interface TaskActionsProps {
@@ -44,15 +33,13 @@ interface TaskActionsProps {
   onDeleted: () => void;
 }
 
+/**
+ * The inspector's "More…" panel: progress, colour, assignees, move,
+ * duplicate, subscribe, delete. Replaces the old 4-section action list;
+ * chips + collapsed rows (in TaskDetail) own priority/labels/dates.
+ */
 export function TaskActions({ task, onDeleted }: TaskActionsProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { data: labels = [] } = useTaskLabels(task.localId);
-
-  // Shared, bus-subscribed label list (same hook + cache the sidebar
-  // uses). A bare useQuery here didn't refresh on the `labels` topic, so
-  // a label created via the popover or deleted via the manager modal
-  // wouldn't appear/disappear in this list until the card remounted.
-  const { data: allLabels = [] } = useLabels();
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['all-projects'],
@@ -76,12 +63,6 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const handleToggleDone = async () => {
-    const nowDone = !task.done;
-    await updateTask(task.localId, { done: nowDone });
-    if (nowDone) playCompletionSound();
-  };
-
   const handleDuplicate = async () => {
     const copy = await duplicateTask(task.localId);
     if (copy) setExpanded(null);
@@ -90,10 +71,6 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
   const handleMove = async (projectLocalId: string) => {
     await moveTask(task.localId, projectLocalId);
     setExpanded(null);
-  };
-
-  const handleToggleFavorite = async () => {
-    await updateTask(task.localId, { isFavorite: !task.isFavorite });
   };
 
   const handleAddAssignee = async (userServerId: number, username?: string) => {
@@ -110,113 +87,10 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     onDeleted();
   };
 
-  const handleDateChange = async (field: string, value: string | null) => {
-    await updateTask(task.localId, { [field]: value } as any);
-    setExpanded(null);
-  };
-
-  // Fixed shortcut set (upstream task-detail keys): run the action or open
-  // the matching section.
-  useEffect(() => {
-    const subs = [
-      onShortcut('task.done', () => void handleToggleDone()),
-      onShortcut('task.favorite', () => void handleToggleFavorite()),
-      onShortcut('task.delete', () => setConfirmDelete(true)),
-      onShortcut('task.assign', () => setExpanded('assignees')),
-      onShortcut('task.labels', () => setExpanded('labels')),
-      onShortcut('task.dueDate', () => setExpanded('dueDate')),
-      onShortcut('task.move', () => setExpanded('move')),
-      onShortcut('task.color', () => setExpanded('color')),
-      onShortcut('task.priority', () => setExpanded('priority')),
-    ];
-    return () => subs.forEach((u) => u());
-  });
-
   return (
-    <div className="flex flex-col gap-1">
-      {/* MARK TASK DONE */}
-      <ActionButton
-        icon={<CheckCircle2 className="h-4 w-4" />}
-        label={task.done ? 'Mark not done' : 'Mark task done'}
-        color={task.done ? 'var(--color-muted-foreground)' : '#22c55e'}
-        onClick={handleToggleDone}
-      />
-
-      <SectionDivider />
-
-      {/* ORGANIZATION */}
-      <SectionHeader label="Organization" />
-
-      <InlinePriority task={task} expanded={expanded === 'priority'} onToggle={() => setExpanded(expanded === 'priority' ? null : 'priority')} />
+    <div className="flex flex-col gap-0.5">
       <InlineProgress task={task} expanded={expanded === 'progress'} onToggle={() => setExpanded(expanded === 'progress' ? null : 'progress')} />
       <InlineColor task={task} expanded={expanded === 'color'} onToggle={() => setExpanded(expanded === 'color' ? null : 'color')} />
-      <InlineLabels
-        taskLocalId={task.localId}
-        currentLabels={labels}
-        allLabels={allLabels}
-        expanded={expanded === 'labels'}
-        onToggle={() => setExpanded(expanded === 'labels' ? null : 'labels')}
-      />
-
-      <SectionDivider />
-
-      {/* FAVORITE + SUBSCRIBE */}
-      <SectionHeader label="Preferences" />
-
-      <ActionButton
-        icon={<Star className={`h-4 w-4 ${task.isFavorite ? 'fill-current' : ''}`} />}
-        label={task.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-        color={task.isFavorite ? '#eab308' : undefined}
-        onClick={handleToggleFavorite}
-      />
-      <ActionButton
-        icon={<Bell className={`h-4 w-4 ${task.isSubscribed ? 'fill-current' : ''}`} />}
-        label={task.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
-        color={task.isSubscribed ? '#3b82f6' : undefined}
-        className="pointer-events-none opacity-50"
-      />
-
-      <SectionDivider />
-
-      {/* DATE AND TIME */}
-      <SectionHeader label="Date and Time" />
-
-      <InlineDate
-        icon={<Calendar className="h-4 w-4" />}
-        label="Set due date"
-        value={task.dueDate}
-        onChange={(v) => handleDateChange('dueDate', v)}
-        expanded={expanded === 'dueDate'}
-        onToggle={() => setExpanded(expanded === 'dueDate' ? null : 'dueDate')}
-      />
-      <InlineDate
-        icon={<Play className="h-4 w-4" />}
-        label="Set start date"
-        value={task.startDate}
-        onChange={(v) => handleDateChange('startDate', v)}
-        expanded={expanded === 'startDate'}
-        onToggle={() => setExpanded(expanded === 'startDate' ? null : 'startDate')}
-      />
-      <InlineDate
-        icon={<Square className="h-4 w-4" />}
-        label="Set end date"
-        value={task.endDate}
-        onChange={(v) => handleDateChange('endDate', v)}
-        expanded={expanded === 'endDate'}
-        onToggle={() => setExpanded(expanded === 'endDate' ? null : 'endDate')}
-      />
-
-      <InlineRepeat
-        task={task}
-        expanded={expanded === 'repeat'}
-        onToggle={() => setExpanded(expanded === 'repeat' ? null : 'repeat')}
-      />
-
-      <SectionDivider />
-
-      {/* MANAGEMENT */}
-      <SectionHeader label="Management" />
-
       <InlineAssignees
         assignees={assignees}
         expanded={expanded === 'assignees'}
@@ -225,17 +99,18 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
         onAdd={handleAddAssignee}
         projectServerId={taskProject?.serverId ?? null}
       />
-
       <InlineMove projects={projects} expanded={expanded === 'move'} onToggle={() => setExpanded(expanded === 'move' ? null : 'move')} onMove={handleMove} />
       <ActionButton
         icon={<Copy className="h-4 w-4" />}
         label="Duplicate"
         onClick={handleDuplicate}
       />
-
-      <SectionDivider />
-
-      {/* DELETE */}
+      <ActionButton
+        icon={<Bell className={`h-4 w-4 ${task.isSubscribed ? 'fill-current' : ''}`} />}
+        label={task.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+        color={task.isSubscribed ? '#3b82f6' : undefined}
+        className="pointer-events-none opacity-50"
+      />
       {confirmDelete ? (
         <div className="flex items-center gap-2 rounded-md border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 px-3 py-2">
           <span className="text-xs text-[var(--color-destructive)]">Delete forever?</span>
@@ -282,7 +157,7 @@ const ActionButton = forwardRef<
     ref={ref}
     type="button"
     className={cn(
-      'flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors hover:bg-[var(--color-accent)]/10',
+      'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13.5px] transition-colors hover:bg-[var(--color-accent)]/10',
       className,
     )}
     style={{ ...(color ? { color } : {}), ...style }}
@@ -299,53 +174,9 @@ const ActionButton = forwardRef<
 ));
 ActionButton.displayName = 'ActionButton';
 
-function SectionDivider() {
-  return <div className="my-1 border-t border-[var(--color-border)]" />;
-}
-
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <p className="px-3 pb-0.5 pt-1 text-footnote font-semibold uppercase tracking-widest text-[var(--color-muted-foreground)]">
-      {label}
-    </p>
-  );
-}
-
-/* ─── Priority inline ─── */
-
-function InlinePriority({
-  task,
-  expanded,
-  onToggle,
-}: {
-  task: Task;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div>
-      <ActionButton
-        icon={<AlertTriangle className="h-4 w-4" />}
-        label={`Priority: ${PRIORITY_LABELS[task.priority] ?? task.priority}`}
-        onClick={onToggle}
-      />
-      {expanded && (
-        <div className="mx-3 mb-1">
-          <PrioritySelect
-            value={task.priority}
-            onChange={(p) => {
-              void updateTask(task.localId, { priority: p });
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─── Progress inline ─── */
 
-function InlineProgress({
+export function InlineProgress({
   task,
   expanded,
   onToggle,
@@ -394,12 +225,12 @@ function InlineProgress({
 
 /* ─── Color inline ─── */
 
-const COLOR_PRESETS = [
+export const COLOR_PRESETS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
   '#3b82f6', '#8b5cf6', '#ec4899', '#78716c', '#000000',
 ];
 
-function InlineColor({
+export function InlineColor({
   task,
   expanded,
   onToggle,
@@ -478,7 +309,7 @@ function InlineColor({
 
 /* ─── Labels inline ─── */
 
-function InlineLabels({
+export function InlineLabels({
   taskLocalId,
   currentLabels,
   allLabels,
@@ -599,7 +430,7 @@ function InlineLabels({
 // `onToggle` API is preserved for the surrounding TaskActions state
 // machine so only one inline editor is open at a time.
 
-function InlineDate({
+export function InlineDate({
   icon,
   label,
   value,
@@ -668,7 +499,7 @@ function InlineDate({
 
 /* ─── Move project inline ─── */
 
-function InlineMove({
+export function InlineMove({
   projects,
   expanded,
   onToggle,
@@ -711,7 +542,7 @@ function InlineMove({
 
 /* ─── Assignees inline ─── */
 
-function InlineAssignees({
+export function InlineAssignees({
   assignees,
   expanded,
   onToggle,
@@ -799,7 +630,7 @@ function valueUnitToSeconds(value: number, unit: 'day' | 'month' | 'hour'): numb
 
 const UNIT_OPTIONS = ['hour', 'day', 'month'] as const;
 
-function InlineRepeat({
+export function InlineRepeat({
   task,
   expanded,
   onToggle,

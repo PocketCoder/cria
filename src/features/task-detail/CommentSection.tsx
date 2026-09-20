@@ -31,15 +31,17 @@ export function CommentSection({
   taskLocalId,
   taskServerId,
   mentionSearch,
+  hideHeader = false,
 }: {
   taskLocalId: string;
   taskServerId: number | null;
   mentionSearch?: MentionSearch;
+  hideHeader?: boolean;
 }) {
   const { data: comments = [] } = useTaskComments(taskLocalId);
   const { data: unreadCount = 0 } = useTaskUnreadCount(taskLocalId);
   const qc = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(hideHeader);
   const [sortAsc, setSortAsc] = useState(true);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
@@ -136,27 +138,29 @@ export function CommentSection({
 
   return (
     <section className="mb-4">
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="flex w-full items-center gap-1 text-left text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-      >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0" />
-        )}
-        <MessageSquare className="h-3 w-3" />
-        Comments
-        {totalCount > 0 ? (
-          <span className="font-normal">{totalCount}</span>
-        ) : null}
-        {unreadCount > 0 ? (
-          <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-white">
-            {unreadCount} new
-          </span>
-        ) : null}
-      </button>
+      {hideHeader ? null : (
+        <button
+          type="button"
+          onClick={handleToggle}
+          className="flex w-full items-center gap-1 text-left text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+        >
+          {expanded ? (
+            <ChevronDown className="h-3 w-3 shrink-0" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0" />
+          )}
+          <MessageSquare className="h-3 w-3" />
+          Comments
+          {totalCount > 0 ? (
+            <span className="font-normal">{totalCount}</span>
+          ) : null}
+          {unreadCount > 0 ? (
+            <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-white">
+              {unreadCount} new
+            </span>
+          ) : null}
+        </button>
+      )}
 
       {expanded ? (
         <div className="mt-2 space-y-2">

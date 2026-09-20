@@ -32,9 +32,11 @@ import type { TaskAttachment } from '@/db/attachments';
 export function AttachmentList({
   taskLocalId,
   taskServerId,
+  hideHeader = false,
 }: {
   taskLocalId: string;
   taskServerId: number | null;
+  hideHeader?: boolean;
 }) {
   const { data: attachments = [] } = useTaskAttachments(taskLocalId);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -138,11 +140,13 @@ export function AttachmentList({
       onDrop={onDrop}
     >
       <div className="mb-1 flex items-center gap-1">
-        <h3 className="flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-          <Paperclip className="h-3 w-3" />
-          Attachments
-          {!empty ? <span className="font-normal">{attachments.length}</span> : null}
-        </h3>
+        {hideHeader ? null : (
+          <h3 className="flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            <Paperclip className="h-3 w-3" />
+            Attachments
+            {!empty ? <span className="font-normal">{attachments.length}</span> : null}
+          </h3>
+        )}
         <button
           type="button"
           onClick={onPick}

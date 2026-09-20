@@ -39,7 +39,13 @@ import { InlineWarning } from '@/components/InlineWarning';
  * `amount + unit + relation` triples, and a "Date and time" mode for
  * the absolute form.
  */
-export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
+export function ReminderList({
+  taskLocalId,
+  hideHeader = false,
+}: {
+  taskLocalId: string;
+  hideHeader?: boolean;
+}) {
   const qc = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState(false);
   const dateFmt = useDateFormatter();
@@ -84,13 +90,15 @@ export function ReminderList({ taskLocalId }: { taskLocalId: string }) {
 
   return (
     <section className="mb-4">
-      <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-        <Bell className="h-3 w-3" />
-        Reminders
-        {reminders.length > 0 ? (
-          <span className="font-normal">{reminders.length}</span>
-        ) : null}
-      </h3>
+      {!hideHeader ? (
+        <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <Bell className="h-3 w-3" />
+          Reminders
+          {reminders.length > 0 ? (
+            <span className="font-normal">{reminders.length}</span>
+          ) : null}
+        </h3>
+      ) : null}
 
       {reminders.length > 0 ? (
         <ul className="mb-1 space-y-1">
