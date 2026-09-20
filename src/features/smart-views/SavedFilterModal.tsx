@@ -72,7 +72,7 @@ export function SavedFilterModal({
       onClick={onClose}
     >
       <div
-        className="glass-surface flex w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
+        className="bg-[var(--color-card)] border border-[var(--color-border)] flex w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">

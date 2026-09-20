@@ -66,11 +66,6 @@ keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 # Tauri's feature/allowlist check. Cargo unions this with the base tauri features.
 tauri = { version = "2", features = ["macos-private-api"] }
 objc2-app-kit = { version = "0.3", features = ["NSApplication"] }
-# Native Liquid Glass (NSGlassEffectView, macOS 26+; falls back to
-# NSVisualEffectView on older macOS). macOS-only — the frontend gates the call
-# behind isGlassSupported(), and the window is made transparent only on macOS
-# (see tauri.macos.conf.json). Requires app.macOSPrivateApi = true.
-tauri-plugin-liquid-glass = "0.1"
 
 # Apple-platform native deps (macOS + iOS): Vision OCR for the shopping-list
 # photo feature, and the keyring Keychain backend for the auth token.

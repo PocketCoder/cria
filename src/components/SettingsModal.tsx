@@ -106,7 +106,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="glass-surface flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
+        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">

@@ -353,7 +353,7 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
         </>
       ) : (
         <div
-          className="glass-surface w-11/12 max-w-lg rounded-lg p-4 shadow-lg"
+          className="bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           {body}

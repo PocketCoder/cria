@@ -17,8 +17,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "dragDropEnabled": false,
-        "devtools": true,
-        "transparent": true
+        "devtools": true
       }
     ],
     "security": {
