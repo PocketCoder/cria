@@ -5,20 +5,19 @@ import { useOnline } from '@/hooks/useOnline';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
-import { Button } from '@/components/ui/button';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useSettings } from '@/stores/settings';
 import { nativeNotify } from '@/utils/notify';
-import { useAuth } from '@/auth/store';
-import { useCurrentUser } from '@/queries/user';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { getDb } from '@/db';
 import { useProjects } from '@/queries/projects';
 import { useProjectViews } from '@/queries/views';
 import { ProjectSidebar } from '@/features/projects/ProjectSidebar';
-import { ProjectHeader } from '@/features/projects/ProjectHeader';
 import { MobileViewSwitcher } from '@/features/projects/MobileViewSwitcher';
+import { ViewSwitcher } from '@/features/projects/ViewSwitcher';
+import { ViewFilterButton } from '@/features/projects/ViewFilterButton';
+import { ProjectPickerList } from '@/features/projects/ProjectPickerList';
 import { TaskList } from '@/features/tasks/TaskList';
 // Heavy, conditionally-rendered project views — code-split out of the startup
 // bundle. Only loaded when the active project view actually selects one. The
@@ -61,29 +60,25 @@ const SettingsModal = lazy(() =>
 import { useOutboxCount } from '@/queries/outbox';
 import { useDeadLettersCount } from '@/queries/outboxRows';
 import { useConflictsCount } from '@/queries/conflicts';
-import { useServerVersion } from '@/queries/server';
 import { useShortcuts } from '@/hooks/useShortcuts';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
-import { SpecularTracker } from '@/components/SpecularTracker';
 import { useUpdaterStore } from '@/stores/updater';
 import { UpdateBanner } from '@/features/shell/UpdateBanner';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { isMobilePlatform } from '@/lib/platform';
 import { TabBar } from './TabBar';
-import { Plus, Search, Settings, X, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, PanelLeft } from 'lucide-react';
+import { Plus, Search, Settings, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
 import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
 import { SelectionBar } from '@/features/tasks/SelectionBar';
 import { useDisplay } from '@/stores/display';
 import { viewKey } from '@/lib/displayConfig';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import pkg from '../../../package.json';
+import { format } from 'date-fns';
 
 export function Shell() {
-  const signOut = useAuth((s) => s.signOut);
-  const { data: user } = useCurrentUser();
   const { data: projects = [] } = useProjects();
   const activeView = useUi((s) => s.activeView);
   const setActiveView = useUi((s) => s.setActiveView);
@@ -96,8 +91,6 @@ export function Shell() {
   const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
   const openDisplaySheet = useDisplay((s) => s.openSheet);
   const currentViewKey = viewKey(activeView);
-  const displayName =
-    user?.name?.trim() || user?.username?.trim() || 'Signed in';
 
   const projectLocalId = activeView?.kind === 'project' ? activeView.localId : '';
   const { data: projectViews = [], isPending: viewsPending } = useProjectViews(projectLocalId);
@@ -131,7 +124,6 @@ export function Shell() {
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
   const { data: deadLetterCount = 0 } = useDeadLettersCount();
-  const { data: serverVersion } = useServerVersion();
   const updaterState = useUpdaterStore((s) => s.state);
   const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
   const installUpdate = useUpdaterStore((s) => s.install);
@@ -197,22 +189,6 @@ export function Shell() {
     };
   }, []);
 
-    const [headerScrolled, setHeaderScrolled] = useState(false);
-  const scrollSentinelRef = useRef<HTMLDivElement>(null);
-
-  // IntersectionObserver to detect when the main content has been scrolled
-  // past the top — we toggle .scrolled on the header to increase glass opacity.
-  useEffect(() => {
-    const sentinel = scrollSentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setHeaderScrolled(!entry?.isIntersecting),
-      { rootMargin: '-1px 0px 0px 0px' },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []);
-
   const [showOutbox, setShowOutbox] = useState(false);
   const [showConflicts, setShowConflicts] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -249,10 +225,10 @@ export function Shell() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'A') {
         setShowQuickAdd(true);
       }
-      // Cmd/Ctrl+F → focus search
+      // Cmd/Ctrl+F → open the command palette
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setShowCommandPalette(true);
       }
     };
     window.addEventListener('keydown', handler);
@@ -276,13 +252,6 @@ export function Shell() {
   });
 
   /* ── search handlers ──────────────────────────────────── */
-  const handleSearchFocus = () => {
-    if (activeView?.kind !== 'search') {
-      prevViewRef.current = activeView;
-      setActiveView({ kind: 'search' });
-    }
-  };
-
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     setSearchQuery(v);
@@ -310,8 +279,8 @@ export function Shell() {
   };
 
   /* ── window drag ──────────────────────────────────────── */
-  // Desktop-only: drag the frameless window by its header. There's no window
-  // chrome to drag on mobile, so this is a no-op there.
+  // Desktop-only: drag the frameless window by its sidebar drag strip. There's
+  // no window chrome to drag on mobile, so this is a no-op there.
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
     if (isMobilePlatform()) return;
     const target = e.target as HTMLElement;
@@ -327,6 +296,7 @@ export function Shell() {
       case 'inbox': return 'Inbox';
       case 'favorites': return 'Favorites';
       case 'search': return 'Search';
+      case 'browse': return 'Browse';
       case 'label':
         return 'Label';
       case 'project': {
@@ -335,6 +305,18 @@ export function Shell() {
       }
     }
   }
+
+  const currentProject =
+    activeView?.kind === 'project'
+      ? projects.find((p) => p.localId === activeView.localId)
+      : undefined;
+  const currentViewLocalId =
+    activeView?.kind === 'project'
+      ? (activeView.viewLocalId ?? projectViews[0]?.localId)
+      : undefined;
+  const currentView = currentViewLocalId
+    ? projectViews.find((v) => v.localId === currentViewLocalId)
+    : undefined;
 
   function renderMain() {
     if (!activeView) {
@@ -364,11 +346,10 @@ export function Shell() {
         return <InboxView />;
       case 'search':
         return <SearchView query={searchQuery} />;
+      case 'browse':
+        return <ProjectPickerList />;
       case 'project': {
-        const project = projects.find(
-          (p) => p.localId === activeView.localId,
-        );
-        if (!project) {
+        if (!currentProject) {
           return (
             <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
               <p className="text-sm text-[var(--color-muted-foreground)]">
@@ -377,62 +358,48 @@ export function Shell() {
             </section>
           );
         }
-        const currentViewLocalId =
-          activeView.viewLocalId ?? projectViews[0]?.localId;
-        const currentView = currentViewLocalId
-          ? projectViews.find((v) => v.localId === currentViewLocalId)
-          : undefined;
         return (
-          <>
-            <ProjectHeader
-              project={project}
-              views={projectViews}
-              activeViewLocalId={currentViewLocalId}
-              onSelectView={handleSelectView}
-            />
-            <div className="flex min-h-0 min-w-0 flex-1">
-              {currentView ? (
-                // Kanban/Table/Gantt are lazy-loaded — wrap in Suspense so the
-                // chunk fetch shows a subtle placeholder instead of an empty
-                // pane. TaskList is eager but harmless to nest here.
-                <Suspense
-                  fallback={
-                    <section className="flex flex-1 items-center justify-center p-8">
-                      <p className="text-sm text-[var(--color-muted-foreground)]">
-                        Loading…
-                      </p>
-                    </section>
-                  }
-                >
-                  {/* Key each view by its localId so switching views remounts the
-                      component instead of reusing per-view state (filter, collapsed
-                      columns, edit drafts) seeded in useState initializers. */}
-                  {currentView.viewKind === 'kanban' ? (
-                    <KanbanBoard key={currentView.localId} view={currentView} project={project} />
-                  ) : currentView.viewKind === 'table' ? (
-                    <TableView key={currentView.localId} project={project} view={currentView} />
-                  ) : currentView.viewKind === 'gantt' ? (
-                    <GanttView key={currentView.localId} project={project} view={currentView} />
-                  ) : (
-                    <TaskList key={currentView.localId} project={project} view={currentView} />
-                  )}
-                </Suspense>
-              ) : viewsPending ? (
-                <section className="flex flex-1 items-center justify-center p-8">
-                  <p className="text-sm text-[var(--color-muted-foreground)]">
-                    Loading views…
-                  </p>
-                </section>
-              ) : (
-                <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-                  <p className="text-sm text-[var(--color-muted-foreground)]">
-                    No views available for this project.
-                  </p>
-                </section>
-              )}
-              <TaskDetail />
-            </div>
-          </>
+          <div className="flex min-h-0 min-w-0 flex-1">
+            {currentView ? (
+              // Kanban/Table/Gantt are lazy-loaded — wrap in Suspense so the
+              // chunk fetch shows a subtle placeholder instead of an empty
+              // pane. TaskList is eager but harmless to nest here.
+              <Suspense
+                fallback={
+                  <section className="flex flex-1 items-center justify-center p-8">
+                    <p className="text-sm text-[var(--color-muted-foreground)]">
+                      Loading…
+                    </p>
+                  </section>
+                }
+              >
+                {/* Key each view by its localId so switching views remounts the
+                    component instead of reusing per-view state (filter, collapsed
+                    columns, edit drafts) seeded in useState initializers. */}
+                {currentView.viewKind === 'kanban' ? (
+                  <KanbanBoard key={currentView.localId} view={currentView} project={currentProject} />
+                ) : currentView.viewKind === 'table' ? (
+                  <TableView key={currentView.localId} project={currentProject} view={currentView} />
+                ) : currentView.viewKind === 'gantt' ? (
+                  <GanttView key={currentView.localId} project={currentProject} view={currentView} />
+                ) : (
+                  <TaskList key={currentView.localId} project={currentProject} view={currentView} />
+                )}
+              </Suspense>
+            ) : viewsPending ? (
+              <section className="flex flex-1 items-center justify-center p-8">
+                <p className="text-sm text-[var(--color-muted-foreground)]">
+                  Loading views…
+                </p>
+              </section>
+            ) : (
+              <section className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+                <p className="text-sm text-[var(--color-muted-foreground)]">
+                  No views available for this project.
+                </p>
+              </section>
+            )}
+          </div>
         );
       }
     }
@@ -445,56 +412,13 @@ export function Shell() {
         isMobile && 'safe-top safe-bottom safe-x',
       )}
     >
-      <SpecularTracker />
-      {/* Left spacer sits behind macOS traffic lights; programmatic
-          drag via getCurrentWindow().startDragging() on mousedown when
-          the target isn't an interactive element. */}
-      <header onMouseDown={handleHeaderMouseDown} className={cn('flex select-none items-center border-b border-[var(--color-border)] px-4 py-2', isMobile ? 'bg-[var(--color-background)]' : 'glass-surface', headerScrolled && 'scrolled')}>
-        {isMobile ? (
+      {isMobile && (
+        <header className="flex select-none items-center border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2">
           <div className="flex flex-1 items-center gap-2">
-            <h1 className={headerScrolled ? 'nav-title-small' : 'nav-title-large'}>
+            <h1 className="nav-title-large">
               {getViewTitle()}
             </h1>
           </div>
-        ) : (
-          <div className="flex flex-1 items-center gap-1 pl-[76px]">
-            <button
-              type="button"
-              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              title={sidebarCollapsed ? 'Show sidebar (⌘E)' : 'Hide sidebar (⌘E)'}
-              onClick={toggleSidebar}
-              className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-            >
-              <PanelLeft className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-        {isMobile ? null : (
-          <div className="mx-4 flex max-w-md flex-1">
-            <div className="relative w-full">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onFocus={handleSearchFocus}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Search tasks…  ⌘F"
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-9 pr-8 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
-              />
-              {searchQuery && (
-                <button
-                  onClick={handleSearchClear}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {isMobile ? (
           <div className="flex shrink-0 items-center gap-0.5">
             {activeView?.kind === 'project' && (
               <MobileViewSwitcher
@@ -523,12 +447,12 @@ export function Shell() {
                 : 'text-[var(--color-warning)]';
               const total = outboxCount + deadLetterCount + conflictCount;
               const label = !isOnline
-                ? 'Offline'
+                ? outboxCount > 0 ? `Offline — ${outboxCount} saved locally` : 'Offline'
                 : deadLetterCount > 0
-                  ? `${deadLetterCount} failed to sync`
+                  ? `${deadLetterCount} ${deadLetterCount === 1 ? 'change' : 'changes'} wouldn't send`
                   : outboxCount > 0
-                    ? `Syncing — ${outboxCount} pending`
-                    : `${conflictCount} conflicts pending`;
+                    ? `Sending ${outboxCount} ${outboxCount === 1 ? 'change' : 'changes'}…`
+                    : `${conflictCount} ${conflictCount === 1 ? 'conflict' : 'conflicts'}`;
               return (
                 <button
                   type="button"
@@ -580,111 +504,106 @@ export function Shell() {
               <Settings className="h-5 w-5" />
             </button>
           </div>
-        ) : (
-          <div className="flex flex-1 items-center justify-end gap-3">
-            <button
-              type="button"
-              aria-label="Add task"
-              onClick={() => setShowQuickAdd(true)}
-              className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            {currentViewKey && (
-              <button
-                type="button"
-                aria-label="Display options"
-                onClick={() => openDisplaySheet(currentViewKey)}
-                className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-            )}
-            <NotificationBell />
-            <span className="text-xs text-[var(--color-muted-foreground)]">
-              {displayName}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-              Sign out
-            </Button>
-          </div>
-        )}
-      </header>
+        </header>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* Desktop: sidebar is a permanent left column. Mobile: it lives in
             the slide-over drawer below instead. */}
-        {!isMobile && !sidebarCollapsed && <ProjectSidebar />}
+        {!isMobile && !sidebarCollapsed && (
+          <ProjectSidebar
+            onOpenSearch={() => setShowCommandPalette(true)}
+            onOpenSettings={() => setShowSettings(true)}
+            onOpenOutbox={() => setShowOutbox(true)}
+            onOpenConflicts={() => setShowConflicts(true)}
+            onDragMouseDown={handleHeaderMouseDown}
+          />
+        )}
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <div ref={scrollSentinelRef} className="pointer-events-none h-px w-full shrink-0" />
-          {renderMain()}
-        </main>
+        {/* Content pane — a white card floating on the paper canvas. */}
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 flex-col bg-[var(--color-card)]',
+            !isMobile && !sidebarCollapsed && 'rounded-l-xl border-l border-[var(--color-border)]',
+          )}
+        >
+          {!isMobile && (
+            <header className="flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11">
+              <div className="flex min-w-[200px] flex-1 items-end gap-3">
+                {sidebarCollapsed && (
+                  <button
+                    type="button"
+                    onClick={toggleSidebar}
+                    aria-label="Show sidebar"
+                    title="Show sidebar (⌘E)"
+                    className="mb-1.5 shrink-0 rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+                  >
+                    <PanelLeft className="h-[18px] w-[18px]" />
+                  </button>
+                )}
+                <div className="min-w-0 flex-1">
+                <h1 className="truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
+                  {getViewTitle()}
+                </h1>
+                <p className="mt-1.5 truncate text-sm text-[var(--color-muted-foreground)]">
+                  {format(new Date(), 'EEEE d MMMM')}
+                </p>
+                </div>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                {activeView?.kind === 'project' && (
+                  <ViewSwitcher
+                    views={projectViews}
+                    activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
+                    onSelect={handleSelectView}
+                  />
+                )}
+                {activeView?.kind === 'project' && currentView && (
+                  <ViewFilterButton view={currentView} />
+                )}
+                {currentViewKey && (
+                  <button
+                    type="button"
+                    onClick={() => openDisplaySheet(currentViewKey)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] dark:border-[oklch(31%_0.008_265)]"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Filter
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAdd(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-inverse)] px-3 py-1.5 text-xs font-medium text-[var(--color-inverse-foreground)] hover:opacity-90"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  Add task
+                </button>
+              </div>
+            </header>
+          )}
+
+          <main className="flex min-w-0 flex-1 flex-col">
+            {renderMain()}
+          </main>
+        </div>
+
+        {/* Inspector — permanent right-hand column on desktop. */}
+        {!isMobile && <TaskDetail />}
       </div>
 
+      {/* Update pill — floats bottom-left instead of living in the removed
+          status bar. Renders nothing unless an update is available. */}
       {!isMobile && (
-        <footer className="glass-surface flex select-none items-center justify-between border-t px-4 py-1.5 text-caption text-[var(--color-muted-foreground)]">
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'h-2 w-2 rounded-full transition-colors duration-300',
-                !isOnline ? 'bg-[var(--color-destructive)] animate-pulse' : outboxCount > 0 ? 'bg-[var(--color-warning)] animate-pulse' : 'bg-[var(--color-success)]'
-              )}
-            />
-             <span>
-               {!isOnline
-                 ? 'Offline'
-                 : outboxCount > 0
-                 ? (
-                     <button
-                       className="underline"
-                       onClick={() => setShowOutbox(true)}
-                     >
-                       Syncing… {outboxCount} pending mutation{outboxCount === 1 ? '' : 's'}
-                     </button>
-                   )
-                 : conflictCount > 0
-                 ? (
-                     <button
-                       className="underline"
-                       onClick={() => setShowConflicts(true)}
-                     >
-                       {conflictCount} conflict{conflictCount === 1 ? '' : 's'} pending
-                     </button>
-                   )
-                 : 'Synced with server'}
-             </span>
-             {deadLetterCount > 0 && (
-               <button
-                 className="ml-2 flex items-center gap-1 text-[var(--color-destructive)] underline"
-                 onClick={() => setShowOutbox(true)}
-               >
-                  <span className="h-2 w-2 rounded-full bg-[var(--color-destructive)]" />
-                 {deadLetterCount} failed to sync
-               </button>
-             )}
-           </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowSettings(true)}
-              className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-              aria-label="Settings"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </button>
-            <UpdateBanner
-              state={updaterState}
-              onInstall={() => void installUpdate()}
-            />
-            <span>
-              Cria {pkg.version}
-              {serverVersion ? <span className="ml-2 text-[var(--color-muted-foreground)]">· {serverVersion}</span> : null}
-            </span>
-          </div>
-        </footer>
+        <div className="fixed bottom-4 left-4 z-50">
+          <UpdateBanner
+            state={updaterState}
+            onInstall={() => void installUpdate()}
+          />
+        </div>
       )}
-{showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
+
+      {showOutbox && <OutboxModal onClose={() => setShowOutbox(false)} />}
       {showConflicts && <ConflictModal onClose={() => setShowConflicts(false)} />}
       <DisplaySheet />
       <TaskActionSheet />
@@ -766,7 +685,7 @@ export function Shell() {
         </div>
       )}
 
-      {/* Floating action button — Todoist's round "+" anchored above the tab
+      {/* Floating action button — ink-filled circle anchored above the tab
           bar. Mobile only; hidden while a full-screen overlay (task detail,
           search, photo capture, quick-add) owns the screen. */}
       {isMobile &&
@@ -778,7 +697,7 @@ export function Shell() {
             type="button"
             aria-label="Add task"
             onClick={() => setShowQuickAdd(true)}
-            className="fab fixed right-5 z-40 flex h-14 w-14 items-center justify-center"
+            className="fixed right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)] shadow-[0_8px_22px_-6px_rgba(0,0,0,0.4)]"
             style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.75rem)' }}
           >
             <Plus className="h-7 w-7" strokeWidth={2.5} />
@@ -786,6 +705,6 @@ export function Shell() {
         )}
 
       <TabBar />
-      </div>
+    </div>
   );
 }
