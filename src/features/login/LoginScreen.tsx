@@ -188,16 +188,17 @@ export function LoginScreen() {
   };
 
   return (
-    <main className="flex min-h-full items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
-        <div className="space-y-1.5">
-          <h1 className="text-xl font-semibold tracking-tight">Sign in to Vikunja</h1>
-          <p className="text-sm text-[var(--color-muted-foreground)]">
-            {authMethod === 'token'
-              ? 'Connect Cria to your Vikunja instance with an API token.'
-              : authMethod === 'password'
-                ? 'Sign in with your Vikunja username or email and password.'
-                : 'Open a project someone shared with you via a link.'}
+    <main className="flex min-h-full items-center justify-center bg-[var(--color-background)] p-6">
+      <div className="w-full max-w-md space-y-6 rounded-xl bg-[var(--color-card)] p-8 text-center dark:border dark:border-[var(--color-border)]">
+        <div className="flex flex-col items-center space-y-2">
+          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-[13px] bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]">
+            <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-[-0.03em]">Point Cria at your Vikunja</h1>
+          <p className="mx-auto max-w-[42ch] text-[14.5px] leading-relaxed text-[var(--color-muted-foreground)]">
+            Everything is stored on your machine and synced in the background. Works offline from the first launch.
           </p>
         </div>
 
@@ -237,7 +238,7 @@ export function LoginScreen() {
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4 text-left">
           <div className="space-y-2">
             <Label htmlFor="serverUrl">Server URL</Label>
             <Input
@@ -355,13 +356,28 @@ export function LoginScreen() {
             </div>
           ) : null}
 
-          <Button type="submit" disabled={isSubmitting} className="w-full">
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]"
+          >
             {isSubmitting
               ? 'Signing in…'
               : totpRequired
                 ? 'Verify'
-                : 'Sign in'}
+                : 'Continue'}
           </Button>
+
+          <p className="text-center text-[12.5px] text-[var(--color-muted-foreground)]">
+            No account yet?{' '}
+            <button
+              type="button"
+              onClick={() => setServerUrl('https://try.vikunja.io')}
+              className="text-[var(--color-primary)] underline underline-offset-2"
+            >
+              Use try.vikunja.io
+            </button>
+          </p>
         </form>
       </div>
     </main>
