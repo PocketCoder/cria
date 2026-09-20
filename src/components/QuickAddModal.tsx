@@ -5,18 +5,266 @@ import { addReminder, type AddReminderInput } from '@/db/reminders';
 import { useUi } from '@/stores/ui';
 import { useSelectableProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
-import { parseQuickAdd } from '@/lib/quickAddParser';
-import { QuickAddPreview } from '@/features/tasks/QuickAddPreview';
+import { parseQuickAdd, type QuickAddResult } from '@/lib/quickAddParser';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
-import { X, ArrowUp, Camera } from 'lucide-react';
+import { ArrowUp, Camera, CalendarDays, Tag, Bell } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { PrioritySelect } from '@/components/ui/priority-select';
+import { PrioritySelect, priorityColor } from '@/components/ui/priority-select';
 import { DatePicker } from '@/components/DatePicker';
 import { LabelPicker } from '@/components/ui/label-picker';
 import { RecurrencePicker } from '@/components/ui/recurrence-picker';
 import { ReminderPill } from '@/components/ui/reminder-pill';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { formatDue } from '@/features/tasks/TaskRowCore';
 import type { TaskInput } from '@/domain/task';
+import type { Project } from '@/domain/project';
+
+/* ─── helpers ─────────────────────────────────────────────────────────────── */
+
+function repeatLabel(repeatAfter: number | null, repeatMode: number | null): string {
+  if (repeatMode === 1) return 'Monthly';
+  if (repeatAfter === null) return '';
+  const HOUR = 3600;
+  const DAY = 86400;
+  const WEEK = 604800;
+  const YEAR = 31536000;
+  if (repeatAfter % YEAR === 0 && repeatAfter >= YEAR) {
+    const n = repeatAfter / YEAR;
+    return n === 1 ? 'Yearly' : `Every ${n} years`;
+  }
+  if (repeatAfter % WEEK === 0 && repeatAfter >= WEEK) {
+    const n = repeatAfter / WEEK;
+    return n === 1 ? 'Weekly' : `Every ${n} weeks`;
+  }
+  if (repeatAfter % DAY === 0 && repeatAfter >= DAY) {
+    const n = repeatAfter / DAY;
+    return n === 1 ? 'Daily' : `Every ${n} days`;
+  }
+  if (repeatAfter % HOUR === 0 && repeatAfter >= HOUR) {
+    const n = repeatAfter / HOUR;
+    return n === 1 ? 'Hourly' : `Every ${n} hours`;
+  }
+  return `Every ${repeatAfter}s`;
+}
+
+/**
+ * The Task-name field with parsed quick-add tokens highlighted inline.
+ * A transparent-text input sits on top of an aria-hidden mirror that paints
+ * the tokens (`--color-primary` on a light blue, 5px radius); the two share
+ * the wrapper's font metrics so they stay pixel-aligned. Scroll syncs so a
+ * long title doesn't desync the mirror.
+ */
+function TokenInput({
+  value,
+  parsed,
+  onChange,
+  onKeyDown,
+  inputRef,
+  placeholder,
+  className,
+}: {
+  value: string;
+  parsed: QuickAddResult;
+  onChange: (v: string) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  inputRef?: React.Ref<HTMLInputElement>;
+  placeholder?: string;
+  className?: string;
+}) {
+  const mirrorRef = useRef<HTMLSpanElement>(null);
+  const syncScroll = (el: HTMLInputElement | null) => {
+    if (mirrorRef.current && el) {
+      mirrorRef.current.scrollLeft = el.scrollLeft;
+    }
+  };
+  return (
+    <div className={cn('relative w-full', className)}>
+      <span
+        ref={mirrorRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden whitespace-nowrap"
+      >
+        {parsed.tokens.map((t, i) =>
+          t.kind === 'text' ? (
+            <span key={i} className="text-[var(--color-foreground)]">
+              {t.text}
+            </span>
+          ) : (
+            <span
+              key={i}
+              className="rounded-[5px] bg-[oklch(95% 0.02 255)] px-0.5 text-[var(--color-primary)]"
+            >
+              {t.text}
+            </span>
+          ),
+        )}
+      </span>
+      <input
+        ref={(el) => {
+          syncScroll(el);
+          if (inputRef) {
+            if (typeof inputRef === 'function') inputRef(el);
+            else (inputRef as React.MutableRefObject<HTMLInputElement | null>).current = el;
+          }
+        }}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onScroll={(e) => syncScroll(e.currentTarget)}
+        placeholder={placeholder}
+        className="relative w-full bg-transparent text-transparent [-webkit-text-fill-color:transparent] caret-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"
+      />
+    </div>
+  );
+}
+
+/**
+ * The "only what is actually set" chip row + the dashed `+ Priority,
+ * labels…` chip that opens the full picker set in a popover. Every chip is a
+ * trigger, so tapping a set chip re-opens the pickers to edit it.
+ */
+function SetChips({
+  parsed,
+  projects,
+  projectId,
+  setProjectId,
+  dueDate,
+  setDueDate,
+  priority,
+  setPriority,
+  labelTitles,
+  setLabelTitles,
+  reminders,
+  setReminders,
+  repeatAfter,
+  repeatMode,
+  onChangeRepeat,
+  className,
+}: {
+  parsed: QuickAddResult;
+  projects: Project[];
+  projectId: string | null;
+  setProjectId: (v: string | null) => void;
+  dueDate: string | null;
+  setDueDate: (v: string | null) => void;
+  priority: number;
+  setPriority: (v: number) => void;
+  labelTitles: string[];
+  setLabelTitles: (v: string[]) => void;
+  reminders: AddReminderInput[];
+  setReminders: (v: AddReminderInput[]) => void;
+  repeatAfter: number | null;
+  repeatMode: number | null;
+  onChangeRepeat: (after: number | null, mode: number | null) => void;
+  className?: string;
+}) {
+  const resolvedProject =
+    parsed.projectTitle ??
+    (projectId ? projects.find((p) => p.localId === projectId)?.title : null);
+  const resolvedProjectColor = parsed.projectTitle
+    ? null
+    : projects.find((p) => p.localId === projectId)?.hexColor ?? null;
+
+  const chips = (
+    <>
+      {dueDate ? (
+        <span className="chip">
+          <CalendarDays className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+          {formatDue(dueDate)}
+        </span>
+      ) : null}
+      {priority > 0 ? (
+        <span className="chip">
+          <span
+            className="h-3 w-[3px] rounded-full"
+            style={{ backgroundColor: priorityColor(priority) }}
+          />
+          !{priority}
+        </span>
+      ) : null}
+      {labelTitles.map((t) => (
+        <span key={t} className="chip">
+          <Tag className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+          {t}
+        </span>
+      ))}
+      {reminders.length > 0 ? (
+        <span className="chip">
+          <Bell className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+          {reminders.length} reminder{reminders.length === 1 ? '' : 's'}
+        </span>
+      ) : null}
+      {repeatAfter !== null || repeatMode !== null ? (
+        <span className="chip">{repeatLabel(repeatAfter, repeatMode)}</span>
+      ) : null}
+      {resolvedProject ? (
+        <span className="chip">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
+            style={resolvedProjectColor ? { backgroundColor: resolvedProjectColor } : undefined}
+          />
+          {resolvedProject}
+        </span>
+      ) : null}
+    </>
+  );
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <div
+          className={cn(
+            'flex cursor-pointer flex-wrap items-center gap-1.5',
+            className,
+          )}
+        >
+          {chips}
+          <span className="chip-dashed">+ Priority, labels…</span>
+        </div>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6} className="w-max max-w-[320px]">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <DatePicker value={dueDate} onChange={setDueDate} placeholder="Date" enableTime smart />
+          <LabelPicker value={labelTitles} onChange={setLabelTitles} />
+          <PrioritySelect value={priority} onChange={setPriority} variant="pill" />
+          <ReminderPill value={reminders} onChange={setReminders} />
+          <RecurrencePicker
+            repeatAfter={repeatAfter}
+            repeatMode={repeatMode}
+            onChange={onChangeRepeat}
+          />
+          {projects.length > 0 ? (
+            <Select value={projectId ?? ''} onValueChange={(v) => setProjectId(v || null)}>
+              <SelectTrigger
+                className="inline-flex h-auto w-auto min-w-0 items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] [&>span]:truncate"
+                aria-label="Project"
+              >
+                <SelectValue placeholder="Inbox" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.localId} value={p.localId}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
+                        style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
+                      />
+                      {p.title}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ─── the modal ───────────────────────────────────────────────────────────── */
 
 export function QuickAddModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
@@ -215,12 +463,11 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!parsed.title) return;
+  const doAdd = async (): Promise<boolean> => {
+    if (!parsed.title) return false;
     // Need a project only when no +project token was typed (dropdown project).
-    if (!parsed.projectTitle && !projectId) return;
-    if (submitting) return;
+    if (!parsed.projectTitle && !projectId) return false;
+    if (submitting) return false;
 
     setSubmitting(true);
     try {
@@ -232,19 +479,19 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
             (p) => p.title.toLowerCase() === parsed.projectTitle!.toLowerCase(),
           )
         : undefined;
-        const input: TaskInput = {
-          title: parsed.title,
-          // If a +project token was parsed but no matching project exists,
-          // omit the projectLocalId so the task falls back to the Inbox.
-          ...(matchedProject ? { projectLocalId: matchedProject.localId } : {}),
-          // If there is no +project token, keep the currently selected project.
-          ...(!parsed.projectTitle ? { projectLocalId: projectId } : {}),
-          ...(description.trim() ? { description: description.trim() } : {}),
-          ...(dueDate ? { dueDate } : {}),
-          ...(priority > 0 ? { priority } : {}),
-          ...(repeatAfter !== null ? { repeatAfter } : {}),
-          ...(repeatMode !== null ? { repeatMode } : {}),
-        };
+      const input: TaskInput = {
+        title: parsed.title,
+        // If a +project token was parsed but no matching project exists,
+        // omit the projectLocalId so the task falls back to the Inbox.
+        ...(matchedProject ? { projectLocalId: matchedProject.localId } : {}),
+        // If there is no +project token, keep the currently selected project.
+        ...(!parsed.projectTitle ? { projectLocalId: projectId } : {}),
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(dueDate ? { dueDate } : {}),
+        ...(priority > 0 ? { priority } : {}),
+        ...(repeatAfter !== null ? { repeatAfter } : {}),
+        ...(repeatMode !== null ? { repeatMode } : {}),
+      };
       const created = await createTask(input);
 
       // Apply chosen labels (picker + any typed *tokens) — create-if-missing.
@@ -277,19 +524,67 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
         );
       }
 
-      onClose();
+      return true;
     } catch (err) {
       console.error('Quick add failed', err);
+      return false;
     } finally {
       setSubmitting(false);
     }
   };
 
+  const resetForm = () => {
+    setText('');
+    setDescription('');
+    setPriority(0);
+    setDueDate(null);
+    setLabelTitles([]);
+    setRepeatAfter(null);
+    setRepeatMode(null);
+    setReminders([]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (await doAdd()) onClose();
+  };
+
+  const handleTitleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // ⇧⏎ adds and keeps the field open for the next task.
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      if (await doAdd()) resetForm();
+    }
+  };
+
+  const submitDisabled = submitting || !parsed.title || (!parsed.projectTitle && !projectId);
+
+  const chipProps = {
+    parsed,
+    projects,
+    projectId,
+    setProjectId,
+    dueDate,
+    setDueDate,
+    priority,
+    setPriority,
+    labelTitles,
+    setLabelTitles,
+    reminders,
+    setReminders,
+    repeatAfter,
+    repeatMode,
+    onChangeRepeat: (after: number | null, mode: number | null) => {
+      setRepeatAfter(after);
+      setRepeatMode(mode);
+    },
+  };
+
   if (isMobile) {
-    // Todoist-style add-task sheet: a solid card anchored to the bottom (lifted
-    // above the keyboard), with a large Task-name field, a Description line, a
-    // horizontally-scrolling chip row of pickers, and a project selector +
-    // round send button in the footer.
+    // Capture sheet: a solid card anchored to the bottom (lifted above the
+    // keyboard) with a 21px token-highlighted Task-name field, a muted
+    // note line, only-set chips + dashed affordance, and a syntax-hint
+    // footer with a 46px ink send button.
     return (
       <div
         className="fixed inset-0 z-50 flex flex-col justify-end"
@@ -302,7 +597,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
         <div
           ref={panelRef}
           className={cn(
-            'relative z-10 w-full rounded-t-2xl bg-[var(--color-card)] pt-2 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)]',
+            'relative z-10 w-full rounded-t-[22px] bg-[var(--color-card)] pt-2.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] dark:border dark:border-[oklch(34%_0.008_265)]',
             dragY === 0 && !drag.current.active && 'animate-[sheet-up_300ms_var(--spring-snappy)]',
           )}
           style={{
@@ -312,71 +607,43 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-[var(--color-muted-foreground)]/30" />
+          <div className="mx-auto mb-1 h-[5px] w-[38px] rounded-full bg-[var(--color-muted-foreground)]/30" />
           <form onSubmit={handleSubmit}>
             <div className="px-5 pt-3">
-              <input
-                ref={titleRef}
-                type="text"
-                placeholder="Task name"
-                className="w-full bg-transparent text-xl font-semibold placeholder-[var(--color-muted-foreground)] focus:outline-none"
+              <TokenInput
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                parsed={parsed}
+                onChange={setText}
+                onKeyDown={handleTitleKeyDown}
+                inputRef={titleRef}
+                placeholder="Task name"
+                className="text-[21px] font-medium leading-[1.35] tracking-[-0.015em]"
               />
               <input
                 type="text"
-                placeholder="Description"
-                className="mt-2 w-full bg-transparent text-sm text-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"
+                placeholder="Add a note…"
+                className="mt-2 w-full bg-transparent text-[15px] text-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
-              <QuickAddPreview parsed={parsed} />
             </div>
 
-            {/* Chip row — due date (smart), labels, priority, reminder,
-                repeat. Project lives in the footer (Todoist-style). All
-                compact pills; each expands into a popover. Scrollable. */}
-            <div className="mt-5 flex items-center gap-2 overflow-x-auto px-5 pb-4 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
-              <DatePicker value={dueDate} onChange={setDueDate} placeholder="Date" enableTime smart />
-              <LabelPicker value={labelTitles} onChange={setLabelTitles} />
-              <PrioritySelect value={priority} onChange={setPriority} variant="pill" />
-              <ReminderPill value={reminders} onChange={setReminders} />
-              <RecurrencePicker
-                repeatAfter={repeatAfter}
-                repeatMode={repeatMode}
-                onChange={(after, mode) => {
-                  setRepeatAfter(after);
-                  setRepeatMode(mode);
-                }}
-              />
+            <div className="mt-4 px-5 pb-4">
+              <SetChips {...chipProps} />
             </div>
 
-            {/* Footer — project selector (left, Todoist-style borderless) +
-                camera & send grouped on the right. */}
+            {/* Footer — syntax hint (left) + camera & 46px ink send (right). */}
             <div
               className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-4 py-3"
               style={{ paddingBottom: keyboardInset ? undefined : 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
             >
-              {projects.length > 0 ? (
-                <Select value={projectId ?? ''} onValueChange={(v) => setProjectId(v || null)}>
-                  <SelectTrigger className="inline-flex h-auto w-auto min-w-0 max-w-[55%] justify-start gap-1.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] [&>span]:truncate" aria-label="Project">
-                    <SelectValue placeholder="Inbox" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.localId} value={p.localId}>
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
-                            style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
-                          />
-                          <span className="truncate">{p.title}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : <span />}
+              <span className="text-[12.5px] text-[var(--color-muted-foreground)]">
+                <code className="font-mono text-[var(--color-primary)]">+project</code>
+                <span className="mx-1.5">·</span>
+                <code className="font-mono text-[var(--color-primary)]">*label</code>
+                <span className="mx-1.5">·</span>
+                <code className="font-mono text-[var(--color-primary)]">!2</code>
+              </span>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
@@ -392,9 +659,9 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !parsed.title || (!parsed.projectTitle && !projectId)}
+                  disabled={submitDisabled}
                   aria-label="Add task"
-                  className="fab flex h-11 w-11 items-center justify-center disabled:opacity-40 disabled:shadow-none"
+                  className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)] disabled:opacity-40"
                 >
                   <ArrowUp className="h-6 w-6" strokeWidth={2.5} />
                 </button>
@@ -408,83 +675,44 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-[oklch(22% 0.012 265 / 0.34)] pt-[70px]"
       onClick={onClose}
     >
-      {!isMobile && (
-        <div
-          className="glass-surface w-11/12 max-w-lg rounded-lg p-4 shadow-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Quick Add</h2>
+      <div
+        className="w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[oklch(34%_0.008_265)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <form onSubmit={handleSubmit}>
+          <div className="px-5 pt-5">
+            <TokenInput
+              value={text}
+              parsed={parsed}
+              onChange={setText}
+              onKeyDown={handleTitleKeyDown}
+              inputRef={titleRef}
+              placeholder="Buy milk tomorrow *groceries !2 @alice +Personal"
+              className="text-[19px] font-semibold tracking-[-0.015em]"
+            />
+          </div>
+
+          <div className="px-5 py-4">
+            <SetChips {...chipProps} />
+          </div>
+
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-5 py-3">
+            <span className="text-[11.5px] text-[var(--color-muted-foreground)]">
+              ⏎ add · ⇧⏎ add &amp; keep open · esc cancel
+            </span>
             <button
-              onClick={onClose}
-              className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-              aria-label="Close"
+              type="submit"
+              disabled={submitDisabled}
+              className="rounded-md bg-[var(--color-inverse)] px-4 py-2 text-[13px] font-semibold text-[var(--color-inverse-foreground)] hover:opacity-90 disabled:opacity-50"
             >
-              <X className="h-4 w-4" />
+              {submitting ? 'Adding…' : 'Add task'}
             </button>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <input
-              ref={titleRef}
-              type="text"
-              placeholder="Buy milk tomorrow *groceries !2 @alice +Personal"
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            <QuickAddPreview parsed={parsed} />
-            <div className="flex flex-wrap items-center gap-2">
-              <DatePicker value={dueDate} onChange={setDueDate} placeholder="Due date" enableTime />
-              <LabelPicker value={labelTitles} onChange={setLabelTitles} />
-              <PrioritySelect value={priority} onChange={setPriority} variant="pill" />
-              <ReminderPill value={reminders} onChange={setReminders} />
-              <RecurrencePicker
-                repeatAfter={repeatAfter}
-                repeatMode={repeatMode}
-                onChange={(after, mode) => {
-                  setRepeatAfter(after);
-                  setRepeatMode(mode);
-                }}
-              />
-            </div>
-              <div className="flex items-center justify-between gap-2">
-                {projects.length > 0 ? (
-                  <Select value={projectId ?? ''} onValueChange={(v) => setProjectId(v || null)}>
-                    <SelectTrigger className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-xs" aria-label="Project">
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((p) => (
-                        <SelectItem key={p.localId} value={p.localId}>
-                          <span className="flex items-center gap-2">
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
-                              style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
-                            />
-                            {p.title}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-              <div className="flex items-center gap-2 text-caption text-[var(--color-muted-foreground)]">
-                <span>Enter to add · Esc to cancel</span>
-                <button
-                  type="submit"
-                  disabled={submitting || !parsed.title || (!parsed.projectTitle && !projectId)}
-                  className="rounded-md bg-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
-                >
-                  {submitting ? 'Adding…' : 'Add'}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   );
 }
