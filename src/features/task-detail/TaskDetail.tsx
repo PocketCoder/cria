@@ -162,6 +162,9 @@ export function TaskDetail() {
         void updateTask(task.localId, { isFavorite: !task.isFavorite }),
       ),
       onShortcut('task.delete', () => {
+        // Mirror TaskActions' "Delete forever?" confirmation — the mouse
+        // path never deletes in one step, so the shortcut shouldn't either.
+        if (!window.confirm('Delete this task forever?')) return;
         void deleteTask(task.localId).then(() => setSelectedTask(null));
       }),
       // Picker-opening actions — open the same popover/section the mouse uses.
