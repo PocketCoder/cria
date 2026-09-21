@@ -60,14 +60,26 @@ export function isFavoritesPseudoProject(p: Project): boolean {
 }
 
 /**
- * Like {@link useProjects} but excludes the Favorites pseudo-project — use this
- * for every "which project does this task go in?" picker. `data` is always an
- * array (never undefined) so callers can drop the `?? []` default.
+ * A saved filter's pseudo-project row (server_id < -1, per pullSavedFilters).
+ * Like Favorites, it's a view, not a real destination — the server has no
+ * project with that id, so a task "created" there can never sync.
+ */
+export function isSavedFilterPseudoProject(p: Project): boolean {
+  return p.serverId != null && p.serverId < -1;
+}
+
+/**
+ * Like {@link useProjects} but excludes the Favorites and saved-filter
+ * pseudo-projects — use this for every "which project does this task go
+ * in?" picker. `data` is always an array (never undefined) so callers can
+ * drop the `?? []` default.
  */
 export function useSelectableProjects() {
   const query = useProjects();
   return {
     ...query,
-    data: (query.data ?? []).filter((p) => !isFavoritesPseudoProject(p)),
+    data: (query.data ?? []).filter(
+      (p) => !isFavoritesPseudoProject(p) && !isSavedFilterPseudoProject(p),
+    ),
   };
 }

@@ -282,9 +282,10 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     activeView?.kind === 'project' ? activeView.localId : null;
   const { data: projects = [] } = useSelectableProjects();
   const { data: user } = useCurrentUser();
-  const [projectId, setProjectId] = useState<string | null>(
-    selectedProjectId ?? null,
-  );
+  // Seeded lazily by the effect below, which validates selectedProjectId
+  // against the selectable project list — the open view can be a saved
+  // filter's pseudo-project, which isn't a real create destination.
+  const [projectId, setProjectId] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
   // Focus the title without letting iOS scroll the page to it (that's what
@@ -394,7 +395,11 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
   // first project. One effect so the fallbacks can't race each other.
   useEffect(() => {
     if (projectId || projects.length === 0) return;
-    if (selectedProjectId) {
+    // selectedProjectId can point at a pseudo-project (Favorites, or a
+    // saved filter) that useSelectableProjects deliberately excludes —
+    // those aren't real create destinations, so fall through to the
+    // user's default / first project instead of using them.
+    if (selectedProjectId && projects.some((p) => p.localId === selectedProjectId)) {
       setProjectId(selectedProjectId);
       return;
     }

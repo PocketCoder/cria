@@ -477,7 +477,10 @@ async function executeOp(
       [task.project_local_id],
     );
     const projectServerId = projectRows[0]?.server_id;
-    if (!projectServerId) {
+    // A negative server_id is a pseudo-project (Favorites, a saved filter)
+    // — not a real server destination, so it must never reach the API any
+    // more than a missing/zero one would.
+    if (!projectServerId || projectServerId < 0) {
       throw new ApiError(408, null, 'Project not yet synced', true, true);
     }
 
