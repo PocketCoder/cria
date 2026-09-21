@@ -154,7 +154,12 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
   }, [canSave]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <div
         className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
         onClick={(e) => e.stopPropagation()}

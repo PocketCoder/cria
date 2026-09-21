@@ -86,6 +86,12 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       ) {
         return;
       }
+      // A modal dialog is open. Focus may sit on the dialog's own content
+      // (caught above) or nowhere in particular (a bare button, or the
+      // document body) — either way the shortcut set must not act on the
+      // view/task behind it, so check for any open dialog regardless of
+      // where focus landed.
+      if (document.querySelector('[role="dialog"]')) return;
       const key = eventToKey(e);
       if (!key) return;
 

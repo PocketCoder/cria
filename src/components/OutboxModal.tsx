@@ -135,6 +135,8 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+      role="dialog"
+      aria-modal="true"
       onClick={onClose}
     >
       <div
