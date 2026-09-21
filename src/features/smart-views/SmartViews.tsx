@@ -462,8 +462,12 @@ function NowRow({ task }: { task: TaskWithProject }) {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const unpick = useNow((s) => s.unpick);
   const handleToggle = useCallback(() => {
-    void toggleTaskDone(task); // completing removes it from the block
-    unpick(task.localId);
+    void toggleTaskDone(task).then((ok) => {
+      // Only drop it from the block once the completion actually landed —
+      // otherwise a failed update would silently vanish from Now while
+      // still showing as incomplete everywhere else.
+      if (ok) unpick(task.localId);
+    });
   }, [task, unpick]);
   return (
     <div

@@ -45,7 +45,10 @@ export function isOverdue(iso: string): boolean {
   }
 }
 
-export async function toggleTaskDone(task: Task) {
+/** Returns whether the update actually went through — callers with a
+ * side effect chained to completion (e.g. the Now block dropping the
+ * task) must check this rather than assuming success. */
+export async function toggleTaskDone(task: Task): Promise<boolean> {
   const nowDone = !task.done;
   try {
     await updateTask(task.localId, { done: nowDone });
@@ -53,8 +56,10 @@ export async function toggleTaskDone(task: Task) {
       playCompletionSound();
       impactComplete();
     }
+    return true;
   } catch (err) {
     console.error('Failed to toggle task:', err);
+    return false;
   }
 }
 
