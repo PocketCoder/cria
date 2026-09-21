@@ -205,6 +205,13 @@ jobs:
       - name: Init iOS project
         run: pnpm tauri ios init
 
+      # `tauri ios init` silently mis-copies some AppIcon.appiconset sizes
+      # (they end up as Tauri's default logo instead of ours, even though
+      # the source files in src-tauri/icons/ios are correct). Overwrite the
+      # generated catalog with our own source images as a workaround.
+      - name: Fix iOS app icon (tauri ios init copy bug workaround)
+        run: cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
+
       - name: Build unsigned archive
         run: pnpm tauri ios build --target aarch64 --no-sign --archive-only --ci
 
