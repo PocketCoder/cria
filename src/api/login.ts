@@ -52,10 +52,12 @@ export async function loginWithPassword(
     );
   }
 
-  const { data, response } = result;
+  const { data, error, response } = result;
   if (!response.ok) {
-    const bodyText = await response.text().catch(() => '');
-    throw await buildApiError(response.status, bodyText);
+    // openapi-fetch already read+parsed the body into `error` — the
+    // Response stream is consumed, so re-reading response.text() here
+    // would throw and mask the server's real error message.
+    throw buildApiError(response.status, error);
   }
 
   return {
