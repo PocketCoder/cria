@@ -67,7 +67,7 @@ pnpm tauri ios dev --host
 pnpm tauri ios build --export-method debugging
 ```
 
-The Xcode project lives under `src-tauri/gen/apple/` (regenerate with `pnpm tauri ios init`). A debug iOS build needs ~10 GB of free disk. CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)); signed iOS distribution is currently a manual step (needs a paid Apple account).
+The Xcode project lives under `src-tauri/gen/apple/` (regenerate with `pnpm tauri ios init`). A debug iOS build needs ~10 GB of free disk. CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)). Tagged releases also build an **unsigned** `.ipa` (`build-ios` job in [`release.yml`](.github/workflows/release.yml)), attached to the GitHub Release alongside the macOS bundles, for sideloading via SideStore/iLoader (they sign it themselves with a free Apple ID; no Apple secrets or device UDIDs are needed in this repo).
 
 ### Regenerating API types
 
