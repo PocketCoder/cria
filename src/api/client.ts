@@ -279,18 +279,19 @@ async function fetchOnce(
 /** Refuse to send a Bearer token to a non-https, non-loopback origin. */
 function guardTokenDestination(baseUrl: string, token: string): void {
   if (!token) return;
+  let u: URL;
   try {
-    const u = new URL(baseUrl);
-    if (u.protocol !== 'https:') {
-      const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
-      if (!loopbacks.includes(u.hostname)) {
-        throw new Error(
-          `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
-        );
-      }
+    u = new URL(baseUrl);
+  } catch {
+    throw new Error(`Refusing to send credentials to an unparseable URL: ${baseUrl}`);
+  }
+  if (u.protocol !== 'https:') {
+    const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
+    if (!loopbacks.includes(u.hostname)) {
+      throw new Error(
+        `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
+      );
     }
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith('Refusing')) throw err;
   }
 }
 
