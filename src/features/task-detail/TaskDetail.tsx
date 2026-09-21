@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Trash2,
   Search,
+  Link2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useUi } from '@/stores/ui';
@@ -40,6 +41,7 @@ import { TaskActions, InlineRepeat, COLOR_PRESETS } from './TaskActions';
 import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
 import { CommentSection } from './CommentSection';
+import { RelatedTasks } from './RelatedTasks';
 import { toggleTaskDone } from '@/features/tasks/TaskRowCore';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -51,7 +53,7 @@ import { getAuthSnapshot } from '@/auth/store';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 
-type OpenSection = 'reminders' | 'attachments' | 'comments' | 'repeat' | 'more' | null;
+type OpenSection = 'reminders' | 'attachments' | 'comments' | 'related' | 'repeat' | 'more' | null;
 
 /** Which chip picker is open. Controlled so keyboard shortcuts (d/p/m/l/c) can
  * open the same popovers the chips open on click. */
@@ -204,6 +206,15 @@ export function TaskDetail() {
     queryFn: async () =>
       task?.localId ? listRemindersForTask(task.localId) : [],
   });
+  const { data: relations = [] } = useQuery({
+    queryKey: ['relations', task?.localId ?? null],
+    enabled: !!task,
+    staleTime: 30_000,
+    queryFn: () => listRelationsForTask(task!.localId),
+  });
+  const relatedCount = relations.filter(
+    (r) => r.kind !== 'subtask' && r.kind !== 'parenttask',
+  ).length;
 
   // No selection: the inspector collapses entirely (both platforms) so the
   // content pane reclaims the width — no empty placeholder column.
@@ -437,6 +448,22 @@ export function TaskDetail() {
               taskServerId={task.serverId}
               mentionSearch={mentionSearch}
               hideHeader
+            />
+          </CollapsedRow>
+          <CollapsedRow
+            icon={<Link2 className="h-[15px] w-[15px]" />}
+            label="Related"
+            value={relatedCount > 0 ? `${relatedCount}` : 'None'}
+            expanded={openSection === 'related'}
+            onToggle={() =>
+              setOpenSection(openSection === 'related' ? null : 'related')
+            }
+          >
+            <RelatedTasks
+              taskLocalId={task.localId}
+              taskServerId={task.serverId}
+              hideHeader
+              excludeSubtasks
             />
           </CollapsedRow>
           <CollapsedRow

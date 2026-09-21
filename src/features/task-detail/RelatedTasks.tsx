@@ -41,9 +41,15 @@ import {
 export function RelatedTasks({
   taskLocalId,
   taskServerId,
+  hideHeader = false,
+  excludeSubtasks = false,
 }: {
   taskLocalId: string;
   taskServerId: number | null;
+  hideHeader?: boolean;
+  /** Hide the 'subtask'/'parenttask' kinds — used in TaskDetail, where
+   * subtasks already have their own dedicated block with progress UI. */
+  excludeSubtasks?: boolean;
 }) {
   void taskServerId; // kept in props for API symmetry with sibling panels
   const qc = useQueryClient();
@@ -59,11 +65,19 @@ export function RelatedTasks({
     [qc],
   );
 
-  const { data: relations = [] } = useQuery<TaskRelation[]>({
+  const { data: allRelations = [] } = useQuery<TaskRelation[]>({
     queryKey: ['relations', taskLocalId],
     staleTime: 30_000,
     queryFn: () => listRelationsForTask(taskLocalId),
   });
+
+  const relations = excludeSubtasks
+    ? allRelations.filter((r) => r.kind !== 'subtask' && r.kind !== 'parenttask')
+    : allRelations;
+
+  const pickableKinds = excludeSubtasks
+    ? TASK_RELATION_PICKABLE_KINDS.filter((k) => k !== 'subtask' && k !== 'parenttask')
+    : TASK_RELATION_PICKABLE_KINDS;
 
   // Group relations by kind for rendering. Sorted by KIND_ORDER below
   // so sections appear in a stable, human-readable order regardless of
@@ -96,13 +110,15 @@ export function RelatedTasks({
 
   return (
     <section className="mb-4">
-      <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-        <Link2 className="h-3 w-3" />
-        Related tasks
-        {relations.length > 0 ? (
-          <span className="font-normal">{relations.length}</span>
-        ) : null}
-      </h3>
+      {hideHeader ? null : (
+        <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <Link2 className="h-3 w-3" />
+          Related tasks
+          {relations.length > 0 ? (
+            <span className="font-normal">{relations.length}</span>
+          ) : null}
+        </h3>
+      )}
 
       {grouped.length > 0 ? (
         <div className="mb-1 space-y-1.5">
@@ -180,6 +196,7 @@ export function RelatedTasks({
         <AddRelationRow
           taskLocalId={taskLocalId}
           disabled={false}
+          pickableKinds={pickableKinds}
           onCancel={() => setAdding(false)}
           onError={(msg) => setOpError(msg)}
         />
@@ -206,16 +223,18 @@ export function RelatedTasks({
 function AddRelationRow({
   taskLocalId,
   disabled,
+  pickableKinds = TASK_RELATION_PICKABLE_KINDS,
   onCancel,
   onError,
 }: {
   taskLocalId: string;
   disabled: boolean;
+  pickableKinds?: readonly TaskRelationKind[];
   onCancel: () => void;
   onError: (msg: string) => void;
 }) {
   const qc = useQueryClient();
-  const [kind, setKind] = useState<TaskRelationKind>('subtask');
+  const [kind, setKind] = useState<TaskRelationKind>(pickableKinds[0] ?? 'related');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TaskWithProject[]>([]);
   const [busy, setBusy] = useState(false);
@@ -305,7 +324,7 @@ function AddRelationRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {TASK_RELATION_PICKABLE_KINDS.map((k) => (
+            {pickableKinds.map((k) => (
               <SelectItem key={k} value={k}>{KIND_LABEL[k]}</SelectItem>
             ))}
           </SelectContent>
