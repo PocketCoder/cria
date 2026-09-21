@@ -119,7 +119,7 @@ export function TaskHoverPreview({ task, children, className }: TaskHoverPreview
             {task.dueDate ? (
               <span>Due {format(new Date(task.dueDate), 'd MMM')}</span>
             ) : null}
-            {task.priority > 0 ? (
+            {task.priority > 2 ? (
               <span style={{ color: priorityColor(task.priority) }}>{'!'.repeat(Math.min(5, task.priority))}</span>
             ) : null}
             {labels.length > 0 ? (

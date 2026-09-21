@@ -625,9 +625,9 @@ const KanbanCard = memo(function KanbanCard({ task }: CardProps) {
       <div className="flex items-start gap-1.5">
         <p className="min-w-0 flex-1 truncate text-xs">{task.title}</p>
       </div>
-      {task.priority > 0 || task.dueDate ? (
+      {task.priority > 2 || task.dueDate ? (
         <div className="mt-1 flex items-center gap-2 text-footnote text-[var(--color-muted-foreground)]">
-          {task.priority > 0 ? (
+          {task.priority > 2 ? (
             <span style={{ color: priorityColor(task.priority) }}>{'!'.repeat(Math.min(5, task.priority))}</span>
           ) : null}
           {task.dueDate ? (
