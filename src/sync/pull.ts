@@ -250,7 +250,7 @@ async function upsertTaskWithRelations(
       const parsed = labelResponseSchema.safeParse(raw);
       if (parsed.success) validLabels.push(parsed.data);
     }
-    if (validLabels.length > 0) ops.push(replaceTaskLabelsFromServer(taskLocalId, validLabels));
+    ops.push(replaceTaskLabelsFromServer(taskLocalId, validLabels));
   }
   if (Array.isArray(t.assignees)) {
     const validAssignees: AssigneeResponse[] = [];
@@ -258,7 +258,7 @@ async function upsertTaskWithRelations(
       const parsed = assigneeResponseSchema.safeParse(raw);
       if (parsed.success) validAssignees.push(parsed.data);
     }
-    if (validAssignees.length > 0) ops.push(upsertTaskAssigneesFromServer(taskLocalId, validAssignees));
+    ops.push(upsertTaskAssigneesFromServer(taskLocalId, validAssignees));
   }
   if (Array.isArray(t.attachments)) {
     const validAttachments: TaskAttachmentResponse[] = [];
@@ -266,7 +266,7 @@ async function upsertTaskWithRelations(
       const parsed = taskAttachmentSchema.safeParse(raw);
       if (parsed.success) validAttachments.push(parsed.data);
     }
-    if (validAttachments.length > 0) ops.push(replaceTaskAttachmentsFromServer(taskLocalId, validAttachments));
+    ops.push(replaceTaskAttachmentsFromServer(taskLocalId, validAttachments));
   }
   if (Array.isArray(t.reminders)) {
     const validReminders: TaskReminderResponse[] = [];
@@ -274,7 +274,7 @@ async function upsertTaskWithRelations(
       const parsed = taskReminderSchema.safeParse(raw);
       if (parsed.success) validReminders.push(parsed.data);
     }
-    if (validReminders.length > 0) ops.push(replaceTaskRemindersFromServer(taskLocalId, validReminders));
+    ops.push(replaceTaskRemindersFromServer(taskLocalId, validReminders));
   }
   if (Array.isArray(t.comments)) {
     const validComments: CommentResponse[] = [];
@@ -282,7 +282,7 @@ async function upsertTaskWithRelations(
       const parsed = commentResponseSchema.safeParse(raw);
       if (parsed.success) validComments.push(parsed.data);
     }
-    if (validComments.length > 0) ops.push(replaceTaskCommentsFromServer(taskLocalId, validComments));
+    ops.push(replaceTaskCommentsFromServer(taskLocalId, validComments));
   }
   if (t.related_tasks && typeof t.related_tasks === 'object') {
     const validRelated: Record<string, RelatedTaskResponse[]> = {};
