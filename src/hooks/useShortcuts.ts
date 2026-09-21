@@ -32,48 +32,52 @@ export function useShortcuts(handlers: ShortcutHandlers) {
     const matcher = createKeyMatcher(MATCHABLE_SHORTCUTS, SEQUENCE_TIMEOUT_MS);
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const dispatch = (id: string) => {
+    // Returns whether the shortcut actually did something — the caller
+    // uses this to decide whether the browser's native handling of the
+    // key should be suppressed (see the `consumed` filter below).
+    const dispatch = (id: string): boolean => {
       const def = SHORTCUTS.find((s) => s.id === id);
-      if (!def) return;
+      if (!def) return false;
       const ui = uiRef.current;
       const h = handlersRef.current;
 
-      if (def.context === 'taskDetail' && !ui.selectedTaskLocalId) return;
+      if (def.context === 'taskDetail' && !ui.selectedTaskLocalId) return false;
       if (
         (def.context === 'project' || def.context === 'list') &&
         ui.activeView?.kind !== 'project'
       ) {
-        return;
+        return false;
       }
 
       switch (id) {
         case 'general.toggleMenu':
           ui.toggleSidebar();
-          return;
+          return true;
         case 'general.quickSearch':
           h.openQuickSearch();
-          return;
+          return true;
         case 'nav.today':
           ui.setActiveView({ kind: 'today' });
-          return;
+          return true;
         case 'nav.upcoming':
           ui.setActiveView({ kind: 'upcoming' });
-          return;
+          return true;
         case 'nav.labels':
           h.openLabelManager();
-          return;
+          return true;
         case 'nav.teams':
           h.openTeams();
-          return;
+          return true;
         case 'view.list':
         case 'view.gantt':
         case 'view.table':
         case 'view.kanban':
           h.switchView(id.slice('view.'.length) as ViewKind);
-          return;
+          return true;
         default:
           // task.* / list.* — owned by whichever component is mounted.
           emitShortcut(id);
+          return true;
       }
     };
 
@@ -96,8 +100,12 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       if (!key) return;
 
       const res = matcher.feed(key, e.timeStamp);
-      res.fired.forEach(dispatch);
-      if (res.fired.length > 0 || res.pending) e.preventDefault();
+      // Only block the browser's own handling of a key that a binding
+      // actually consumed — a match whose context gate no-ops inside
+      // dispatch() must not eat native behaviour (e.g. Enter activating
+      // whatever button currently has focus).
+      const consumed = res.fired.filter((id) => dispatch(id));
+      if (consumed.length > 0 || res.pending) e.preventDefault();
 
       clearTimeout(timer);
       if (res.pending) {
