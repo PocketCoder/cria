@@ -382,6 +382,7 @@ export function TaskDetail() {
 
         <section className="mb-[22px]">
           <RichTextEditor
+            key={task.localId}
             value={task.description}
             onSave={handleDescriptionSave}
             taskLocalId={task.localId}
