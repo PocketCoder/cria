@@ -63,54 +63,36 @@ export function ShareProjectModal({
   project: Project;
   onClose: () => void;
 }) {
+  // All hooks before any early return — React's hook-order rule. projectId
+  // can be null (project not yet synced); every hook below guards on it via
+  // `enabled` instead of skipping the hook call itself.
   const [tab, setTab] = useState<Tab>('users');
   const online = useOnline();
   const qc = useQueryClient();
   const projectId = project.serverId;
+  const hasProjectId = projectId != null;
 
-  if (projectId == null) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        onClick={onClose}
-      >
-        <div
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <p className="text-sm">Sync this project before sharing it.</p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-3 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)]"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    );
-  }
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: ['project-shares', projectId] });
 
   /* users */
   const usersQ = useQuery({
     queryKey: ['project-shares', projectId, 'users'],
-    queryFn: () => listProjectUsers(projectId),
-    enabled: online,
+    queryFn: () => listProjectUsers(projectId!),
+    enabled: online && hasProjectId,
   });
   const [newUserPermission, setNewUserPermission] = useState<Permission>(0);
 
   /* teams */
   const teamsQ = useQuery({
     queryKey: ['project-shares', projectId, 'teams'],
-    queryFn: () => listProjectTeams(projectId),
-    enabled: online && tab === 'teams',
+    queryFn: () => listProjectTeams(projectId!),
+    enabled: online && hasProjectId && tab === 'teams',
   });
   const allTeamsQ = useQuery({
     queryKey: ['teams'],
     queryFn: () => listTeams(),
-    enabled: online && tab === 'teams',
+    enabled: online && hasProjectId && tab === 'teams',
   });
   const [newTeamId, setNewTeamId] = useState<number | ''>('');
   const [newTeamPermission, setNewTeamPermission] = useState<Permission>(0);
@@ -118,8 +100,8 @@ export function ShareProjectModal({
   /* links */
   const linksQ = useQuery({
     queryKey: ['project-shares', projectId, 'links'],
-    queryFn: () => listLinkShares(projectId),
-    enabled: online && tab === 'links',
+    queryFn: () => listLinkShares(projectId!),
+    enabled: online && hasProjectId && tab === 'links',
   });
   const { data: frontendUrl } = useFrontendUrl();
   const [linkName, setLinkName] = useState('');
@@ -145,6 +127,29 @@ export function ShareProjectModal({
   };
 
   const err = mutate.error ? String((mutate.error as Error).message ?? mutate.error) : null;
+
+  if (projectId == null) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={onClose}
+      >
+        <div
+          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-sm">Sync this project before sharing it.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-3 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
