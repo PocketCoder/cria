@@ -117,7 +117,11 @@ export async function pullSavedFilters(
       ),
     );
 
-    const keep: number[] = [];
+    // Start from "every filter we currently know about" and only drop one
+    // on a *confirmed* 404 — a rejected request or a transient HTTP error
+    // must never count as "gone", or a single network blip during sync
+    // would prune (i.e. delete) every locally cached saved filter.
+    const keep = new Set(filterEntries.map(({ filterId }) => filterId));
     let removedStale = false;
     for (const result of results) {
       if (result.status === 'rejected') {
@@ -128,6 +132,7 @@ export async function pullSavedFilters(
       if (response.status === 404) {
         console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
         await db.execute('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
+        keep.delete(filterId);
         removedStale = true;
         continue;
       }
@@ -136,11 +141,10 @@ export async function pullSavedFilters(
         continue;
       }
       await upsertSavedFilterFromServer(data as SavedFilterPayload);
-      keep.push(filterId);
     }
-    await pruneSavedFilters(keep);
+    await pruneSavedFilters([...keep]);
     if (removedStale) notify('projects');
-    return keep.length;
+    return keep.size;
   });
 }
 
