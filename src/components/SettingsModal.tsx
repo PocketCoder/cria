@@ -60,10 +60,15 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
     if (!user) return;
     const raw = user.raw as Record<string, unknown> | undefined;
     const settings = (raw?.settings as UserSettingsInput | undefined) ?? {};
+    // Server values as the base; anything already changed in this session
+    // (held in settingsRef) wins so a background user refetch can't clobber
+    // an unsaved edit — the server overwrites every column from whatever we
+    // POST next, so a stale refetch landing on top would silently revert it.
     settingsRef.current = {
       ...SETTINGS_DEFAULTS,
       ...settings,
       name: settings.name ?? user.name ?? undefined,
+      ...settingsRef.current,
     };
   }, [user]);
 
