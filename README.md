@@ -4,7 +4,7 @@ A native desktop and iOS client for [Vikunja](https://vikunja.io) — an offline
 
 ## Features
 
-- **Cross-platform**: desktop (macOS, Windows, Linux) and **iOS** from one codebase — a responsive layout collapses the three panes to a single navigable view on iPhone, with touch (pointer) drag-and-drop
+- **macOS and iOS** from one codebase (Windows/Linux are not built or tested). A responsive layout collapses the three panes to a single navigable view on iPhone, with touch (pointer) drag-and-drop
 - **Three-pane layout**: projects sidebar | task list | detail pane with editable fields
 - **Offline-first**: local SQLite database, syncs in the background
 - **Rich task editing**: WYSIWYG description (TipTap), inline metadata pickers for priority, dates, labels, assignees, color, repeat, and more
@@ -13,6 +13,13 @@ A native desktop and iOS client for [Vikunja](https://vikunja.io) — an offline
 - **Native OS integration** (desktop): tray icon, global shortcuts, deep links (`vikunja://`), autostart, Dock badge — gated off on iOS, which provides its own equivalents
 - **Conflict resolution**: detected and surfaced when local changes conflict with server updates
 - **Sync engine**: exponential-backoff outbox drain, dead-letter queue for persistent failures
+- **Vikunja features**: saved filters, project sharing and teams, @mentions, notification inbox, Kanban, table and Gantt views, attachments, comments
+
+## Install
+
+Download the macOS `.dmg` (Apple silicon or Intel) from [GitHub Releases](https://github.com/PocketCoder/cria/releases/latest). The app isn't notarised yet, so macOS blocks the first launch: open **System Settings → Privacy & Security** and choose **Open Anyway**. After that it updates itself.
+
+iOS: each release attaches an unsigned `.ipa` for sideloading with SideStore or iLoader (see [iOS](#ios)).
 
 ## Stack
 
@@ -51,6 +58,9 @@ pnpm typecheck
 # Run tests
 pnpm test
 
+# Tests + coverage thresholds (what CI runs)
+pnpm test:coverage
+
 # Production frontend build
 pnpm vite:build
 ```
@@ -74,7 +84,7 @@ The Xcode project lives under `src-tauri/gen/apple/` (regenerate with `pnpm taur
 ```sh
 cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
 ```
- CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)). Tagged releases also build an **unsigned** `.ipa` (`build-ios` job in [`release.yml`](.github/workflows/release.yml)), attached to the GitHub Release alongside the macOS bundles, for sideloading via SideStore/iLoader (they sign it themselves with a free Apple ID; no Apple secrets or device UDIDs are needed in this repo).
+CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)). Tagged releases also build an **unsigned** `.ipa` (`build-ios` job in [`release.yml`](.github/workflows/release.yml)), attached to the GitHub Release alongside the macOS bundles, for sideloading via SideStore/iLoader (they sign it themselves with a free Apple ID; no Apple secrets or device UDIDs are needed in this repo).
 
 ### Regenerating API types
 

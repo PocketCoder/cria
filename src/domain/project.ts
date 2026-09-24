@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Local domain representation of a Vikunja project. `localId` is a
  * client-generated UUID that stays stable across sync; `serverId` is null
- * until the project has been confirmed-created on the server (see SPEC §4.2).
+ * until the project has been confirmed-created on the server.
  *
  * For M1 (read-only sync) every project we see comes *from* the server, so
  * `serverId` will always be set, but the type permits null so M2 can drop

@@ -11,10 +11,9 @@ import { isPageVisible, onVisibilityChange } from '@/lib/visibility';
 const INTERVAL_MS = 60_000;
 
 /**
- * Lightweight periodic pull while authenticated. Per SPEC §7.6 the
- * "light pull" cadence is 60s; M1 only refreshes the project list (tasks
- * refresh whenever the user switches projects). M2+ will fold in tasks
- * via /tasks delta filters and the outbox push loop.
+ * Periodic sync while authenticated, every 60s: drain the outbox, then pull
+ * projects, saved filters, labels, all tasks (delta-filtered), views and
+ * buckets. Each pull is followed by one notify() for its topic.
  *
  * One global timer — mount this hook once in the App.
  */

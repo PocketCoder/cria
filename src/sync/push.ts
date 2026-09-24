@@ -117,7 +117,7 @@ async function callApiIgnore404<T>(
  * server, delete it on success, or back off / dead-letter on failure.
  *
  * FIFO per entity. We process one op at a time and stop on first failure
- * (per SPEC §7.1) so subsequent ops referencing the same entity don't run
+ * so subsequent ops referencing the same entity don't run
  * against a not-yet-existing server row.
  *
  * **Re-entrancy guard.** Concurrent drain calls — common in practice because
