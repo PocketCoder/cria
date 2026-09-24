@@ -67,7 +67,14 @@ pnpm tauri ios dev --host
 pnpm tauri ios build --export-method debugging
 ```
 
-The Xcode project lives under `src-tauri/gen/apple/` (regenerate with `pnpm tauri ios init`). A debug iOS build needs ~10 GB of free disk. CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)); signed iOS distribution is currently a manual step (needs a paid Apple account).
+The Xcode project lives under `src-tauri/gen/apple/` (regenerate with `pnpm tauri ios init`). A debug iOS build needs ~10 GB of free disk.
+
+`tauri ios init` has a bug where it mis-copies some `AppIcon.appiconset` sizes back to Tauri's default logo, even though the source files in `src-tauri/icons/ios/` are correct. After (re-)running `ios init`, fix it with:
+
+```sh
+cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
+```
+ CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)). Tagged releases also build an **unsigned** `.ipa` (`build-ios` job in [`release.yml`](.github/workflows/release.yml)), attached to the GitHub Release alongside the macOS bundles, for sideloading via SideStore/iLoader (they sign it themselves with a free Apple ID; no Apple secrets or device UDIDs are needed in this repo).
 
 ### Regenerating API types
 

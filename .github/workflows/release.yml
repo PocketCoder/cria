@@ -10,13 +10,12 @@ name: Release
 #   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (empty string is fine for an
 #                                           unprotected dev key)
 #
-# iOS is intentionally NOT built here. A distributable iOS build needs a paid
-# Apple Developer account + App Store Connect API key (as secrets) and a
-# distribution channel (TestFlight / App Store). The current setup is a free
-# personal team, whose builds expire after 7 days and can't be distributed, so
-# iOS ships manually for now — `pnpm tauri ios build --export-method debugging`
-# (see README "iOS"). PRs are still iOS-compile-checked by ci-ios.yml. Add an
-# iOS job here once a paid account + ASC secrets exist.
+# Also builds an UNSIGNED iOS .ipa (build-ios job) and attaches it to the
+# same release. It's deliberately unsigned: there's no paid Apple Developer
+# account, so no distribution certificate exists to sign with. The .ipa is
+# meant to be sideloaded via SideStore/iLoader, which sign it themselves
+# locally with a free Apple ID — no Apple secrets or device UDIDs needed in
+# this repo. PRs are still iOS-compile-checked by ci-ios.yml.
 
 on:
   push:
@@ -162,6 +161,88 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
+  # Build an unsigned iOS .ipa for sideloading (SideStore/iLoader do their
+  # own signing with a free Apple ID, so no Apple secrets are needed here).
+  # ------------------------------------------------------------------
+  build-ios:
+    name: Build unsigned iOS .ipa
+    runs-on: macos-latest
+    timeout-minutes: 45
+    needs: verify-version
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust toolchain (iOS target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-ios-ipa-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-ipa-
+            ${{ runner.os }}-cargo-ios-
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Init iOS project
+        run: pnpm tauri ios init
+
+      # `tauri ios init` silently mis-copies some AppIcon.appiconset sizes
+      # (they end up as Tauri's default logo instead of ours, even though
+      # the source files in src-tauri/icons/ios are correct). Overwrite the
+      # generated catalog with our own source images as a workaround.
+      - name: Fix iOS app icon (tauri ios init copy bug workaround)
+        run: cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
+
+      - name: Build unsigned archive
+        run: pnpm tauri ios build --target aarch64 --no-sign --archive-only --ci
+
+      - name: Package unsigned .ipa
+        run: |
+          set -euo pipefail
+          ARCHIVE=$(find src-tauri/gen/apple -name '*.xcarchive' -print -quit)
+          if [ -z "$ARCHIVE" ]; then
+            echo "No .xcarchive found" >&2
+            find src-tauri/gen/apple -maxdepth 4 >&2
+            exit 1
+          fi
+          APP=$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+          if [ -z "$APP" ]; then
+            echo "No .app found in archive" >&2
+            exit 1
+          fi
+          mkdir -p ipa_out/Payload
+          cp -R "$APP" ipa_out/Payload/
+          (cd ipa_out && zip -qr ../Cria-unsigned.ipa Payload)
+          ls -la Cria-unsigned.ipa
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cria-ios-unsigned
+          path: Cria-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------
   # Collect all per-target artifacts, attach them to the GitHub Release,
   # and write update.json to the gh-pages branch.
   # ------------------------------------------------------------------
@@ -169,7 +250,7 @@ jobs:
     name: Publish release + update manifest
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: build
+    needs: [build, build-ios]
 
     steps:
       - uses: actions/checkout@v4
@@ -186,7 +267,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          find artifacts -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) \
+          find artifacts -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' -o -name '*.ipa' \) \
             -exec cp -v {} release/ \;
           ls -la release
 
@@ -246,6 +327,7 @@ jobs:
             release/*.dmg
             release/*.app.tar.gz
             release/*.app.tar.gz.sig
+            release/*.ipa
 
       # Push update.json to gh-pages so the configured updater endpoint
       # (https://pocketcoder.github.io/cria/update.json) serves it.
