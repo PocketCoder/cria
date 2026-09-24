@@ -3,8 +3,8 @@ import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 /**
- * Small warning pill shown when a drag‑reorder operation fails.
- * Auto‑dismisses after 4 seconds or when the user clicks the close button.
+ * Small warning pill shown when a drag-reorder operation fails.
+ * Auto-dismisses after 4 seconds or when the user clicks the close button.
  */
 export function ReorderErrorPill({
   message = 'Reorder failed – priority/date ordering applied',

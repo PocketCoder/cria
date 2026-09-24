@@ -110,7 +110,11 @@ function passwordRefreshToken(): string | null {
   return c.authMethod === 'password' && c.refreshToken ? c.refreshToken : null;
 }
 
-let refreshInFlight: Promise<string | null> | null = null;
+// Pinned on globalThis so an HMR reload can't orphan an in-flight refresh
+// and fire a second one with the already-rotated refresh token.
+declare global {
+  var __cria_refreshInFlight__: Promise<string | null> | null | undefined;
+}
 
 /**
  * Exchange the stored refresh token for a fresh JWT and persist it. Concurrent
@@ -119,12 +123,12 @@ let refreshInFlight: Promise<string | null> | null = null;
  * or the refresh failed (in which case the session is genuinely dead).
  */
 export function refreshSession(): Promise<string | null> {
-  if (!refreshInFlight) {
-    refreshInFlight = doRefresh().finally(() => {
-      refreshInFlight = null;
+  if (!globalThis.__cria_refreshInFlight__) {
+    globalThis.__cria_refreshInFlight__ = doRefresh().finally(() => {
+      globalThis.__cria_refreshInFlight__ = null;
     });
   }
-  return refreshInFlight;
+  return globalThis.__cria_refreshInFlight__;
 }
 
 async function doRefresh(): Promise<string | null> {
@@ -149,7 +153,7 @@ async function doRefresh(): Promise<string | null> {
   }
   if (!res.ok) return null;
 
-  let body: { token?: string } | null = null;
+  let body: { token?: string };
   try {
     body = (await res.json()) as { token?: string };
   } catch {

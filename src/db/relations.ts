@@ -12,7 +12,7 @@
  * relation; once the local task arrives, the next pull re-resolves
  * the row via `replaceTaskRelationsFromServer`.
  *
- * Push: add/remove queue a `task_relation` outbox op. push.ts hits the
+ * Push: add/remove queue a `task_relation` outbox op. push/task.ts hits the
  * `/tasks/{taskID}/relations` endpoints to mutate server-side; the
  * server creates the inverse on the other task automatically, so we
  * don't push it ourselves.

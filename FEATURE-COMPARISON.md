@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: Tue Jun 16 2026
+Last updated: 24 September 2026 (v0.13.0 + `dev`)
 
 ## Legend
 | Icon | Meaning |
@@ -40,7 +40,7 @@ Last updated: Tue Jun 16 2026
 | Tasks | Favorites (is_favorite) | ✅ | Star toggle in TaskActions |
 | Tasks | Description WYSIWYG editor (TipTap) | ✅ | Full TipTap with slash commands, images, links |
 | Tasks | Copy task link/identifier | ✅ | Copy icon in detail header — copies server URL or falls back to title |
-| Tasks | Bulk operations (multi-select, batch actions) | ❌ | Not started |
+| Tasks | Bulk operations (multi-select, batch actions) | ✅ | Multi-select + `SelectionBar`: complete, schedule, move, priority, delete |
 | Tasks | Hover preview popup | ✅ | Shipped (TaskHoverPreview component, 800ms delay, shows description/labels/due/priority) |
 
 ### Projects
@@ -52,9 +52,9 @@ Last updated: Tue Jun 16 2026
 | Projects | Archive | ✅ | Archive toggle in sidebar context menu |
 | Projects | Hex color picker | ✅ | Shown in sidebar |
 | Projects | Sidebar list (flat) | ✅ | Sortable, filterable |
-| Projects | Sub-project hierarchy in sidebar | ❌ | Flat list only; parent_project_id in schema |
+| Projects | Sub-project hierarchy in sidebar | ✅ | Nested tree in `ProjectSidebar` from `parent_project_id` |
 | Projects | Project background images | ❌ | Not started (Unsplash integration) |
-| Projects | Customizable project identifier | ❌ | Not started (server assigns identifier) |
+| Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
 
 ### Labels
 
@@ -75,7 +75,7 @@ Last updated: Tue Jun 16 2026
 | Smart Views | Favorites (favorited tasks) | ✅ | `FavoritesView` in SmartViews |
 | Smart Views | Label tasks (per-label) | ✅ | `LabelView` in SmartViews |
 | Smart Views | Inbox (tasks without a project) | ✅ | Shipped (InboxView component, defaultProjectId from user settings — #52) |
-| Smart Views | Saved filters (Vikunja filter DSL) | ❌ | Not started |
+| Smart Views | Saved filters (Vikunja filter DSL) | ✅ | Migration 018, sidebar Filters section, `FilterInput` with highlighting + autocomplete |
 
 ### Search
 
@@ -115,8 +115,8 @@ Last updated: Tue Jun 16 2026
 | Comments | Read comments on task | ✅ | Collapsible section with read/unread tracking |
 | Comments | Write/create/update/delete comments | ✅ | Full outbox-backed CRUD |
 | Comments | Emoji reactions | ✅ | Phase 3, inline badges + picker, fire-and-forget API |
-| Comments | @mentions in comments | ❌ | Not started |
-| Comments | In-app notification inbox for @mentions | ❌ | Not started |
+| Comments | @mentions in comments | ✅ | Vikunja-compatible `<mention-user>` in comments and descriptions |
+| Comments | In-app notification inbox for @mentions | ✅ | `NotificationBell` in the sidebar footer |
 
 ### Task Relations
 
@@ -137,7 +137,7 @@ Last updated: Tue Jun 16 2026
 | Sync | Conflict resolution UI (keep mine / use theirs) | ✅ | ConflictModal component |
 | Sync | Delete reconciliation (tombstone sweep) | ✅ | reconcile.ts |
 | Sync | Last-synced snapshot for 3-way merge | ✅ | `_lastSynced` JSON column |
-| Sync | Live sync via WebSockets | ❌ | SPEC §3.5 proposed; not started |
+| Sync | Live sync via WebSockets | ❌ | Not started; 60s polling pull today |
 
 ### Auth
 
@@ -194,7 +194,7 @@ Last updated: Tue Jun 16 2026
 | UI | Online/offline indicator in footer | ✅ | Green/amber/red dot |
 | UI | Sync status (pending count) | ✅ | Footer shows outbox count |
 | UI | Cmd+K command palette | ✅ | CommandPalette (views, projects, labels, tasks, actions) |
-| UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ❌ | Removed from scope |
+| UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ✅ | Fixed Vikunja set in `src/lib/shortcuts.ts` (j/k, Enter, task-detail keys, g-sequences) |
 | UI | Rebindable shortcuts in settings | ❌ | Removed from scope |
 | UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
 | UI | Inbox view (no-project tasks) | ✅ | Shipped |
@@ -210,9 +210,9 @@ Last updated: Tue Jun 16 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Settings | User preferences (language, timezone, week start) | ❌ | Controls removed from the pane — synced to server but had no local effect; tracked in #76 (timezone), #77 (week start), #78 (language/i18n) |
+| Settings | User preferences (language, timezone, week start) | 🟡 | Controls in General tab, synced to server. Only week start has a local effect; timezone (#76) and language/i18n (#78) do not |
 | Settings | Date format / time format preference | ✅ | Drives full date/time displays (reminders, conflict timestamps, task add + detail date pickers) via lib/dateFormat; dense list rows keep the compact 'd MMM' style; timezone tracked in #76 |
-| Settings | Week start (local rendering) | ❌ | Control removed; "this week" logic still hardcodes Monday — tracked in #77 |
+| Settings | Week start (local rendering) | ✅ | Upcoming calendar reads the server `week_start` |
 | Settings | Account info display | ✅ | Shows name in header |
 | Settings | Display name editing | ✅ | Account section input, synced to server |
 | Settings | Autostart toggle | ✅ | SettingsModal Advanced section |
@@ -230,7 +230,7 @@ Last updated: Tue Jun 16 2026
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Export/Import | Vikunja data export | ❌ | Not started |
+| Export/Import | Vikunja data export | ✅ | Request + download in Settings → Data (`src/api/account.ts`) |
 | Export/Import | Import from Todoist/Trello/Asana/etc. | ❌ | Server-side exists, no UI |
 | Export/Import | Duplicate task (server endpoint) | ✅ | `duplicateTask` in db/tasks |
 | Export/Import | Duplicate project | ❌ | Server endpoint exists, no UI |
@@ -244,7 +244,7 @@ Last updated: Tue Jun 16 2026
 | Misc | External-link handling (opens in OS browser) | ✅ | openExternal.ts |
 | Misc | Dev-only keyboard shortcuts | ✅ | Cmd+F for search, Cmd+Shift+A dev fallback |
 | Misc | Server-side Vikunja version in footer | ✅ | Shown in footer via useServerVersion |
-| Misc | In-app notification inbox | ❌ | `GET /notifications` not wired |
+| Misc | In-app notification inbox | ✅ | `GET /notifications` wired; bell + unread badge |
 
 ## Easiest next features (quickest to ship)
 

@@ -48,7 +48,7 @@ const CONFIG = {
   // Defence in depth: DOMPurify already blocks `javascript:`/`data:` hrefs by
   // default, but pin the allowed URI schemes explicitly so a version bump
   // can't silently widen them. (http/https/mailto, fragments, relative paths.)
-  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|#|\/|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|#|\/|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
 };
 
 // Link hardening as a DOMPurify hook (runs *inside* sanitisation, so unlike a

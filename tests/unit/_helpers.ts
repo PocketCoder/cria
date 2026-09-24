@@ -71,6 +71,7 @@ export async function clearTables(): Promise<void> {
     'conflicts',
     'outbox_dead_letter',
     'outbox',
+    'task_comments',
     'task_relations',
     'task_reminders',
     'task_attachments',

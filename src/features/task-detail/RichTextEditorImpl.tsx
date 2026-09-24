@@ -467,7 +467,7 @@ function EditView({
           selectedIndex: 0,
           filteredCommandsCount: filtered.length,
         });
-      } catch (err) {
+      } catch {
         updateSlashState({ open: false });
       }
     } else {
@@ -660,7 +660,7 @@ function EditView({
             }
             if (event.key === 'Enter') {
               event.preventDefault();
-              const editorInstance = (view as any).editor || editor;
+              const editorInstance = (view as unknown as { editor?: typeof editor }).editor || editor;
               if (editorInstance) {
                 executeSlashCommand(slashStateRef.current.selectedIndex, editorInstance);
               }
@@ -706,18 +706,21 @@ function EditView({
     }
   };
 
-  // Cmd/Ctrl+Enter to save while editor has focus.
+  // Cmd/Ctrl+Enter to save while editor has focus. Handlers via refs so a
+  // new onSave/onCancel (e.g. after switching tasks) is always the one called.
+  const keyHandlersRef = useRef({ handleSave, onCancel });
+  keyHandlersRef.current = { handleSave, onCancel };
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom;
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        void handleSave();
+        void keyHandlersRef.current.handleSave();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         if (dirty && !window.confirm('Discard unsaved changes?')) return;
-        onCancel();
+        keyHandlersRef.current.onCancel();
       }
     };
     dom.addEventListener('keydown', handler);

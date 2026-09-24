@@ -21,7 +21,7 @@ function viewKey(projectLocalId: string) {
  *
  * On a fresh install with no network, the defaults render: List, Gantt,
  * Table, Kanban. On cellular with a slow link, the user sees the defaults
- * in <1 ms instead of staring at "No views available" for 20 s.
+ * in <1 ms instead of staring at "No views available" for 20 s.
  *
  * Subscribes to the 'views' bus to refresh on mutations.
  */

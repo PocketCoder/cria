@@ -69,6 +69,7 @@ export async function extractListItems(file: Blob): Promise<OcrResult> {
     console.warn('[shopping-ocr] tesseract failed:', tessErr);
     throw new Error(
       'Could not read the photo. Native text recognition is unavailable here and the fallback engine failed to load.',
+      { cause: tessErr },
     );
   }
 }

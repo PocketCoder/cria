@@ -1,9 +1,9 @@
 # Cria — agent guide
 
 **Cria** is a native desktop and iOS client for [Vikunja](https://vikunja.io),
-built with Tauri 2 + React. Read [SPEC.md](SPEC.md) for the *design*; this file is
-the *implementation* cheat-sheet — commands, conventions, and the hard-won
-gotchas a fresh session needs before touching code.
+built with Tauri 2 + React. This file is the implementation cheat-sheet:
+commands, conventions, and the hard-won gotchas a fresh session needs before
+touching code.
 
 > This file is `AGENTS.md` (the cross-tool convention). Claude Code loads it
 > automatically when no `CLAUDE.md` is present. Keep it as the single source
@@ -15,7 +15,9 @@ gotchas a fresh session needs before touching code.
 pnpm dev            # full Tauri stack (needs cargo on PATH — see gotcha)
 pnpm vite           # frontend only, no webview
 pnpm typecheck      # tsc --noEmit
+pnpm lint           # eslint (typescript-eslint + react-hooks)
 pnpm test           # vitest run (unit tests in tests/unit/)
+pnpm test:coverage  # tests + coverage thresholds (what CI runs)
 pnpm test:watch     # vitest watch
 pnpm vite:build     # production frontend build
 pnpm generate:api   # regen src/api/schema.ts (VK_URL= to target an instance)
@@ -31,14 +33,14 @@ If pnpm's build-script pre-flight nags, the same binaries live under
 `node_modules/.bin/` (`node_modules/.bin/tsc --noEmit`, `…/vitest run`,
 `…/vite build`) and skip the check.
 
-**Always** run `pnpm typecheck` and `pnpm test` before declaring a change
+**Always** run `pnpm typecheck`, `pnpm lint` and `pnpm test` before declaring a change
 done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
 `cargo check --target aarch64-apple-ios` to catch iOS-only breakage).
 
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.12.6` (in `package.json`,
+shipped in `v0.4.0`. Current version is `0.13.0` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **Bump only via `pnpm bump` (see "Cutting a
 release") — never hand-edit these files.** This has bitten twice:
@@ -52,7 +54,7 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | M0 skeleton + sign-in | ✅ |
 | M1 read-only sync (projects/tasks/labels, 60s refresh) | ✅ |
 | M2 local writes + outbox (create/update/delete round-trip) | ✅ |
-| M3 conflicts + deletion reconcile | 🟡 in tree; one owed item below |
+| M3 conflicts + deletion reconcile | ✅ |
 | M4 native polish (notification/autostart/global-shortcut/tray, `execute_tx`) | ✅ |
 | M4.5 auto-update distribution (updater, signing, release workflow) | ✅ |
 | M5 input parity (TipTap WYSIWYG, NL quick-add, inline pickers, label mutations) | ✅ |
@@ -62,18 +64,16 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | M9 reorder, DnD, Kanban, table view | ✅ |
 | M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
 | **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅ |
+| Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
+| Ledger redesign (tokens, shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased; reference in `design_handoff_ledger/` |
 
-**Next up:** M10 stretch goals (notes).
-See [SPEC.md §14](SPEC.md).
+**Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
+in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
-- **M3 two-client conflict smoke test** still owed (#32) — hard to repro
-  because sync drains too fast to diverge. Automated dirty-guard + merge
-  coverage already lives in `tests/unit/syncMerge.test.ts` +
-  `tests/unit/upsertFromServer.test.ts`.
-- **Delta-aware pull** — `src/sync/pull.ts` still does a full per-project
-  reload each tick (filters by `project_id`, not `updated > lastSyncAt`).
-  Fine for a few projects; revisit if it gets slow.
+- **Live sync (WebSockets)** not started; sync is a 60s poll.
+- **UI has no unit tests.** Coverage thresholds cover only the logic layers
+  (`src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}`).
 
 ## Stack
 
@@ -81,8 +81,8 @@ See [SPEC.md §14](SPEC.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 15 migrations in
-  `src/db/migrations/` (`001_initial.sql` → `015_perf_indexes.sql`).
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 18 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `018_saved_filters.sql`).
   Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
   Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),
@@ -97,7 +97,8 @@ sync layer validates server payloads with Zod schemas in `src/domain/*`, then
 upserts via repository helpers (`upsert*FromServer`). After the pull, the
 queryFn re-reads from the DB so the consumer gets fresh data. Writes go to the
 DB + an outbox row in one transaction; `src/sync/push.ts` drains the outbox
-FIFO to the server with exponential backoff.
+FIFO to the server with exponential backoff, dispatching each op to its
+entity executor in `src/sync/push/*.ts`.
 
 ## Gotchas you'll hit
 
@@ -113,13 +114,16 @@ path. M0 burned an hour on this. Already fixed — don't strip it.
 Editing `src-tauri/capabilities/*.json` requires a Rust rebuild. Restart
 `tauri dev` (≈10s for an incremental rebuild of the `cria` crate).
 
-### Stronghold is too slow for the credential hot path
+### Credentials live in the OS keychain
 
-Stronghold's `load`/`save` took **minutes** per call on the dev machine. We
-use `localStorage` instead ([src/auth/storage.ts](src/auth/storage.ts)). The
-plugin stays registered in [lib.rs](src-tauri/src/lib.rs) for future
-non-hot-path uses. Threat model documented inline in `storage.ts`. Future
-upgrade path: OS keychain via `keyring-rs`.
+The whole credential blob (server URL, token, auth method, refresh token) is
+stored via the `secure_*_token` commands in
+[src-tauri/src/secure.rs](src-tauri/src/secure.rs) (`keyring` crate: macOS/iOS
+Keychain). [src/auth/storage.ts](src/auth/storage.ts) falls back to
+localStorage **only** when the store is missing (browser dev server, tests,
+Android stub). A transient keychain error must never trigger that fallback, or
+the token lands in plaintext; `tests/unit/auth-storage.test.ts` pins this.
+Stronghold was dropped: its `load`/`save` took minutes per call.
 
 ### `withTx` is a *batched* transaction — don't read collected writes inside
 
@@ -159,6 +163,9 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
 - `globalThis.__cria_writeChain__` — the serial queue's tail.
 - `globalThis.__cria_busListeners__` — change-bus listeners map.
 - `globalThis.__cria_isDraining__` — outbox drain re-entry guard.
+- `globalThis.__cria_refreshInFlight__`: token-refresh single-flight (a
+  duplicate refresh would reuse an already-rotated refresh token).
+- `globalThis.__cria_settingsHydrated__`: synced-prefs hydrate-once flag.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
@@ -197,7 +204,7 @@ on the way in. Don't display the raw value.
 ### `taskToBody()` wire-format quirks
 
 Every Vikunja server-side body quirk lives in `taskToBody()` in
-[src/sync/push.ts](src/sync/push.ts): `hex_color` sent raw (no `#`, else 500),
+[src/sync/push/task.ts](src/sync/push/task.ts): `hex_color` sent raw (no `#`, else 500),
 `percent_done` as 0–100 (UI stores 0–1), `is_favorite` sent explicit `false`
 (omitting breaks un-favorite), `repeat_after`/`repeat_mode` sent explicit `0`,
 `project_id` included on move. Covered by `tests/unit/taskToBody.test.ts`.
@@ -212,7 +219,8 @@ value (`""`, `0`, `false`, `nil`) — silently wiping the server's stored `name`
 generated `schema.ts` only shows the body *shape* (a complete `v1.UserSettings`);
 the Go handler is the ground truth (`pkg/routes/api/v1/user_settings.go`,
 `UpdateGeneralUserSettings`). When upstream runtime behaviour is in doubt, read
-the handler — a local clone of the Vikunja source makes this checkable in
+the handler — a local clone of the Vikunja source (`real-vikunja-git/`,
+gitignored) makes this checkable in
 seconds and beats inferring from the schema.
 
 **Rule:** never send a partial settings object. Seed the complete current
@@ -227,9 +235,12 @@ sending a subset.
 ### pnpm 11 build-script approvals
 
 `esbuild` + `better-sqlite3` need build approval. Allowlisted in
-[pnpm-workspace.yaml](pnpm-workspace.yaml) (`allowBuilds`) +
-`package.json#pnpm.onlyBuiltDependencies`. Don't strip either. New deps with
-native binaries may need adding too.
+[pnpm-workspace.yaml](pnpm-workspace.yaml) (`allowBuilds`), the only place
+pnpm 11 reads (`packageManager` pins 11.x, so CI uses it too). Don't strip it.
+The old `package.json#pnpm.onlyBuiltDependencies` block was removed: pnpm 11
+ignores the `pnpm` field and warns on every command. New deps with native
+binaries may need adding to `allowBuilds`; `pnpm ignored-builds` lists any
+that were skipped.
 
 ### `pnpm dev` indirectly requires `cargo`
 
@@ -243,7 +254,10 @@ cargo, `source "$HOME/.cargo/env"` (or open a new tab — rustup added itself to
 
 All development happens on `dev`. Feature work uses `feature/<name>` branches,
 fixes use `fix/<name>`. PRs target `dev`; `main` is released-only. Always
-branch off `dev`, never off `main`.
+branch off `dev`, never off `main`. To release, merge `dev` into `main` and tag
+the merge commit **on `main`** (v0.13.0 was tagged on `dev`, which left `main`
+behind the shipped build until it was merged back). CI-only fixes made on
+`main` must be merged back into `dev`.
 
 ### iOS & platform gating
 
@@ -286,7 +300,9 @@ Other rules:
   hard (delete app + reboot if it shows the default). CI compile-checks the iOS
   shell on native-code changes
   ([.github/workflows/ci-ios.yml](.github/workflows/ci-ios.yml)); signed
-  distribution is manual (no paid Apple account yet — see release.yml).
+  distribution is manual (no paid Apple account yet). Each release also
+  attaches an **unsigned** `.ipa` (release.yml `build-ios` job) for
+  SideStore/iLoader sideloading, which re-sign it with a free Apple ID.
 
 ### Sync vs user mutations
 
@@ -308,7 +324,6 @@ catches up. The central guard lives in `src/db/syncMerge.ts`
 
 `local_id` is a client-side `nanoid()`. `server_id` is `NULL` until first
 successful sync. Foreign keys reference `local_id` so offline creates work.
-See SPEC §4.2.
 
 ### Sync metadata columns
 
@@ -318,7 +333,7 @@ outbox row. `last_synced` (JSON snapshot) feeds conflict detection.
 
 ### File layout
 
-Matches SPEC §11. Feature folders under `src/features/`, repositories under
+Feature folders under `src/features/`, repositories under
 `src/db/`, sync engine under `src/sync/`, domain types/zod under
 `src/domain/`. Don't restructure without reason.
 
@@ -386,10 +401,11 @@ Ed25519 keypair: public key in `src-tauri/tauri.conf.json`
 GitHub Actions secret. Manifest served at
 `https://pocketcoder.github.io/cria/update.json` (gh-pages branch).
 
-1. `pnpm bump <patch|minor|major|X.Y.Z>` — updates `package.json`,
+1. On `dev`: `pnpm bump <patch|minor|major|X.Y.Z>` — updates `package.json`,
    `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and runs `cargo check`
-   to sync `Cargo.lock`. (Script: `scripts/bump.sh`.)
-3. `git tag vX.Y.Z && git push origin vX.Y.Z` — the `v*` tag triggers
+   to sync `Cargo.lock`. (Script: `scripts/bump.sh`.) Commit and push.
+2. Merge `dev` into `main` and push `main`.
+3. On `main`: `git tag vX.Y.Z && git push origin vX.Y.Z` — the `v*` tag triggers
    `.github/workflows/release.yml` (macOS aarch64 + x86_64, signs bundles,
    creates the GitHub Release, publishes `update.json`).
    **Push tags standalone** — `git push origin vX.Y.Z` only, never bundled
@@ -400,7 +416,7 @@ GitHub Actions secret. Manifest served at
 **Versioning is plain `0.x.y`** — no `-alpha`/`-beta`. The `0.` major is the
 stability signal; minor per milestone, patch for fixes. `1.0.0` is the
 "stable, won't break your data" promise (maps to M7 polish + macOS
-notarisation). See [SPEC.md §14](SPEC.md).
+notarisation).
 
 Release-pipeline landmines (don't undo):
 - `--bundles app,dmg,updater` + `createUpdaterArtifacts: true` are both

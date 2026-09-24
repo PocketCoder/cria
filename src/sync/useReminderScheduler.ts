@@ -33,7 +33,7 @@ const SNOOZE_MS = 10 * 60_000;
  * lets the mobile reconcile loop run idempotently and diff against the OS's
  * pending list.
  */
-function reminderNotifId(taskLocalId: string, reminderAt: string): number {
+export function reminderNotifId(taskLocalId: string, reminderAt: string): number {
   const s = `${taskLocalId}|${reminderAt}`;
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
@@ -53,7 +53,7 @@ function reminderNotifId(taskLocalId: string, reminderAt: string): number {
  * running when a notification fires, so there's nothing to mark. Idempotency
  * comes from the stable id + pending-list diff instead. Returns a cleanup fn.
  */
-function startScheduledReminders(): () => void {
+export function startScheduledReminders(): () => void {
   let disposed = false;
   let inFlight: Promise<void> | null = null;
   let queued = false;
@@ -185,7 +185,7 @@ function startScheduledReminders(): () => void {
  * "Due now" is decided here in JS (Date comparison) rather than in SQL, to
  * sidestep ISO-string-compare pitfalls across timezone offsets.
  */
-function startPollingReminders(): () => void {
+export function startPollingReminders(): () => void {
   let cancelled = false;
 
   const tick = async () => {

@@ -131,7 +131,7 @@ export async function pullSavedFilters(
       const { filterId, data, response } = result.value;
       if (response.status === 404) {
         console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
-        await db.execute('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
+        await exec('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
         keep.delete(filterId);
         removedStale = true;
         continue;
@@ -444,6 +444,7 @@ export async function pullViewsForProject(
 ): Promise<number> {
   return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
   const allRaw = await fetchAllPages(async (page) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated schema omits page/per_page on this endpoint
     const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views',
       {
@@ -522,6 +523,7 @@ async function pullBucketsForView(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   const allRaw = await fetchAllPages(async (page) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- path missing from the generated schema
     const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views/{view}/buckets',
       {
