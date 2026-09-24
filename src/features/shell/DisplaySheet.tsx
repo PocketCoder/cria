@@ -329,7 +329,8 @@ function PickerScreen({
         onToggle={(key) => {
           const v = Number(key);
           const next = new Set(selected);
-          next.has(v) ? next.delete(v) : next.add(v);
+          if (next.has(v)) next.delete(v);
+          else next.add(v);
           patch({ filters: { priority: next.size ? [...next] : undefined } });
         }}
       />
@@ -344,7 +345,8 @@ function PickerScreen({
         emptyMessage="No labels yet."
         onToggle={(key) => {
           const next = new Set(selected);
-          next.has(key) ? next.delete(key) : next.add(key);
+          if (next.has(key)) next.delete(key);
+        else next.add(key);
           patch({ filters: { labels: next.size ? [...next] : undefined } });
         }}
       />
@@ -359,7 +361,8 @@ function PickerScreen({
       emptyMessage="No projects."
       onToggle={(key) => {
         const next = new Set(selected);
-        next.has(key) ? next.delete(key) : next.add(key);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
         patch({ filters: { projects: next.size ? [...next] : undefined } });
       }}
     />

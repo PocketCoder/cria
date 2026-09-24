@@ -137,7 +137,7 @@ export function useKanbanBoard(
     };
   }, [queryClient, view?.localId]);
 
-  const tasks = tasksQuery.data ?? [];
+  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const bucketData = bucketsQuery.data;
 
   const columns = useMemo<KanbanColumn[]>(() => {

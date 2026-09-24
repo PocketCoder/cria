@@ -130,7 +130,6 @@ async function callApiIgnore404<T>(
 // HMR-safe: pin the guard on globalThis so a module reload doesn't reset
 // `false` while a previous module's drain is still in flight.
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_isDraining__: boolean | undefined;
 }
 
@@ -919,6 +918,7 @@ async function executeTaskCommentOp(
     }
 
     const res = await callApi(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated schema has no body for comment update
       (client.POST as any)('/tasks/{taskID}/comments/{commentID}', {
         params: { path: { taskID: taskServerId, commentID: row.server_id } },
         body: { comment: row.comment },

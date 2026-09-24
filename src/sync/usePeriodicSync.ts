@@ -98,7 +98,7 @@ export function usePeriodicSync() {
       if (shouldTick()) void tick();
     }, INTERVAL_MS);
 
-    // Deletion reconciliation every 15 min
+    // Deletion reconciliation every 15 min
     const RECONCILE_MS = 15 * 60 * 1000;
     const reconId = setInterval(() => {
       // reconcileDeletions throws (and aborts the delete sweep) on any HTTP

@@ -119,7 +119,7 @@ export function Shell() {
         selectedTaskLocalId: selected,
       });
     }
-  }, [activeView?.kind === 'project' ? activeView?.localId : null, projectViews.length]);
+  }, [activeView, projectViews]); // guarded: re-runs are no-ops once viewLocalId is set
 
   const { data: outboxCount = 0 } = useOutboxCount();
   const { data: conflictCount = 0 } = useConflictsCount();
@@ -168,7 +168,7 @@ export function Shell() {
         const [, type, serverIdStr] = matches;
         const serverId = parseInt(serverIdStr!, 10);
         const db = await getDb();
-        const row = await db.select<any[]>(
+        const row = await db.select<{ local_id: string }[]>(
           `SELECT local_id FROM ${type}s WHERE server_id = ? LIMIT 1`,
           [serverId]
         );
@@ -187,7 +187,7 @@ export function Shell() {
     return () => {
       unlisten.then((fn) => fn()).catch(() => {});
     };
-  }, []);
+  }, [setSelectedProject, setSelectedTask]);
 
   const [showOutbox, setShowOutbox] = useState(false);
   const [showConflicts, setShowConflicts] = useState(false);

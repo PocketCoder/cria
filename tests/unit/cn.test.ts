@@ -7,6 +7,7 @@ describe('cn', () => {
   });
 
   it('filters falsy values', () => {
+    // eslint-disable-next-line no-constant-binary-expression -- the falsy `&&` is the input under test
     expect(cn('a', false && 'b', undefined, null, 0, 'c')).toBe('a c');
   });
 

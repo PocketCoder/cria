@@ -15,7 +15,6 @@
 type Listener = () => void;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_shortcutListeners__: Map<string, Set<Listener>> | undefined;
 }
 

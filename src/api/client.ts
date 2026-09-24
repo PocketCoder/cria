@@ -113,7 +113,6 @@ function passwordRefreshToken(): string | null {
 // Pinned on globalThis so an HMR reload can't orphan an in-flight refresh
 // and fire a second one with the already-rotated refresh token.
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_refreshInFlight__: Promise<string | null> | null | undefined;
 }
 
@@ -154,7 +153,7 @@ async function doRefresh(): Promise<string | null> {
   }
   if (!res.ok) return null;
 
-  let body: { token?: string } | null = null;
+  let body: { token?: string };
   try {
     body = (await res.json()) as { token?: string };
   } catch {

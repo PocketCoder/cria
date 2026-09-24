@@ -35,6 +35,9 @@ jobs:
       - name: TypeScript check
         run: pnpm typecheck
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Unit tests + coverage thresholds
         run: pnpm test:coverage
 

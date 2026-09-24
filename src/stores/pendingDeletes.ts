@@ -26,7 +26,6 @@ const UNDO_WINDOW_MS = 15_000;
 // orphan a pending commit — same rationale as the db-layer globals in
 // CLAUDE.md, though here the worst case is only a late/missed delete.
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_pendingDeleteTimers__:
     | Map<string, ReturnType<typeof setTimeout>>
     | undefined;

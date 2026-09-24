@@ -103,7 +103,6 @@ interface NodeSqlite {
  * for it instead of starting a fresh BEGIN that collides.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_writeChain__: Promise<unknown> | undefined;
 }
 

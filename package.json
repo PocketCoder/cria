@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
     "generate:api": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v1/docs.json -o /tmp/vikunja-swagger.json && npx -y swagger2openapi@7 /tmp/vikunja-swagger.json -o /tmp/vikunja-openapi.json && openapi-typescript /tmp/vikunja-openapi.json -o src/api/schema.ts'",
     "clean": "rm -rf dist src-tauri/target",
     "clean:all": "rm -rf dist src-tauri/target node_modules"
@@ -71,6 +72,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.1",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.3",
@@ -80,10 +82,14 @@
     "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "2.1.9",
     "better-sqlite3": "^12.11.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "jsdom": "^29.1.1",
     "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
     "vite": "^6.4.3",
     "vitest": "^2.1.9"
   },

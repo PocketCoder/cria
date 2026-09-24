@@ -444,6 +444,7 @@ export async function pullViewsForProject(
 ): Promise<number> {
   return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
   const allRaw = await fetchAllPages(async (page) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated schema omits page/per_page on this endpoint
     const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views',
       {
@@ -522,6 +523,7 @@ async function pullBucketsForView(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   const allRaw = await fetchAllPages(async (page) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- path missing from the generated schema
     const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views/{view}/buckets',
       {

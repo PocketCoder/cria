@@ -15,6 +15,7 @@ touching code.
 pnpm dev            # full Tauri stack (needs cargo on PATH — see gotcha)
 pnpm vite           # frontend only, no webview
 pnpm typecheck      # tsc --noEmit
+pnpm lint           # eslint (typescript-eslint + react-hooks)
 pnpm test           # vitest run (unit tests in tests/unit/)
 pnpm test:coverage  # tests + coverage thresholds (what CI runs)
 pnpm test:watch     # vitest watch
@@ -32,7 +33,7 @@ If pnpm's build-script pre-flight nags, the same binaries live under
 `node_modules/.bin/` (`node_modules/.bin/tsc --noEmit`, `…/vitest run`,
 `…/vite build`) and skip the check.
 
-**Always** run `pnpm typecheck` and `pnpm test` before declaring a change
+**Always** run `pnpm typecheck`, `pnpm lint` and `pnpm test` before declaring a change
 done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
 `cargo check --target aarch64-apple-ios` to catch iOS-only breakage).
 
@@ -71,8 +72,6 @@ in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
 - **Live sync (WebSockets)** not started; sync is a 60s poll.
-- **No linter.** There is no ESLint/Prettier config, so the existing
-  `eslint-disable` comments are inert. `tsc --strict` + tests are the gate.
 - **UI has no unit tests.** Coverage thresholds cover only the logic layers
   (`src/{api,auth,db,domain,lib,sync,stores,hooks}`).
 

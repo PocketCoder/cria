@@ -17,7 +17,7 @@
  * tests, Android — credentials fall back to localStorage (token in
  * `cria:token/v1`, meta in `cria:credentials/v2`). We probe the secure store
  * once and cache the result. A transient keychain error is *not* cached and
- * never triggers the fallback (see useSecureStore).
+ * never triggers the fallback (see hasSecureStore).
  *
  * Migration: the old single blob (`cria:credentials/v1`) and the previous split
  * layout (bare token in the keychain + meta in localStorage) are both upgraded
@@ -59,7 +59,7 @@ async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promis
 }
 
 /** Whether the OS-keychain commands exist + work. Probed once. */
-async function useSecureStore(): Promise<boolean> {
+async function hasSecureStore(): Promise<boolean> {
   if (secureAvailable !== null) return secureAvailable;
   if (!isTauri) {
     secureAvailable = false;
@@ -182,7 +182,7 @@ async function migrateLegacy(): Promise<void> {
 export async function loadCredentials(): Promise<Credentials | null> {
   await migrateLegacy();
 
-  if (await useSecureStore()) {
+  if (await hasSecureStore()) {
     let raw: string | null;
     try {
       raw = await readSecureRaw();
@@ -223,7 +223,7 @@ export async function loadCredentials(): Promise<Credentials | null> {
 }
 
 export async function saveCredentials(creds: Credentials): Promise<void> {
-  if (await useSecureStore()) {
+  if (await hasSecureStore()) {
     // Everything in the keychain. Keep a non-secret meta copy in localStorage
     // (harmless cache), but never the token, and scrub any stale fallback tokens.
     await writeSecureRaw(JSON.stringify(creds));
@@ -248,5 +248,5 @@ export async function clearCredentials(): Promise<void> {
     localStorage.removeItem(TOKEN_FALLBACK_KEY);
     localStorage.removeItem(REFRESH_FALLBACK_KEY);
   }
-  if (await useSecureStore()) await clearSecureRaw();
+  if (await hasSecureStore()) await clearSecureRaw();
 }

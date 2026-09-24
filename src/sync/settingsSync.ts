@@ -45,7 +45,6 @@ let applyingRemote = false;
  *  can't revert a change the user just made before it finished pushing.
  *  Pinned on globalThis: an HMR reset would re-hydrate and revert settings. */
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_settingsHydrated__: boolean | undefined;
 }
 
