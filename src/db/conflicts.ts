@@ -184,7 +184,7 @@ const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
 function renderValue(v: unknown): string {
   if (v === null || v === undefined) return '—';
-  if (v === '0001-01-01T00:00:00Z') return '—'; // Vikunja "no date" sentinel
+  if (typeof v === 'string' && v !== '' && normaliseDate(v) === null) return '—'; // Vikunja "no date" sentinel
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'string') {
     if (ISO_DATETIME.test(v)) {

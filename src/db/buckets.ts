@@ -190,22 +190,6 @@ export async function listBucketAssignmentsForView(
 }
 
 /**
- * Get all task local_ids assigned to a specific bucket.
- */
-export async function listTaskIdsForBucket(
-  bucketLocalId: string,
-): Promise<string[]> {
-  const db = await getDb();
-  const rows = await db.select<{ task_local_id: string }[]>(
-    `SELECT task_local_id
-       FROM task_buckets
-      WHERE bucket_local_id = ?`,
-    [bucketLocalId],
-  );
-  return rows.map((r) => r.task_local_id);
-}
-
-/**
  * Set a task's bucket assignment for a given kanban view.
  * Replaces any existing assignment for the (task, view) pair.
  * User mutation — calls notify('tasks') so the UI refreshes.

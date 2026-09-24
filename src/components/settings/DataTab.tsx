@@ -10,6 +10,7 @@ import {
 import { saveBlob } from '@/lib/download';
 import { useCurrentUser } from '@/queries/user';
 import { Button } from '@/components/ui/button';
+import { normaliseDate } from '@/domain/task';
 
 interface Props {
   disabled?: boolean;
@@ -26,8 +27,7 @@ export function DataTab({ disabled }: Props) {
   const [delError, setDelError] = useState('');
 
   const raw = user?.raw as Record<string, unknown> | undefined;
-  const deletionScheduledAt = raw?.deletion_scheduled_at as string | undefined;
-  const hasDeletionScheduled = deletionScheduledAt && deletionScheduledAt !== '0001-01-01T00:00:00Z';
+  const deletionScheduledAt = normaliseDate(raw?.deletion_scheduled_at as string | undefined);
 
   useEffect(() => {
     getExportStatus()
@@ -108,7 +108,7 @@ export function DataTab({ disabled }: Props) {
       <section>
         <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Delete Account</h3>
         <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
-          {hasDeletionScheduled ? (
+          {deletionScheduledAt ? (
             <div>
               <p className="mb-2 text-sm text-[var(--color-warning)]">
                 Deletion scheduled for {new Date(deletionScheduledAt).toLocaleString()}.

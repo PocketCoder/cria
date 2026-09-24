@@ -1,6 +1,6 @@
 import { exec, getDb, withTx } from './index';
 import { notify } from './bus';
-import type { TaskReminderResponse } from '@/domain/task';
+import { normaliseDate, type TaskReminderResponse } from '@/domain/task';
 
 export interface TaskReminder {
   reminderAt: string;
@@ -66,13 +66,9 @@ export async function replaceTaskRemindersFromServer(
       [taskLocalId],
     );
     for (const r of reminders) {
-      // Skip the Vikunja zero-date ("0001-01-01T00:00:00Z") that the
-      // server emits for relative reminders with no resolved time —
-      // treat it as null instead. Same convention normaliseDate() uses
-      // for due/start/end dates.
-      const at = r.reminder && r.reminder !== '0001-01-01T00:00:00Z'
-        ? r.reminder
-        : null;
+      // The server emits the zero-date for relative reminders with no
+      // resolved time; normaliseDate() maps it to null.
+      const at = normaliseDate(r.reminder);
       const period = typeof r.relative_period === 'number' ? r.relative_period : null;
       const relTo = r.relative_to ?? null;
       // A row with no resolved time AND no relative spec is meaningless;

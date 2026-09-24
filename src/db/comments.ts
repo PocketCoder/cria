@@ -173,18 +173,6 @@ export async function markCommentsAsRead(
   );
 }
 
-export async function getCommentCountForTask(
-  taskLocalId: string,
-): Promise<number> {
-  const db = await getDb();
-  const rows = await db.select<{ count: number }[]>(
-    `SELECT COUNT(*) AS count FROM task_comments
-      WHERE task_local_id = ? AND deleted = 0`,
-    [taskLocalId],
-  );
-  return rows[0]?.count ?? 0;
-}
-
 export async function getUnreadCountForTask(
   taskLocalId: string,
 ): Promise<number> {
