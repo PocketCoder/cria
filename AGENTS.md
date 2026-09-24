@@ -73,7 +73,7 @@ in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 **Known gaps / deferred:**
 - **Live sync (WebSockets)** not started; sync is a 60s poll.
 - **UI has no unit tests.** Coverage thresholds cover only the logic layers
-  (`src/{api,auth,db,domain,lib,sync,stores,hooks}`).
+  (`src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}`).
 
 ## Stack
 

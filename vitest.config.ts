@@ -26,7 +26,7 @@ export default defineConfig({
     // raise them as coverage grows, never lower them.
     coverage: {
       provider: 'v8',
-      include: ['src/{api,auth,db,domain,lib,sync,stores,hooks}/**'],
+      include: ['src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}/**'],
       exclude: ['src/api/schema.ts', 'src/db/migrations/**'],
       reporter: ['text-summary', 'html'],
       thresholds: { lines: 70, statements: 70, functions: 80, branches: 75 },
