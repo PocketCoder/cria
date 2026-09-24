@@ -90,11 +90,5 @@
   "packageManager": "pnpm@11.18.0",
   "engines": {
     "node": ">=20"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "@tauri-apps/cli"
-    ]
   }
 }

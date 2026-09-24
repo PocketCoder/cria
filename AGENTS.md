@@ -235,9 +235,12 @@ sending a subset.
 ### pnpm 11 build-script approvals
 
 `esbuild` + `better-sqlite3` need build approval. Allowlisted in
-[pnpm-workspace.yaml](pnpm-workspace.yaml) (`allowBuilds`) +
-`package.json#pnpm.onlyBuiltDependencies`. Don't strip either. New deps with
-native binaries may need adding too.
+[pnpm-workspace.yaml](pnpm-workspace.yaml) (`allowBuilds`), the only place
+pnpm 11 reads (`packageManager` pins 11.x, so CI uses it too). Don't strip it.
+The old `package.json#pnpm.onlyBuiltDependencies` block was removed: pnpm 11
+ignores the `pnpm` field and warns on every command. New deps with native
+binaries may need adding to `allowBuilds`; `pnpm ignored-builds` lists any
+that were skipped.
 
 ### `pnpm dev` indirectly requires `cargo`
 
