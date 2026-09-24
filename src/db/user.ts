@@ -34,6 +34,25 @@ export async function getCachedUser(): Promise<User | null> {
 }
 
 export async function upsertUser(user: User): Promise<void> {
+  const rawJson = JSON.stringify(user.raw);
+
+  // Only notify when something other than fetched_at changed. The 'user'
+  // bus topic invalidates useCurrentUser, whose refetch calls upsertUser
+  // again — notifying on every timestamp-only write turned that into a
+  // self-sustaining request loop (~90 req/s when the server failed fast).
+  const db = await getDb();
+  const existing = await db.select<
+    { server_id: number; username: string; email: string | null; name: string | null; raw: string }[]
+  >(`SELECT server_id, username, email, name, raw FROM user WHERE id = 1 LIMIT 1`);
+  const prev = existing[0];
+  const changed =
+    !prev ||
+    prev.server_id !== user.serverId ||
+    prev.username !== user.username ||
+    prev.email !== user.email ||
+    prev.name !== user.name ||
+    prev.raw !== rawJson;
+
   await exec(
     `INSERT INTO user (id, server_id, username, email, name, raw, fetched_at)
      VALUES (1, ?, ?, ?, ?, ?, ?)
@@ -49,11 +68,11 @@ export async function upsertUser(user: User): Promise<void> {
       user.username,
       user.email,
       user.name,
-      JSON.stringify(user.raw),
+      rawJson,
       user.fetchedAt,
     ],
   );
-  notify('user');
+  if (changed) notify('user');
 }
 
 export async function clearUser(): Promise<void> {

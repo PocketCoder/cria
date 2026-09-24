@@ -5,6 +5,7 @@ import { listBucketsForView, listBucketAssignmentsForView } from '@/db/buckets';
 import { subscribe } from '@/db/bus';
 import type { Task } from '@/domain/task';
 import type { Bucket, TaskBucket } from '@/domain/bucket';
+import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
 import type { Project } from '@/domain/project';
 
@@ -101,7 +102,8 @@ export function useKanbanBoard(
   project: Project | null,
 ) {
   const queryClient = useQueryClient();
-  const tasksQuery = useProjectTasks(project);
+  const vf = view ? viewFilterParams(view) : null;
+  const tasksQuery = useProjectTasks(project, vf?.filter, undefined, vf?.includeNulls ?? false);
 
   const bucketsQuery = useQuery<{
     buckets: Bucket[];

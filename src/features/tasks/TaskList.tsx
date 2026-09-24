@@ -24,6 +24,7 @@ import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
+import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
@@ -36,6 +37,8 @@ import { Trash2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, Copy, Extern
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
+import { useListFocus } from '@/stores/listFocus';
+import { onShortcut } from '@/lib/shortcutBus';
 import { useDisplay } from '@/stores/display';
 import { useDisplayCtx } from '@/queries/displayData';
 import { filterTasks, sortTasks, defaultConfigFor } from '@/lib/displayConfig';
@@ -88,8 +91,10 @@ export function TaskList({ project, view }: TaskListProps) {
   // truth; any other sort renders in sorted order and disables dragging.
   const sortable = config.sort.field === 'manual';
 
+  // Vikunja views can carry their own filter (project_views.filter).
+  const vf = view ? viewFilterParams(view) : null;
   const { data: tasks = [], isLoading, isFetching, isError, error } =
-    useProjectTasks(project);
+    useProjectTasks(project, vf?.filter, undefined, vf?.includeNulls ?? false);
 
   // Tasks queued for deletion are hidden immediately while the undo
   // toast is live (issue #25). They're still deleted=0 in the DB until
@@ -132,6 +137,45 @@ export function TaskList({ project, view }: TaskListProps) {
     () => buildTaskTree(completedTasks, subtaskMap),
     [completedTasks, subtaskMap],
   );
+
+  // j/k/Enter row focus (fixed shortcut set). Moves through the visible
+  // tree in display order; Enter opens the focused task's detail card.
+  useEffect(() => {
+    const flatIds = (): string[] => {
+      const out: string[] = [];
+      const dfs = (nodes: TaskTreeNode[]) => {
+        for (const n of nodes) {
+          out.push(n.task.localId);
+          dfs(n.children);
+        }
+      };
+      dfs(taskTree);
+      return out;
+    };
+    const move = (delta: 1 | -1) => {
+      const ids = flatIds();
+      if (ids.length === 0) return;
+      const { focusedId, setFocusedId } = useListFocus.getState();
+      const idx = focusedId ? ids.indexOf(focusedId) : -1;
+      const next = ids[Math.min(ids.length - 1, Math.max(0, idx + delta))]!;
+      setFocusedId(next);
+      document
+        .querySelector(`[data-task-row="${next}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+    };
+    const subs = [
+      onShortcut('list.down', () => move(1)),
+      onShortcut('list.up', () => move(-1)),
+      onShortcut('list.open', () => {
+        const { focusedId } = useListFocus.getState();
+        if (focusedId) useUi.getState().setSelectedTask(focusedId);
+      }),
+    ];
+    return () => {
+      subs.forEach((u) => u());
+      useListFocus.getState().setFocusedId(null);
+    };
+  }, [taskTree]);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState(false);
@@ -421,6 +465,7 @@ const TaskRow = memo(function TaskRow({
 }) {
   const selectedTaskId = useUi((s) => s.selectedTaskLocalId);
   const setSelectedTask = useUi((s) => s.setSelectedTask);
+  const isKeyFocused = useListFocus((s) => s.focusedId === task.localId);
   const selecting = useDisplay((s) => s.selecting);
   const isSelected = useDisplay((s) => !!s.selected[task.localId]);
   const toggleSelected = useDisplay((s) => s.toggleSelected);
@@ -510,12 +555,13 @@ const TaskRow = memo(function TaskRow({
           style={style}
           {...attributes}
           {...listeners}
-          data-task-row=""
+          data-task-row={task.localId}
           className={cn(
             'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
             task.done && 'opacity-60',
             isSelected && 'bg-[var(--color-primary)]/10',
             !isSelected && selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+            isKeyFocused && 'ring-1 ring-inset ring-[var(--color-primary)]',
             isDragging && 'opacity-40',
             sortable && !selecting && 'cursor-grab active:cursor-grabbing',
           )}

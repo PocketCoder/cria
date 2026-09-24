@@ -24,6 +24,23 @@ export interface UserSettingsInput {
 }
 
 /**
+ * Defaults for every field Vikunja's UpdateUser with forceOverride=true would
+ * zero-out if omitted from the POST body. Spread before user overrides so no
+ * field is ever lost.
+ */
+export const SETTINGS_DEFAULTS: UserSettingsInput = {
+  language: 'en',
+  timezone: 'UTC',
+  week_start: 1,
+  email_reminders_enabled: false,
+  overdue_tasks_reminders_enabled: false,
+  overdue_tasks_reminders_time: '09:00',
+  default_project_id: 0,
+  discoverable_by_email: false,
+  discoverable_by_name: false,
+};
+
+/**
  * POST the full settings object to the server. Callers must pass the
  * complete object (not a partial patch) — see the note on
  * {@link UserSettingsInput} for why a partial body silently clears the

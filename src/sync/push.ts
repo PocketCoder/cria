@@ -12,35 +12,38 @@ export async function subscribeToTask(
   taskLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<void> {
-  await callApi(
-    client.PUT('/subscriptions/{entity}/{entityID}', {
-      params: { path: { entity: 'task', entityID: String(taskServerId) } },
-    }),
-  );
-  await exec(
-    `UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`,
-    [new Date().toISOString(), taskLocalId],
-  );
+  const now = new Date().toISOString();
+  await exec(`UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+  try {
+    await callApi(
+      client.PUT('/subscriptions/{entity}/{entityID}', {
+        params: { path: { entity: 'task', entityID: String(taskServerId) } },
+      }),
+    );
+  } catch (err) {
+    await exec(`UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+    throw err;
+  }
   notify('tasks');
 }
 
-/**
- * Unsubscribe the current user from a task.
- */
 export async function unsubscribeFromTask(
   taskServerId: number,
   taskLocalId: string,
   client: ApiClient = createApiClient(),
 ): Promise<void> {
-  await callApi(
-    client.DELETE('/subscriptions/{entity}/{entityID}', {
-      params: { path: { entity: 'task', entityID: String(taskServerId) } },
-    }),
-  );
-  await exec(
-    `UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`,
-    [new Date().toISOString(), taskLocalId],
-  );
+  const now = new Date().toISOString();
+  await exec(`UPDATE tasks SET is_subscribed = 0, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+  try {
+    await callApi(
+      client.DELETE('/subscriptions/{entity}/{entityID}', {
+        params: { path: { entity: 'task', entityID: String(taskServerId) } },
+      }),
+    );
+  } catch (err) {
+    await exec(`UPDATE tasks SET is_subscribed = 1, updated_at = ? WHERE local_id = ?`, [now, taskLocalId]);
+    throw err;
+  }
   notify('tasks');
 }
 
@@ -143,10 +146,13 @@ export async function drainOutbox(
   }
 }
 
+const MAX_OPS_PER_DRAIN = 100;
+
 async function drainLoop(client: ApiClient): Promise<void> {
   const db = await getDb();
+  let ops = 0;
 
-  while (true) {
+  while (ops < MAX_OPS_PER_DRAIN) {
     // Always pick the oldest row regardless of next_attempt_at. If the head
     // row is backing off, stop the drain — skipping it would break FIFO.
     const rows = await db.select<OutboxRow[]>(
@@ -166,6 +172,7 @@ async function drainLoop(client: ApiClient): Promise<void> {
       await executeOp(client, db, op);
       await exec('DELETE FROM outbox WHERE id = ?', [op.id]);
       notify('outbox');
+      ops++;
     } catch (err) {
       const isDependency =
         err instanceof ApiError && err.dependency;
@@ -1302,6 +1309,7 @@ interface ViewRow {
   title: string;
   view_kind: string;
   position: number | null;
+  filter: string | null;
   bucket_configuration_mode: string;
   done_bucket_server_id: number | null;
   default_bucket_server_id: number | null;
@@ -1311,11 +1319,26 @@ interface ViewRow {
 type ViewKindLiteral = 'list' | 'gantt' | 'table' | 'kanban';
 type BucketModeLiteral = 'none' | 'manual' | 'filter';
 
+function viewFilterForBody(raw: string | null): unknown {
+  if (!raw) return undefined;
+  // Stored as the server's TaskCollection JSON; a bare string is wrapped.
+  if (raw.trimStart().startsWith('{')) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return { filter: raw };
+}
+
 function viewBody(row: ViewRow): Record<string, unknown> {
+  const filter = viewFilterForBody(row.filter);
   return {
     title: row.title,
     view_kind: row.view_kind as ViewKindLiteral,
     ...(row.position != null ? { position: row.position } : {}),
+    ...(filter !== undefined ? { filter } : {}),
     bucket_configuration_mode: row.bucket_configuration_mode as BucketModeLiteral,
     // Vikunja uses 0 for "no done/default bucket".
     done_bucket_id: row.done_bucket_server_id ?? 0,
@@ -1331,7 +1354,7 @@ async function executeViewOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ViewRow[]>(
     `SELECT local_id, server_id, project_local_id, title, view_kind,
-            position, bucket_configuration_mode,
+            position, filter, bucket_configuration_mode,
             done_bucket_server_id, default_bucket_server_id, deleted
        FROM project_views WHERE local_id = ? LIMIT 1`,
     [localId],

@@ -31,7 +31,8 @@ import {
   loadBoardFilter,
   saveBoardFilter,
 } from './boardFilter';
-import { createTask } from '@/db/tasks';
+import { createTask, updateTask } from '@/db/tasks';
+import { playCompletionSound } from '@/utils/sound';
 import { setTaskBucket, reorderTasksInBucket, createBucket, deleteBucket, updateBucket } from '@/db/buckets';
 import { updateView } from '@/db/views';
 import { useUi } from '@/stores/ui';
@@ -605,7 +606,16 @@ const KanbanCard = memo(function KanbanCard({ task }: CardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      onClick={() => setSelectedTask(task.localId)}
+      onClick={(e) => {
+        // Upstream parity: ⌘/Ctrl+click toggles done instead of opening.
+        if (e.metaKey || e.ctrlKey) {
+          void updateTask(task.localId, { done: !task.done }).then(() => {
+            if (!task.done) playCompletionSound();
+          });
+          return;
+        }
+        setSelectedTask(task.localId);
+      }}
       className={cn(
         'group mb-2 cursor-grab rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm transition-shadow hover:shadow-sm active:cursor-grabbing',
         task.done && 'opacity-60',

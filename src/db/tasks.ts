@@ -127,6 +127,52 @@ export async function listTasksForProjectFiltered(
   return rows.map(rowToTask);
 }
 
+/**
+ * Cross-project variant of listTasksForProjectFiltered, for saved-filter
+ * views (Vikunja pseudo-projects): the compiled filter IS the task source.
+ * Rows carry the owning project's title like the smart-view queries.
+ */
+export async function listTasksFilteredAllProjects(
+  preFilterDone: boolean,
+  filterWhere?: string,
+  filterParams?: unknown[],
+  orderBy?: string,
+): Promise<TaskWithProject[]> {
+  const db = await getDb();
+
+  const conditions: string[] = ['t.deleted = 0', 'p.deleted = 0'];
+  const allParams: unknown[] = [];
+
+  if (preFilterDone) {
+    conditions.push('t.done = 0');
+  }
+  if (filterWhere) {
+    conditions.push(`(${filterWhere})`);
+    if (filterParams) allParams.push(...filterParams);
+  }
+
+  const rows = await db.select<TaskWithProjectRow[]>(
+    `SELECT ${SELECT_TASK_COLS_T}, p.title AS project_title
+       FROM tasks t
+       JOIN projects p ON p.local_id = t.project_local_id
+      WHERE ${conditions.join(' AND ')}
+   ORDER BY ${orderBy || DEFAULT_ORDER_BY}`,
+    allParams,
+  );
+  return rows.map(rowToTaskWithProject);
+}
+
+/** Locate a task by its server id (notification click-through). */
+export async function getTaskByServerId(serverId: number): Promise<Task | null> {
+  const db = await getDb();
+  const rows = await db.select<TaskRow[]>(
+    `SELECT ${SELECT_TASK_COLS} FROM tasks
+      WHERE server_id = ? AND deleted = 0 LIMIT 1`,
+    [serverId],
+  );
+  return rows[0] ? rowToTask(rows[0]) : null;
+}
+
 export async function getTaskByLocalId(localId: string): Promise<Task | null> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
@@ -171,7 +217,8 @@ export async function listTasksWithDueDate(): Promise<TaskWithProject[]> {
        JOIN projects p ON p.local_id = t.project_local_id
       WHERE t.deleted = 0 AND t.done = 0 AND t.due_date IS NOT NULL
         AND p.deleted = 0
-   ORDER BY t.due_date ASC, t.priority DESC`,
+   ORDER BY t.due_date ASC, t.priority DESC
+      LIMIT 500`,
   );
   return rows.map(rowToTaskWithProject);
 }

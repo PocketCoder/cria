@@ -124,6 +124,17 @@ describe('loginWithPassword', () => {
       loginWithPassword(serverUrl, { username: 'jane', password: 'secret' }),
     ).rejects.toThrow(NetworkError);
   });
+
+  it('refuses to send the password to a plaintext non-loopback server', async () => {
+    await expect(
+      loginWithPassword('http://vikunja.example.com', {
+        username: 'jane',
+        password: 'secret',
+      }),
+    ).rejects.toThrow(/Refusing/);
+
+    expect(mockClient.POST).not.toHaveBeenCalled();
+  });
 });
 
 describe('isTotpRequired', () => {

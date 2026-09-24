@@ -56,23 +56,38 @@ export function classify(status: number): ErrorClassification {
   return { retryable: false };
 }
 
-export async function buildApiError(
-  status: number,
-  bodyText: string,
-): Promise<ApiError> {
+/**
+ * Builds an ApiError from an error value. Accepts either:
+ * - the pre-parsed `error` field openapi-fetch already produces (it reads
+ *   the response body internally and best-effort JSON.parses it before we
+ *   ever see the Response — re-reading `response.text()` ourselves throws
+ *   "body stream already read" and was silently swallowed, degrading every
+ *   error message to a bare "HTTP 400"), or
+ * - a raw JSON/plain-text string, for callers that read the body directly.
+ */
+export function buildApiError(status: number, error: unknown): ApiError {
   let code: number | null = null;
   let message = `HTTP ${status}`;
-  if (bodyText) {
-    try {
-      const envelope = JSON.parse(bodyText) as VikunjaErrorEnvelope;
-      if (typeof envelope.code === 'number') code = envelope.code;
-      if (typeof envelope.message === 'string' && envelope.message.length > 0) {
-        message = envelope.message;
+
+  let envelope: VikunjaErrorEnvelope | null = null;
+  if (typeof error === 'string') {
+    if (error.length > 0) {
+      try {
+        envelope = JSON.parse(error) as VikunjaErrorEnvelope;
+      } catch {
+        message = error.slice(0, 200);
       }
-    } catch {
-      // Non-JSON body; fall back to status text.
-      message = bodyText.slice(0, 200);
+    }
+  } else if (error && typeof error === 'object') {
+    envelope = error as VikunjaErrorEnvelope;
+  }
+
+  if (envelope) {
+    if (typeof envelope.code === 'number') code = envelope.code;
+    if (typeof envelope.message === 'string' && envelope.message.length > 0) {
+      message = envelope.message;
     }
   }
+
   return new ApiError(status, code, message, classify(status).retryable);
 }

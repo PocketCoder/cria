@@ -299,3 +299,63 @@ describe('sync/push edge cases', () => {
     });
   });
 });
+
+describe('view filter push', () => {
+  beforeAll(initSchema);
+  beforeEach(clearTables);
+
+  it('includes the stored filter (as TaskCollection object) when pushing a view update', async () => {
+    await withTx(async (tx) => {
+      await tx.execute(
+        `INSERT INTO projects (local_id, server_id, title, updated_at, dirty, deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+        ['proj1', 1, 'Project', now()],
+      );
+      await tx.execute(
+        `INSERT INTO project_views (local_id, server_id, project_local_id, title, view_kind, updated_at, dirty, deleted)
+         VALUES ('view1', 55, 'proj1', 'List', 'list', ?, 0, 0)`,
+        [now()],
+      );
+    });
+    const { updateView } = await import('@/db/views');
+    await updateView('view1', {
+      filter: JSON.stringify({ filter: 'priority >= 3', filter_include_nulls: true }),
+    });
+
+    const client = mockClient();
+    await drainOutbox(client);
+
+    expect(client.POST).toHaveBeenCalledWith(
+      '/projects/{project}/views/{id}',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          filter: { filter: 'priority >= 3', filter_include_nulls: true },
+        }),
+      }),
+    );
+  });
+
+  it('omits filter from the body when the view has none', async () => {
+    await withTx(async (tx) => {
+      await tx.execute(
+        `INSERT INTO projects (local_id, server_id, title, updated_at, dirty, deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+        ['proj1', 1, 'Project', now()],
+      );
+      await tx.execute(
+        `INSERT INTO project_views (local_id, server_id, project_local_id, title, view_kind, updated_at, dirty, deleted)
+         VALUES ('view1', 55, 'proj1', 'List', 'list', ?, 0, 0)`,
+        [now()],
+      );
+    });
+    const { updateView } = await import('@/db/views');
+    await updateView('view1', { title: 'Renamed' });
+
+    const client = mockClient();
+    await drainOutbox(client);
+
+    const call = (client.POST as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c: unknown[]) => c[0] === '/projects/{project}/views/{id}',
+    );
+    expect(call).toBeTruthy();
+    expect((call![1] as { body: Record<string, unknown> }).body).not.toHaveProperty('filter');
+  });
+});

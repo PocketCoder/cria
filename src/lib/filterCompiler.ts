@@ -249,28 +249,34 @@ function compileProjectClause(
   const values = clause.value.type === 'array' ? clause.value.values : [clause.value];
   const sqlValues = values.map((v) => filterValueToSql(v));
 
+  // Vikunja-web saved filters store numeric project *ids*; hand-typed
+  // queries use titles. Match numbers on server_id, strings on title.
+  const matchExpr = (v: unknown) =>
+    typeof v === 'number' ? 'p2.server_id = ?' : 'p2.title = ?';
+
+  const anyMatch = (vals: unknown[]) =>
+    vals.map(matchExpr).join(' OR ');
+
   if (clause.operator === 'in') {
-    const placeholders = sqlValues.map(() => '?').join(', ');
     clauses.push(
-      `EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND p2.title IN (${placeholders}))`
+      `EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND (${anyMatch(sqlValues)}))`
     );
     params.push(...sqlValues);
   } else if (clause.operator === 'not in') {
-    const placeholders = sqlValues.map(() => '?').join(', ');
     clauses.push(
-      `NOT EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND p2.title IN (${placeholders}))`
+      `NOT EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND (${anyMatch(sqlValues)}))`
     );
     params.push(...sqlValues);
   } else if (clause.operator === '=') {
     if (sqlValues.length < 1 || sqlValues[0] === null) return;
     clauses.push(
-      `EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND p2.title = ?)`
+      `EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND ${matchExpr(sqlValues[0])})`
     );
     params.push(sqlValues[0]);
   } else if (clause.operator === '!=') {
     if (sqlValues.length < 1 || sqlValues[0] === null) return;
     clauses.push(
-      `NOT EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND p2.title = ?)`
+      `NOT EXISTS (SELECT 1 FROM projects p2 WHERE p2.local_id = t.project_local_id AND ${matchExpr(sqlValues[0])})`
     );
     params.push(sqlValues[0]);
   }

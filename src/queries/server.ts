@@ -16,3 +16,19 @@ export function useServerVersion() {
     refetchOnWindowFocus: false,
   });
 }
+
+/** The server's configured public frontend base (for link-share URLs). */
+export function useFrontendUrl() {
+  return useQuery<string | null>({
+    queryKey: ['server-frontend-url'],
+    queryFn: async () => {
+      const { serverUrl } = getAuthSnapshot();
+      if (!serverUrl) return null;
+      const { frontendUrl } = await probeServer(serverUrl);
+      return frontendUrl;
+    },
+    staleTime: 60 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}

@@ -19,6 +19,33 @@ export interface ProjectView {
   updatedAt: string;
 }
 
+/**
+ * A view's stored filter, extracted from the TaskCollection JSON the server
+ * puts in `project_views.filter` ({"filter": "...", "filter_include_nulls": …}).
+ * Bare strings (older payloads / hand-written rows) are treated as the query
+ * itself. Returns null when the view has no usable filter.
+ */
+export function viewFilterParams(
+  view: ProjectView,
+): { filter: string; includeNulls: boolean } | null {
+  if (!view.filter) return null;
+  let filter = view.filter;
+  let includeNulls = false;
+  if (filter.trimStart().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(filter) as {
+        filter?: unknown;
+        filter_include_nulls?: unknown;
+      };
+      filter = typeof parsed.filter === 'string' ? parsed.filter : '';
+      includeNulls = parsed.filter_include_nulls === true;
+    } catch {
+      return null;
+    }
+  }
+  return filter.trim() ? { filter, includeNulls } : null;
+}
+
 export const viewResponseSchema = z
   .object({
     id: z.number(),
