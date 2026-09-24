@@ -97,7 +97,8 @@ sync layer validates server payloads with Zod schemas in `src/domain/*`, then
 upserts via repository helpers (`upsert*FromServer`). After the pull, the
 queryFn re-reads from the DB so the consumer gets fresh data. Writes go to the
 DB + an outbox row in one transaction; `src/sync/push.ts` drains the outbox
-FIFO to the server with exponential backoff.
+FIFO to the server with exponential backoff, dispatching each op to its
+entity executor in `src/sync/push/*.ts`.
 
 ## Gotchas you'll hit
 
@@ -203,7 +204,7 @@ on the way in. Don't display the raw value.
 ### `taskToBody()` wire-format quirks
 
 Every Vikunja server-side body quirk lives in `taskToBody()` in
-[src/sync/push.ts](src/sync/push.ts): `hex_color` sent raw (no `#`, else 500),
+[src/sync/push/task.ts](src/sync/push/task.ts): `hex_color` sent raw (no `#`, else 500),
 `percent_done` as 0–100 (UI stores 0–1), `is_favorite` sent explicit `false`
 (omitting breaks un-favorite), `repeat_after`/`repeat_mode` sent explicit `0`,
 `project_id` included on move. Covered by `tests/unit/taskToBody.test.ts`.

@@ -158,7 +158,7 @@ export async function markReminderNotified(
 // Reminders are a task FIELD in Vikunja (no dedicated endpoint), so a
 // reminder change is pushed as a task update: we edit task_reminders,
 // mark the task dirty, and queue a task 'update' outbox op. The drain
-// (push.ts) reads the current task_reminders set and sends it in the
+// (push/task.ts) reads the current task_reminders set and sends it in the
 // task body. `reminderAt` is an absolute ISO datetime.
 
 export type ReminderRelation = 'due_date' | 'start_date' | 'end_date';
