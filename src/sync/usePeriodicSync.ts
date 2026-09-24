@@ -51,6 +51,7 @@ export function usePeriodicSync() {
       try {
         // Saved-filter details for pseudo-projects pulled just above.
         await pullSavedFilters();
+        notify('saved_filters');
       } catch (err) {
         throttledWarn('periodic-sync/saved-filters', '[periodic-sync] saved-filter pull failed:', err);
       }

@@ -131,7 +131,7 @@ export async function pullSavedFilters(
       const { filterId, data, response } = result.value;
       if (response.status === 404) {
         console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
-        await db.execute('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
+        await exec('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
         keep.delete(filterId);
         removedStale = true;
         continue;
