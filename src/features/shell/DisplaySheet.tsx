@@ -147,7 +147,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Display options">
         <div className="sheet-backdrop absolute inset-0" onClick={close} />
-        <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--color-background)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)]">
+        <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--color-background)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">{body}</div>
         </div>
@@ -159,7 +159,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={close}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
         onClick={(e) => e.stopPropagation()}
       >
         {header}
@@ -329,7 +329,8 @@ function PickerScreen({
         onToggle={(key) => {
           const v = Number(key);
           const next = new Set(selected);
-          next.has(v) ? next.delete(v) : next.add(v);
+          if (next.has(v)) next.delete(v);
+          else next.add(v);
           patch({ filters: { priority: next.size ? [...next] : undefined } });
         }}
       />
@@ -344,7 +345,8 @@ function PickerScreen({
         emptyMessage="No labels yet."
         onToggle={(key) => {
           const next = new Set(selected);
-          next.has(key) ? next.delete(key) : next.add(key);
+          if (next.has(key)) next.delete(key);
+        else next.add(key);
           patch({ filters: { labels: next.size ? [...next] : undefined } });
         }}
       />
@@ -359,7 +361,8 @@ function PickerScreen({
       emptyMessage="No projects."
       onToggle={(key) => {
         const next = new Set(selected);
-        next.has(key) ? next.delete(key) : next.add(key);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
         patch({ filters: { projects: next.size ? [...next] : undefined } });
       }}
     />

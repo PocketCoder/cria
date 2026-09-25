@@ -135,10 +135,12 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+      role="dialog"
+      aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="glass-surface flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
+        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sticky header + action toolbar */}

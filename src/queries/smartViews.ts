@@ -44,6 +44,31 @@ function groupByProject(tasks: TaskWithProject[]): TaskGroup[] {
   }));
 }
 
+/** Overdue (only if any, surfaced first) + due-today groups. Pure, for tests. */
+export function groupToday(all: TaskWithProject[], now: Date): TaskGroup[] {
+  const today = startOfDay(now);
+  const overdue: TaskWithProject[] = [];
+  const due: TaskWithProject[] = [];
+  for (const t of all) {
+    if (!t.dueDate) continue;
+    const d = toCalendarDate(t.dueDate);
+    if (isBefore(d, today)) overdue.push(t);
+    else if (isSameDay(d, today)) due.push(t);
+  }
+  const groups: TaskGroup[] = [];
+  if (overdue.length) groups.push({ key: 'overdue', label: 'Overdue', tasks: overdue });
+  groups.push({ key: 'today', label: 'Today', tasks: due });
+  return groups;
+}
+
+/** Tasks due today or later. Pure, for tests. */
+export function upcomingFrom(all: TaskWithProject[], now: Date): TaskWithProject[] {
+  const today = startOfDay(now);
+  return all.filter(
+    (t) => t.dueDate && !isBefore(startOfDay(toCalendarDate(t.dueDate)), today),
+  );
+}
+
 /** Today = overdue (surfaced first) + due-today, across all projects. */
 export function useTodayTasks() {
   const qc = useQueryClient();
@@ -59,24 +84,7 @@ export function useTodayTasks() {
     queryKey: ['smart', 'today'],
     staleTime: 30_000,
     refetchInterval: SMART_REFETCH_MS(),
-    queryFn: async () => {
-      const all = await listTasksWithDueDate();
-      const today = startOfDay(new Date());
-      const overdue: TaskWithProject[] = [];
-      const due: TaskWithProject[] = [];
-      for (const t of all) {
-        if (!t.dueDate) continue;
-        const d = toCalendarDate(t.dueDate);
-        if (isBefore(d, today)) overdue.push(t);
-        else if (isSameDay(d, today)) due.push(t);
-      }
-      const groups: TaskGroup[] = [];
-      if (overdue.length) {
-        groups.push({ key: 'overdue', label: 'Overdue', tasks: overdue });
-      }
-      groups.push({ key: 'today', label: 'Today', tasks: due });
-      return groups;
-    },
+    queryFn: async () => groupToday(await listTasksWithDueDate(), new Date()),
   });
 }
 
@@ -96,14 +104,9 @@ export function useUpcomingTasks() {
     queryKey: ['smart', 'upcoming'],
     staleTime: 30_000,
     refetchInterval: SMART_REFETCH_MS(),
-    queryFn: async () => {
-      const all = await listTasksWithDueDate();
-      const today = startOfDay(new Date());
-      const tasks = all.filter(
-        (t) => t.dueDate && !isBefore(startOfDay(toCalendarDate(t.dueDate)), today),
-      );
-      return [{ key: 'upcoming', label: '', tasks }];
-    },
+    queryFn: async () => [
+      { key: 'upcoming', label: '', tasks: upcomingFrom(await listTasksWithDueDate(), new Date()) },
+    ],
   });
 }
 

@@ -1,21 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUi } from '@/stores/ui';
 import { useProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
-import { searchTasks } from '@/db/tasks';
+import { searchTasks, updateTask } from '@/db/tasks';
 import { cn } from '@/lib/cn';
-import {
-  Calendar,
-  Inbox,
-  Star,
-  FileText,
-  Tag,
-  Plus,
-  Settings,
-  CheckCircle2,
-  Circle,
-} from 'lucide-react';
+import { formatDue } from '@/features/tasks/TaskRowCore';
+import { priorityColor } from '@/components/ui/priority-select';
+import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings, Search } from 'lucide-react';
 
 interface PaletteAction {
   id: string;
@@ -25,6 +17,11 @@ interface PaletteAction {
   keywords: string;
   icon: React.ReactNode;
   onSelect: () => void;
+  /** Task rows carry a priority bar + right-aligned `project · due` so the
+   * palette doubles as triage. */
+  taskLocalId?: string;
+  priority?: number;
+  dueDate?: string | null;
 }
 
 export function CommandPalette({
@@ -42,6 +39,7 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const setActiveView = useUi((s) => s.setActiveView);
   const setSelectedProject = useUi((s) => s.setSelectedProject);
+  const queryClient = useQueryClient();
   const { data: projects = [] } = useProjects();
   const { data: labels = [] } = useLabels();
 
@@ -146,11 +144,10 @@ export function CommandPalette({
         subtitle: t.projectTitle,
         group: 'Tasks',
         keywords: `task ${t.title} ${t.projectTitle}`,
-        icon: t.done ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-        ) : (
-          <Circle className="h-4 w-4" />
-        ),
+        icon: null,
+        taskLocalId: t.localId,
+        priority: t.priority,
+        dueDate: t.dueDate,
         onSelect: () => {
           useUi.setState({
             activeView: { kind: 'project', localId: t.projectLocalId },
@@ -226,6 +223,15 @@ export function CommandPalette({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      // ⌘⏎ completes the selected task without leaving the palette.
+      const t = filtered[selectedIndex];
+      if (t?.taskLocalId) {
+        e.preventDefault();
+        void updateTask(t.taskLocalId, { done: true }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['palette-tasks'] });
+        });
+      }
     } else if (e.key === 'Enter' && filtered[selectedIndex]) {
       e.preventDefault();
       filtered[selectedIndex].onSelect();
@@ -252,23 +258,27 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-[15vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-[oklch(22% 0.012 265 / 0.34)] pt-[70px]"
       onClick={onClose}
     >
       <div
-        className="glass-surface w-full max-w-lg rounded-lg shadow-xl"
+        className="w-[560px] overflow-hidden rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[oklch(34%_0.008_265)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-[var(--color-border)] px-4 py-3">
+        <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-4">
+          <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
           <input
             ref={inputRef}
             type="text"
             placeholder="Search tasks, actions, projects, labels…"
-            className="w-full bg-transparent text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent py-3 text-sm text-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
           />
+          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-muted-foreground)]">
+            esc
+          </span>
         </div>
 
         <div className="max-h-[50vh] overflow-y-auto p-2">
@@ -279,31 +289,57 @@ export function CommandPalette({
           )}
           {grouped.map((group) => (
             <div key={group.name}>
-              <p className="px-2 pb-1 pt-3 text-caption font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+              <p className="px-2 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[0.11em] text-[var(--color-muted-foreground)]">
                 {group.name}
               </p>
               {group.items.map((item) => {
                 const idx = flatIdx++;
                 const isSelected = idx === selectedIndex;
+                const right = item.taskLocalId
+                  ? [item.subtitle, item.dueDate ? formatDue(item.dueDate) : null]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : item.subtitle;
                 return (
                   <button
                     key={item.id}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                      'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors',
                       isSelected
-                        ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                        : 'hover:bg-[var(--color-card)]',
+                        ? 'bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]'
+                        : 'text-[var(--color-foreground)] hover:bg-[var(--color-muted)]',
                     )}
                     onClick={() => item.onSelect()}
                     onMouseEnter={() => setSelectedIndex(idx)}
                   >
-                    <span className="flex-shrink-0 opacity-60">{item.icon}</span>
-                    <span className="min-w-0 flex-1 truncate font-medium">
-                      {item.label}
-                    </span>
-                    <span className="flex-shrink-0 text-caption opacity-40">
-                      {item.subtitle}
-                    </span>
+                    {item.taskLocalId ? (
+                      <span
+                        className="h-4 w-[3px] shrink-0 rounded-full"
+                        style={{
+                          backgroundColor:
+                            (item.priority ?? 0) > 2
+                              ? priorityColor(item.priority ?? 0)
+                              : 'transparent',
+                        }}
+                      />
+                    ) : (
+                      <span className="flex w-[3px] shrink-0 justify-center">
+                        <span className="opacity-60">{item.icon}</span>
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+                    {right ? (
+                      <span
+                        className={cn(
+                          'shrink-0 text-[11.5px]',
+                          isSelected
+                            ? 'text-[var(--color-inverse-foreground)]/70'
+                            : 'text-[var(--color-muted-foreground)]',
+                        )}
+                      >
+                        {right}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -311,8 +347,10 @@ export function CommandPalette({
           ))}
         </div>
 
-        <div className="border-t border-[var(--color-border)] px-4 py-2 text-caption text-[var(--color-muted-foreground)]">
-          <span>&uarr;&darr; Navigate &middot; Enter select &middot; Esc close</span>
+        <div className="flex items-center justify-between border-t border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-[11.5px] text-[var(--color-muted-foreground)]">
+          <span>&uarr;&darr; navigate &middot; ⏎ open &middot; ⌘⏎ mark done</span>          <span>
+            {filtered.length} result{filtered.length === 1 ? '' : 's'}
+          </span>
         </div>
       </div>
     </div>

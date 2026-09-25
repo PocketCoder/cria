@@ -141,22 +141,30 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Cmd+Enter to save
+  // Cmd+Enter to save. Via a ref so the handler always saves the latest
+  // field values (depending on [canSave] alone saved stale state).
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        void handleSave();
+        void handleSaveRef.current();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canSave]);
+  }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <div
-        className="glass-surface flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
+        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -388,7 +396,7 @@ function ProjectDescriptionEditor({
         if (s.open && s.filteredCount > 0) {
           if (event.key === 'ArrowDown') { event.preventDefault(); updateSlash({ selectedIndex: (s.selectedIndex + 1) % s.filteredCount }); return true; }
           if (event.key === 'ArrowUp') { event.preventDefault(); updateSlash({ selectedIndex: (s.selectedIndex - 1 + s.filteredCount) % s.filteredCount }); return true; }
-          if (event.key === 'Enter') { event.preventDefault(); const ed = (view as any).editor || editor; if (ed) execSlash(s.selectedIndex, ed); return true; }
+          if (event.key === 'Enter') { event.preventDefault(); const ed = (view as unknown as { editor?: typeof editor }).editor || editor; if (ed) execSlash(s.selectedIndex, ed); return true; }
           if (event.key === 'Escape') { event.preventDefault(); updateSlash({ open: false }); return true; }
         }
         return false;

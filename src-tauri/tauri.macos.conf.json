@@ -14,8 +14,7 @@
         "decorations": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "dragDropEnabled": false,
-        "transparent": true
+        "dragDropEnabled": false
       }
     ]
   }

@@ -1,4 +1,4 @@
-// Coverage for src/sync/push.ts::taskToBody.
+// Coverage for src/sync/push/task.ts::taskToBody.
 //
 // Every quirk listed below caused a production bug at some point —
 // they're documented in CLAUDE.md's "Recent work (Deepseek V4 Pro)"

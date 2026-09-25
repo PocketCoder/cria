@@ -19,9 +19,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useUi } from '@/stores/ui';
-import { format } from 'date-fns';
-import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
-import { priorityColor } from '@/components/ui/priority-select';
 import { useProjectTasks } from '@/queries/tasks';
 import type { Project } from '@/domain/project';
 import { viewFilterParams } from '@/domain/view';
@@ -30,10 +27,9 @@ import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
 import { updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
-import { playCompletionSound } from '@/utils/sound';
 import { listSubtaskRelationsForProject } from '@/db/relations';
 import { subscribe } from '@/db/bus';
-import { Trash2, Pencil, RefreshCw, Paperclip, CheckSquare, Square, Copy, ExternalLink, Check, CheckCircle2 } from 'lucide-react';
+import { Trash2, Pencil, Copy, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -50,8 +46,8 @@ import {
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { LabelChips } from './LabelChips';
 import { TaskHoverPreview } from './TaskHoverPreview';
+import { TaskRowCore, countChecklistItems } from './TaskRowCore';
 
 // Collect a task and all its descendants from the task tree
 function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {
@@ -439,18 +435,6 @@ const TreeBranch = memo(function TreeBranch({
   );
 });
 
-/* ─── Checklist progress from description HTML ─── */
-
-function countChecklistItems(html: string | null | undefined): { checked: number; total: number } {
-  if (!html) return { checked: 0, total: 0 };
-  const inputs = html.match(/<input\s[^>]*?type="checkbox"[^>]*?>/gi) ?? [];
-  let checked = 0;
-  for (const input of inputs) {
-    if (/\bchecked\s*[= >]/i.test(input)) checked++;
-  }
-  return { checked, total: inputs.length };
-}
-
 /* ─── Task row ─── */
 const TaskRow = memo(function TaskRow({
   task,
@@ -478,22 +462,6 @@ const TaskRow = memo(function TaskRow({
     () => countChecklistItems(task.description),
     [task.description],
   );
-  const dueLabel = useMemo(
-    () => (task.dueDate ? formatDate(task.dueDate) : null),
-    [task.dueDate],
-  );
-
-  const handleToggle = useCallback(async () => {
-    const nowDone = !task.done;
-    try {
-      await updateTask(task.localId, { done: nowDone });
-      if (nowDone) {
-        playCompletionSound();
-      }
-    } catch (err) {
-      console.error('Failed to update task:', err);
-    }
-  }, [task.localId, task.done]);
 
   const {
     attributes,
@@ -547,6 +515,12 @@ const TaskRow = memo(function TaskRow({
     }
   };
 
+  const handleOpen = () => {
+    if (editing) return;
+    if (selecting) toggleSelected(task.localId);
+    else setSelectedTask(task.localId);
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -555,49 +529,26 @@ const TaskRow = memo(function TaskRow({
           style={style}
           {...attributes}
           {...listeners}
-          data-task-row={task.localId}
           className={cn(
-            'group flex items-start gap-3 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-accent)]/5',
-            task.done && 'opacity-60',
-            isSelected && 'bg-[var(--color-primary)]/10',
-            !isSelected && selectedTaskId === task.localId && 'bg-[var(--color-accent)]/10',
+            'border-b border-[var(--color-border)]',
             isKeyFocused && 'ring-1 ring-inset ring-[var(--color-primary)]',
             isDragging && 'opacity-40',
             sortable && !selecting && 'cursor-grab active:cursor-grabbing',
           )}
-          onClick={() => {
-            if (editing) return;
-            if (selecting) toggleSelected(task.localId);
-            else setSelectedTask(task.localId);
-          }}
         >
-          <div className="flex w-full items-start gap-3 pr-6 py-3">
-            {selecting ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); toggleSelected(task.localId); }}
-                aria-label={isSelected ? 'Deselect' : 'Select'}
-                className={cn(
-                  'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
-                  isSelected
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                    : 'border-[var(--color-muted-foreground)]',
-                )}
-              >
-                {isSelected && <Check className="h-3 w-3" />}
-              </button>
-            ) : (
-              <input
-                type="checkbox"
-                checked={task.done}
-                onChange={handleToggle}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={task.done ? 'Done' : 'Not done'}
-                className="task-check mt-0.5"
-              />
-            )}
-            <div className="min-w-0 flex-1">
-              {editing ? (
+          <TaskRowCore
+            task={task}
+            labels={labels}
+            hasAttachments={hasAttachments}
+            checklist={checklist}
+            selecting={selecting}
+            isSelected={isSelected}
+            isOpen={!isSelected && selectedTaskId === task.localId}
+            onToggleSelect={() => toggleSelected(task.localId)}
+            onOpen={handleOpen}
+            className="py-2.5 pr-6"
+            titleSlot={
+              editing ? (
                 <input
                   type="text"
                   value={draft}
@@ -606,91 +557,39 @@ const TaskRow = memo(function TaskRow({
                   onKeyDown={handleTitleKeyDown}
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+                  className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
                 />
               ) : (
-                  <TaskHoverPreview task={task}>
-                    <p
-                      className={cn(
-                        'truncate rounded px-1 py-0.5 text-sm transition-all',
-                        task.done && 'line-through text-[var(--color-muted-foreground)]',
-                      )}
-                      onDoubleClick={handleTitleEdit}
-                      title={task.title}
-                    >
-                      {task.title}
-                    </p>
-                  </TaskHoverPreview>
-              )}
-              {(task.dueDate || task.priority > 0 || labels.length > 0 || task.percentDone > 0 || task.repeatAfter > 0 || hasAttachments || checklist.total > 0) ? (
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-[var(--color-muted-foreground)]">
-                  {task.dueDate ? (
-                    <span>Due {dueLabel}</span>
-                  ) : null}
-                  {hasAttachments ? (
-                    <Paperclip className="h-3 w-3" aria-label="Has attachments" />
-                  ) : null}
-                  {checklist.total > 0 ? (
-                    <span className="flex items-center gap-1">
-                      {checklist.checked === checklist.total ? (
-                        <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
-                      ) : (
-                        <Square className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
-                      )}
-                      <span className="tabular-nums">{checklist.checked}/{checklist.total}</span>
-                    </span>
-                  ) : null}
-                  {task.priority > 0 ? (
-                    <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
-                      {'!'.repeat(Math.min(5, task.priority))}
-                    </span>
-                  ) : null}
-                  <LabelChips labels={labels} />
-                  {task.percentDone > 0 ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--color-border)]">
-                        <span
-                          className="block h-full rounded-full bg-[var(--color-primary)] transition-all"
-                          style={{ width: `${Math.min(100, task.percentDone)}%` }}
-                        />
-                      </span>
-                      <span className="tabular-nums">{Math.round(task.percentDone)}%</span>
-                    </span>
-                  ) : null}
-                  {task.repeatAfter > 0 ? (
-                    <RefreshCw className="h-3 w-3" aria-label="Repeating" />
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-            {task.hexColor ? (
-              <span
-                aria-hidden="true"
-                className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                style={{ background: task.hexColor }}
-              />
-            ) : null}
-            {/* Hover actions. `mt-1` matches the checkbox so the icons sit on
-                the title baseline (issue #21). Pencil enters inline rename —
-                the explicit affordance now that single-click on the title
-                opens detail instead of editing (issue #20). */}
-            <div className="mt-1 flex items-center gap-1">
-              <button
-                onClick={handleTitleEdit}
-                aria-label="Rename task"
-                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={handleDelete}
-                aria-label="Delete task"
-                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
+                <TaskHoverPreview task={task} className="min-w-0 flex-1">
+                  <p
+                    className="truncate rounded px-1 py-0.5 text-sm"
+                    onDoubleClick={handleTitleEdit}
+                    title={task.title}
+                  >
+                    {task.title}
+                  </p>
+                </TaskHoverPreview>
+              )
+            }
+            actions={
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleTitleEdit}
+                  aria-label="Rename task"
+                  className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={handleDelete}
+                  aria-label="Delete task"
+                  className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            }
+          />
         </li>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -729,12 +628,3 @@ const TaskRow = memo(function TaskRow({
     </ContextMenu>
   );
 });
-
-function formatDate(iso: string): string {
-  try {
-    const base = format(toCalendarDate(iso), 'd MMM');
-    return hasTimeOfDay(iso) ? `${base}, ${formatTime(iso)}` : base;
-  } catch {
-    return iso;
-  }
-}

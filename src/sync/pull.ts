@@ -107,16 +107,32 @@ export async function pullSavedFilters(
     const rows = await db.select<{ server_id: number }[]>(
       'SELECT server_id FROM projects WHERE server_id < -1 AND deleted = 0',
     );
-    const keep: number[] = [];
+
+    const filterEntries = rows.map((r) => ({ serverId: r.server_id, filterId: -r.server_id - 1 }));
+
+    const results = await Promise.allSettled(
+      filterEntries.map(({ filterId }) =>
+        client.GET('/filters/{id}', { params: { path: { id: filterId } } })
+          .then(({ data, response }) => ({ filterId, data, response })),
+      ),
+    );
+
+    // Start from "every filter we currently know about" and only drop one
+    // on a *confirmed* 404 — a rejected request or a transient HTTP error
+    // must never count as "gone", or a single network blip during sync
+    // would prune (i.e. delete) every locally cached saved filter.
+    const keep = new Set(filterEntries.map(({ filterId }) => filterId));
     let removedStale = false;
-    for (const row of rows) {
-      const filterId = -row.server_id - 1;
-      const { data, response } = await client.GET('/filters/{id}', {
-        params: { path: { id: filterId } },
-      });
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('[pullSavedFilters] fetch rejected:', result.reason);
+        continue;
+      }
+      const { filterId, data, response } = result.value;
       if (response.status === 404) {
         console.warn(`[pullSavedFilters] filter ${filterId} gone — removing stale pseudo-project`);
-        await db.execute('DELETE FROM projects WHERE server_id = ?', [row.server_id]);
+        await exec('DELETE FROM projects WHERE server_id = ?', [-filterId - 1]);
+        keep.delete(filterId);
         removedStale = true;
         continue;
       }
@@ -125,11 +141,10 @@ export async function pullSavedFilters(
         continue;
       }
       await upsertSavedFilterFromServer(data as SavedFilterPayload);
-      keep.push(filterId);
     }
-    await pruneSavedFilters(keep);
+    await pruneSavedFilters([...keep]);
     if (removedStale) notify('projects');
-    return keep.length;
+    return keep.size;
   });
 }
 
@@ -239,7 +254,7 @@ async function upsertTaskWithRelations(
       const parsed = labelResponseSchema.safeParse(raw);
       if (parsed.success) validLabels.push(parsed.data);
     }
-    if (validLabels.length > 0) ops.push(replaceTaskLabelsFromServer(taskLocalId, validLabels));
+    ops.push(replaceTaskLabelsFromServer(taskLocalId, validLabels));
   }
   if (Array.isArray(t.assignees)) {
     const validAssignees: AssigneeResponse[] = [];
@@ -247,7 +262,7 @@ async function upsertTaskWithRelations(
       const parsed = assigneeResponseSchema.safeParse(raw);
       if (parsed.success) validAssignees.push(parsed.data);
     }
-    if (validAssignees.length > 0) ops.push(upsertTaskAssigneesFromServer(taskLocalId, validAssignees));
+    ops.push(upsertTaskAssigneesFromServer(taskLocalId, validAssignees));
   }
   if (Array.isArray(t.attachments)) {
     const validAttachments: TaskAttachmentResponse[] = [];
@@ -255,7 +270,7 @@ async function upsertTaskWithRelations(
       const parsed = taskAttachmentSchema.safeParse(raw);
       if (parsed.success) validAttachments.push(parsed.data);
     }
-    if (validAttachments.length > 0) ops.push(replaceTaskAttachmentsFromServer(taskLocalId, validAttachments));
+    ops.push(replaceTaskAttachmentsFromServer(taskLocalId, validAttachments));
   }
   if (Array.isArray(t.reminders)) {
     const validReminders: TaskReminderResponse[] = [];
@@ -263,7 +278,7 @@ async function upsertTaskWithRelations(
       const parsed = taskReminderSchema.safeParse(raw);
       if (parsed.success) validReminders.push(parsed.data);
     }
-    if (validReminders.length > 0) ops.push(replaceTaskRemindersFromServer(taskLocalId, validReminders));
+    ops.push(replaceTaskRemindersFromServer(taskLocalId, validReminders));
   }
   if (Array.isArray(t.comments)) {
     const validComments: CommentResponse[] = [];
@@ -271,7 +286,7 @@ async function upsertTaskWithRelations(
       const parsed = commentResponseSchema.safeParse(raw);
       if (parsed.success) validComments.push(parsed.data);
     }
-    if (validComments.length > 0) ops.push(replaceTaskCommentsFromServer(taskLocalId, validComments));
+    ops.push(replaceTaskCommentsFromServer(taskLocalId, validComments));
   }
   if (t.related_tasks && typeof t.related_tasks === 'object') {
     const validRelated: Record<string, RelatedTaskResponse[]> = {};
@@ -429,6 +444,7 @@ export async function pullViewsForProject(
 ): Promise<number> {
   return singleFlight(`pullViewsForProject:${projectLocalId}`, async () => {
   const allRaw = await fetchAllPages(async (page) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated schema omits page/per_page on this endpoint
     const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views',
       {
@@ -507,6 +523,7 @@ async function pullBucketsForView(
   client: ApiClient = createApiClient(),
 ): Promise<number> {
   const allRaw = await fetchAllPages(async (page) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- path missing from the generated schema
     const { data, error, response } = await (client.GET as any)(
       '/projects/{project}/views/{view}/buckets',
       {

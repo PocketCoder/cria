@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { subscribe } from '@/db/bus';
 import { initSchema, clearTables } from './_helpers';
 import {
   listSavedFilters,
@@ -67,5 +68,17 @@ describe('db/savedFilters', () => {
     await upsertSavedFilterFromServer(payload(1, 'A'));
     await pruneSavedFilters([]);
     expect(await listSavedFilters()).toEqual([]);
+  });
+
+  // AGENTS.md: sync-path upserts must never notify() (refetch loop).
+  it('sync upsert/prune are silent; user delete notifies', async () => {
+    const heard = vi.fn();
+    const unsub = subscribe('saved_filters', heard);
+    await upsertSavedFilterFromServer(payload(1, 'A'));
+    await pruneSavedFilters([1]);
+    expect(heard).not.toHaveBeenCalled();
+    await deleteSavedFilterByServerId(1);
+    expect(heard).toHaveBeenCalledTimes(1);
+    unsub();
   });
 });

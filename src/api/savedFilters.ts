@@ -1,13 +1,12 @@
 import { type ApiClient, callApi, createApiClient } from './client';
-import { upsertProjectFromServer } from '@/db/projects';
 import {
-  upsertSavedFilterFromServer,
   deleteSavedFilterByServerId,
   type SavedFilter,
   type SavedFilterPayload,
 } from '@/db/savedFilters';
-import { getDb } from '@/db';
+import { getDb, withTx } from '@/db';
 import { notify } from '@/db/bus';
+import { nanoid } from 'nanoid';
 
 export interface SavedFilterInput {
   title: string;
@@ -30,16 +29,50 @@ function toBody(input: SavedFilterInput) {
 /** Mirror the API result into saved_filters + the pseudo-project row the
  * server will report on the next GET /projects (id = -filterId - 1). */
 async function mirrorLocally(payload: SavedFilterPayload): Promise<void> {
-  await upsertSavedFilterFromServer(payload);
-  if (typeof payload.id === 'number') {
-    await upsertProjectFromServer({
-      id: -payload.id - 1,
-      title: payload.title ?? '',
-      description: payload.description ?? null,
-      updated: payload.updated ?? new Date().toISOString(),
-    });
-    notify('projects');
-  }
+  const serverId = payload.id;
+  if (typeof serverId !== 'number') return;
+  const now = new Date().toISOString();
+  await withTx(async (tx) => {
+    await tx.execute(
+      `INSERT INTO saved_filters
+         (server_id, title, description, filter_query, filter_include_nulls, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(server_id) DO UPDATE SET
+         title             = excluded.title,
+         description       = excluded.description,
+         filter_query      = excluded.filter_query,
+         filter_include_nulls = excluded.filter_include_nulls,
+         updated_at        = excluded.updated_at`,
+      [
+        serverId,
+        payload.title ?? '',
+        payload.description ?? null,
+        payload.filters?.filter ?? '',
+        payload.filters?.filter_include_nulls ? 1 : 0,
+        payload.updated ?? null,
+      ],
+    );
+    await tx.execute(
+      `INSERT INTO projects
+         (local_id, server_id, title, updated_at, synced_at, dirty, deleted)
+       VALUES (?, ?, ?, ?, ?, 0, 0)
+       ON CONFLICT(server_id) DO UPDATE SET
+         title      = excluded.title,
+         updated_at = excluded.updated_at,
+         synced_at  = excluded.synced_at,
+         dirty      = 0,
+         deleted    = 0`,
+      [
+        nanoid(),
+        -serverId - 1,
+        payload.title ?? '',
+        now,
+        now,
+      ],
+    );
+  });
+  notify('saved_filters');
+  notify('projects');
 }
 
 export async function createSavedFilter(

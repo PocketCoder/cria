@@ -11,10 +11,9 @@ import { isPageVisible, onVisibilityChange } from '@/lib/visibility';
 const INTERVAL_MS = 60_000;
 
 /**
- * Lightweight periodic pull while authenticated. Per SPEC §7.6 the
- * "light pull" cadence is 60s; M1 only refreshes the project list (tasks
- * refresh whenever the user switches projects). M2+ will fold in tasks
- * via /tasks delta filters and the outbox push loop.
+ * Periodic sync while authenticated, every 60s: drain the outbox, then pull
+ * projects, saved filters, labels, all tasks (delta-filtered), views and
+ * buckets. Each pull is followed by one notify() for its topic.
  *
  * One global timer — mount this hook once in the App.
  */
@@ -51,6 +50,7 @@ export function usePeriodicSync() {
       try {
         // Saved-filter details for pseudo-projects pulled just above.
         await pullSavedFilters();
+        notify('saved_filters');
       } catch (err) {
         throttledWarn('periodic-sync/saved-filters', '[periodic-sync] saved-filter pull failed:', err);
       }
@@ -98,7 +98,7 @@ export function usePeriodicSync() {
       if (shouldTick()) void tick();
     }, INTERVAL_MS);
 
-    // Deletion reconciliation every 15 min
+    // Deletion reconciliation every 15 min
     const RECONCILE_MS = 15 * 60 * 1000;
     const reconId = setInterval(() => {
       // reconcileDeletions throws (and aborts the delete sweep) on any HTTP

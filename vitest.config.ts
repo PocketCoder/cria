@@ -21,5 +21,15 @@ export default defineConfig({
     // Forks give each test file its own Node process and clean module
     // graph.
     pool: 'forks',
+    // `pnpm test:coverage` (CI). Scoped to the logic layers; UI components
+    // have no unit tests. Thresholds are a floor just under current numbers:
+    // raise them as coverage grows, never lower them.
+    coverage: {
+      provider: 'v8',
+      include: ['src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}/**'],
+      exclude: ['src/api/schema.ts', 'src/db/migrations/**'],
+      reporter: ['text-summary', 'html'],
+      thresholds: { lines: 70, statements: 70, functions: 80, branches: 75 },
+    },
   },
 });

@@ -42,8 +42,11 @@ function currentPrefs(): SyncedPrefs {
 /** While we apply server values to the local store, suppress the echo back. */
 let applyingRemote = false;
 /** Hydrate from the server only once per session, so a later 60s user refetch
- *  can't revert a change the user just made before it finished pushing. */
-let hydratedOnce = false;
+ *  can't revert a change the user just made before it finished pushing.
+ *  Pinned on globalThis: an HMR reset would re-hydrate and revert settings. */
+declare global {
+  var __cria_settingsHydrated__: boolean | undefined;
+}
 
 function frontendSettingsOf(user: User | null): Record<string, unknown> {
   const settings = (user?.raw as Record<string, unknown> | undefined)?.settings as
@@ -70,9 +73,9 @@ export function frontendSettingsWithCria(existing: unknown): Record<string, unkn
 
 /** Apply server-stored prefs to the local store once. No echo back to server. */
 export function maybeHydrateSyncedPrefs(user: User | null): void {
-  if (hydratedOnce || !user) return;
+  if (globalThis.__cria_settingsHydrated__ || !user) return;
   const prefs = criaPrefsOf(frontendSettingsOf(user));
-  hydratedOnce = true; // mark even if absent, so we don't re-check every refetch
+  globalThis.__cria_settingsHydrated__ = true; // mark even if absent, so we don't re-check every refetch
   if (!prefs) return;
   applyingRemote = true;
   try {

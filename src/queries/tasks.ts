@@ -98,7 +98,12 @@ export function useProjectTasks(
 
       if (isSavedFilter) {
         const saved = await getSavedFilterByServerId(-project.serverId! - 1);
-        const parsedSaved = saved ? parseFilter(saved.filterQuery) : { ast: null, hasDoneFilter: false };
+        // The saved filter's row is missing locally (not yet synced, or
+        // pruned) — show nothing rather than falling through to a null
+        // AST, which compiles to an unconstrained query and would show
+        // every task instead of respecting a filter the user can't see.
+        if (!saved) return [];
+        const parsedSaved = parseFilter(saved.filterQuery);
         const compiledSaved = compileFilterAndSort(
           parsedSaved.ast,
           saved?.filterIncludeNulls ?? false,

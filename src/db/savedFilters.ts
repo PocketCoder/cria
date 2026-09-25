@@ -1,4 +1,4 @@
-import { getDb } from './index';
+import { exec, getDb } from './index';
 import { notify } from './bus';
 
 export interface SavedFilter {
@@ -69,8 +69,8 @@ export async function upsertSavedFilterFromServer(
   payload: SavedFilterPayload,
 ): Promise<void> {
   if (typeof payload.id !== 'number') return;
-  const db = await getDb();
-  await db.execute(
+  // Sync path: silent (no notify) — the caller notifies once after the pull.
+  await exec(
     `INSERT INTO saved_filters
        (server_id, title, description, filter_query, filter_include_nulls, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -89,28 +89,24 @@ export async function upsertSavedFilterFromServer(
       payload.updated ?? null,
     ],
   );
-  notify('saved_filters');
 }
 
 export async function deleteSavedFilterByServerId(
   serverId: number,
 ): Promise<void> {
-  const db = await getDb();
-  await db.execute('DELETE FROM saved_filters WHERE server_id = ?', [serverId]);
+  await exec('DELETE FROM saved_filters WHERE server_id = ?', [serverId]);
   notify('saved_filters');
 }
 
-/** Remove rows whose server_id is not in the given set (sync reconcile). */
+/** Remove rows whose server_id is not in the given set (sync reconcile, silent). */
 export async function pruneSavedFilters(keepServerIds: number[]): Promise<void> {
-  const db = await getDb();
   if (keepServerIds.length === 0) {
-    await db.execute('DELETE FROM saved_filters');
+    await exec('DELETE FROM saved_filters');
   } else {
     const placeholders = keepServerIds.map(() => '?').join(', ');
-    await db.execute(
+    await exec(
       `DELETE FROM saved_filters WHERE server_id NOT IN (${placeholders})`,
       keepServerIds,
     );
   }
-  notify('saved_filters');
 }

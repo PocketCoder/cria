@@ -31,7 +31,6 @@ export type Topic =
 type Listener = () => void;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_busListeners__: Map<Topic, Set<Listener>> | undefined;
 }
 

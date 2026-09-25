@@ -13,24 +13,31 @@ documents how credentials and user data are protected, and the known gaps.
   `src-tauri/capabilities/default.json` to `https://**` plus localhost. TLS
   certificates are validated (no verification-bypass flags).
 - 2FA/TOTP is supported: a `412` from `/login` prompts for the code.
-- On a `401` (token expired/revoked) the client clears credentials and returns
-  to the login screen (`handleUnauthorized` in `src/api/client.ts`).
+- On a `401`, a password session first exchanges its refresh token (Vikunja's
+  `vikunja_refresh_token` cookie) for a fresh JWT and retries once
+  (`refreshSession` in `src/api/client.ts`). Only when there is nothing to
+  refresh, or the refresh fails, does the 401 count towards sign-out: three
+  consecutive ones clear credentials and return to the login screen
+  (`handleUnauthorized`).
 
 ## Auth token at rest
 
-- **macOS / iOS / Windows / Linux:** stored in the OS secret store — Keychain
+- **macOS / iOS / Windows / Linux:** the whole credential (server URL, token,
+  auth method, refresh token) is stored as one blob in the OS secret store — Keychain
   (macOS + iOS) / Credential Manager / Secret Service — via the `secure_*_token`
   Tauri commands (`src-tauri/src/secure.rs`, `keyring` crate, verified compiling
   for the host, iOS-sim and iOS-device targets). A stolen app-data-dir snapshot
   does **not** contain the token.
-- **Browser dev / tests / Android, or an iOS keychain-access failure:** the
-  token falls back to `localStorage` (`src/auth/storage.ts`); the layer probes
-  for a working store once and degrades gracefully. On iOS a real-device
-  keychain write needs a valid provisioning profile (the app has a development
-  team set); confirm on-device that the token lands in Keychain and not the
-  fallback.
-- Only the non-secret `serverUrl` / `authMethod` live in `localStorage`. The
-  password is never persisted — it exists only in form state during sign-in.
+- **Browser dev / tests / Android:** where no secret store exists, the token
+  falls back to `localStorage` (`src/auth/storage.ts`). The fallback is taken
+  **only** when the store is missing (command not registered, or the Android
+  stub). A transient keychain error (e.g. locked at launch) never falls back:
+  saving fails and an unreadable keychain reads as signed out, so the token
+  can't silently land in plaintext (`tests/unit/auth-storage.test.ts`). On iOS
+  a real-device keychain write needs a valid provisioning profile.
+- With a keychain, `localStorage` holds only a non-secret `serverUrl` /
+  `authMethod` copy. The password is never persisted; it exists only in form
+  state during sign-in.
 - Tokens are requested as `long_token` (long-lived); a leaked token is valid
   until revoked server-side.
 

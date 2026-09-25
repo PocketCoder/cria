@@ -2,9 +2,6 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDb } from '@/db';
 import { subscribe } from '@/db/bus';
-import { useOutboxCount } from '@/queries/outbox';
-import { useDeadLettersCount } from '@/queries/outboxRows';
-import { useConflictsCount } from '@/queries/conflicts';
 
 export function useLastSyncTime() {
   const queryClient = useQueryClient();
@@ -40,22 +37,4 @@ export function useLastSyncTime() {
     },
     staleTime: Infinity,
   });
-}
-
-/**
- * Combined sync health — single hook a future settings / debug page can
- * call to get all sync-related state at once.
- */
-export function useSyncHealth() {
-  const { data: lastSync } = useLastSyncTime();
-  const { data: outboxCount = 0 } = useOutboxCount();
-  const { data: deadLetterCount = 0 } = useDeadLettersCount();
-  const { data: conflictCount = 0 } = useConflictsCount();
-
-  return {
-    lastSync: lastSync ?? null,
-    outboxCount,
-    deadLetterCount,
-    conflictCount,
-  };
 }

@@ -412,7 +412,7 @@ export async function upsertTaskFromServer(
     payload.hex_color ?? null,
     payload.position ?? null,
     payload.is_favorite === true ? 1 : 0,
-    (payload as any).subscription != null ? 1 : 0,
+    (payload as { subscription?: unknown }).subscription != null ? 1 : 0,
     payload.repeat_after ?? 0,
     payload.repeat_mode ?? 0,
     payload.identifier ?? null,
@@ -555,7 +555,7 @@ export async function updateTask(
 
   await withTx(async (db) => {
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (input.title !== undefined) {
       sets.push('title = ?');

@@ -29,7 +29,15 @@ import {
   Palette,
   ChevronRight,
   ChevronDown,
+  Search,
+  Settings,
 } from 'lucide-react';
+import { useOnline } from '@/hooks/useOnline';
+import { useOutboxCount } from '@/queries/outbox';
+import { useDeadLettersCount } from '@/queries/outboxRows';
+import { useConflictsCount } from '@/queries/conflicts';
+import { useLastSyncTime } from '@/queries/syncState';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 import {
   Popover,
   PopoverTrigger,
@@ -52,29 +60,56 @@ function NavItem({
   label,
   isSelected,
   onClick,
+  count,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
   isSelected: boolean;
   onClick: () => void;
+  count?: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px]',
         'hover:bg-[var(--color-muted)]',
-        isSelected && 'bg-[var(--color-muted)] font-medium',
+        isSelected &&
+          'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]',
       )}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
+      <Icon
+        className={cn(
+          'h-3.5 w-3.5 shrink-0',
+          isSelected ? '' : 'text-[var(--color-muted-foreground)]',
+        )}
+      />
       <span className="truncate">{label}</span>
+      {count != null && (
+        <span
+          className={cn(
+            'ml-auto text-[11.5px] tabular-nums',
+            isSelected ? 'opacity-70' : 'text-[var(--color-muted-foreground)]',
+          )}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
 
-/* ──────────────────────── sidebar component ─────────────────────────── */
+/* ────────────────────────── sidebar component ─────────────────────────── */
+
+function timeAgo(d: Date): string {
+  const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
 
 /**
  * Sidebar with smart views at the top (Today / Upcoming / Labels) and
@@ -83,14 +118,32 @@ function NavItem({
  */
 export function ProjectSidebar({
   showSmartViews = true,
+  onOpenSearch,
+  onOpenSettings,
+  onOpenOutbox,
+  onOpenConflicts,
+  onDragMouseDown,
 }: {
   showSmartViews?: boolean;
+  onOpenSearch?: () => void;
+  onOpenSettings?: () => void;
+  onOpenOutbox?: () => void;
+  onOpenConflicts?: () => void;
+  onDragMouseDown?: (e: React.MouseEvent) => void;
 } = {}) {
-  const { data: projects = [], isLoading, isFetching, isError, error } =
+  const { data: projects = [], isLoading, isError, error } =
     useProjects();
   const { data: labels = [] } = useLabels();
   const activeView = useUi((s) => s.activeView);
   const setActiveView = useUi((s) => s.setActiveView);
+
+  // Sync line (sidebar footer). Priority: offline > dead letters > conflicts
+  // > draining outbox > idle.
+  const online = useOnline();
+  const { data: outboxCount = 0 } = useOutboxCount();
+  const { data: deadLetterCount = 0 } = useDeadLettersCount();
+  const { data: conflictCount = 0 } = useConflictsCount();
+  const { data: lastSync } = useLastSyncTime();
 
   const qc = useQueryClient();
   useEffect(
@@ -250,41 +303,100 @@ export function ProjectSidebar({
     }
   };
 
+  const syncLine = useMemo(() => {
+    if (!online) {
+      return {
+        dot: 'bg-[var(--color-warning)]',
+        text: outboxCount > 0 ? `Offline — ${outboxCount} saved locally` : 'Offline',
+        action: null as string | null,
+        onClick: onOpenOutbox,
+      };
+    }
+    if (deadLetterCount > 0) {
+      return {
+        dot: 'bg-[var(--color-destructive)]',
+        text: `${deadLetterCount} ${deadLetterCount === 1 ? 'change' : 'changes'} wouldn't send`,
+        action: 'Review',
+        onClick: onOpenOutbox,
+      };
+    }
+    if (conflictCount > 0) {
+      return {
+        dot: 'bg-[var(--color-destructive)]',
+        text: `${conflictCount} ${conflictCount === 1 ? 'conflict' : 'conflicts'}`,
+        action: 'Resolve',
+        onClick: onOpenConflicts,
+      };
+    }
+    if (outboxCount > 0) {
+      return {
+        dot: 'bg-[var(--color-primary)]',
+        text: `Sending ${outboxCount} ${outboxCount === 1 ? 'change' : 'changes'}…`,
+        action: null as string | null,
+        onClick: onOpenOutbox,
+      };
+    }
+    return {
+      dot: 'bg-[var(--color-success)]',
+      text: lastSync ? `All synced · ${timeAgo(lastSync)}` : 'All synced',
+      action: null as string | null,
+      onClick: undefined as (() => void) | undefined,
+    };
+  }, [online, outboxCount, deadLetterCount, conflictCount, lastSync, onOpenOutbox, onOpenConflicts]);
+
   return (
-    <aside className="glass-nav flex h-full w-full flex-col md:w-52">
-      <nav className="flex-1 overflow-y-auto px-2 pb-3">
+    <aside className="flex h-full w-[236px] shrink-0 flex-col bg-[var(--color-background)]">
+      {/* 44px traffic-light strip — the window drag region */}
+      <div
+        onMouseDown={onDragMouseDown}
+        className="flex h-11 flex-none select-none items-center gap-2 px-4"
+      >
+        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+      </div>
+
+      {/* Search → command palette */}
+      <div className="flex-none px-3 pb-3">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="flex w-full items-center gap-2 rounded-lg bg-[var(--color-muted)] px-2.5 py-1.5 text-[13px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+        >
+          <Search className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1 text-left">Search</span>
+          <span className="text-[11px] opacity-70">⌘K</span>
+        </button>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-3 pb-3">
         {/* ── Smart Views (hidden in mobile sheet — only shows projects + labels) ── */}
         {showSmartViews && (
-          <div className="mb-1">
-            <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Smart Views
-            </p>
-            <div className="space-y-0.5">
-              <NavItem
-                icon={Calendar}
-                label="Today"
-                isSelected={activeView?.kind === 'today'}
-                onClick={() => setActiveView({ kind: 'today' })}
-              />
-              <NavItem
-                icon={CalendarDays}
-                label="Upcoming"
-                isSelected={activeView?.kind === 'upcoming'}
-                onClick={() => setActiveView({ kind: 'upcoming' })}
-              />
-              <NavItem
-                icon={Star}
-                label="Favorites"
-                isSelected={activeView?.kind === 'favorites'}
-                onClick={() => setActiveView({ kind: 'favorites' })}
-              />
-              <NavItem
-                icon={Inbox}
-                label="Inbox"
-                isSelected={activeView?.kind === 'inbox'}
-                onClick={() => setActiveView({ kind: 'inbox' })}
-              />
-            </div>
+          <div className="flex flex-col gap-1">
+            <NavItem
+              icon={Calendar}
+              label="Today"
+              isSelected={activeView?.kind === 'today'}
+              onClick={() => setActiveView({ kind: 'today' })}
+            />
+            <NavItem
+              icon={CalendarDays}
+              label="Upcoming"
+              isSelected={activeView?.kind === 'upcoming'}
+              onClick={() => setActiveView({ kind: 'upcoming' })}
+            />
+            <NavItem
+              icon={Inbox}
+              label="Inbox"
+              isSelected={activeView?.kind === 'inbox'}
+              onClick={() => setActiveView({ kind: 'inbox' })}
+            />
+            <NavItem
+              icon={Star}
+              label="Favorites"
+              isSelected={activeView?.kind === 'favorites'}
+              onClick={() => setActiveView({ kind: 'favorites' })}
+            />
           </div>
         )}
 
@@ -293,7 +405,7 @@ export function ProjectSidebar({
         {showSmartViews && (
           <div className="mb-1">
             <div className="flex items-center justify-between pr-1">
-              <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              <p className="px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
                 Filters
               </p>
               <button
@@ -310,7 +422,6 @@ export function ProjectSidebar({
                 const pseudo = projects.find(
                   (p) => p.serverId === -f.serverId - 1,
                 );
-                if (!pseudo) return null;
                 return (
                   <ContextMenu key={f.serverId}>
                     <ContextMenuTrigger asChild>
@@ -319,12 +430,14 @@ export function ProjectSidebar({
                           icon={ListFilter}
                           label={f.title}
                           isSelected={
+                            !!pseudo &&
                             activeView?.kind === 'project' &&
                             activeView.localId === pseudo.localId
                           }
-                          onClick={() =>
-                            setActiveView({ kind: 'project', localId: pseudo.localId })
-                          }
+                          onClick={() => {
+                            if (!pseudo) return;
+                            setActiveView({ kind: 'project', localId: pseudo.localId });
+                          }}
                         />
                       </div>
                     </ContextMenuTrigger>
@@ -355,7 +468,7 @@ export function ProjectSidebar({
 
         {/* ── Labels ── */}
         <div className="mb-1">
-          <p className="px-2 pb-1 pt-3 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <p className="px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
             Labels
           </p>
           <div className="space-y-0.5">
@@ -449,20 +562,53 @@ export function ProjectSidebar({
         <div className="my-2 border-t border-[var(--color-border)]" />
 
         {/* ── Projects ── */}
-        <div>
-          <header className="flex items-center justify-between px-2 pb-1 pt-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-            <span>Projects</span>
-            {isFetching ? (
-              <span aria-live="polite">syncing…</span>
-            ) : null}
+        <div className="mt-2">
+          <header className="flex items-center justify-between pr-1">
+            <p className="px-2.5 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+              Projects
+            </p>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              aria-label="New project"
+              className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+            </button>
           </header>
 
+          {creating ? (
+            <input
+              type="text"
+              autoFocus
+              value={newTitle}
+              disabled={busy}
+              onChange={(e) => setNewTitle(e.target.value)}
+              onBlur={() => void handleCreate()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleCreate();
+                } else if (e.key === 'Escape') {
+                  setCreating(false);
+                  setNewTitle('');
+                }
+              }}
+              placeholder="New project name…"
+              className="mx-2.5 mb-1 w-[calc(100%-1.25rem)] rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+            />
+          ) : null}
+
           {isLoading && projects.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-[var(--color-muted-foreground)]">
+            <p className="px-2.5 py-1 text-xs text-[var(--color-muted-foreground)]">
               Loading…
             </p>
           ) : projects.length === 0 && !creating ? (
-            <p className="px-2 py-1 text-xs text-[var(--color-muted-foreground)]">
+            <p className="px-2.5 py-1 text-xs text-[var(--color-muted-foreground)]">
               No projects yet.
             </p>
           ) : (
@@ -541,41 +687,41 @@ export function ProjectSidebar({
         </div>
       </nav>
 
-      <footer className="border-t border-[var(--color-border)] bg-[var(--color-muted)]/50 px-2 py-2">
-        {creating ? (
-          <input
-            type="text"
-            autoFocus
-            value={newTitle}
-            disabled={busy}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onBlur={() => void handleCreate()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void handleCreate();
-              } else if (e.key === 'Escape') {
-                setCreating(false);
-                setNewTitle('');
-              }
-            }}
-            placeholder="New project name…"
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-          >
-            {busy ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
+      <footer className="flex-none border-t border-[var(--color-border)] px-3 pb-2.5 pt-2">
+        <button
+          type="button"
+          onClick={syncLine.onClick}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11.5px] text-[var(--color-muted-foreground)]',
+            syncLine.onClick && 'hover:bg-[var(--color-muted)]',
+          )}
+        >
+          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', syncLine.dot)} />
+          <span className="truncate">{syncLine.text}</span>
+          {syncLine.action && (
+            <span className="ml-auto font-medium text-[var(--color-primary)]">
+              {syncLine.action}
+            </span>
+          )}
+        </button>
+        <div className="mt-0.5 flex items-center justify-between pr-0.5">
+          <span className="text-[10.5px] text-[var(--color-muted-foreground)]">
+            Cria
+          </span>
+          <div className="flex items-center gap-0.5">
+            <NotificationBell />
+            {onOpenSettings && (
+              <button
+                type="button"
+                aria-label="Settings"
+                onClick={onOpenSettings}
+                className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
             )}
-            New project
-          </button>
-        )}
+          </div>
+        </div>
       </footer>
 
       {filterModal && (
@@ -714,9 +860,9 @@ function ProjectRow({
               type="button"
               onClick={onSelect}
               className={cn(
-                'flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 pr-8 text-left text-sm',
+                'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
                 'hover:bg-[var(--color-muted)]',
-                isSelected && 'bg-[var(--color-muted)] font-medium',
+                isSelected && 'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]',
               )}
             >
               <span
@@ -728,11 +874,21 @@ function ProjectRow({
               />
               <span className="truncate">{project.title}</span>
               {project.isArchived ? (
-                <span className="ml-auto text-footnote uppercase text-[var(--color-muted-foreground)]">
+                <span
+                  className={cn(
+                    'ml-auto text-footnote uppercase',
+                    isSelected ? 'opacity-70' : 'text-[var(--color-muted-foreground)]',
+                  )}
+                >
                   archived
                 </span>
               ) : taskCount > 0 ? (
-                <span className="ml-auto text-footnote text-[var(--color-muted-foreground)]">
+                <span
+                  className={cn(
+                    'ml-auto text-footnote',
+                    isSelected ? 'opacity-70' : 'text-[var(--color-muted-foreground)]',
+                  )}
+                >
                   {taskCount}
                 </span>
               ) : null}
@@ -950,9 +1106,9 @@ function LabelRow({
             type="button"
             onClick={onSelect}
             className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
+              'flex w-full items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
               'hover:bg-[var(--color-muted)]',
-              isSelected && 'bg-[var(--color-muted)] font-medium',
+              isSelected && 'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]',
             )}
           >
             <span

@@ -164,7 +164,7 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">General</h3>
       {feedback && (
-        <p className={`mb-2 text-xs ${feedback.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+        <p className={`mb-2 text-xs ${feedback.type === 'success' ? 'text-[var(--color-success)]' : 'text-[var(--color-destructive)]'}`}>
           {feedback.message}
         </p>
       )}

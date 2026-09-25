@@ -31,7 +31,6 @@ interface ResilienceState {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __cria_resilience__: ResilienceState | undefined;
 }
 

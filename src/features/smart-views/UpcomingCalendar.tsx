@@ -68,16 +68,16 @@ export function UpcomingCalendar({
         </span>
         <span
           className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-full text-sm',
+            'flex h-[34px] w-[34px] items-center justify-center rounded-[11px] text-sm',
             isToday && 'bg-[var(--color-primary)] font-semibold text-white',
-            !isToday && isSel && 'ring-1 ring-[var(--color-primary)] text-[var(--color-primary)]',
+            !isToday && isSel && 'bg-[var(--color-muted)] font-semibold text-[var(--color-primary)]',
             !isToday && !isSel && 'text-[var(--color-foreground)]',
           )}
         >
           {format(d, 'd')}
         </span>
         <span
-          className={cn('h-1 w-1 rounded-full', has ? 'bg-[var(--color-muted-foreground)]' : 'bg-transparent')}
+          className={cn('h-1 w-1 rounded-full', has ? 'bg-[var(--color-primary)]' : 'bg-transparent')}
           aria-hidden
         />
       </button>
@@ -161,8 +161,8 @@ export function UpcomingCalendar({
               weekdays: 'flex justify-between',
               weekday: 'flex-1 text-footnote font-medium text-[var(--color-muted-foreground)] uppercase',
               week: 'flex w-full justify-between mt-1',
-              day: 'relative h-9 flex-1 text-center text-sm',
-              day_button: 'mx-auto inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-[var(--color-muted)] focus:outline-none',
+              day: 'relative h-[34px] flex-1 text-center text-sm',
+              day_button: 'mx-auto inline-flex h-[34px] w-[34px] items-center justify-center rounded-[11px] hover:bg-[var(--color-muted)] focus:outline-none',
               today: '[&_button]:font-semibold [&_button]:text-[var(--color-primary)]',
               selected: '[&_button]:bg-[var(--color-primary)] [&_button]:text-white [&_button:hover]:bg-[var(--color-primary)]',
               outside: 'opacity-40',

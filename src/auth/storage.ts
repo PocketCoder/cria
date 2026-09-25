@@ -13,10 +13,11 @@
  * attacker couldn't otherwise obtain, and it never touches localStorage when a
  * keychain is available.
  *
- * Where the native commands aren't present or the store errors — the
- * browser-only dev server, tests, Android — credentials fall back to
- * localStorage (token in `cria:token/v1`, meta in `cria:credentials/v2`). We
- * probe the secure store once and cache the result.
+ * Where the native commands aren't present — the browser-only dev server,
+ * tests, Android — credentials fall back to localStorage (token in
+ * `cria:token/v1`, meta in `cria:credentials/v2`). We probe the secure store
+ * once and cache the result. A transient keychain error is *not* cached and
+ * never triggers the fallback (see hasSecureStore).
  *
  * Migration: the old single blob (`cria:credentials/v1`) and the previous split
  * layout (bare token in the keychain + meta in localStorage) are both upgraded
@@ -58,7 +59,7 @@ async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promis
 }
 
 /** Whether the OS-keychain commands exist + work. Probed once. */
-async function useSecureStore(): Promise<boolean> {
+async function hasSecureStore(): Promise<boolean> {
   if (secureAvailable !== null) return secureAvailable;
   if (!isTauri) {
     secureAvailable = false;
@@ -67,11 +68,23 @@ async function useSecureStore(): Promise<boolean> {
   try {
     await invokeCmd<string | null>('secure_get_token');
     secureAvailable = true;
-  } catch {
-    // Command absent or store unreachable → use localStorage.
+  } catch (err) {
+    if (!isStoreMissing(err)) {
+      // Transient keychain error (e.g. locked at launch). Don't cache, and
+      // don't fall back: a fallback here would write the token to plaintext
+      // localStorage for the rest of the session. Callers surface the error.
+      return true;
+    }
     secureAvailable = false;
   }
   return secureAvailable;
+}
+
+/** True when the platform has no secure store at all (command not
+ *  registered, or the Android stub in secure.rs) — the only case where the
+ *  localStorage fallback is allowed. */
+export function isStoreMissing(err: unknown): boolean {
+  return /not found|unavailable on this platform/i.test(String(err));
 }
 
 /* ── Raw accessors for the single keychain slot ─────────────────────────── */
@@ -169,8 +182,16 @@ async function migrateLegacy(): Promise<void> {
 export async function loadCredentials(): Promise<Credentials | null> {
   await migrateLegacy();
 
-  if (await useSecureStore()) {
-    const raw = await readSecureRaw();
+  if (await hasSecureStore()) {
+    let raw: string | null;
+    try {
+      raw = await readSecureRaw();
+    } catch (err) {
+      // Keychain present but unreadable right now: treat as signed out
+      // rather than leaving hydrate() hanging; signing in rewrites the slot.
+      console.warn('[auth] keychain read failed:', err);
+      return null;
+    }
     const creds = parseCreds(raw);
     if (creds) return creds;
     // Legacy split layout: the keychain held only a bare token. Combine with
@@ -202,7 +223,7 @@ export async function loadCredentials(): Promise<Credentials | null> {
 }
 
 export async function saveCredentials(creds: Credentials): Promise<void> {
-  if (await useSecureStore()) {
+  if (await hasSecureStore()) {
     // Everything in the keychain. Keep a non-secret meta copy in localStorage
     // (harmless cache), but never the token, and scrub any stale fallback tokens.
     await writeSecureRaw(JSON.stringify(creds));
@@ -227,5 +248,5 @@ export async function clearCredentials(): Promise<void> {
     localStorage.removeItem(TOKEN_FALLBACK_KEY);
     localStorage.removeItem(REFRESH_FALLBACK_KEY);
   }
-  if (await useSecureStore()) await clearSecureRaw();
+  if (await hasSecureStore()) await clearSecureRaw();
 }

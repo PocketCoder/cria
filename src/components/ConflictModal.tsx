@@ -6,7 +6,7 @@ import {
   resolveConflictUseTheirs,
   diffConflict,
 } from '@/db/conflicts';
-import { AlertTriangle, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface ConflictModalProps {
   onClose: () => void;
@@ -23,17 +23,15 @@ interface ConflictRow {
 }
 
 /**
- * Per-conflict resolution UI. Renders a field-by-field diff of the
- * fields the sync layer flagged as divergent, with two top-level
- * actions:
+ * Conflict resolution. Two plain-language option cards per conflict — yours
+ * and the server's, each summarising the differing fields on one line — with
+ * an all-or-nothing choice:
  *
- *   - Keep my version  — clears the conflict, outbox push wins
- *   - Use server's     — overwrites local from the remote snapshot
- *                        and drops the pending outbox entry
+ *   - Keep mine     — clears the conflict, outbox push wins
+ *   - Keep server's — overwrites local from the remote snapshot
  *
- * Per-field merge ("keep this one, take that one") is a larger M3
- * follow-up; for now the all-or-nothing choice plus a clear diff is
- * enough to unstick people.
+ * No field-by-field diff; the one-line summary plus the choice is enough to
+ * unstick people. Per-field merge is a larger follow-up.
  */
 export function ConflictModal({ onClose }: ConflictModalProps) {
   const { data: conflicts = [], isLoading, isError } = useConflicts() as {
@@ -60,49 +58,39 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="glass-surface flex max-h-[80vh] w-11/12 max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
+        className="flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--color-border)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-[var(--color-warning)]" />
-            <h2 className="text-sm font-semibold">
-              Conflicts
-              {conflicts.length > 0 ? (
-                <span className="ml-1 text-[var(--color-muted-foreground)]">
-                  ({conflicts.length})
-                </span>
-              ) : null}
-            </h2>
-          </div>
+        <div className="flex items-start justify-between gap-3 px-5 pt-4">
+          <h2 className="text-[17px] font-semibold tracking-[-0.02em]">
+            {conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            className="-mr-1 shrink-0 rounded-md p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
-        </header>
+        </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-2">
           {isLoading ? (
-            <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
-              Loading…
-            </p>
+            <p className="py-6 text-sm text-[var(--color-muted-foreground)]">Loading…</p>
           ) : isError ? (
-            <p className="p-6 text-sm text-[var(--color-destructive)]">
-              Failed to load conflicts.
-            </p>
+            <p className="py-6 text-sm text-[var(--color-destructive)]">Failed to load conflicts.</p>
           ) : conflicts.length === 0 ? (
-            <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
-              No conflicts. Your local edits are in sync with the server.
+            <p className="py-6 text-sm text-[var(--color-muted-foreground)]">
+              Nothing to resolve — your local edits are in sync.
             </p>
           ) : (
-            <ul className="divide-y divide-[var(--color-border)]">
+            <ul className="flex flex-col gap-6">
               {conflicts.map((c) => (
                 <ConflictItem
                   key={c.id}
@@ -118,6 +106,15 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
       </div>
     </div>
   );
+}
+
+function snapshotTitle(json: string): string | null {
+  try {
+    const t = (JSON.parse(json) as { title?: unknown }).title;
+    return typeof t === 'string' && t.trim() ? t : null;
+  } catch {
+    return null;
+  }
 }
 
 function ConflictItem({
@@ -137,75 +134,61 @@ function ConflictItem({
     conflict.local_snapshot,
     conflict.remote_snapshot,
   );
+  const title = snapshotTitle(conflict.local_snapshot);
+  const mine = diffs.map((d) => d.local).join(' · ') || 'No changes recorded';
+  const theirs = diffs.map((d) => d.remote).join(' · ') || 'No changes recorded';
   let detected = conflict.detected_at;
   try {
     detected = formatDateTime(conflict.detected_at);
   } catch {
-    // keep the raw ISO if it doesn't parse
+    // keep raw ISO
   }
 
   return (
-    <li className="space-y-3 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
-            {conflict.entity_type}
+    <li>
+      <p className="mb-4 text-[13.5px] leading-relaxed text-[var(--color-muted-foreground)]">
+        You edited{' '}
+        {title ? (
+          <strong className="font-semibold text-[var(--color-foreground)]">{title}</strong>
+        ) : (
+          'this task'
+        )}{' '}
+        offline while the server also changed it. Keep one.
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <div className="rounded-xl border-[1.5px] border-[var(--color-primary)] px-4 py-3">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--color-primary)]">
+            Yours · edited {detected}
           </p>
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            Detected {detected}
-          </p>
+          <p className="text-sm">{mine}</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onKeepMine}
-            disabled={busy}
-            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-xs hover:bg-[var(--color-muted)] disabled:opacity-50"
-          >
-            {busy ? 'Working…' : 'Keep my version'}
-          </button>
-          <button
-            type="button"
-            onClick={onUseTheirs}
-            disabled={busy}
-            className="rounded-md bg-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? 'Working…' : "Use server's"}
-          </button>
+        <div className="rounded-xl border border-[var(--color-border)] px-4 py-3">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+            Server
+          </p>
+          <p className="text-sm">{theirs}</p>
         </div>
       </div>
 
-      {diffs.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]">
-          No field-level diff recorded.
-        </p>
-      ) : (
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-footnote uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              <th className="w-[28%] py-1 pr-2 text-left font-medium">Field</th>
-              <th className="w-[36%] py-1 pr-2 text-left font-medium">
-                My version
-              </th>
-              <th className="w-[36%] py-1 text-left font-medium">
-                Server's version
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {diffs.map((d) => (
-              <tr
-                key={d.field}
-                className="align-top border-t border-[var(--color-border)]/60"
-              >
-                <td className="py-1.5 pr-2 font-medium">{d.label}</td>
-                <td className="py-1.5 pr-2 break-words">{d.local}</td>
-                <td className="py-1.5 break-words">{d.remote}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onKeepMine}
+          disabled={busy}
+          className="flex-1 rounded-lg bg-[var(--color-inverse)] px-3 py-2.5 text-[13.5px] font-medium text-[var(--color-inverse-foreground)] disabled:opacity-50"
+        >
+          {busy ? 'Working…' : 'Keep mine'}
+        </button>
+        <button
+          type="button"
+          onClick={onUseTheirs}
+          disabled={busy}
+          className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5 text-[13.5px] font-medium disabled:opacity-50"
+        >
+          {busy ? 'Working…' : "Keep server's"}
+        </button>
+      </div>
     </li>
   );
 }

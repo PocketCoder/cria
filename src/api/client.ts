@@ -110,7 +110,11 @@ function passwordRefreshToken(): string | null {
   return c.authMethod === 'password' && c.refreshToken ? c.refreshToken : null;
 }
 
-let refreshInFlight: Promise<string | null> | null = null;
+// Pinned on globalThis so an HMR reload can't orphan an in-flight refresh
+// and fire a second one with the already-rotated refresh token.
+declare global {
+  var __cria_refreshInFlight__: Promise<string | null> | null | undefined;
+}
 
 /**
  * Exchange the stored refresh token for a fresh JWT and persist it. Concurrent
@@ -119,12 +123,12 @@ let refreshInFlight: Promise<string | null> | null = null;
  * or the refresh failed (in which case the session is genuinely dead).
  */
 export function refreshSession(): Promise<string | null> {
-  if (!refreshInFlight) {
-    refreshInFlight = doRefresh().finally(() => {
-      refreshInFlight = null;
+  if (!globalThis.__cria_refreshInFlight__) {
+    globalThis.__cria_refreshInFlight__ = doRefresh().finally(() => {
+      globalThis.__cria_refreshInFlight__ = null;
     });
   }
-  return refreshInFlight;
+  return globalThis.__cria_refreshInFlight__;
 }
 
 async function doRefresh(): Promise<string | null> {
@@ -149,7 +153,7 @@ async function doRefresh(): Promise<string | null> {
   }
   if (!res.ok) return null;
 
-  let body: { token?: string } | null = null;
+  let body: { token?: string };
   try {
     body = (await res.json()) as { token?: string };
   } catch {
@@ -279,18 +283,19 @@ async function fetchOnce(
 /** Refuse to send a Bearer token to a non-https, non-loopback origin. */
 function guardTokenDestination(baseUrl: string, token: string): void {
   if (!token) return;
+  let u: URL;
   try {
-    const u = new URL(baseUrl);
-    if (u.protocol !== 'https:') {
-      const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
-      if (!loopbacks.includes(u.hostname)) {
-        throw new Error(
-          `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
-        );
-      }
+    u = new URL(baseUrl);
+  } catch {
+    throw new Error(`Refusing to send credentials to an unparseable URL: ${baseUrl}`);
+  }
+  if (u.protocol !== 'https:') {
+    const loopbacks = ['localhost', '127.0.0.1', '[::1]'];
+    if (!loopbacks.includes(u.hostname)) {
+      throw new Error(
+        `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
+      );
     }
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith('Refusing')) throw err;
   }
 }
 

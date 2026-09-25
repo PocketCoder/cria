@@ -594,7 +594,7 @@ function Cell({
         </span>
       );
     case 'priority':
-      return task.priority > 0 ? (
+      return task.priority > 2 ? (
         <span aria-label={`Priority ${task.priority}`} style={{ color: priorityColor(task.priority) }}>
           {'!'.repeat(Math.min(5, task.priority))}
         </span>
