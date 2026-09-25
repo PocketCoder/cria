@@ -588,7 +588,9 @@ export function Shell() {
           </main>
         </div>
 
-        {/* Inspector — permanent right-hand column on desktop. */}
+        {/* Inspector — permanent right-hand column on desktop. This and the
+            mobile mount below are the only TaskDetail instances: a second
+            one would double-register every task shortcut. */}
         {!isMobile && <TaskDetail />}
       </div>
 
@@ -684,6 +686,11 @@ export function Shell() {
           </div>
         </div>
       )}
+
+      {/* Inspector on mobile: a fixed bottom sheet, mounted after the search
+          overlay so it stacks above it (both are z-50). Desktop mounts it as
+          the right-hand column above; exactly one instance either way. */}
+      {isMobile && <TaskDetail />}
 
       {/* Floating action button — ink-filled circle anchored above the tab
           bar. Mobile only; hidden while a full-screen overlay (task detail,

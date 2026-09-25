@@ -32,7 +32,6 @@ import {
   type DisplayCtx,
   type ViewKey,
 } from '@/lib/displayConfig';
-import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import {
@@ -219,7 +218,6 @@ function SmartView({
           )}
           </PullToRefresh>
         </section>
-        <TaskDetail />
       </div>
     </>
   );
