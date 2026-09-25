@@ -65,7 +65,8 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
 | **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅ |
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
-| Ledger redesign (tokens, shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased; reference in `design_handoff_ledger/` |
+| Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased |
+| Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ on `dev`, unreleased; tokens + motion in `src/styles/globals.css` |
 
 **Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
