@@ -52,8 +52,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-nightly-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
+            ${{ runner.os }}-cargo-nightly-${{ matrix.target }}-
             ${{ runner.os }}-cargo-${{ matrix.target }}-
       - run: pnpm install --frozen-lockfile
       - name: Switch config to nightly channel
@@ -70,9 +71,10 @@ jobs:
           arch="${{ matrix.target }}"; arch="${arch%%-*}"
           B="src-tauri/target/${{ matrix.target }}/release/bundle"
           mkdir -p out
-          cp "$B"/dmg/*.dmg                   "out/Cria-Nightly_${arch}.dmg"
-          cp "$B"/macos/*.app.tar.gz          "out/Cria-Nightly_${arch}.app.tar.gz"
-          cp "$B"/macos/*.app.tar.gz.sig      "out/Cria-Nightly_${arch}.app.tar.gz.sig"
+          # Exact names: the cargo cache can carry stable Cria bundles too.
+          cp "$B"/dmg/"Cria (Nightly)_"*.dmg                 "out/Cria-Nightly_${arch}.dmg"
+          cp "$B/macos/Cria (Nightly).app.tar.gz"            "out/Cria-Nightly_${arch}.app.tar.gz"
+          cp "$B/macos/Cria (Nightly).app.tar.gz.sig"        "out/Cria-Nightly_${arch}.app.tar.gz.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: nightly-${{ matrix.target }}
