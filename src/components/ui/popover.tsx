@@ -21,8 +21,8 @@ export const PopoverContent = forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-[var(--color-card-foreground)] shadow-md outline-none',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+        'z-50 rounded-md border border-[var(--color-border)] bg-[var(--glass-bg)] p-2 text-[var(--color-card-foreground)] shadow-md outline-none backdrop-blur-[var(--glass-blur)]',
+        'pop-in origin-[var(--radix-popover-content-transform-origin)]',
         className,
       )}
       {...props}

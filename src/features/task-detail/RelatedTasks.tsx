@@ -111,7 +111,7 @@ export function RelatedTasks({
   return (
     <section className="mb-4">
       {hideHeader ? null : (
-        <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+        <h3 className="mb-1 flex items-center gap-1 group-label text-[var(--color-muted-foreground)]">
           <Link2 className="h-3 w-3" />
           Related tasks
           {relations.length > 0 ? (

@@ -134,7 +134,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -193,7 +193,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
 
           {rows.length > 0 && (
             <section>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              <h3 className="mb-2 group-label text-[var(--color-muted-foreground)]">
                 Queued ({rows.length})
               </h3>
               <p className="mb-3 text-xs text-[var(--color-muted-foreground)]">
@@ -220,7 +220,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
           {deadRows.length > 0 && (
             <section className={cn(rows.length > 0 && 'mt-6')}>
               <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-warning)]">
+                <h3 className="group-label text-[var(--color-warning)]">
                   Failed to sync ({deadRows.length})
                 </h3>
                 <div className="flex items-center gap-3">

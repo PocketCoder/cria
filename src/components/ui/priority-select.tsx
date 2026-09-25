@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Flag } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { indicatorStyle, useSegmentIndicator } from '@/components/ui/segmented-control';
 
-/* Vikunja priority scale (0–5) with an ink-on-paper ramp: 0–2 carry no
-   colour at all (the ledger renders nothing for them); High is the warm
-   warning hue, Urgent a burnt orange, Critical the destructive red.
+/* Vikunja priority scale (0–5): sky, meadow, marigold, orange, coral.
    `color` drives both the selected-segment fill and the unselected glyph
-   tint. */
+   tint. Rows only surface priorities 3–5. */
 export interface PriorityMeta {
   value: number;
   label: string;
@@ -16,9 +15,9 @@ export interface PriorityMeta {
 
 export const PRIORITY_META: readonly PriorityMeta[] = [
   { value: 0, label: 'None', color: 'transparent' },
-  { value: 1, label: 'Low', color: 'transparent' },
-  { value: 2, label: 'Medium', color: 'transparent' },
   // Tokens (not literals) so the ramp lifts in dark — see --prio-* in globals.css.
+  { value: 1, label: 'Low', color: 'var(--prio-low)' },
+  { value: 2, label: 'Medium', color: 'var(--prio-medium)' },
   { value: 3, label: 'High', color: 'var(--prio-high)' },
   { value: 4, label: 'Urgent', color: 'var(--prio-urgent)' },
   { value: 5, label: 'Critical', color: 'var(--prio-critical)' },
@@ -114,9 +113,9 @@ function PriorityPill({
   );
 }
 
-/* Segmented button group for picking a task priority. Each segment fills
-   with its priority colour when selected; unselected segments tint their
-   glyph and lift on hover. Behaves as an ARIA radiogroup. */
+/* Segmented button group for picking a task priority. One indicator slides
+   between the six equal-width segments and cross-fades to the priority
+   colour; the newly selected flag wiggles. Behaves as an ARIA radiogroup. */
 export function PrioritySelect({
   value,
   onChange,
@@ -128,66 +127,94 @@ export function PrioritySelect({
     return <PriorityPill value={value} onChange={onChange} className={className} />;
   }
   return (
+    <PrioritySegmented value={value} onChange={onChange} className={className} compact={compact} />
+  );
+}
+
+function PrioritySegmented({
+  value,
+  onChange,
+  className,
+  compact,
+}: Pick<PrioritySelectProps, 'value' | 'onChange' | 'className' | 'compact'>) {
+  const ref = useRef<HTMLDivElement>(null);
+  const index = Math.max(0, PRIORITY_META.findIndex((m) => m.value === value));
+  const box = useSegmentIndicator(ref, index, [compact]);
+  const [moved, setMoved] = useState(false);
+  const current = PRIORITY_META[index]!;
+  return (
     <div
+      ref={ref}
       role="radiogroup"
       aria-label="Priority"
       className={cn(
-        'inline-flex w-full items-stretch gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] p-0.5',
+        'relative inline-flex w-full items-stretch gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] p-0.5',
         className,
       )}
     >
+      {box ? (
+        <span
+          aria-hidden="true"
+          className="absolute rounded-[5px] shadow-sm"
+          style={{
+            ...indicatorStyle(box, moved, 'background-color var(--duration-slide) ease'),
+            backgroundColor: current.value === 0 ? 'var(--color-card)' : current.color,
+          }}
+        />
+      ) : null}
       {PRIORITY_META.map((meta) => {
         const selected = value === meta.value;
         const isNone = meta.value === 0;
         return (
           <button
             key={meta.value}
+            data-seg=""
             type="button"
             role="radio"
             aria-checked={selected}
             aria-label={meta.label}
             title={meta.label}
-            onClick={() => onChange(meta.value)}
-            style={
-              selected
-                ? { backgroundColor: meta.color }
-                : compact && !isNone
-                  ? { color: meta.color }
-                  : undefined
-            }
+            onClick={() => {
+              setMoved(true);
+              onChange(meta.value);
+            }}
+            style={!selected && !isNone ? { color: meta.color } : undefined}
             className={cn(
-              'flex items-center justify-center gap-1 rounded-[5px] font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
+              'relative z-[1] flex min-w-0 flex-[1_1_0] items-center justify-center gap-1 overflow-hidden rounded-[5px] font-medium transition-colors duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
               compact ? 'px-1.5 py-0.5 text-footnote' : 'px-1 py-1 text-caption',
-              compact || !selected ? 'min-w-0 flex-1' : 'shrink-0',
               selected
-                ? 'text-white shadow-sm'
-                : compact
-                  ? 'hover:bg-[var(--color-card)]'
-                  : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-card)]',
+                ? isNone
+                  ? 'text-[var(--color-foreground)]'
+                  : 'text-white'
+                : isNone
+                  ? 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-card)]'
+                  : 'hover:bg-[var(--color-card)]',
             )}
           >
             {isNone ? (
-
-              <span
-                className={cn(
-                  'leading-none',
-                  !selected && 'text-[var(--color-muted-foreground)]',
-                )}
-              >
-                {selected ? 'None' : '–'}
-              </span>
+              <span className="leading-none">{selected ? 'None' : '–'}</span>
             ) : compact ? (
-
               <span className="leading-none tabular-nums">{meta.value}</span>
             ) : (
-
               <>
                 <Flag
-                  className="h-3 w-3 shrink-0"
-                  style={selected ? undefined : { color: meta.color }}
+                  key={selected ? 'on' : 'off'}
+                  className={cn(
+                    'h-3 w-3 shrink-0 origin-[30%_90%]',
+                    selected && moved && 'animate-[cria-wiggle_520ms_ease]',
+                  )}
                   fill={selected ? 'currentColor' : 'none'}
                 />
-                {selected && <span className="whitespace-nowrap leading-none">{meta.label}</span>}
+                {selected && (
+                  <span
+                    className={cn(
+                      'truncate leading-none',
+                      moved && 'animate-[fade-in_220ms_ease]',
+                    )}
+                  >
+                    {meta.label}
+                  </span>
+                )}
               </>
             )}
           </button>

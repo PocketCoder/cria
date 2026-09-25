@@ -57,7 +57,7 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -158,13 +158,13 @@ function ConflictItem({
 
       <div className="flex flex-col gap-2">
         <div className="rounded-xl border-[1.5px] border-[var(--color-primary)] px-4 py-3">
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--color-primary)]">
+          <p className="mb-1 group-label text-[var(--color-primary)]">
             Yours · edited {detected}
           </p>
           <p className="text-sm">{mine}</p>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] px-4 py-3">
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+          <p className="mb-1 group-label text-[var(--color-muted-foreground)]">
             Server
           </p>
           <p className="text-sm">{theirs}</p>

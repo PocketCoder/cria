@@ -71,7 +71,7 @@ export function ViewFilterButton({ view }: { view: ProjectView }) {
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+        <p className="mb-2 group-label text-[var(--color-muted-foreground)]">
           View filter
         </p>
         <FilterInput

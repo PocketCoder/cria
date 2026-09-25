@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { useNow, useUi } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { priorityColor } from '@/components/ui/priority-select';
+import { TaskCheck } from '@/components/ui/task-check';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -477,14 +478,7 @@ function NowRow({ task }: { task: TaskWithProject }) {
         className="h-5 w-[3px] shrink-0 rounded-full"
         style={{ background: task.priority > 2 ? priorityColor(task.priority) : 'transparent' }}
       />
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="task-check"
-      />
+      <TaskCheck checked={task.done} onToggle={handleToggle} />
       <p className="min-w-0 flex-1 truncate text-[14.5px] font-medium leading-snug">{task.title}</p>
       {task.projectTitle ? (
         <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{task.projectTitle}</span>
@@ -573,7 +567,7 @@ function PickerSheet({
                     className={cn(
                       'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
                       on
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                         : 'border-[var(--color-muted-foreground)]',
                     )}
                   >
@@ -604,7 +598,7 @@ function PickerSheet({
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
-        <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
+        <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
         </div>
@@ -612,9 +606,9 @@ function PickerSheet({
     );
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--sheet-border)]"
         onClick={(e) => e.stopPropagation()}
       >
         {header}

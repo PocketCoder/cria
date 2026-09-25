@@ -979,7 +979,7 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
   return (
     <section className="mb-[22px]">
       <div className="mb-2 flex items-center gap-2.5">
-        <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+        <span className="group-label text-[var(--color-muted-foreground)]">
           Subtasks
         </span>
         {subtasks.length > 0 ? (
@@ -1009,7 +1009,7 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
             className={cn(
               'flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer',
               r.otherTaskDone
-                ? 'bg-[var(--color-primary)] text-white'
+                ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                 : 'border-[1.5px] border-[var(--color-muted-foreground)]/40',
             )}
           >

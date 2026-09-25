@@ -329,7 +329,7 @@ export function TaskList({ project, view }: TaskListProps) {
                 "Completed Tasks" toggle is on, and are hidden otherwise. */}
             {showCompleted && completedTasks.length > 0 ? (
               <li className="border-t border-[var(--color-border)]">
-                <h2 className="px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                <h2 className="px-7 py-1.5 group-label text-[var(--color-muted-foreground)]">
                   Completed
                   <span className="ml-2 font-normal normal-case">{completedTasks.length}</span>
                 </h2>
