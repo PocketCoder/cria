@@ -381,7 +381,7 @@ export function TableView({ project, view }: TableViewProps) {
             <button
               type="button"
               onClick={saveAndExit}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs font-medium text-white hover:opacity-90"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90"
             >
               <Check className="h-3.5 w-3.5" />
               Save

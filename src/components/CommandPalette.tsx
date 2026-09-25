@@ -258,11 +258,11 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-[oklch(22% 0.012 265 / 0.34)] pt-[70px]"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
       onClick={onClose}
     >
       <div
-        className="w-[560px] overflow-hidden rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[oklch(34%_0.008_265)]"
+        className="w-[560px] overflow-hidden rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-4">
@@ -289,7 +289,7 @@ export function CommandPalette({
           )}
           {grouped.map((group) => (
             <div key={group.name}>
-              <p className="px-2 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[0.11em] text-[var(--color-muted-foreground)]">
+              <p className="px-2 pb-1 pt-3 group-label text-[var(--color-muted-foreground)]">
                 {group.name}
               </p>
               {group.items.map((item) => {

@@ -1,10 +1,11 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { format, startOfDay, isBefore } from 'date-fns';
 import { Paperclip, RefreshCw, CheckSquare, Square } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { priorityColor } from '@/components/ui/priority-select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { TaskCheck } from '@/components/ui/task-check';
 import { TaskHoverPreview } from './TaskHoverPreview';
 import { LabelChips } from './LabelChips';
 import { updateTask } from '@/db/tasks';
@@ -154,7 +155,7 @@ export interface TaskRowCoreProps {
 }
 
 /**
- * The ledger task row: `[3px priority bar][checkbox][title…][date · project · +n]`.
+ * The task row: `[3px priority bar][checkbox][title…][date · project · +n]`.
  * Everything after the title is 12px muted-foreground, right-aligned, in fixed
  * order (date → project → +n). Suppressed signals (labels, attachments,
  * checklist, repeat, percent, colour) collapse into the `+n` popover — the row
@@ -197,6 +198,15 @@ export const TaskRowCore = memo(function TaskRowCore({
     [labels.length, hasAttachments, checklist.total, task.repeatAfter, task.percentDone, task.hexColor],
   );
 
+  // Row glow plays on a false→true change, never on mount (the class drops
+  // on un-complete, so re-completing replays it).
+  const [prevDone, setPrevDone] = useState(task.done);
+  const [glow, setGlow] = useState(false);
+  if (prevDone !== task.done) {
+    setPrevDone(task.done);
+    setGlow(task.done);
+  }
+
   const handleToggle = () => {
     if (onToggle) onToggle();
     else void toggleTaskDone(task);
@@ -236,10 +246,11 @@ export const TaskRowCore = memo(function TaskRowCore({
   return (
     <div
       data-task-row={task.localId}
+      data-done={task.done || undefined}
       onClick={onOpen}
       className={cn(
-        'group relative flex cursor-pointer items-center gap-3 transition-colors hover:bg-[var(--color-accent)]/5',
-        task.done && 'opacity-45',
+        'task-row group relative flex cursor-pointer items-center gap-3 hover:bg-[var(--color-accent)]/5',
+        glow && 'row-glow',
         isSelected && 'bg-[var(--color-primary)]/10',
         isOpen && 'bg-[var(--color-accent)]/10',
         className,
@@ -265,21 +276,14 @@ export const TaskRowCore = memo(function TaskRowCore({
             className={cn(
               'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
               isSelected
-                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                 : 'border-[var(--color-muted-foreground)]',
             )}
           >
             {isSelected && <Check className="h-3 w-3" />}
           </button>
         ) : (
-          <input
-            type="checkbox"
-            checked={task.done}
-            onChange={handleToggle}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={task.done ? 'Done' : 'Not done'}
-            className="task-check"
-          />
+          <TaskCheck checked={task.done} onToggle={handleToggle} />
         )}
         {titleSlot ?? (
           <TaskHoverPreview task={task} className="min-w-0 flex-1">
@@ -287,11 +291,13 @@ export const TaskRowCore = memo(function TaskRowCore({
               className={cn(
                 'truncate text-sm leading-snug',
                 titleWeight === 'medium' && 'font-medium',
-                task.done && 'line-through text-[var(--color-muted-foreground)]',
+                task.done && 'text-[var(--color-muted-foreground)]',
               )}
               title={task.title}
             >
-              {task.title}
+              <span className="task-strike" data-done={task.done || undefined}>
+                {task.title}
+              </span>
             </p>
           </TaskHoverPreview>
         )}

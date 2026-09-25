@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Instrument Sans (variable weight) — Cria's branded humanist sans. Bundled
 // so it ships offline and renders identically on every platform. Must be
 // imported before globals.css references the family in --font-sans.
-import '@fontsource-variable/instrument-sans';
+import '@fontsource-variable/onest';
 import './styles/globals.css';
 import { App } from './App';
 import { initPlatform, isMobilePlatform } from './lib/platform';

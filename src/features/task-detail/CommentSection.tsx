@@ -142,7 +142,7 @@ export function CommentSection({
         <button
           type="button"
           onClick={handleToggle}
-          className="flex w-full items-center gap-1 text-left text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+          className="flex w-full items-center gap-1 text-left group-label text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
         >
           {expanded ? (
             <ChevronDown className="h-3 w-3 shrink-0" />
@@ -155,7 +155,7 @@ export function CommentSection({
             <span className="font-normal">{totalCount}</span>
           ) : null}
           {unreadCount > 0 ? (
-            <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-white">
+            <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-[var(--color-primary-foreground)]">
               {unreadCount} new
             </span>
           ) : null}

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import appIcon from '@/assets/app-icon.png';
 import { useAuth } from '@/auth/store';
 import { createApiClient } from '@/api/client';
 import { fetchCurrentUser } from '@/api/user';
@@ -24,6 +26,12 @@ const serverUrlSchema = z.string().trim().url().refine(
 );
 
 type AuthMethod = 'token' | 'password' | 'share';
+
+const AUTH_METHODS: { value: AuthMethod; label: string }[] = [
+  { value: 'token', label: 'API Token' },
+  { value: 'password', label: 'Username & Password' },
+  { value: 'share', label: 'Share link' },
+];
 
 export function LoginScreen() {
   const signIn = useAuth((s) => s.signIn);
@@ -191,52 +199,21 @@ export function LoginScreen() {
     <main className="flex min-h-full items-center justify-center bg-[var(--color-background)] p-6">
       <div className="w-full max-w-md space-y-6 rounded-xl bg-[var(--color-card)] p-8 text-center dark:border dark:border-[var(--color-border)]">
         <div className="flex flex-col items-center space-y-2">
-          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-[13px] bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]">
-            <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </div>
+          <img src={appIcon} alt="" className="mb-2 h-14 w-14 rounded-[14px]" />
           <h1 className="text-2xl font-semibold tracking-[-0.03em]">Point Cria at your Vikunja</h1>
           <p className="mx-auto max-w-[42ch] text-[14.5px] leading-relaxed text-[var(--color-muted-foreground)]">
             Everything is stored on your machine and synced in the background. Works offline from the first launch.
           </p>
         </div>
 
-        <div className="flex rounded-lg border border-[var(--color-border)] p-0.5">
-          <button
-            type="button"
-            onClick={() => switchMethod('token')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-              authMethod === 'token'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
-          >
-            API Token
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMethod('password')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-              authMethod === 'password'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
-          >
-            Username &amp; Password
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMethod('share')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-              authMethod === 'share'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
-          >
-            Share link
-          </button>
-        </div>
+        <SegmentedControl
+          aria-label="Sign-in method"
+          variant="primary"
+          fill
+          options={AUTH_METHODS}
+          value={authMethod}
+          onChange={switchMethod}
+        />
 
         <form onSubmit={onSubmit} className="space-y-4 text-left">
           <div className="space-y-2">

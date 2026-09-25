@@ -48,54 +48,44 @@ export function TabBar() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-[var(--color-border)] bg-[var(--color-card)] px-3"
-      style={{ paddingTop: '8px', paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }}
+      className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-4"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }}
       aria-label="Primary"
     >
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const active = isActive(tab);
-        return (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => {
-              if (tab.view) setActiveView(tab.view);
-            }}
-            className={cn(
-              'relative flex flex-1 flex-col items-center justify-center gap-1 py-0.5',
-              'transition-colors',
-            )}
-            aria-label={tab.label}
-            aria-current={active ? 'page' : undefined}
-          >
-            <Icon
+      <div className="flex w-full max-w-md items-center justify-around gap-1 rounded-[26px] border-[0.5px] border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 shadow-[var(--shadow-tabbar)]">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = isActive(tab);
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                if (tab.view) setActiveView(tab.view);
+              }}
               className={cn(
-                'h-[22px] w-[22px]',
-                active
-                  ? 'text-[var(--color-foreground)]'
-                  : 'text-[var(--color-muted-foreground)]',
+                'tab-item relative flex flex-1 flex-col items-center gap-0.5 rounded-[20px] py-1.5',
+                active ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]',
               )}
-              strokeWidth={active ? 2 : 1.75}
-            />
-            <span
-              className={cn(
-                'text-[10.5px] leading-none',
-                active
-                  ? 'font-semibold text-[var(--color-foreground)]'
-                  : 'text-[var(--color-muted-foreground)]',
-              )}
+              aria-label={tab.label}
+              aria-current={active ? 'page' : undefined}
             >
-              {tab.label}
-            </span>
-            {tab.key === 'browse' && inboxCount > 0 ? (
-              <span className="absolute right-[calc(50%-24px)] top-0 min-w-[16px] rounded-full bg-[var(--color-inverse)] px-1 py-px text-center text-[9px] font-semibold leading-[14px] text-[var(--color-inverse-foreground)]">
-                {inboxCount > 99 ? '99+' : inboxCount}
+              {/* Keyed on `active` so the hop replays each time a tab activates. */}
+              <span key={active ? 'on' : 'off'} className={cn('flex', active && 'tab-hop')}>
+                <Icon className="h-5 w-5" />
               </span>
-            ) : null}
-          </button>
-        );
-      })}
+              <span className="text-[10px] font-medium leading-none transition-colors duration-200">
+                {tab.label}
+              </span>
+              {tab.key === 'browse' && inboxCount > 0 ? (
+                <span className="absolute right-[calc(50%-22px)] top-0.5 min-w-[16px] rounded-full bg-[var(--color-inverse)] px-1 py-px text-center text-[9px] font-semibold leading-[14px] text-[var(--color-inverse-foreground)]">
+                  {inboxCount > 99 ? '99+' : inboxCount}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
     </nav>
   );
 }

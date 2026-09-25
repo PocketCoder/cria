@@ -674,7 +674,7 @@ function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => void handleCreate()}
-            className="rounded bg-[var(--color-primary)] px-3 py-1 text-xs text-white cursor-pointer hover:opacity-90"
+            className="rounded bg-[var(--color-primary)] px-3 py-1 text-xs text-[var(--color-primary-foreground)] cursor-pointer hover:opacity-90"
           >
             Add
           </button>

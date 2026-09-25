@@ -466,7 +466,7 @@ export function Shell() {
                 >
                   <Icon className="h-5 w-5" />
                   {total > 0 ? (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-[10px] font-semibold leading-[1.1rem] text-white">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-[10px] font-semibold leading-[1.1rem] text-[var(--color-primary-foreground)]">
                       {total > 99 ? '99+' : total}
                     </span>
                   ) : null}
@@ -565,7 +565,7 @@ export function Shell() {
                   <button
                     type="button"
                     onClick={() => openDisplaySheet(currentViewKey)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] dark:border-[oklch(31%_0.008_265)]"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5" />
                     Filter
@@ -574,7 +574,7 @@ export function Shell() {
                 <button
                   type="button"
                   onClick={() => setShowQuickAdd(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-inverse)] px-3 py-1.5 text-xs font-medium text-[var(--color-inverse-foreground)] hover:opacity-90"
+                  className="press inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-inverse)] px-3 py-1.5 text-xs font-medium text-[var(--color-inverse-foreground)] hover:opacity-90"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                   Add task
@@ -692,7 +692,7 @@ export function Shell() {
           the right-hand column above; exactly one instance either way. */}
       {isMobile && <TaskDetail />}
 
-      {/* Floating action button — ink-filled circle anchored above the tab
+      {/* Floating action button — purple circle anchored above the tab
           bar. Mobile only; hidden while a full-screen overlay (task detail,
           search, photo capture, quick-add) owns the screen. */}
       {isMobile &&
@@ -704,7 +704,7 @@ export function Shell() {
             type="button"
             aria-label="Add task"
             onClick={() => setShowQuickAdd(true)}
-            className="fixed right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)] shadow-[0_8px_22px_-6px_rgba(0,0,0,0.4)]"
+            className="fab fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full"
             style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.75rem)' }}
           >
             <Plus className="h-7 w-7" strokeWidth={2.5} />

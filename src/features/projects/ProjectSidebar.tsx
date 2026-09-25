@@ -76,7 +76,7 @@ function NavItem({
         'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px]',
         'hover:bg-[var(--color-muted)]',
         isSelected &&
-          'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]',
+          'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]',
       )}
     >
       <Icon
@@ -405,7 +405,7 @@ export function ProjectSidebar({
         {showSmartViews && (
           <div className="mb-1">
             <div className="flex items-center justify-between pr-1">
-              <p className="px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+              <p className="px-2.5 pb-1.5 pt-4 group-label text-[var(--color-muted-foreground)]">
                 Filters
               </p>
               <button
@@ -468,7 +468,7 @@ export function ProjectSidebar({
 
         {/* ── Labels ── */}
         <div className="mb-1">
-          <p className="px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+          <p className="px-2.5 pb-1.5 pt-4 group-label text-[var(--color-muted-foreground)]">
             Labels
           </p>
           <div className="space-y-0.5">
@@ -564,7 +564,7 @@ export function ProjectSidebar({
         {/* ── Projects ── */}
         <div className="mt-2">
           <header className="flex items-center justify-between pr-1">
-            <p className="px-2.5 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+            <p className="px-2.5 pb-1.5 pt-2 group-label text-[var(--color-muted-foreground)]">
               Projects
             </p>
             <button
@@ -862,7 +862,7 @@ function ProjectRow({
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
                 'hover:bg-[var(--color-muted)]',
-                isSelected && 'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]',
+                isSelected && 'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]',
               )}
             >
               <span
@@ -1108,7 +1108,7 @@ function LabelRow({
             className={cn(
               'flex w-full items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
               'hover:bg-[var(--color-muted)]',
-              isSelected && 'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]',
+              isSelected && 'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]',
             )}
           >
             <span

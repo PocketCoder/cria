@@ -69,7 +69,7 @@ export function UpcomingCalendar({
         <span
           className={cn(
             'flex h-[34px] w-[34px] items-center justify-center rounded-[11px] text-sm',
-            isToday && 'bg-[var(--color-primary)] font-semibold text-white',
+            isToday && 'bg-[var(--color-primary)] font-semibold text-[var(--color-primary-foreground)]',
             !isToday && isSel && 'bg-[var(--color-muted)] font-semibold text-[var(--color-primary)]',
             !isToday && !isSel && 'text-[var(--color-foreground)]',
           )}
@@ -164,7 +164,7 @@ export function UpcomingCalendar({
               day: 'relative h-[34px] flex-1 text-center text-sm',
               day_button: 'mx-auto inline-flex h-[34px] w-[34px] items-center justify-center rounded-[11px] hover:bg-[var(--color-muted)] focus:outline-none',
               today: '[&_button]:font-semibold [&_button]:text-[var(--color-primary)]',
-              selected: '[&_button]:bg-[var(--color-primary)] [&_button]:text-white [&_button:hover]:bg-[var(--color-primary)]',
+              selected: '[&_button]:bg-[var(--color-primary)] [&_button]:text-[var(--color-primary-foreground)] [&_button:hover]:bg-[var(--color-primary)]',
               outside: 'opacity-40',
             }}
           />

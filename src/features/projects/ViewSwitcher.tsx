@@ -1,5 +1,5 @@
 import type { ProjectView } from '@/domain/view';
-import { cn } from '@/lib/cn';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 
 interface ViewSwitcherProps {
   views: ProjectView[];
@@ -22,21 +22,14 @@ export function ViewSwitcher({
   if (views.length <= 1) return null;
 
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-[var(--color-muted)]/40 p-0.5">
-      {views.map((v) => (
-        <button
-          key={v.localId}
-          onClick={() => onSelect(v.localId)}
-          className={cn(
-            'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-            v.localId === activeViewLocalId
-              ? 'bg-[var(--color-background)] text-[var(--color-foreground)] shadow-sm'
-              : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
-          )}
-        >
-          {v.title || VIEW_LABELS[v.viewKind] || v.viewKind}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      aria-label="View"
+      options={views.map((v) => ({
+        value: v.localId,
+        label: v.title || VIEW_LABELS[v.viewKind] || v.viewKind,
+      }))}
+      value={activeViewLocalId}
+      onChange={onSelect}
+    />
   );
 }

@@ -6,20 +6,19 @@
    `dark:` utilities track the app's toggle, not just the OS setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Instrument Sans — Cria's branded humanist sans ("ink on warm paper").
-   Bundled via fontsource (variable weight) so it renders identically on
-   every platform and ships offline. Imported in main.tsx; the family name
-   is referenced below. */
+/* Onest: Cria's UI face. Bundled via fontsource (variable weight) so it
+   renders identically on every platform and ships offline. Imported in
+   main.tsx; the family name is referenced below. */
 
 @theme {
   --font-sans:
-    "Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system,
+    "Onest Variable", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
 
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
   /* Typography scale — semantic tiers for the metadata sizes that live
      below Tailwind's text-xs (12px), where arbitrary text-[Npx] values had
@@ -30,67 +29,66 @@
   --text-footnote: 10px; /* badges, secondary indicators */
   --text-micro: 9px;     /* dense badges, avatar initials, tiny glyphs */
 
-  /* ── Light theme — warm paper canvas, slate-blue accent ──────────
-     "Ledger": ink on warm paper. Neutrals sit around hue 85 (warm paper)
-     at a slightly tinted lightness so the canvas reads like paper, not
-     glass; the accent is a slate blue (hue 255). All secondary text uses
-     muted-foreground — never lighter. */
-  --color-background:        oklch(97.5% 0.006 85);
+  /* ── Light theme: warm paper canvas, Llama purple accent ──────────
+     Neutrals sit at hue 95 (warm paper); ink and greys tint toward violet
+     (hue 285). #643B9F (the app-icon purple) is the only brand accent. All
+     secondary text uses muted-foreground, never lighter. */
+  --color-background:        oklch(99.3% 0.004 95);
   --color-card:              oklch(100% 0 0);
-  --color-foreground:        oklch(22% 0.012 265);
-  --color-card-foreground:   oklch(22% 0.012 265);
-  --color-muted:             oklch(93.5% 0.006 85);
-  --color-muted-foreground:  oklch(50% 0.012 265);
-  --color-border:            oklch(91% 0.006 85);
-  --color-input:             oklch(97.5% 0.006 85);
-  --color-primary:           oklch(46% 0.11 255);
+  --color-foreground:        oklch(24% 0.015 285);
+  --color-card-foreground:   oklch(24% 0.015 285);
+  --color-muted:             oklch(97% 0.005 95);
+  --color-muted-foreground:  oklch(50% 0.015 285);
+  --color-border:            oklch(93% 0.004 95);
+  --color-input:             oklch(97% 0.005 95);
+  --color-primary:           #643B9F;
   --color-primary-foreground:oklch(99% 0 0);
-  --color-accent:            oklch(46% 0.11 255);
+  --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
-  --color-destructive:       oklch(55% 0.20 25);
-  --color-success:           oklch(62% 0.14 150);
-  --color-warning:           oklch(74% 0.13 85);
-  /* Kept as a companion to the README token set: code uses var(--color-ring)
-     for focus-visible rings everywhere, so the token survives the swap. */
-  --color-ring:              oklch(58% 0.12 255);
-  /* Ink-filled elements (buttons, selected rows, FAB). Dark mode inverts
-     this pair so the same components work in both themes. */
-  --color-inverse:           oklch(22% 0.012 265);
+  --color-destructive:       oklch(58% 0.22 27);
+  --color-success:           oklch(62% 0.16 150);
+  --color-warning:           oklch(75% 0.16 80);
+  --color-ring:              oklch(55% 0.16 300);
+  /* Formerly ink-filled (FAB, Add task, Mark done, selected palette row);
+     now purple. Dark mode swaps to the lighter purple + dark ink. */
+  --color-inverse:           #643B9F;
   --color-inverse-foreground:oklch(99% 0 0);
-  /* Priority ramp (3–5). Tokenised so it can lift in dark. 0–2 render nothing. */
-  --prio-high:               oklch(74% 0.13 85);
-  --prio-urgent:             oklch(65% 0.17 45);
-  --prio-critical:           oklch(55% 0.20 25);
+  /* Priority ramp 1–5 (sky, meadow, marigold, orange, coral). Tokenised so it
+     can lift in dark. Rows only show a bar for 3–5. */
+  --prio-low:                oklch(62% 0.12 240);
+  --prio-medium:             oklch(68% 0.14 150);
+  --prio-high:               oklch(76% 0.15 75);
+  --prio-urgent:             oklch(68% 0.19 45);
+  --prio-critical:           oklch(58% 0.22 27);
 }
 
 @media (prefers-color-scheme: dark) {
   @theme {
-    /* Ledger dark — not an inversion: the content pane (card) still sits
-       lighter than the canvas. Cool charcoal (hue 265, chroma 0.008); warm
-       greys go muddy at these lightnesses. */
-    --color-background: oklch(17% 0.008 265);
-    --color-card: oklch(21% 0.008 265);
-    --color-foreground: oklch(94% 0.004 85);
-    --color-card-foreground: oklch(94% 0.004 85);
-    --color-muted: oklch(25% 0.008 265);
-    --color-muted-foreground: oklch(70% 0.008 265);
-    --color-border: oklch(29% 0.008 265);
-    --color-input: oklch(25% 0.008 265);
-    --color-ring: oklch(60% 0.10 255);
-    --color-primary: oklch(72% 0.12 255);
-    --color-primary-foreground: oklch(18% 0.008 265);
-    --color-accent: oklch(72% 0.12 255);
-    --color-accent-foreground: oklch(18% 0.008 265);
-    --color-destructive: oklch(70% 0.16 25);
-    --color-success: oklch(72% 0.13 150);
-    --color-warning: oklch(80% 0.12 85);
-    /* Ink fill inverts: light-filled elements become near-white on ink. */
-    --color-inverse: oklch(92% 0.004 85);
-    --color-inverse-foreground: oklch(18% 0.008 265);
-    /* Priority ramp lifts so it stays legible on the dark pane. */
-    --prio-high: oklch(80% 0.12 85);
-    --prio-urgent: oklch(72% 0.16 45);
-    --prio-critical: oklch(66% 0.19 25);
+    /* Dark: deep violet-black canvas, cards 4% lighter, lighter purple
+       accent with dark ink on purple fills. */
+    --color-background:        oklch(15% 0.012 285);
+    --color-card:              oklch(19% 0.012 285);
+    --color-foreground:        oklch(95% 0.005 285);
+    --color-card-foreground:   oklch(95% 0.005 285);
+    --color-muted:             oklch(23% 0.012 285);
+    --color-muted-foreground:  oklch(66% 0.015 285);
+    --color-border:            oklch(28% 0.012 285);
+    --color-input:             oklch(24% 0.012 285);
+    --color-primary:           oklch(67% 0.14 300);
+    --color-primary-foreground:oklch(17% 0.045 300);
+    --color-accent:            oklch(67% 0.14 300);
+    --color-accent-foreground: oklch(17% 0.045 300);
+    --color-destructive:       oklch(70% 0.16 25);
+    --color-success:           oklch(72% 0.13 150);
+    --color-warning:           oklch(80% 0.12 85);
+    --color-ring:              oklch(67% 0.14 300);
+    --color-inverse:           oklch(67% 0.14 300);
+    --color-inverse-foreground:oklch(17% 0.045 300);
+    --prio-low:                oklch(62% 0.12 240);
+    --prio-medium:             oklch(68% 0.14 150);
+    --prio-high:               oklch(80% 0.12 85);
+    --prio-urgent:             oklch(72% 0.16 45);
+    --prio-critical:           oklch(66% 0.19 25);
   }
 }
 
@@ -116,11 +114,11 @@ body,
   padding-right: env(safe-area-inset-right);
 }
 
-/* Bottom padding for scrollable task lists behind the fixed tab bar on
-   mobile. The 52px accounts for the tab bar body (~48px) plus a comfortable
-   gap so content doesn't sit flush against it. */
+/* Bottom padding for scrollable task lists behind the floating tab bar on
+   mobile: the capsule (~58px) sits 8px above the safe area, plus a gap so
+   content doesn't sit flush against it. */
 .tab-bar-safe-bottom {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 52px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 80px);
 }
 
 /* Reveal-on-hover affordances (row edit/delete buttons, label-chip remove)
@@ -160,7 +158,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.006em; /* Instrument Sans reads a touch wide at body size */
+  letter-spacing: -0.006em;
 }
 
 /* Native Liquid Glass transparency is handled in the confined navigation-layer
@@ -182,11 +180,60 @@ body {
   }
 }
 
-/* ── iOS spring curves ────────────────────────────────── */
+/* ── Motion: iOS springs + joy layer ──────────────────── */
 :root {
-  --spring-snappy: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring-snappy: cubic-bezier(0.32, 0.72, 0, 1); /* sheets, title collapse */
   --spring-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1); /* small things: press, toggles */
+  --spring-soft: cubic-bezier(0.34, 1.25, 0.64, 1); /* indicators, pop-ins */
+  --duration-slide: 260ms;
+  --duration-pop: 360ms;
+  --duration-celebrate: 560ms;
+  --press-scale: 0.94;
+  --press-scale-subtle: 0.97;
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.04), 0 4px 16px oklch(0% 0 0 / 0.05);
+  --shadow-tabbar: 0 8px 28px -8px oklch(0% 0 0 / 0.22), 0 2px 8px -2px oklch(0% 0 0 / 0.12);
+  --shadow-fab: 0 4px 12px oklch(47% 0.155 300 / 0.35), 0 2px 4px oklch(0% 0 0 / 0.12);
+  --shadow-fab-hover: 0 6px 18px oklch(47% 0.155 300 / 0.42), 0 3px 6px oklch(0% 0 0 / 0.16);
+  --shadow-sheet: 0 -8px 30px -12px rgb(0 0 0 / 0.35);
+  --shadow-inspector: 0 10px 40px -10px rgb(0 0 0 / 0.45);
+
+  /* Glass: navigation layer only (popovers, inspector). Content stays opaque. */
+  --glass-bg: oklch(99.3% 0.004 95 / 0.72);
+  --glass-blur: 14px;
+  --glass-border: oklch(93% 0.004 95 / 0.5);
+
+  /* Sheets */
+  --overlay-backdrop: rgb(0 0 0 / 0.3);
+  --sheet-bg-grouped: var(--color-background);
+  --sheet-border: transparent;
 }
+.dark {
+  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.2), 0 4px 16px oklch(0% 0 0 / 0.25);
+  --shadow-tabbar: 0 8px 28px -8px oklch(0% 0 0 / 0.6), 0 2px 8px -2px oklch(0% 0 0 / 0.4);
+  --glass-bg: oklch(19% 0.012 285 / 0.78);
+  --glass-border: oklch(40% 0.012 285 / 0.4);
+  --overlay-backdrop: rgb(0 0 0 / 0.6);
+  --sheet-bg-grouped: oklch(19% 0.012 285);
+  --sheet-border: oklch(34% 0.014 285);
+}
+
+@keyframes cria-pop-in { from { opacity: 0; transform: scale(0.92) translateY(-4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes cria-dialog-in { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes cria-toast-up { from { opacity: 0; transform: translateY(16px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes cria-check-pop { 0% { transform: scale(1); } 35% { transform: scale(1.28); } 65% { transform: scale(0.92); } 100% { transform: scale(1); } }
+@keyframes cria-tick-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+@keyframes cria-ring-burst { from { opacity: 0.55; transform: scale(0.7); } to { opacity: 0; transform: scale(2.1); } }
+@keyframes cria-spark {
+  0% { opacity: 0; transform: rotate(var(--a)) translateY(0) scale(0.4); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-15px) scale(1); }
+}
+@keyframes cria-wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-16deg) scale(1.15); } 45% { transform: rotate(12deg) scale(1.1); } 70% { transform: rotate(-6deg); } }
+@keyframes cria-hop { 0%, 100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-4px) scale(1.12); } 65% { transform: translateY(1px) scale(0.96); } }
+@keyframes cria-row-glow { from { background-color: color-mix(in oklch, var(--color-primary) 14%, transparent); } to { background-color: transparent; } }
 
 /* ── iOS-style large title ────────────────────────────── */
 .nav-title-large {
@@ -206,16 +253,10 @@ body {
               line-height 200ms var(--spring-snappy);
 }
 
-/* Tab bar item — iOS-style active state indicator (flat bar, not docked) */
+/* Tab bar item (floating capsule). */
 .tab-item {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-}
-.tab-item.active .tab-icon {
-  color: var(--color-foreground);
-}
-.tab-item.active .tab-label {
-  color: var(--color-foreground);
 }
 
 /* ── iOS sheet entrance ───────────────────────────────── */
@@ -230,7 +271,7 @@ body {
 }
 
 .sheet-backdrop {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--overlay-backdrop);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   animation: fade-in 200ms ease-out;
@@ -287,53 +328,59 @@ body {
    have higher specificity than @theme inside @media so they win
    over the system preference when explicitly set. */
 .light {
-  --color-background:        oklch(97.5% 0.006 85);
+  --color-background:        oklch(99.3% 0.004 95);
   --color-card:              oklch(100% 0 0);
-  --color-foreground:        oklch(22% 0.012 265);
-  --color-card-foreground:   oklch(22% 0.012 265);
-  --color-muted:             oklch(93.5% 0.006 85);
-  --color-muted-foreground:  oklch(50% 0.012 265);
-  --color-border:            oklch(91% 0.006 85);
-  --color-input:             oklch(97.5% 0.006 85);
-  --color-primary:           oklch(46% 0.11 255);
+  --color-foreground:        oklch(24% 0.015 285);
+  --color-card-foreground:   oklch(24% 0.015 285);
+  --color-muted:             oklch(97% 0.005 95);
+  --color-muted-foreground:  oklch(50% 0.015 285);
+  --color-border:            oklch(93% 0.004 95);
+  --color-input:             oklch(97% 0.005 95);
+  --color-primary:           #643B9F;
   --color-primary-foreground:oklch(99% 0 0);
-  --color-accent:            oklch(46% 0.11 255);
+  --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
-  --color-destructive:       oklch(55% 0.20 25);
-  --color-success:           oklch(62% 0.14 150);
-  --color-warning:           oklch(74% 0.13 85);
-  --color-ring:              oklch(58% 0.12 255);
-  --color-inverse:           oklch(22% 0.012 265);
+  --color-destructive:       oklch(58% 0.22 27);
+  --color-success:           oklch(62% 0.16 150);
+  --color-warning:           oklch(75% 0.16 80);
+  --color-ring:              oklch(55% 0.16 300);
+  /* Formerly ink-filled (FAB, Add task, Mark done, selected palette row);
+     now purple. Dark mode swaps to the lighter purple + dark ink. */
+  --color-inverse:           #643B9F;
   --color-inverse-foreground:oklch(99% 0 0);
-  --prio-high:               oklch(74% 0.13 85);
-  --prio-urgent:             oklch(65% 0.17 45);
-  --prio-critical:           oklch(55% 0.20 25);
+  /* Priority ramp 1–5 (sky, meadow, marigold, orange, coral). Tokenised so it
+     can lift in dark. Rows only show a bar for 3–5. */
+  --prio-low:                oklch(62% 0.12 240);
+  --prio-medium:             oklch(68% 0.14 150);
+  --prio-high:               oklch(76% 0.15 75);
+  --prio-urgent:             oklch(68% 0.19 45);
+  --prio-critical:           oklch(58% 0.22 27);
 }
 
 .dark {
-  --color-background: oklch(17% 0.008 265);
-  --color-card: oklch(21% 0.008 265);
-  --color-foreground: oklch(94% 0.004 85);
-  --color-card-foreground: oklch(94% 0.004 85);
-  --color-muted: oklch(25% 0.008 265);
-  --color-muted-foreground: oklch(70% 0.008 265);
-  --color-border: oklch(29% 0.008 265);
-  --color-input: oklch(25% 0.008 265);
-  --color-ring: oklch(60% 0.10 255);
-  --color-primary: oklch(72% 0.12 255);
-  --color-primary-foreground: oklch(18% 0.008 265);
-  --color-accent: oklch(72% 0.12 255);
-  --color-accent-foreground: oklch(18% 0.008 265);
-  --color-destructive: oklch(70% 0.16 25);
-  --color-success: oklch(72% 0.13 150);
-  --color-warning: oklch(80% 0.12 85);
-  /* Ink fill inverts in dark: near-white on ink, so the same ink-filled
-     components (Add task, Mark done, FAB, selected palette row) read right. */
-  --color-inverse: oklch(92% 0.004 85);
-  --color-inverse-foreground: oklch(18% 0.008 265);
-  --prio-high: oklch(80% 0.12 85);
-  --prio-urgent: oklch(72% 0.16 45);
-  --prio-critical: oklch(66% 0.19 25);
+  --color-background:        oklch(15% 0.012 285);
+  --color-card:              oklch(19% 0.012 285);
+  --color-foreground:        oklch(95% 0.005 285);
+  --color-card-foreground:   oklch(95% 0.005 285);
+  --color-muted:             oklch(23% 0.012 285);
+  --color-muted-foreground:  oklch(66% 0.015 285);
+  --color-border:            oklch(28% 0.012 285);
+  --color-input:             oklch(24% 0.012 285);
+  --color-primary:           oklch(67% 0.14 300);
+  --color-primary-foreground:oklch(17% 0.045 300);
+  --color-accent:            oklch(67% 0.14 300);
+  --color-accent-foreground: oklch(17% 0.045 300);
+  --color-destructive:       oklch(70% 0.16 25);
+  --color-success:           oklch(72% 0.13 150);
+  --color-warning:           oklch(80% 0.12 85);
+  --color-ring:              oklch(67% 0.14 300);
+  --color-inverse:           oklch(67% 0.14 300);
+  --color-inverse-foreground:oklch(17% 0.045 300);
+  --prio-low:                oklch(62% 0.12 240);
+  --prio-medium:             oklch(68% 0.14 150);
+  --prio-high:               oklch(80% 0.12 85);
+  --prio-urgent:             oklch(72% 0.16 45);
+  --prio-critical:           oklch(66% 0.19 25);
 }
 
 /* ── Scrollbars ───────────────────────────────────────────
@@ -343,10 +390,10 @@ body {
    scrollbar-* properties; WebKit/Blink uses ::-webkit-scrollbar. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: oklch(60% 0.01 250 / 0.35) transparent;
+  scrollbar-color: oklch(60% 0.015 285 / 0.35) transparent;
 }
 .dark * {
-  scrollbar-color: oklch(70% 0.01 250 / 0.3) transparent;
+  scrollbar-color: oklch(70% 0.015 285 / 0.3) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -357,21 +404,21 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(60% 0.01 250 / 0.3);
+  background: oklch(60% 0.015 285 / 0.3);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(55% 0.01 250 / 0.5);
+  background: oklch(55% 0.015 285 / 0.5);
   background-clip: padding-box;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(70% 0.01 250 / 0.28);
+  background: oklch(70% 0.015 285 / 0.28);
   background-clip: padding-box;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(75% 0.01 250 / 0.45);
+  background: oklch(75% 0.015 285 / 0.45);
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-corner {
@@ -389,12 +436,12 @@ ul[data-type="taskList"] li > div > p {
   margin: 0;
 }
 
-/* Group label — the 11.5px/700/0.11em uppercase section labels used by the
-   sidebar (PROJECTS/LABELS) and list group headings. */
+/* Group label (eyebrow): the 10px/600/+0.025em uppercase section labels used
+   by the sidebar (PROJECTS/LABELS) and list group headings. */
 @utility group-label {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.11em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -424,48 +471,179 @@ ul[data-type="taskList"] li > div > p {
 }
 
 
-/* ── Round task checkbox ───────────────────────────────
-   A hollow circle that fills with the accent and shows a white tick when
-   checked. `appearance: none` strips the native control; the tick is a
-   background SVG (input elements don't render ::after reliably in WebKit, so
-   we can't use a pseudo-element). */
+/* ── Round task checkbox (TaskCheck) ──────────────────────
+   A hollow circle that fills purple with a tick when checked. Completing
+   plays the joy burst: the circle pops, the tick draws in, and a ring and six
+   sparks fly out. Tick/ring colours use primary-foreground so dark mode gets
+   dark ink on the lighter purple. */
 .task-check {
-  appearance: none;
-  -webkit-appearance: none;
+  position: relative;
   width: 1.125rem;
   height: 1.125rem;
   flex: none;
-  border: 1.5px solid var(--color-muted-foreground);
+  padding: 0;
+  border: 0;
   border-radius: 9999px;
-  cursor: pointer;
-  opacity: 0.55;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 0.7rem;
-  transition: background-color 120ms ease, border-color 120ms ease,
-    opacity 120ms ease;
-}
-.task-check:hover {
-  border-color: var(--color-primary);
-  opacity: 1;
-}
-.task-check:checked {
-  opacity: 1;
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='white'%20stroke-width='3.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5%2013l4%204L19%207'/%3E%3C/svg%3E");
+  background: none;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
 }
 .task-check:focus-visible {
   outline: 2px solid var(--color-ring);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
-/* Dark: at muted-foreground (70%) an empty ring reads as filled — darken it.
-   And the completed tick goes dark on the lighter accent circle, not white. */
-.dark .task-check {
-  border-color: oklch(48% 0.008 265);
+.task-check-circle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-muted-foreground);
+  border-radius: 9999px;
+  opacity: 0.55;
+  transition: background-color 160ms ease, border-color 160ms ease,
+    opacity 160ms ease, transform 200ms var(--spring-bouncy);
 }
-.dark .task-check:checked {
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%231a1d24'%20stroke-width='3.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5%2013l4%204L19%207'/%3E%3C/svg%3E");
+.task-check-circle svg {
+  width: 62%;
+  height: 62%;
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 24;
+  opacity: 0;
+}
+.task-check[aria-checked="true"] .task-check-circle {
+  opacity: 1;
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+}
+.task-check[aria-checked="true"] svg {
+  opacity: 1;
+  stroke: var(--color-primary-foreground);
+}
+@media (hover: hover) {
+  .task-check:hover .task-check-circle {
+    opacity: 1;
+    border-color: var(--color-primary);
+  }
+  .task-check:hover:not([aria-checked="true"]) .task-check-circle {
+    transform: scale(1.08);
+    background-color: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  }
+  .task-check:hover:not([aria-checked="true"]) svg {
+    opacity: 0.6;
+  }
+}
+.task-check:active .task-check-circle {
+  transform: scale(0.85);
+}
+.task-check-circle[data-burst] {
+  animation: cria-check-pop var(--duration-pop) var(--spring-smooth);
+}
+.task-check[aria-checked="true"] .task-check-circle[data-burst] path {
+  animation: cria-tick-draw 280ms var(--spring-smooth) 80ms backwards;
+}
+.task-check-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--color-primary);
+  border-radius: 9999px;
+  pointer-events: none;
+  animation: cria-ring-burst var(--duration-celebrate) var(--spring-smooth) forwards;
+}
+.task-check-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  animation: cria-spark var(--duration-celebrate) var(--spring-smooth) 60ms forwards;
+}
+
+/* ── Task row completion ───────────────────────────────────
+   The title strike draws left→right (a 1px background line, so it can
+   animate where text-decoration can't), the row glows faintly purple on the
+   false→true change (`.row-glow`), then settles at 60%. */
+.task-strike {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 55%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 320ms var(--spring-smooth) 60ms, color 200ms ease;
+}
+.task-strike[data-done] {
+  background-size: 100% 1px;
+}
+.task-row {
+  transition: background-color 150ms ease, opacity 400ms ease 200ms;
+}
+.task-row[data-done] {
+  opacity: 0.6;
+}
+.task-row.row-glow {
+  animation: cria-row-glow 700ms var(--spring-smooth);
+}
+
+/* ── Joy layer: press, FAB, tab hop, overlays ─────────────── */
+.press {
+  transition: transform 180ms var(--spring-bouncy), opacity 150ms ease,
+    background-color 150ms ease, color 150ms ease;
+}
+.press:active:not(:disabled) {
+  transform: scale(var(--press-scale-subtle));
+}
+
+.fab {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  box-shadow: var(--shadow-fab);
+  transition: transform 220ms var(--spring-bouncy), box-shadow 140ms ease,
+    filter 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.fab svg {
+  transition: transform 320ms var(--spring-bouncy);
+}
+@media (hover: hover) {
+  .fab:hover {
+    filter: brightness(1.06);
+    box-shadow: var(--shadow-fab-hover);
+  }
+  .fab:hover svg {
+    transform: rotate(90deg);
+  }
+}
+.fab:active {
+  transform: scale(var(--press-scale));
+}
+
+.tab-hop {
+  animation: cria-hop 420ms var(--spring-smooth);
+}
+
+/* Popovers, menus and selects pop in from their anchor corner (Radix exposes
+   the origin as a CSS variable per primitive). */
+.pop-in {
+  animation: cria-pop-in 200ms var(--spring-soft);
+}
+
+/* Centred modal: backdrop fades, the panel (first child) scales up. */
+.dialog-backdrop {
+  animation: fade-in 180ms ease-out;
+}
+.dialog-backdrop > :first-child {
+  animation: cria-dialog-in 280ms var(--spring-soft);
+}
+
+.toast-up {
+  animation: cria-toast-up 340ms var(--spring-soft);
 }
 
 /* ── Cursor pointer over all clickable actions ────────────
