@@ -1,0 +1,181 @@
+name: Nightly
+
+# Every push to dev builds "Cria (Nightly)" (io.cria.app.nightly, see
+# scripts/nightly-config.sh): signed macOS bundles + an unsigned iOS .ipa,
+# attached to a single rolling `nightly` prerelease. Its updater reads
+# nightly.json on gh-pages, so nightlies auto-update while stable Cria keeps
+# reading update.json. Separate identifiers mean both install side by side.
+#
+# Version is <package.json version>-nightly.<run_number>: semver-increasing
+# across nightlies, and below the next stable of the same base version.
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# A newer push supersedes an in-flight nightly.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+      - run: pnpm install --frozen-lockfile
+      - name: Switch config to nightly channel
+        run: scripts/nightly-config.sh "$(jq -r .version package.json)-nightly.${{ github.run_number }}"
+      - name: Build signed bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg,updater
+      # Rename to space/paren-free, per-arch names (see release.yml for why).
+      - name: Stage
+        run: |
+          set -euo pipefail
+          arch="${{ matrix.target }}"; arch="${arch%%-*}"
+          B="src-tauri/target/${{ matrix.target }}/release/bundle"
+          mkdir -p out
+          cp "$B"/dmg/*.dmg                   "out/Cria-Nightly_${arch}.dmg"
+          cp "$B"/macos/*.app.tar.gz          "out/Cria-Nightly_${arch}.app.tar.gz"
+          cp "$B"/macos/*.app.tar.gz.sig      "out/Cria-Nightly_${arch}.app.tar.gz.sig"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.target }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 3
+
+  build-ios:
+    name: Build unsigned iOS .ipa
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-ios-ipa-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-ipa-
+            ${{ runner.os }}-cargo-ios-
+      - run: pnpm install --frozen-lockfile
+      # No version arg: CFBundleShortVersionString rejects semver prerelease
+      # suffixes. Sideloaded builds don't use the updater anyway.
+      - name: Switch config to nightly channel
+        run: scripts/nightly-config.sh
+      - run: pnpm tauri ios init
+      # Same icon workaround as release.yml.
+      - run: cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
+      - run: pnpm tauri ios build --target aarch64 --no-sign --archive-only --ci
+      - name: Package unsigned .ipa
+        run: |
+          set -euo pipefail
+          ARCHIVE=$(find src-tauri/gen/apple -name '*.xcarchive' -print -quit)
+          APP=$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+          [ -n "$APP" ] || { echo "No .app found in archive" >&2; exit 1; }
+          mkdir -p ipa_out/Payload
+          cp -R "$APP" ipa_out/Payload/
+          (cd ipa_out && zip -qr ../Cria-Nightly-unsigned.ipa Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-ios
+          path: Cria-Nightly-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: Publish nightly release + manifest
+    runs-on: ubuntu-latest
+    needs: [build, build-ios]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Write nightly.json
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version package.json)-nightly.${{ github.run_number }}"
+          base="https://github.com/${{ github.repository }}/releases/download/nightly"
+          mkdir -p gh-pages-out
+          jq -n \
+            --arg v "$version" \
+            --arg notes "dev @ ${GITHUB_SHA::7}" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg sa "$(cat release/Cria-Nightly_aarch64.app.tar.gz.sig)" \
+            --arg sx "$(cat release/Cria-Nightly_x86_64.app.tar.gz.sig)" \
+            --arg base "$base" '{
+              version: $v, notes: $notes, pub_date: $date,
+              platforms: {
+                "darwin-aarch64": {signature: $sa, url: "\($base)/Cria-Nightly_aarch64.app.tar.gz"},
+                "darwin-x86_64":  {signature: $sx, url: "\($base)/Cria-Nightly_x86_64.app.tar.gz"}
+              }
+            }' > gh-pages-out/nightly.json
+          cat gh-pages-out/nightly.json
+      # Recreate the release so the tag, assets, and notes track the latest push.
+      - name: Replace nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly release/* \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Nightly (dev @ ${GITHUB_SHA::7})" \
+            --notes "Automated build of \`dev\` at ${GITHUB_SHA}. Installs as **Cria (Nightly)** alongside stable Cria and auto-updates on each dev push. Unstable."
+      - name: Publish nightly.json to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: gh-pages-out
+          keep_files: true
+          commit_message: 'nightly: ${{ github.sha }}'

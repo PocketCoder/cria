@@ -7,7 +7,6 @@
     "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:release-id": "tauri dev",
     "build": "tsc --noEmit && vite build && tauri build",
-    "build:dev-app": "tsc --noEmit && vite build && tauri build --config src-tauri/tauri.dev.conf.json --features devtools",
     "vite": "vite",
     "vite:build": "vite build",
     "preview": "vite preview",

@@ -356,43 +356,41 @@ depend on that data, not run once on `[]` mount — otherwise they fire before
 the data loads and never re-run. If wiring is genuinely out of scope, ship the
 control as 🟡 in FEATURE-COMPARISON.md, never ✅.
 
-## Running a dev build side-by-side with the release
+## Release channels and local dev
 
-Two builds, two bundle IDs, two macOS data dirs. No cross-talk.
+Three identifiers, three macOS data dirs. No cross-talk.
 
-| | `Cria.app` (release) | `Cria Dev.app` (dev) |
-|---|---|---|
-| Branch | `main` (auto-updates) | `dev` (manual rebuild) |
-| Bundle ID | `io.cria.desktop` | `io.cria.desktop.dev` |
-| Data dir | `~/Library/Application Support/io.cria.desktop` | `…/io.cria.desktop.dev` |
-| SQLite / localStorage | separate | separate |
-| Updater | live `update.json` | disabled (invalid endpoint, error swallowed) |
+| | `Cria.app` (stable) | `Cria (Nightly).app` | `pnpm dev` |
+|---|---|---|---|
+| Source | `v*` tag on `main` | every push to `dev` | local checkout |
+| Bundle ID | `io.cria.app` | `io.cria.app.nightly` | `io.cria.app.dev` |
+| Updater feed | `update.json` | `nightly.json` | disabled (invalid endpoint, error swallowed) |
+| Workflow | `release.yml` | `nightly.yml` | n/a |
 
-```sh
-pnpm dev            # HMR dev run, ALSO under io.cria.desktop.dev
-pnpm build:dev-app  # → …/bundle/dmg/Cria Dev_<ver>_<arch>.dmg
-```
+Nightlies are published to a single rolling `nightly` prerelease (recreated on
+each push) with signed macOS bundles plus an unsigned `.ipa`. CI turns the
+stable config into the nightly one with
+[`scripts/nightly-config.sh`](scripts/nightly-config.sh), which rewrites
+`tauri.conf.json` in place; there is no committed nightly config. Nightly
+versions are `<package.json version>-nightly.<run_number>`, so they increase
+monotonically. The `.ipa` keeps the plain version because
+`CFBundleShortVersionString` rejects prerelease suffixes.
 
-Drag the `.dmg` into `/Applications`; re-run to refresh. The overlay
-([`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json)) only
-overrides productName / identifier / updater endpoints; everything else
-inherits from `tauri.conf.json`.
-
-**Why `pnpm dev` uses the dev identifier (don't revert this).** Migrations
+**Why `pnpm dev` uses its own identifier (don't revert this).** Migrations
 are registered Rust-side and the plugin records applied versions in the
-DB. If `pnpm dev` ran under the release identifier (`io.cria.desktop`,
-the old default), running it from a branch with a *newer* migration would
-upgrade the **installed release app's** database — and the older release
-binary then aborts with `migration N … missing in the resolved
-migrations`, bricking the shipped app's DB. Routing `pnpm dev` through
-`tauri.dev.conf.json` (`io.cria.desktop.dev`) keeps dev's schema fully
-isolated. `pnpm dev:release-id` is the escape hatch if you ever
-deliberately need the release DB.
+DB. If `pnpm dev` ran under an installed app's identifier, running it from a
+branch with a *newer* migration would upgrade that app's database, and the
+older binary then aborts with `migration N … missing in the resolved
+migrations`, bricking its DB. Routing `pnpm dev` through
+[`tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json) (`io.cria.app.dev`)
+keeps dev's schema isolated. `pnpm dev:release-id` is the escape hatch if you
+ever deliberately need the release DB.
 
-**Two-client note:** both apps hit the same server with the same credentials,
-so an edit in one shows up in the other within ~60s of pull lag. Editing the
-same task in both within that window surfaces the M3 conflict modal — a free
-smoke test. Outbox counts are per-app.
+**Multi-client note:** all builds hit the same server with the same
+credentials, so an edit in one shows up in another within ~60s of pull lag.
+Editing the same task in two within that window surfaces the M3 conflict
+modal: a free smoke test. Outbox counts are per-app. The keychain service name
+(`"Cria"` in `secure.rs`) is shared, so sign-in state may be shared too.
 
 ## Cutting a release
 
