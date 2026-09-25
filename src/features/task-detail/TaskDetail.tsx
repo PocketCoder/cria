@@ -1252,7 +1252,10 @@ function DetailCard({
       )}
       <aside
         ref={cardRef}
-        role="dialog"
+        // Desktop is a docked side panel, not a modal: useShortcuts suppresses
+        // every shortcut while any [role="dialog"] exists, so a dialog role
+        // here would kill the task shortcuts. Mobile is a modal sheet.
+        role={isMobile ? 'dialog' : 'complementary'}
         aria-label="Task details"
         className={cn(
           'flex flex-col overflow-hidden',
