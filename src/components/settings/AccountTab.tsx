@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { FieldLabel } from '@/components/ui/field-label';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { getAvatarSettings, setAvatarProvider, uploadAvatar, fetchAvatarBlob } from '@/api/account';
@@ -99,17 +100,18 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
           <span className="text-[var(--color-muted-foreground)]">User</span>
           <span className="max-w-[60%] truncate text-[var(--color-foreground)]">{user?.name || user?.username || '—'}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
+          <FieldLabel label="Display name" className="flex-1">
           <input
-            aria-label="Display name"
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             onBlur={handleNameSave}
             placeholder="Display name"
             disabled={disabled}
-            className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] disabled:opacity-50"
+            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] disabled:opacity-50"
           />
+          </FieldLabel>
           <Button variant="outline" size="sm" onClick={handleNameSave} disabled={disabled}>Save</Button>
         </div>
         <div className="flex items-center justify-between">

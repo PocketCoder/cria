@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FieldLabel } from '@/components/ui/field-label';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { X, Trash2, Copy, Check, Lock, Loader2 } from 'lucide-react';
@@ -458,25 +459,27 @@ function LinksPanel({
     <>
       <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2.5">
         <div className="flex items-center gap-2">
+          <FieldLabel label="Link name" className="flex-1">
           <input
-            aria-label="Link name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name (optional)"
-            className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
+            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
           />
+          </FieldLabel>
           <PermissionSelect value={permission} onChange={setPermission} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
+          <FieldLabel label="Link password" className="flex-1">
           <input
-            aria-label="Link password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password (optional)"
-            className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
+            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
           />
+          </FieldLabel>
           <button
             type="button"
             disabled={!online || mutate.isPending}
