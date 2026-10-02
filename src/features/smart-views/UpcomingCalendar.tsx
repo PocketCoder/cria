@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { startOfWeek, addDays, format, isSameDay, startOfDay } from 'date-fns';
+import { startOfWeek, addDays, addMonths, format, isSameDay, startOfDay } from 'date-fns';
 import { ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevR } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -31,6 +31,8 @@ export function UpcomingCalendar({
   weekStartsOn?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [month, setMonth] = useState(selected);
+  useEffect(() => setMonth(selected), [selected]);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const wso = (weekStartsOn % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -86,17 +88,41 @@ export function UpcomingCalendar({
 
   return (
     <div className="border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 pb-2 pt-1">
-      <button
-        type="button"
-        onClick={() => setExpanded((e) => !e)}
-        className={cn(
-          'flex items-center gap-1 py-1 text-base font-semibold',
-          expanded ? 'text-[var(--color-primary)]' : 'text-[var(--color-foreground)]',
-        )}
-      >
-        {format(selected, 'MMM yyyy')}
-        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className={cn(
+            'flex items-center gap-1 py-1 text-base font-semibold',
+            expanded ? 'text-[var(--color-primary)]' : 'text-[var(--color-foreground)]',
+          )}
+        >
+          {format(expanded ? month : selected, 'MMM yyyy')}
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </button>
+        <div className="flex items-center gap-0.5">
+          {expanded && (
+            <>
+              <button type="button" aria-label="Previous month" onClick={() => setMonth((m) => addMonths(m, -1))} className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)]">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="Next month" onClick={() => setMonth((m) => addMonths(m, 1))} className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)]">
+                <ChevR className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              onPickDay(today);
+              setMonth(today);
+            }}
+            className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-muted)]"
+          >
+            Today
+          </button>
+        </div>
+      </div>
 
       {/* Cross-fade the week strip ↔ month grid by animating each container's
           height (grid-rows 0fr↔1fr — smooth, no fixed-height guess, no dep). */}
@@ -139,24 +165,14 @@ export function UpcomingCalendar({
             showOutsideDays
             modifiers={{ hasTasks: (d) => taskDays.has(dayKey(d)) }}
             modifiersClassNames={{ hasTasks: 'day-has-tasks' }}
-            components={{
-              PreviousMonthButton: (props) => (
-                <button {...props} className={cn('inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)]', props.className)} aria-label="Previous month">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-              ),
-              NextMonthButton: (props) => (
-                <button {...props} className={cn('inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)]', props.className)} aria-label="Next month">
-                  <ChevR className="h-4 w-4" />
-                </button>
-              ),
-            }}
+            month={month}
+            onMonthChange={setMonth}
+            hideNavigation
             classNames={{
               root: 'rdp w-full text-sm',
               months: 'w-full',
               month: 'w-full',
               month_caption: 'sr-only',
-              nav: 'absolute right-0 -top-7 flex gap-0.5',
               month_grid: 'w-full border-collapse',
               weekdays: 'flex justify-between',
               weekday: 'flex-1 text-footnote font-medium text-[var(--color-muted-foreground)] uppercase',

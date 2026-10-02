@@ -528,7 +528,12 @@ export function Shell() {
           )}
         >
           {!isMobile && (
-            <header className="flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11">
+            <header
+              className={cn(
+                'flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11',
+                activeView?.kind === 'upcoming' && 'bg-[var(--color-background)]',
+              )}
+            >
               <div className="flex min-w-[200px] flex-1 items-end gap-3">
                 {sidebarCollapsed && (
                   <button
