@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { format } from 'date-fns';
+import { canAnimate, withViewTransition, type TransitionKind } from '@/lib/viewTransition';
 
 /**
  * What the main pane is currently showing. Either a project's task list
@@ -23,12 +23,74 @@ interface UiState {
   sidebarCollapsed: boolean;
   /** Transient: the "create tasks from a photo" capture modal is open. */
   photoCaptureOpen: boolean;
+  /** Transient: the Ramble (speak → many tasks) sheet is open. */
+  rambleOpen: boolean;
+  /** Unsent ramble text, kept across close/reopen so a slip doesn't lose it. */
+  rambleDraft: string;
   setActiveView: (view: ActiveView | null) => void;
   /** Convenience for the common "open a project" path. */
   setSelectedProject: (id: string | null) => void;
   setSelectedTask: (id: string | null) => void;
   toggleSidebar: () => void;
   setPhotoCaptureOpen: (open: boolean) => void;
+  setRambleOpen: (open: boolean) => void;
+  setRambleDraft: (text: string) => void;
+}
+
+function viewKey(v: ActiveView | null): string {
+  return JSON.stringify(v);
+}
+
+/** `view` for a List/Kanban/Table/Gantt switch inside one project, else `nav`. */
+function navKind(prev: ActiveView | null, next: ActiveView | null): TransitionKind | null {
+  if (viewKey(prev) === viewKey(next)) return null;
+  if (prev?.kind === 'project' && next?.kind === 'project' && prev.localId === next.localId) {
+    return 'view';
+  }
+  return 'nav';
+}
+
+/** The row's title text, which morphs to and from the inspector's <h2>. */
+function rowTitle(taskLocalId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    `[data-task-row="${CSS.escape(taskLocalId)}"] .task-strike`,
+  );
+}
+
+function setTitleName(el: HTMLElement | null, on: boolean) {
+  if (el) el.style.viewTransitionName = on ? 'task-title' : '';
+}
+
+/**
+ * Desktop inspector open/close/switch. The row title carries the shared name
+ * only on the side of the transition where the inspector is closed, because
+ * two live elements with one name abort the transition. Mobile skips this:
+ * the inspector is a bottom sheet with its own sheet-up animation.
+ */
+function transitionTask(prev: string | null, next: string | null, commit: () => void) {
+  if (prev === next || !canAnimate() || window.matchMedia('(max-width: 768px)').matches) {
+    return commit();
+  }
+  if (prev && next) {
+    void withViewTransition('task', commit);
+    return;
+  }
+  if (next) {
+    const el = rowTitle(next);
+    setTitleName(el, true);
+    void withViewTransition('task', commit, {
+      waitFor: '[data-inspector-title]',
+      afterUpdate: () => setTitleName(el, false),
+    });
+    return;
+  }
+  let el: HTMLElement | null = null;
+  void withViewTransition('task', commit, {
+    afterUpdate: () => {
+      el = rowTitle(prev!);
+      setTitleName(el, true);
+    },
+  }).then(() => setTitleName(el, false));
 }
 
 /**
@@ -39,22 +101,30 @@ interface UiState {
  */
 export const useUi = create<UiState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       activeView: { kind: 'today' },
       selectedTaskLocalId: null,
       sidebarCollapsed: false,
       photoCaptureOpen: false,
-      setActiveView: (view) =>
-        set({ activeView: view, selectedTaskLocalId: null }),
+      rambleOpen: false,
+      rambleDraft: '',
+      setActiveView: (view) => {
+        const commit = () => set({ activeView: view, selectedTaskLocalId: null });
+        const kind = navKind(get().activeView, view);
+        if (kind) withViewTransition(kind, commit);
+        else commit();
+      },
       setSelectedProject: (id) =>
-        set({
-          activeView: id ? { kind: 'project', localId: id } : null,
-          selectedTaskLocalId: null,
-        }),
-      setSelectedTask: (id) => set({ selectedTaskLocalId: id }),
+        get().setActiveView(id ? { kind: 'project', localId: id } : null),
+      setSelectedTask: (id) =>
+        transitionTask(get().selectedTaskLocalId, id, () =>
+          set({ selectedTaskLocalId: id }),
+        ),
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
+      setRambleOpen: (open) => set({ rambleOpen: open }),
+      setRambleDraft: (text) => set({ rambleDraft: text }),
     }),
     {
       name: 'cria:ui/v2',
@@ -67,38 +137,3 @@ export const useUi = create<UiState>()(
 );
 
 /* ─────────────────────────── Now block (M7) ─────────────────────────── */
-
-/**
- * The "Now" block's state: up to three tasks picked for today, plus the day
- * they were picked for (a `yyyy-MM-dd` key). Local, device-scoped UI state —
- * no server round-trip. Persisted separately under `cria:now` so it doesn't
- * share the `cria:ui/v2` lifecycle.
- */
-interface NowState {
-  nowTaskIds: string[];
-  pickedOn: string | null;
-  /** Store the picked task ids for today (max 3). */
-  pick: (ids: string[]) => void;
-  /** Drop a single task (completion/reschedule removes it). */
-  unpick: (id: string) => void;
-  /** Clear the whole block (start over). */
-  reset: () => void;
-}
-
-export const useNow = create<NowState>()(
-  persist(
-    (set) => ({
-      nowTaskIds: [],
-      pickedOn: null,
-      pick: (ids) =>
-        set({ nowTaskIds: ids.slice(0, 3), pickedOn: format(new Date(), 'yyyy-MM-dd') }),
-      unpick: (id) =>
-        set((s) => ({ nowTaskIds: s.nowTaskIds.filter((x) => x !== id) })),
-      reset: () => set({ nowTaskIds: [], pickedOn: null }),
-    }),
-    {
-      name: 'cria:now',
-      partialize: (s) => ({ nowTaskIds: s.nowTaskIds, pickedOn: s.pickedOn }),
-    },
-  ),
-);

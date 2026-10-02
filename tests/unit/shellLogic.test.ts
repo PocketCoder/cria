@@ -122,6 +122,7 @@ describe('showMobileFab', () => {
     hasSelectedTask: false,
     mobileSearchOpen: false,
     photoCaptureOpen: false,
+    rambleOpen: false,
     quickAddOpen: false,
   };
   it('shows only on mobile with no overlay open', () => {
@@ -130,6 +131,7 @@ describe('showMobileFab', () => {
     expect(showMobileFab({ ...base, hasSelectedTask: true })).toBe(false);
     expect(showMobileFab({ ...base, mobileSearchOpen: true })).toBe(false);
     expect(showMobileFab({ ...base, photoCaptureOpen: true })).toBe(false);
+    expect(showMobileFab({ ...base, rambleOpen: true })).toBe(false);
     expect(showMobileFab({ ...base, quickAddOpen: true })).toBe(false);
   });
 });

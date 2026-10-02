@@ -5,6 +5,9 @@ import { useSettings } from '@/stores/settings';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
 import { extractListItems, type OcrEngine } from './ocr';
+import { generate } from '@/tauri/ai';
+import { aiErrorMessage, clip, parseLines, TIDY_LIST_INSTRUCTIONS } from '@/lib/aiPrompts';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 import { createTasksFromItems, selectedItems, type DraftItem } from './photoItems';
 import { PhotoExtracting, PhotoPrompt, PhotoReview } from './PhotoReview';
 
@@ -100,6 +103,32 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
   const includedCount = selectedItems(items).length;
 
+  // On-device model clean-up of the OCR'd lines (typos, split items, prices).
+  // Replaces the list; the user still reviews before anything is created.
+  const aiAvailable = useAiAvailable();
+  const [tidying, setTidying] = useState(false);
+  const tidy = async () => {
+    const lines = items.filter((i) => i.include && i.text.trim()).map((i) => i.text.trim());
+    if (lines.length === 0) return;
+    setTidying(true);
+    setError(null);
+    try {
+      const out = await generate({
+        title: 'Tidying your list',
+        instructions: TIDY_LIST_INSTRUCTIONS,
+        prompt: clip(lines.join('\n')),
+      });
+      const cleaned = parseLines(out, 100);
+      if (cleaned.length > 0) {
+        setItems(cleaned.map((text) => ({ id: nextId.current++, text, include: true })));
+      }
+    } catch (err) {
+      setError(aiErrorMessage(err));
+    } finally {
+      setTidying(false);
+    }
+  };
+
   const handleCreate = async () => {
     const chosen = selectedItems(items);
     if (chosen.length === 0 || !projectId) return;
@@ -173,6 +202,10 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
           setItems={setItems}
           includedCount={includedCount}
           engine={engine}
+          error={error}
+          aiAvailable={aiAvailable}
+          tidying={tidying}
+          onTidy={() => void tidy()}
           saving={phase === 'saving'}
           projects={projects}
           projectId={projectId}

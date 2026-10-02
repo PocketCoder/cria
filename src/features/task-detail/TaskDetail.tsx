@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Check, Trash2, Search } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { onShortcut } from '@/lib/shortcutBus';
-import { getTaskByLocalId, updateTask, moveTask, searchTasks, deleteTask } from '@/db/tasks';
+import { getTaskByLocalId, createTask, updateTask, moveTask, searchTasks, deleteTask } from '@/db/tasks';
 import { getProjectByLocalId } from '@/db/projects';
 import { searchProjectUsers } from '@/api/users';
 import { toggleTaskLabel } from '@/db/labels';
@@ -20,6 +20,8 @@ import {
 import { listRemindersForTask, type TaskReminder } from '@/db/reminders';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { RichTextEditor } from './RichTextEditor';
+import { BreakDown } from './BreakDown';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 import { toggleTaskDone } from '@/features/tasks/taskRowHelpers';
 import type { Task } from '@/domain/task';
 import { getAuthSnapshot } from '@/auth/store';
@@ -245,7 +247,12 @@ export function TaskDetail() {
           />
         </section>
 
-        <SubtasksBlock taskLocalId={task.localId} />
+        <SubtasksBlock
+          taskLocalId={task.localId}
+          projectLocalId={task.projectLocalId}
+          title={task.title}
+          description={task.description}
+        />
 
         <DetailSections
           task={task}
@@ -316,8 +323,19 @@ function useTaskShortcuts(
 
 /* ─── subtasks ─── */
 
-function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
+function SubtasksBlock({
+  taskLocalId,
+  projectLocalId,
+  title,
+  description,
+}: {
+  taskLocalId: string;
+  projectLocalId: string;
+  title: string;
+  description: string | null;
+}) {
   const qc = useQueryClient();
+  const aiAvailable = useAiAvailable();
   const { data: relations = [] } = useQuery({
     queryKey: ['relations', taskLocalId],
     queryFn: () => listRelationsForTask(taskLocalId),
@@ -361,6 +379,14 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
     await refresh();
   };
 
+  // New subtask lands in the parent's project, then gets linked.
+  const handleCreate = async () => {
+    const title = query.trim();
+    if (!title) return;
+    const created = await createTask({ projectLocalId, title });
+    await handlePick(created.localId);
+  };
+
   const handleRemove = async (r: { otherTaskLocalId: string | null; otherTaskServerId: number | null }) => {
     if (!r.otherTaskLocalId) return;
     await removeRelation(taskLocalId, r.otherTaskLocalId, r.otherTaskServerId, 'subtask');
@@ -375,7 +401,7 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
   return (
     <section className="mb-[22px]">
       <div className="mb-2 flex items-center gap-2.5">
-        <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+        <span className="group-label text-[var(--color-muted-foreground)]">
           Subtasks
         </span>
         {subtasks.length > 0 ? (
@@ -405,7 +431,7 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
             className={cn(
               'flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer',
               r.otherTaskDone
-                ? 'bg-[var(--color-primary)] text-white'
+                ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                 : 'border-[1.5px] border-[var(--color-muted-foreground)]/40',
             )}
           >
@@ -443,14 +469,28 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
                 if (e.key === 'Escape') {
                   setAdding(false);
                   setQuery('');
+                } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void handleCreate();
                 }
               }}
-              placeholder="Search tasks…"
+              placeholder="New subtask or search…"
               className="w-full bg-transparent text-[13.5px] focus:outline-none"
             />
           </div>
-          {results.length > 0 ? (
-            <div className="mt-1 flex max-h-40 flex-col overflow-y-auto">
+          {query.trim() ? (
+            <div className="mt-1 flex max-h-48 flex-col overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => void handleCreate()}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+                <span className="min-w-0 flex-1 truncate">
+                  Create “{query.trim()}”
+                </span>
+                <span className="text-[11px] text-[var(--color-muted-foreground)]">Enter</span>
+              </button>
               {results.map((r) => (
                 <button
                   key={r.localId}
@@ -466,14 +506,30 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
           ) : null}
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 rounded-md px-1 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          <Plus className="h-[15px] w-[15px]" />
-          Add subtask
-        </button>
+        <div className="flex flex-wrap items-center gap-x-3">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-2 rounded-md px-1 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
+          >
+            <Plus className="h-[15px] w-[15px]" />
+            Add subtask
+          </button>
+          {aiAvailable && (
+            <BreakDown
+              title={title}
+              description={description}
+              existing={subtasks.map((s) => s.otherTaskTitle ?? '')}
+              onAdd={async (titles) => {
+                for (const t of titles) {
+                  const created = await createTask({ projectLocalId, title: t });
+                  await addRelation(taskLocalId, created.localId, 'subtask');
+                }
+                await refresh();
+              }}
+            />
+          )}
+        </div>
       )}
     </section>
   );

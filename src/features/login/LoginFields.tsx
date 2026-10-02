@@ -1,15 +1,13 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import appIcon from '@/assets/app-icon.png';
 import type { AuthMethod } from './loginHelpers';
 
 export function LoginHeader() {
   return (
     <div className="flex flex-col items-center space-y-2">
-      <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-[13px] bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]">
-        <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-      </div>
+      <img src={appIcon} alt="" className="mb-2 h-14 w-14 rounded-[14px]" />
       <h1 className="text-2xl font-semibold tracking-[-0.03em]">Point Cria at your Vikunja</h1>
       <p className="mx-auto max-w-[42ch] text-[14.5px] leading-relaxed text-[var(--color-muted-foreground)]">
         Everything is stored on your machine and synced in the background. Works offline from the first launch.
@@ -18,10 +16,10 @@ export function LoginHeader() {
   );
 }
 
-const TABS: { method: AuthMethod; label: React.ReactNode }[] = [
-  { method: 'token', label: 'API Token' },
-  { method: 'password', label: <>Username &amp; Password</> },
-  { method: 'share', label: 'Share link' },
+const AUTH_METHODS: { value: AuthMethod; label: string }[] = [
+  { value: 'token', label: 'API Token' },
+  { value: 'password', label: 'Username & Password' },
+  { value: 'share', label: 'Share link' },
 ];
 
 export function MethodTabs({
@@ -32,22 +30,14 @@ export function MethodTabs({
   onSwitch: (method: AuthMethod) => void;
 }) {
   return (
-    <div className="flex rounded-lg border border-[var(--color-border)] p-0.5">
-      {TABS.map(({ method, label }) => (
-        <button
-          key={method}
-          type="button"
-          onClick={() => onSwitch(method)}
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-            authMethod === method
-              ? 'bg-[var(--color-primary)] text-white shadow-sm'
-              : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      aria-label="Sign-in method"
+      variant="primary"
+      fill
+      options={AUTH_METHODS}
+      value={authMethod}
+      onChange={onSwitch}
+    />
   );
 }
 

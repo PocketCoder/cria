@@ -47,7 +47,7 @@ export function TokenInput({
           ) : (
             <span
               key={i}
-              className="rounded-[5px] bg-[oklch(95% 0.02 255)] px-0.5 text-[var(--color-primary)]"
+              className="rounded-[5px] bg-[var(--color-primary)]/12 px-0.5 text-[var(--color-primary)]"
             >
               {t.text}
             </span>

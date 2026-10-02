@@ -20,6 +20,9 @@ const PhotoTaskCreator = lazy(() =>
     default: m.PhotoTaskCreator,
   })),
 );
+const RambleModal = lazy(() =>
+  import('@/features/ramble/RambleModal').then((m) => ({ default: m.RambleModal })),
+);
 const CommandPalette = lazy(() =>
   import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
 );
@@ -32,10 +35,14 @@ export function ShellOverlays({
   modals,
   photoCaptureOpen,
   setPhotoCaptureOpen,
+  rambleOpen,
+  setRambleOpen,
 }: {
   modals: ShellModals;
   photoCaptureOpen: boolean;
   setPhotoCaptureOpen: (open: boolean) => void;
+  rambleOpen: boolean;
+  setRambleOpen: (open: boolean) => void;
 }) {
   const m = modals;
   return (
@@ -55,6 +62,11 @@ export function ShellOverlays({
       {photoCaptureOpen && (
         <Suspense fallback={null}>
           <PhotoTaskCreator onClose={() => setPhotoCaptureOpen(false)} />
+        </Suspense>
+      )}
+      {rambleOpen && (
+        <Suspense fallback={null}>
+          <RambleModal onClose={() => setRambleOpen(false)} />
         </Suspense>
       )}
       {m.showSettings && (
@@ -136,7 +148,7 @@ export function MobileSearchOverlay({ search }: { search: ShellSearch }) {
 }
 
 /**
- * Floating action button — ink-filled circle anchored above the tab bar.
+ * Floating action button — purple circle anchored above the tab bar.
  * Mobile only; the caller hides it while a full-screen overlay owns the screen.
  */
 export function MobileFab({ onClick }: { onClick: () => void }) {
@@ -145,7 +157,7 @@ export function MobileFab({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="Add task"
       onClick={onClick}
-      className="fixed right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)] shadow-[0_8px_22px_-6px_rgba(0,0,0,0.4)]"
+      className="fab fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full"
       style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.75rem)' }}
     >
       <Plus className="h-7 w-7" strokeWidth={2.5} />

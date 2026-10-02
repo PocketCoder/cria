@@ -47,7 +47,7 @@ function SyncStatusButton({
     >
       <Icon className="h-5 w-5" />
       {status.total > 0 ? (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-[10px] font-semibold leading-[1.1rem] text-white">
+        <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] rounded-full bg-[var(--color-primary)] px-1 text-[10px] font-semibold leading-[1.1rem] text-[var(--color-primary-foreground)]">
           {status.total > 99 ? '99+' : status.total}
         </span>
       ) : null}
@@ -80,7 +80,7 @@ export function MobileHeader({
   return (
     <header className="flex select-none items-center border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2">
       <div className="flex flex-1 items-center gap-2">
-        <h1 className="nav-title-large">
+        <h1 className="vt-title nav-title-large">
           {title}
         </h1>
       </div>
@@ -150,7 +150,12 @@ export function DesktopHeader({
   onQuickAdd: () => void;
 }) {
   return (
-    <header className="flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11">
+    <header
+      className={cn(
+        'flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11',
+        activeView?.kind === 'upcoming' && 'bg-[var(--color-background)]',
+      )}
+    >
       <div className="flex min-w-[200px] flex-1 items-end gap-3">
         {sidebarCollapsed && (
           <button
@@ -164,7 +169,7 @@ export function DesktopHeader({
           </button>
         )}
         <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
+        <h1 className="vt-title truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
           {title}
         </h1>
         <p className="mt-1.5 truncate text-sm text-[var(--color-muted-foreground)]">
@@ -187,7 +192,7 @@ export function DesktopHeader({
           <button
             type="button"
             onClick={onOpenDisplay}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] dark:border-[oklch(31%_0.008_265)]"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
             Filter
@@ -196,7 +201,7 @@ export function DesktopHeader({
         <button
           type="button"
           onClick={onQuickAdd}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-inverse)] px-3 py-1.5 text-xs font-medium text-[var(--color-inverse-foreground)] hover:opacity-90"
+          className="press inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-inverse)] px-3 py-1.5 text-xs font-medium text-[var(--color-inverse-foreground)] hover:opacity-90"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           Add task

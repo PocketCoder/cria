@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Check, RefreshCw } from 'lucide-react';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  pickerChipClass,
+  pickerRowClass,
+  type PickerOpenProps,
+} from '@/components/ui/popover';
 import {
   Select,
   SelectTrigger,
@@ -51,7 +58,9 @@ export function RecurrencePicker({
   repeatMode,
   onChange,
   className,
-}: {
+  open,
+  onOpenChange,
+}: PickerOpenProps & {
   repeatAfter: number | null;
   repeatMode: number | null;
   onChange: (repeatAfter: number | null, repeatMode: number | null) => void;
@@ -66,15 +75,12 @@ export function RecurrencePicker({
   const apply = (v: number, u: Unit, m: number) => onChange(valueUnitToSeconds(v, u), m);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label="Repeat"
-          className={cn(
-            'inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
-            className,
-          )}
+          className={cn(pickerChipClass, className)}
         >
           <RefreshCw className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
           <span className={summary ? '' : 'text-[var(--color-muted-foreground)]'}>
@@ -82,7 +88,7 @@ export function RecurrencePicker({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-60 p-2">
+      <PopoverContent align="start" sideOffset={6} className="w-64 p-2">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-[var(--color-muted-foreground)]">Every</span>
@@ -126,14 +132,12 @@ export function RecurrencePicker({
                 key={m}
                 type="button"
                 onClick={() => apply(value, unit, m)}
-                className={cn(
-                  'w-full rounded px-2 py-1 text-left text-xs transition-colors',
-                  m === mode && summary
-                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                    : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]/10',
-                )}
+                className={cn(pickerRowClass, m === mode && summary && 'bg-[var(--color-muted)]')}
               >
-                {REPEAT_MODE_LABELS[m]}
+                <span className="min-w-0 flex-1 truncate">{REPEAT_MODE_LABELS[m]}</span>
+                {m === mode && summary ? (
+                  <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+                ) : null}
               </button>
             ))}
           </div>
@@ -142,7 +146,7 @@ export function RecurrencePicker({
             <button
               type="button"
               onClick={() => onChange(null, null)}
-              className="self-start rounded px-2 py-0.5 text-footnote text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+              className={cn(pickerRowClass, 'text-[var(--color-destructive)]')}
             >
               Remove repeat
             </button>

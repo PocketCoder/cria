@@ -40,6 +40,8 @@ export function Shell() {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const rambleOpen = useUi((s) => s.rambleOpen);
+  const setRambleOpen = useUi((s) => s.setRambleOpen);
   const sidebarCollapsed = useUi((s) => s.sidebarCollapsed);
   const toggleSidebar = useUi((s) => s.toggleSidebar);
   const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
@@ -157,7 +159,7 @@ export function Shell() {
         {/* Content pane — a white card floating on the paper canvas. */}
         <div
           className={cn(
-            'flex min-w-0 flex-1 flex-col bg-[var(--color-card)]',
+            'flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-card)]',
             !isMobile && !sidebarCollapsed && 'rounded-l-xl border-l border-[var(--color-border)]',
           )}
         >
@@ -176,7 +178,7 @@ export function Shell() {
             />
           )}
 
-          <main className="flex min-w-0 flex-1 flex-col">
+          <main className="vt-pane flex min-h-0 min-w-0 flex-1 flex-col">
             <MainView
               activeView={activeView}
               searchQuery={searchQuery}
@@ -208,6 +210,8 @@ export function Shell() {
         modals={modals}
         photoCaptureOpen={photoCaptureOpen}
         setPhotoCaptureOpen={setPhotoCaptureOpen}
+        rambleOpen={rambleOpen}
+        setRambleOpen={setRambleOpen}
       />
 
       {/* Mobile search overlay */}
@@ -219,12 +223,13 @@ export function Shell() {
       {isMobile && <TaskDetail />}
 
       {/* Floating action button — hidden while a full-screen overlay (task
-          detail, search, photo capture, quick-add) owns the screen. */}
+          detail, search, photo capture, ramble, quick-add) owns the screen. */}
       {showMobileFab({
         isMobile,
         hasSelectedTask: !!selectedTaskLocalId,
         mobileSearchOpen,
         photoCaptureOpen,
+        rambleOpen,
         quickAddOpen: modals.showQuickAdd,
       }) && <MobileFab onClick={() => setShowQuickAdd(true)} />}
 

@@ -26,6 +26,7 @@ function deps() {
     onClose: vi.fn(),
     onOpenQuickAdd: vi.fn(),
     onOpenSettings: vi.fn(),
+    aiAvailable: false,
   };
 }
 
@@ -43,6 +44,12 @@ describe('buildPaletteActions', () => {
       'action-quick-add',
       'action-settings',
     ]);
+  });
+
+  it('adds the Ramble action only when AI is available', () => {
+    const ids = buildPaletteActions({ ...deps(), aiAvailable: true }).map((a) => a.id);
+    expect(ids).toContain('action-ramble');
+    expect(ids.indexOf('action-ramble')).toBeLessThan(ids.indexOf('action-settings'));
   });
 
   it('wires selection handlers and closes the palette', () => {

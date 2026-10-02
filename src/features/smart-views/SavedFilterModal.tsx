@@ -6,6 +6,8 @@ import { createSavedFilter, updateSavedFilter } from '@/api/savedFilters';
 import { useOnline } from '@/hooks/useOnline';
 import { Switch } from '@/components/ui/switch';
 import type { SavedFilter } from '@/db/savedFilters';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
+import { DescribeFilter } from './DescribeFilter';
 
 /**
  * Create/edit a Vikunja saved filter. The query is validated live with the
@@ -20,6 +22,7 @@ export function SavedFilterModal({
   onClose: () => void;
 }) {
   const online = useOnline();
+  const aiAvailable = useAiAvailable();
   const [title, setTitle] = useState(existing?.title ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [query, setQuery] = useState(existing?.filterQuery ?? '');
@@ -68,7 +71,7 @@ export function SavedFilterModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -110,6 +113,7 @@ export function SavedFilterModal({
             <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Filter query
             </label>
+            {aiAvailable && <DescribeFilter onQuery={setQuery} />}
             <FilterInput
               value={query}
               onChange={setQuery}

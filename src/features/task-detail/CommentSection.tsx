@@ -25,6 +25,8 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { getAuthSnapshot } from '@/auth/store';
 import { pullCommentsForTask } from '@/sync/pull';
 import { RichTextEditor } from './RichTextEditor';
+import { ThreadSummary } from './ThreadSummary';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 import type { MentionSearch } from './mentionExtension';
 
 export function CommentSection({
@@ -41,6 +43,7 @@ export function CommentSection({
   const { data: comments = [] } = useTaskComments(taskLocalId);
   const { data: unreadCount = 0 } = useTaskUnreadCount(taskLocalId);
   const qc = useQueryClient();
+  const aiAvailable = useAiAvailable();
   const [expanded, setExpanded] = useState(hideHeader);
   const [sortAsc, setSortAsc] = useState(true);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -142,7 +145,7 @@ export function CommentSection({
         <button
           type="button"
           onClick={handleToggle}
-          className="flex w-full items-center gap-1 text-left text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+          className="flex w-full items-center gap-1 text-left group-label text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
         >
           {expanded ? (
             <ChevronDown className="h-3 w-3 shrink-0" />
@@ -155,7 +158,7 @@ export function CommentSection({
             <span className="font-normal">{totalCount}</span>
           ) : null}
           {unreadCount > 0 ? (
-            <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-white">
+            <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-[var(--color-primary-foreground)]">
               {unreadCount} new
             </span>
           ) : null}
@@ -174,6 +177,8 @@ export function CommentSection({
               {sortAsc ? 'Oldest first' : 'Newest first'}
             </button>
           ) : null}
+
+          {aiAvailable && comments.length >= 3 && <ThreadSummary comments={comments} />}
 
           {sortedComments.length === 0 ? (
             <p className="px-1 text-xs text-[var(--color-muted-foreground)]">

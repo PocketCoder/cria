@@ -176,7 +176,7 @@ export function ProjectPickerList({
         {fp.length > 0 && (
           <>
             <div className="flex items-center justify-between pr-1">
-              <p className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+              <p className="px-2 pb-1.5 pt-3 group-label text-[var(--color-muted-foreground)]">
                 Projects
               </p>
               <Plus className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
@@ -195,7 +195,7 @@ export function ProjectPickerList({
 
         {fl.length > 0 && (
           <>
-            <p className="px-2 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+            <p className="px-2 pb-1.5 pt-4 group-label text-[var(--color-muted-foreground)]">
               Labels
             </p>
             <div className="flex flex-wrap gap-2 px-2">

@@ -43,7 +43,7 @@ export function UndoToasts() {
       {entries.map(({ task, enqueuedAt }) => (
         <div
           key={task.localId}
-          className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-card)] shadow-lg"
+          className="toast-up flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-card)] shadow-lg"
           role="status"
         >
           <div className="flex items-center gap-3 px-3 py-2 text-xs">

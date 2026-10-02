@@ -245,7 +245,7 @@ export function TaskList({ project, view }: TaskListProps) {
                 "Completed Tasks" toggle is on, and are hidden otherwise. */}
             {showCompleted && completedTasks.length > 0 ? (
               <li className="border-t border-[var(--color-border)]">
-                <h2 className="px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                <h2 className="px-7 py-1.5 group-label text-[var(--color-muted-foreground)]">
                   Completed
                   <span className="ml-2 font-normal normal-case">{completedTasks.length}</span>
                 </h2>
@@ -385,7 +385,6 @@ const TaskRow = memo(function TaskRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    paddingLeft: `${28 + depth * 28}px`,
     paddingRight: 0,
     overflow: 'hidden',
     position: 'relative',
@@ -454,6 +453,7 @@ const TaskRow = memo(function TaskRow({
             onToggleSelect={() => toggleSelected(task.localId)}
             onOpen={handleOpen}
             className="py-2.5 pr-6"
+            style={{ paddingLeft: `${28 + depth * 28}px` }}
             titleSlot={
               editing ? (
                 <input

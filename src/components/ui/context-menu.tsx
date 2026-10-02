@@ -38,7 +38,7 @@ export const ContextMenuSubContent = forwardRef<
     ref={ref}
     className={cn(
       'z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-1 text-[var(--color-card-foreground)] shadow-md',
-      'animate-in slide-in-from-left-1',
+      'pop-in origin-[var(--radix-context-menu-content-transform-origin)]',
       className,
     )}
     {...props}
@@ -55,7 +55,7 @@ export const ContextMenuContent = forwardRef<
       ref={ref}
       className={cn(
         'z-50 min-w-[12rem] overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-1 text-[var(--color-card-foreground)] shadow-md',
-        'animate-in fade-in-80 zoom-in-95',
+        'pop-in origin-[var(--radix-context-menu-content-transform-origin)]',
         className,
       )}
       {...props}

@@ -27,7 +27,7 @@ import type { Label } from '@/domain/label';
 import { PROJECT_COLORS } from './sidebarLogic';
 
 const SELECTED_ROW =
-  'bg-[var(--color-inverse)] font-medium text-[var(--color-inverse-foreground)] dark:bg-[oklch(30%_0.012_265)] dark:text-[var(--color-foreground)]';
+  'bg-[var(--color-muted)] font-medium text-[color:var(--color-foreground)]';
 
 /* ────────────────────────── shared nav item ─────────────────────────── */
 
@@ -377,7 +377,7 @@ export function ProjectRow({
   );
 }
 
-/** Own button so it never nests inside the row's select button. A spacer keeps childless rows aligned. */
+/** Own button so it never nests inside the row's select button. Sits in the nav's left gutter so dots align with the Labels rows and section headers. */
 function ExpandToggle({
   hasChildren,
   expanded,
@@ -387,7 +387,7 @@ function ExpandToggle({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  if (!hasChildren) return <span className="h-5 w-4 shrink-0" aria-hidden="true" />;
+  if (!hasChildren) return null;
   return (
     <button
       type="button"
@@ -396,7 +396,7 @@ function ExpandToggle({
         e.stopPropagation();
         onToggle();
       }}
-      className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+      className="absolute -left-3 top-1/2 flex h-5 w-4 -translate-y-1/2 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
     >
       {expanded ? (
         <ChevronDown className="h-3.5 w-3.5" />
@@ -425,7 +425,7 @@ function ProjectSelectButton({
       onClick={onSelect}
       className={cn(
         'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
-        'hover:bg-[var(--color-muted)]',
+        'hover:bg-[var(--color-muted)] hover:text-[color:var(--color-foreground)]',
         isSelected && SELECTED_ROW,
       )}
     >

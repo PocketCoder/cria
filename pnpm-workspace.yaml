@@ -4,3 +4,13 @@ allowBuilds:
   # tesseract.js's only install hook is an OpenCollective donation prompt; we
   # use its prebuilt dist/, so the build step is unnecessary.
   tesseract.js: false
+# Xcode's "Build Rust Code" phase runs `pnpm tauri ios xcode-script` with a
+# sanitised env (no CI, no TTY). pnpm 11's pre-run deps check then tries to
+# reinstall and aborts on the modules-dir purge prompt. Deps are installed by
+# the caller already, so skip the check.
+verifyDepsBeforeRun: false
+# Supply-chain hardening: don't install versions published in the last 7 days
+# (minutes, so 10080 = 7d). `trustPolicy: no-downgrade` was tried and dropped:
+# it rejects old-major backports (nanoid 3, semver 6, vite 5, ...) that lack
+# provenance, which broke `pnpm install --frozen-lockfile` in CI.
+minimumReleaseAge: 10080

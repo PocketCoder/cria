@@ -60,6 +60,10 @@ interface ReviewProps {
   setItems: (updater: (prev: DraftItem[]) => DraftItem[]) => void;
   includedCount: number;
   engine: OcrEngine | null;
+  error: string | null;
+  aiAvailable: boolean;
+  tidying: boolean;
+  onTidy: () => void;
   saving: boolean;
   projects: Project[];
   projectId: string;
@@ -76,6 +80,10 @@ export function PhotoReview({
   setItems,
   includedCount,
   engine,
+  error,
+  aiAvailable,
+  tidying,
+  onTidy,
   saving,
   projects,
   projectId,
@@ -90,12 +98,27 @@ export function PhotoReview({
     <div className="space-y-3">
       <div className="flex items-center justify-between text-caption text-[var(--color-muted-foreground)]">
         <span>{selectedLabel(includedCount)}</span>
-        {engine === 'vision' && (
-          <span className="flex items-center gap-1" title="Read on-device with Apple Vision">
-            <Sparkles className="h-3 w-3" /> On-device
-          </span>
+        {aiAvailable ? (
+          <button
+            type="button"
+            disabled={tidying || saving}
+            onClick={onTidy}
+            title="Fix misreadings and drop prices/headings (on-device)"
+            className="flex items-center gap-1 hover:text-[var(--color-foreground)] disabled:opacity-60"
+          >
+            {tidying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {tidying ? 'Tidying…' : 'Tidy up'}
+          </button>
+        ) : (
+          engine === 'vision' && (
+            <span className="flex items-center gap-1" title="Read on-device with Apple Vision">
+              <Sparkles className="h-3 w-3" /> On-device
+            </span>
+          )
         )}
       </div>
+
+      {error && <p className="text-caption text-[var(--color-destructive)]">{error}</p>}
 
       <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
         {items.map((item) => (

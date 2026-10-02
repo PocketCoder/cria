@@ -119,7 +119,7 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-2">
         <div className="mb-1 flex items-center justify-between px-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <p className="group-label text-[var(--color-muted-foreground)]">
             Notifications
           </p>
           {unread > 0 && (

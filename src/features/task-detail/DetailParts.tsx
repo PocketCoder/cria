@@ -124,7 +124,8 @@ export function TaskTitle({
   }
   return (
     <h2
-      className="mb-[18px] cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
+      data-inspector-title
+      className="vt-task-title mb-[18px] w-fit max-w-full cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
       onClick={() => {
         setDraft(task.title);
         setEditing(true);

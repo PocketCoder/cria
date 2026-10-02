@@ -52,7 +52,7 @@ describe('upcomingSectioner', () => {
       'empty-2030-05-18-2030-05-28',
     ]);
     expect(groups[1]!.tasks.map((t) => t.localId)).toEqual(['a']);
-    expect(groups[2]!.label).toContain('nothing scheduled');
+    expect(groups[2]!.label).toBe('Nothing else scheduled');
   });
 
   it('skips undated and past tasks and extends past 13 days for later tasks', () => {

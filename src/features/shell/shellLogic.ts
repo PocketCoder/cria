@@ -98,12 +98,13 @@ export function resolveCurrentProjectView<
   return { project, view };
 }
 
-/** The FAB hides while a full-screen overlay (detail, search, photo, quick-add) owns the screen. */
+/** The FAB hides while a full-screen overlay (detail, search, photo, ramble, quick-add) owns the screen. */
 export function showMobileFab(o: {
   isMobile: boolean;
   hasSelectedTask: boolean;
   mobileSearchOpen: boolean;
   photoCaptureOpen: boolean;
+  rambleOpen: boolean;
   quickAddOpen: boolean;
 }): boolean {
   return (
@@ -111,6 +112,7 @@ export function showMobileFab(o: {
     !o.hasSelectedTask &&
     !o.mobileSearchOpen &&
     !o.photoCaptureOpen &&
+    !o.rambleOpen &&
     !o.quickAddOpen
   );
 }

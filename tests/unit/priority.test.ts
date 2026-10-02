@@ -7,9 +7,9 @@ describe('priority scale', () => {
     expect(PRIORITY_LABELS).toEqual(['None', 'Low', 'Medium', 'High', 'Urgent', 'Critical']);
   });
 
-  it('returns a token colour for high levels and transparent otherwise', () => {
+  it('returns a token colour for every level except none', () => {
     expect(priorityColor(0)).toBe('transparent');
-    expect(priorityColor(2)).toBe('transparent');
+    expect(priorityColor(2)).toBe('var(--prio-medium)');
     expect(priorityColor(3)).toBe('var(--prio-high)');
     expect(priorityColor(5)).toBe('var(--prio-critical)');
   });

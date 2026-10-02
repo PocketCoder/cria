@@ -47,15 +47,8 @@ export function ProjectSidebar({
 
   return (
     <aside className="flex h-full w-[236px] shrink-0 flex-col bg-[var(--color-background)]">
-      {/* 44px traffic-light strip — the window drag region */}
-      <div
-        onMouseDown={onDragMouseDown}
-        className="flex h-11 flex-none select-none items-center gap-2 px-4"
-      >
-        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
-      </div>
+      {/* 44px strip under the native (overlay) traffic lights — the window drag region */}
+      <div onMouseDown={onDragMouseDown} className="h-11 flex-none select-none" />
 
       {/* Search → command palette */}
       <div className="flex-none px-3 pb-3">

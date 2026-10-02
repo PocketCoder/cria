@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Calendar as CalendarIcon, Check, ChevronRight } from 'lucide-react';
 import { listProjects } from '@/db/projects';
@@ -18,21 +18,17 @@ type DateField = 'dueDate' | 'startDate' | 'endDate';
 type OnSetDate = (field: DateField, value: string | null) => Promise<void>;
 type OnToggleLabel = (labelLocalId: string) => Promise<void>;
 
-function Chip({
-  children,
-  onClick,
-  dashed = false,
-  className,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  dashed?: boolean;
-  className?: string;
-}) {
+// forwardRef + prop spread: Radix `PopoverTrigger asChild` needs the ref to
+// anchor the popover and passes aria/data-state props through.
+const Chip = forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { dashed?: boolean }
+>(function Chip({ children, dashed = false, className, ...rest }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
-      onClick={onClick}
+      {...rest}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-[5px] text-[12.5px] transition-colors cursor-pointer',
         dashed
@@ -44,7 +40,7 @@ function Chip({
       {children}
     </button>
   );
-}
+});
 
 function Dot({ color }: { color: string }) {
   return (

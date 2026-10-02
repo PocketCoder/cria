@@ -4,6 +4,7 @@ import { useSelectableProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 import type { AddReminderInput } from '@/db/reminders';
 import {
   buildQuickAddInput,
@@ -34,6 +35,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const activeView = useUi((s) => s.activeView);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const aiAvailable = useAiAvailable();
   const selectedProjectId =
     activeView?.kind === 'project' ? activeView.localId : null;
   const { data: projects = [] } = useSelectableProjects();
@@ -209,6 +211,17 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
           onClose();
           setPhotoCaptureOpen(true);
         }}
+        onOpenRamble={
+          aiAvailable
+            ? () => {
+                // Carry over anything already typed.
+                const ui = useUi.getState();
+                if (text.trim() && !ui.rambleDraft.trim()) ui.setRambleDraft(text);
+                onClose();
+                ui.setRambleOpen(true);
+              }
+            : undefined
+        }
       />
     );
   }

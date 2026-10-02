@@ -4,9 +4,8 @@ import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
 import { todaySectioner, upcomingDayLabel, upcomingSectioner } from './sectioners';
 import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { useNow, useUi } from '@/stores/ui';
+import { useUi } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { priorityColor } from '@/components/ui/priority';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -361,49 +360,10 @@ function flatten(groups: TaskGroup[]): TaskWithProject[] {
   return groups.flatMap((g) => g.tasks);
 }
 
-/* ─────────────────────────────── Now block ──────────────────────────── */
-
-/** A stripped Now-block row: priority bar · checkbox · title(500) · project. */
-function NowRow({ task }: { task: TaskWithProject }) {
-  const setSelectedTask = useUi((s) => s.setSelectedTask);
-  const unpick = useNow((s) => s.unpick);
-  const handleToggle = useCallback(() => {
-    void toggleTaskDone(task).then((ok) => {
-      // Only drop it from the block once the completion actually landed —
-      // otherwise a failed update would silently vanish from Now while
-      // still showing as incomplete everywhere else.
-      if (ok) unpick(task.localId);
-    });
-  }, [task, unpick]);
-  return (
-    <div
-      onClick={() => setSelectedTask(task.localId)}
-      className="flex cursor-pointer items-center gap-3 rounded-md px-1 py-[9px] hover:bg-[var(--color-accent)]/5"
-    >
-      <span
-        aria-hidden="true"
-        className="h-5 w-[3px] shrink-0 rounded-full"
-        style={{ background: task.priority > 2 ? priorityColor(task.priority) : 'transparent' }}
-      />
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="task-check"
-      />
-      <p className="min-w-0 flex-1 truncate text-[14.5px] font-medium leading-snug">{task.title}</p>
-      {task.projectTitle ? (
-        <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{task.projectTitle}</span>
-      ) : null}
-    </div>
-  );
-}
+/* ─────────────────────────────── Pickers ──────────────────────────── */
 
 /**
- * A checklist sheet over a task list — used both to pick the Now block (max 3)
- * and to pull a future task forward. Selection is capped at `max`; `onConfirm`
+ * A checklist sheet over a task list — used to pull a future task forward. Selection is capped at `max`; `onConfirm`
  * receives the chosen ids.
  */
 function PickerSheet({
@@ -482,7 +442,7 @@ function PickerSheet({
                     className={cn(
                       'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
                       on
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                         : 'border-[var(--color-muted-foreground)]',
                     )}
                   >
@@ -513,7 +473,7 @@ function PickerSheet({
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
-        <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
+        <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
         </div>
@@ -521,80 +481,14 @@ function PickerSheet({
     );
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--sheet-border)]"
         onClick={(e) => e.stopPropagation()}
       >
         {header}
         <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
       </div>
-    </div>
-  );
-}
-
-/**
- * The Now block: up to three user-picked tasks for today. Local device state
- * (`useNow`); a task leaves the block when it's completed or rescheduled off
- * today (both drop it out of `livePicks`). Renders its empty state when nothing
- * live is picked for today.
- */
-function NowBlock({ tasks }: { tasks: TaskWithProject[] }) {
-  const isMobile = useIsMobile();
-  const { nowTaskIds, pickedOn, pick } = useNow();
-  const [picking, setPicking] = useState(false);
-
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
-  const active = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
-  const livePicks = useMemo(() => {
-    if (pickedOn !== todayKey) return [];
-    const byId = new Map(active.map((t) => [t.localId, t]));
-    return nowTaskIds.map((id) => byId.get(id)).filter(Boolean) as TaskWithProject[];
-  }, [pickedOn, todayKey, nowTaskIds, active]);
-
-  return (
-    <div className={cn('mb-[34px] bg-[var(--color-background)] p-5', isMobile ? 'rounded-[18px]' : 'rounded-[14px]')}>
-      <div className="mb-3 flex items-baseline gap-2.5">
-        <h2 className="group-label !tracking-[0.11em] text-[var(--color-primary)]">Now</h2>
-        <span className="text-xs text-[var(--color-muted-foreground)]">three things, then stop</span>
-        {livePicks.length > 0 ? (
-          <button
-            onClick={() => setPicking(true)}
-            className="ml-auto text-xs text-[var(--color-primary)]"
-          >
-            Re-pick
-          </button>
-        ) : null}
-      </div>
-      {livePicks.length > 0 ? (
-        <div className="flex flex-col gap-0.5">
-          {livePicks.map((t) => (
-            <NowRow key={t.localId} task={t} />
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-[var(--color-muted-foreground)]">Pick up to three things for today</span>
-          <button
-            onClick={() => setPicking(true)}
-            className="shrink-0 rounded-lg bg-[var(--color-inverse)] px-3.5 py-2 text-xs font-medium text-[var(--color-inverse-foreground)]"
-          >
-            Pick
-          </button>
-        </div>
-      )}
-      {picking ? (
-        <PickerSheet
-          tasks={active}
-          initialSelected={nowTaskIds}
-          max={3}
-          title="Pick for Now"
-          subtitle="Up to three things, then stop"
-          confirmLabel={(n) => (n ? `Pick ${n}` : 'Clear')}
-          onConfirm={pick}
-          onClose={() => setPicking(false)}
-        />
-      ) : null}
     </div>
   );
 }
@@ -658,13 +552,13 @@ function NothingDue({ doneCount }: { doneCount: number }) {
   );
 }
 
-/** Today's header region: the Now block when there's work, else Nothing-due. */
+/** Today's header region: Nothing-due when nothing is left, else empty. */
 function TodayTop({ tasks }: { tasks: TaskWithProject[] }) {
   const active = tasks.filter((t) => !t.done);
   if (active.length === 0) {
     return <NothingDue doneCount={tasks.filter((t) => t.done).length} />;
   }
-  return <NowBlock tasks={tasks} />;
+  return null;
 }
 
 export function TodayView() {

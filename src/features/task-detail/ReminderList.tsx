@@ -91,7 +91,7 @@ export function ReminderList({
   return (
     <section className="mb-4">
       {!hideHeader ? (
-        <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+        <h3 className="mb-1 flex items-center gap-1 group-label text-[var(--color-muted-foreground)]">
           <Bell className="h-3 w-3" />
           Reminders
           {reminders.length > 0 ? (

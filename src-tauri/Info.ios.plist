@@ -10,5 +10,12 @@
 	<string>Cria uses the camera to photograph a shopping list and turn it into tasks.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cria reads a photo you choose to turn a shopping list into tasks.</string>
+	<!-- On-device AI calls run as BGContinuedProcessingTasks so they survive the
+	     user switching apps (system progress Live Activity). Identifiers are
+	     generated per call under this prefix; see swift/CriaAI/Background.swift. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).ai.*</string>
+	</array>
 </dict>
 </plist>

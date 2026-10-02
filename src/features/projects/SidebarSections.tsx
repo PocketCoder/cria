@@ -31,7 +31,7 @@ import { LabelRow, NavItem, ProjectRow } from './SidebarRows';
 import { computeDropPosition, computeSyncLine, visibleProjectList } from './sidebarLogic';
 
 const SECTION_HEADING =
-  'px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]';
+  'px-2.5 pb-1.5 pt-4 group-label text-[var(--color-muted-foreground)]';
 
 /* ────────────────────────── saved filters ─────────────────────────── */
 
@@ -402,7 +402,7 @@ export function ProjectsSection({ onShare }: { onShare: (project: Project) => vo
   return (
     <div className="mt-2">
       <header className="flex items-center justify-between pr-1">
-        <p className="px-2.5 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+        <p className="px-2.5 pb-1.5 pt-2 group-label text-[var(--color-muted-foreground)]">
           Projects
         </p>
         <button

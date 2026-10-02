@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings } from 'lucide-react';
+import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings, Mic } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import type { Project } from '@/domain/project';
 import type { Label } from '@/domain/label';
@@ -34,6 +34,7 @@ export interface PaletteActionDeps {
   onClose: () => void;
   onOpenQuickAdd: () => void;
   onOpenSettings: () => void;
+  aiAvailable: boolean;
 }
 
 export function buildPaletteActions({
@@ -45,6 +46,7 @@ export function buildPaletteActions({
   onClose,
   onOpenQuickAdd,
   onOpenSettings,
+  aiAvailable,
 }: PaletteActionDeps): PaletteAction[] {
   const list: PaletteAction[] = [];
 
@@ -160,6 +162,20 @@ export function buildPaletteActions({
       onOpenQuickAdd();
     },
   });
+  if (aiAvailable) {
+    list.push({
+      id: 'action-ramble',
+      label: 'Ramble',
+      subtitle: 'Talk freely, get a list of tasks',
+      group: 'Actions',
+      keywords: 'ramble voice dictate speak brain dump ai many tasks',
+      icon: <Mic className="h-4 w-4" />,
+      onSelect: () => {
+        onClose();
+        useUi.getState().setRambleOpen(true);
+      },
+    });
+  }
   list.push({
     id: 'action-settings',
     label: 'Settings',

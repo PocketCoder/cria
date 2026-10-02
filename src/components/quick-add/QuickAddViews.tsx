@@ -1,5 +1,5 @@
 import type { MutableRefObject, FormEvent, KeyboardEvent, RefObject } from 'react';
-import { ArrowUp, Camera } from 'lucide-react';
+import { ArrowUp, Camera, Mic } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { QuickAddResult } from '@/lib/quickAddParser';
 import { TokenInput } from './TokenInput';
@@ -27,6 +27,8 @@ interface MobileProps extends ViewProps {
   dragY: number;
   keyboardInset: number;
   onOpenPhotoCapture: () => void;
+  /** Present only when AI is available. */
+  onOpenRamble?: () => void;
 }
 
 /**
@@ -52,6 +54,7 @@ export function MobileQuickAdd({
   dragY,
   keyboardInset,
   onOpenPhotoCapture,
+  onOpenRamble,
 }: MobileProps) {
   return (
     <div
@@ -65,7 +68,7 @@ export function MobileQuickAdd({
       <div
         ref={panelRef}
         className={cn(
-          'relative z-10 w-full rounded-t-[22px] bg-[var(--color-card)] pt-2.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] dark:border dark:border-[oklch(34%_0.008_265)]',
+          'relative z-10 w-full rounded-t-[22px] bg-[var(--color-card)] pt-2.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] dark:border dark:border-[var(--sheet-border)]',
           dragY === 0 && !drag.current.active && 'animate-[sheet-up_300ms_var(--spring-snappy)]',
         )}
         style={{
@@ -113,6 +116,17 @@ export function MobileQuickAdd({
               <code className="font-mono text-[var(--color-primary)]">!2</code>
             </span>
             <div className="flex shrink-0 items-center gap-1.5">
+              {onOpenRamble && (
+                <button
+                  type="button"
+                  aria-label="Ramble"
+                  title="Ramble: talk freely, get a list of tasks"
+                  onClick={onOpenRamble}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+                >
+                  <Mic className="h-5 w-5" />
+                </button>
+              )}
               <button
                 type="button"
                 aria-label="Add tasks from a photo"
@@ -156,11 +170,11 @@ export function DesktopQuickAdd({
 }: DesktopProps) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-[oklch(22% 0.012 265 / 0.34)] pt-[70px]"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
       onClick={onClose}
     >
       <div
-        className="w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[oklch(34%_0.008_265)]"
+        className="w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]"
         onClick={(e) => e.stopPropagation()}
       >
         <form onSubmit={onSubmit}>

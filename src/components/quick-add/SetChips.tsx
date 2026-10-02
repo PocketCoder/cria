@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CalendarDays, Tag, Bell } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { PrioritySelect } from '@/components/ui/priority-select';
@@ -6,7 +7,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { LabelPicker } from '@/components/ui/label-picker';
 import { RecurrencePicker } from '@/components/ui/recurrence-picker';
 import { ReminderPill } from '@/components/ui/reminder-pill';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Popover, PopoverTrigger, PopoverContent, pickerChipClass } from '@/components/ui/popover';
 import { formatDue } from '@/features/tasks/taskRowHelpers';
 import { cn } from '@/lib/cn';
 import { repeatLabel } from '@/lib/repeatLabel';
@@ -138,19 +139,47 @@ function PickerSet({
   repeatMode,
   onChangeRepeat,
 }: SetChipsProps) {
+  // One picker open at a time: opening another chip closes the current one.
+  // The functional update keeps a late close from the old picker from
+  // clobbering the new one.
+  const [openPicker, setOpenPicker] = useState<string | null>(null);
+  const pickerOpen = (key: string) => ({
+    open: openPicker === key,
+    onOpenChange: (o: boolean) =>
+      setOpenPicker((cur) => (o ? key : cur === key ? null : cur)),
+  });
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <DatePicker value={dueDate} onChange={setDueDate} placeholder="Date" enableTime smart />
-      <LabelPicker value={labelTitles} onChange={setLabelTitles} />
-      <PrioritySelect value={priority} onChange={setPriority} variant="pill" />
-      <ReminderPill value={reminders} onChange={setReminders} />
+      <DatePicker
+        value={dueDate}
+        onChange={setDueDate}
+        placeholder="Date"
+        enableTime
+        smart
+        {...pickerOpen('date')}
+      />
+      <LabelPicker value={labelTitles} onChange={setLabelTitles} {...pickerOpen('labels')} />
+      <PrioritySelect
+        value={priority}
+        onChange={setPriority}
+        variant="pill"
+        {...pickerOpen('priority')}
+      />
+      <ReminderPill value={reminders} onChange={setReminders} {...pickerOpen('reminders')} />
       <RecurrencePicker
         repeatAfter={repeatAfter}
         repeatMode={repeatMode}
         onChange={onChangeRepeat}
+        {...pickerOpen('repeat')}
       />
       {projects.length > 0 ? (
-        <ProjectPicker projects={projects} projectId={projectId} setProjectId={setProjectId} />
+        <ProjectPicker
+          projects={projects}
+          projectId={projectId}
+          setProjectId={setProjectId}
+          {...pickerOpen('project')}
+        />
       ) : null}
     </div>
   );
@@ -160,11 +189,21 @@ function ProjectPicker({
   projects,
   projectId,
   setProjectId,
-}: Pick<SetChipsProps, 'projects' | 'projectId' | 'setProjectId'>) {
+  open,
+  onOpenChange,
+}: Pick<SetChipsProps, 'projects' | 'projectId' | 'setProjectId'> & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   return (
-    <Select value={projectId ?? ''} onValueChange={(v) => setProjectId(v || null)}>
+    <Select
+      value={projectId ?? ''}
+      onValueChange={(v) => setProjectId(v || null)}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <SelectTrigger
-        className="inline-flex h-auto w-auto min-w-0 items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] [&>span]:truncate"
+        className={cn(pickerChipClass, 'h-auto w-auto min-w-0 justify-start [&>span]:truncate')}
         aria-label="Project"
       >
         <SelectValue placeholder="Inbox" />
