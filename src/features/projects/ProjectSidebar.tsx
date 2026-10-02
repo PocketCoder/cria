@@ -836,7 +836,8 @@ function ProjectRow({
             style={depth > 0 ? { paddingLeft: depth * 14 } : undefined}
           >
             {/* Expand/collapse toggle — own button so it never nests inside the
-                row's select button. A spacer keeps childless rows aligned. */}
+                row's select button. Sits in the nav's left gutter so dots align
+                with the Labels rows and section headers. */}
             {hasChildren ? (
               <button
                 type="button"
@@ -845,7 +846,7 @@ function ProjectRow({
                   e.stopPropagation();
                   onToggleExpand();
                 }}
-                className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+                className="absolute -left-3 top-1/2 flex h-5 w-4 -translate-y-1/2 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
               >
                 {expanded ? (
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -853,9 +854,7 @@ function ProjectRow({
                   <ChevronRight className="h-3.5 w-3.5" />
                 )}
               </button>
-            ) : (
-              <span className="h-5 w-4 shrink-0" aria-hidden="true" />
-            )}
+            ) : null}
             <button
               type="button"
               onClick={onSelect}
