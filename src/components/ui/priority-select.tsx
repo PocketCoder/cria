@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { Check, Flag } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { PRIORITY_META } from '@/components/ui/priority';
@@ -27,6 +27,22 @@ interface PrioritySelectProps extends PickerOpenProps {
   variant?: 'segmented' | 'pill';
 }
 
+/* WAI-ARIA radio group keys, matching the segmented control: arrows move
+   focus and selection (wrapping), Home/End jump to the ends. */
+function radioKeyDown(e: KeyboardEvent<HTMLElement>, i: number, pick: (i: number) => void) {
+  const last = PRIORITY_META.length - 1;
+  const next =
+    e.key === 'ArrowRight' || e.key === 'ArrowDown' ? (i === last ? 0 : i + 1)
+    : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? (i === 0 ? last : i - 1)
+    : e.key === 'Home' ? 0
+    : e.key === 'End' ? last
+    : null;
+  if (next === null) return;
+  e.preventDefault();
+  e.currentTarget.closest('[role="radiogroup"]')?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+  pick(next);
+}
+
 /* Single chip + popover. The trigger shows a flag (tinted to the chosen
    priority) and its label; the popover lists the six levels. */
 function PriorityPill({
@@ -40,6 +56,8 @@ function PriorityPill({
   const setOpen = ctl.onOpenChange ?? setInnerOpen;
   const meta = PRIORITY_META[value] ?? PRIORITY_META[0]!;
   const isSet = value > 0;
+  // Roving tabindex: only the checked row (or the first, if none) is tabbable.
+  const tabStop = Math.max(0, PRIORITY_META.findIndex((m) => m.value === value));
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -62,7 +80,7 @@ function PriorityPill({
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6} className="w-44 p-1">
         <div role="radiogroup" aria-label="Priority" className="flex flex-col">
-          {PRIORITY_META.map((m) => {
+          {PRIORITY_META.map((m, i) => {
             const selected = m.value === value;
             return (
               <button
@@ -70,10 +88,12 @@ function PriorityPill({
                 type="button"
                 role="radio"
                 aria-checked={selected}
+                tabIndex={i === tabStop ? 0 : -1}
                 onClick={() => {
                   onChange(m.value);
                   setOpen(false);
                 }}
+                onKeyDown={(e) => radioKeyDown(e, i, (n) => onChange(PRIORITY_META[n]!.value))}
                 className={cn(pickerRowClass, selected && 'bg-[var(--color-muted)]')}
               >
                 <Flag
@@ -151,7 +171,7 @@ function PrioritySegmented({
           }}
         />
       ) : null}
-      {PRIORITY_META.map((meta) => {
+      {PRIORITY_META.map((meta, i) => {
         const selected = value === meta.value;
         const isNone = meta.value === 0;
         return (
@@ -163,10 +183,17 @@ function PrioritySegmented({
             aria-checked={selected}
             aria-label={meta.label}
             title={meta.label}
+            tabIndex={i === index ? 0 : -1}
             onClick={() => {
               setMoved(true);
               onChange(meta.value);
             }}
+            onKeyDown={(e) =>
+              radioKeyDown(e, i, (n) => {
+                setMoved(true);
+                onChange(PRIORITY_META[n]!.value);
+              })
+            }
             style={!selected && !isNone ? { color: meta.color } : undefined}
             className={cn(
               'relative z-[1] flex min-w-0 flex-[1_1_0] items-center justify-center gap-1 overflow-hidden rounded-[5px] font-medium transition-colors duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
