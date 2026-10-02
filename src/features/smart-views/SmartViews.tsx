@@ -434,7 +434,8 @@ export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): 
     if (runStart === -1) return;
     out.push({
       key: `empty-${groups[runStart]!.key}-${groups[end]!.key}`,
-      label: emptyRunLabel(groups, runStart, end),
+      // Trailing run: no task follows, so say that instead of an arbitrary range.
+      label: end === groups.length - 1 ? 'Nothing else scheduled' : emptyRunLabel(groups, runStart, end),
       tasks: [],
     });
     runStart = -1;
