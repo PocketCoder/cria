@@ -453,7 +453,7 @@ function LinksPanel({
   return (
     <>
       <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
           <LabeledInput
             label="Link name"
             className="flex-1"
