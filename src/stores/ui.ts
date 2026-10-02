@@ -63,8 +63,24 @@ function rowTitle(taskLocalId: string): HTMLElement | null {
   );
 }
 
-function setTitleName(el: HTMLElement | null, on: boolean) {
-  if (el) el.style.viewTransitionName = on ? 'task-title' : '';
+// The row currently carrying `task-title`, and a token for the latest claim.
+// A close's cleanup runs only once its animation finishes, so a quick
+// close-then-open would otherwise leave two rows sharing the name.
+let titleEl: HTMLElement | null = null;
+let titleClaim = 0;
+
+/** Name `el` as the shared title, taking the name from any other row. Returns the release. */
+function claimTitle(el: HTMLElement | null): () => void {
+  if (titleEl) titleEl.style.viewTransitionName = '';
+  titleEl = el;
+  const id = ++titleClaim;
+  if (el) el.style.viewTransitionName = 'task-title';
+  // A stale release must not strip a newer claim's name (even on the same row).
+  return () => {
+    if (id !== titleClaim) return;
+    if (el) el.style.viewTransitionName = '';
+    titleEl = null;
+  };
 }
 
 /**
@@ -82,21 +98,19 @@ function transitionTask(prev: string | null, next: string | null, commit: () => 
     return;
   }
   if (next) {
-    const el = rowTitle(next);
-    setTitleName(el, true);
+    const release = claimTitle(rowTitle(next));
     void withViewTransition('task', commit, {
       waitFor: '[data-inspector-title]',
-      afterUpdate: () => setTitleName(el, false),
+      afterUpdate: release,
     });
     return;
   }
-  let el: HTMLElement | null = null;
+  let release = () => {};
   void withViewTransition('task', commit, {
     afterUpdate: () => {
-      el = rowTitle(prev!);
-      setTitleName(el, true);
+      release = claimTitle(rowTitle(prev!));
     },
-  }).then(() => setTitleName(el, false));
+  }).then(() => release());
 }
 
 /**
