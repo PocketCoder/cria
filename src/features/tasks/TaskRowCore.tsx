@@ -236,6 +236,9 @@ export const TaskRowCore = memo(function TaskRowCore({
   return (
     <div
       data-task-row={task.localId}
+      // Pointer convenience only: the title below is the focusable control, and
+      // its click bubbles up here.
+      role="presentation"
       onClick={onOpen}
       className={cn(
         'group relative flex cursor-pointer items-center gap-3 transition-colors hover:bg-[var(--color-accent)]/5',
@@ -283,16 +286,32 @@ export const TaskRowCore = memo(function TaskRowCore({
         )}
         {titleSlot ?? (
           <TaskHoverPreview task={task} className="min-w-0 flex-1">
-            <p
-              className={cn(
-                'truncate text-sm leading-snug',
-                titleWeight === 'medium' && 'font-medium',
-                task.done && 'line-through text-[var(--color-muted-foreground)]',
-              )}
-              title={task.title}
-            >
-              {task.title}
-            </p>
+            {onOpen ? (
+              // No onClick of its own: Enter/Space synthesise a click that
+              // bubbles to the row's onOpen.
+              <button
+                type="button"
+                className={cn(
+                  'block w-full cursor-pointer truncate text-left text-sm leading-snug',
+                  titleWeight === 'medium' && 'font-medium',
+                  task.done && 'line-through text-[var(--color-muted-foreground)]',
+                )}
+                title={task.title}
+              >
+                {task.title}
+              </button>
+            ) : (
+              <p
+                className={cn(
+                  'truncate text-sm leading-snug',
+                  titleWeight === 'medium' && 'font-medium',
+                  task.done && 'line-through text-[var(--color-muted-foreground)]',
+                )}
+                title={task.title}
+              >
+                {task.title}
+              </p>
+            )}
           </TaskHoverPreview>
         )}
         <span className="ml-auto flex shrink-0 items-center">{meta}</span>

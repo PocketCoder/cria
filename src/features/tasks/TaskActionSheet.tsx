@@ -133,7 +133,7 @@ function Inner({ task }: { task: Task }) {
   if (isMobile) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Task actions">
-        <div className="sheet-backdrop absolute inset-0" onClick={close} />
+        <div role="presentation" className="sheet-backdrop absolute inset-0" onClick={close} />
         <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-1 shadow-xl animate-[sheet-up_300ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
           <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
           {header}
@@ -144,8 +144,8 @@ function Inner({ task }: { task: Task }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={close}>
-      <div className="w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]" onClick={(e) => e.stopPropagation()}>
+    <div role="presentation" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={close}>
+      <div role="presentation" className="w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]" onClick={(e) => e.stopPropagation()}>
         {header}
         <div className="max-h-[70vh] overflow-y-auto">{body}</div>
       </div>

@@ -373,12 +373,15 @@ export function TaskDetail() {
             className="mb-[18px] w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
           />
         ) : (
-          <h2
-            className="mb-[18px] cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
-            onClick={handleTitleEdit}
-            title="Click to edit"
-          >
-            {task.title}
+          <h2 className="mb-[18px] text-[21px] font-semibold leading-[1.28] tracking-[-0.025em]">
+            <button
+              type="button"
+              className="block w-full cursor-pointer text-left transition-colors hover:opacity-80"
+              onClick={handleTitleEdit}
+              title="Click to edit"
+            >
+              {task.title}
+            </button>
           </h2>
         )}
 
@@ -1245,7 +1248,7 @@ function DetailCard({
   return (
     <>
       {isMobile && (
-        <div className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
+        <div role="presentation" className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
       )}
       <aside
         ref={cardRef}

@@ -257,6 +257,7 @@ export function CommandPalette({
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 z-50 flex items-start justify-center bg-[oklch(22% 0.012 265 / 0.34)] pt-[70px]"
       onClick={onClose}
     >

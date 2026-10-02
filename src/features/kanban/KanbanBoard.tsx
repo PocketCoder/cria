@@ -611,6 +611,7 @@ const KanbanCard = memo(function KanbanCard({ task }: CardProps) {
       style={style}
       {...attributes}
       {...listeners}
+      role="button"
       onClick={(e) => {
         // Upstream parity: ⌘/Ctrl+click toggles done instead of opening.
         if (e.metaKey || e.ctrlKey) {

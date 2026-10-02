@@ -348,6 +348,7 @@ export function ProjectSidebar({
     <aside className="flex h-full w-[236px] shrink-0 flex-col bg-[var(--color-background)]">
       {/* 44px traffic-light strip — the window drag region */}
       <div
+        role="presentation"
         onMouseDown={onDragMouseDown}
         className="flex h-11 flex-none select-none items-center gap-2 px-4"
       >

@@ -284,7 +284,6 @@ export const SmartTaskRow = memo(function SmartTaskRow({
 
   return (
     <li
-      onClick={handleClick}
       className={cn(
         'border-b border-[var(--color-border)]',
         collapse && 'completion-collapse',
@@ -339,6 +338,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
           isOpen={!isSelected && selectedTaskId === task.localId}
           onToggle={onToggle}
           onToggleSelect={handleToggleSelect}
+          onOpen={handleClick}
           className="px-7 py-3"
           actions={
             <div className="flex items-center gap-1">
@@ -469,6 +469,7 @@ function NowRow({ task }: { task: TaskWithProject }) {
   }, [task, unpick]);
   return (
     <div
+      role="presentation"
       onClick={() => setSelectedTask(task.localId)}
       className="flex cursor-pointer items-center gap-3 rounded-md px-1 py-[9px] hover:bg-[var(--color-accent)]/5"
     >
@@ -485,7 +486,13 @@ function NowRow({ task }: { task: TaskWithProject }) {
         aria-label={task.done ? 'Done' : 'Not done'}
         className="task-check"
       />
-      <p className="min-w-0 flex-1 truncate text-[14.5px] font-medium leading-snug">{task.title}</p>
+      {/* No onClick of its own: its click bubbles to the row's handler. */}
+      <button
+        type="button"
+        className="min-w-0 flex-1 cursor-pointer truncate text-left text-[14.5px] font-medium leading-snug"
+      >
+        {task.title}
+      </button>
       {task.projectTitle ? (
         <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{task.projectTitle}</span>
       ) : null}
@@ -604,7 +611,7 @@ function PickerSheet({
   if (isMobile) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
+        <div role="presentation" className="sheet-backdrop absolute inset-0" onClick={onClose} />
         <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
@@ -613,8 +620,9 @@ function PickerSheet({
     );
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
       <div
+        role="presentation"
         className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
         onClick={(e) => e.stopPropagation()}
       >

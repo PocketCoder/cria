@@ -335,6 +335,7 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      role="presentation"
       className={cn(
         'fixed inset-0 z-50',
         isMobile ? '' : 'flex items-start justify-center bg-black/50 pt-24',
@@ -344,8 +345,9 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
       {hiddenInput}
       {isMobile ? (
         <>
-          <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
+          <div role="presentation" className="sheet-backdrop absolute inset-0" onClick={onClose} />
           <div
+            role="presentation"
             className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--color-card)] px-4 pb-8 pt-2 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
@@ -355,6 +357,7 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
         </>
       ) : (
         <div
+          role="presentation"
           className="bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >

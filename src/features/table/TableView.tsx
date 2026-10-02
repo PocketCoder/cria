@@ -477,7 +477,15 @@ export function TableView({ project, view }: TableViewProps) {
                 {showCompleted && sortedCompleted.map((task) => (
                   <tr
                     key={task.localId}
+                    tabIndex={editMode ? undefined : 0}
                     onClick={editMode ? undefined : () => setSelectedTask(task.localId)}
+                    onKeyDown={(e) => {
+                      if (editMode || e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedTask(task.localId);
+                      }
+                    }}
                     className={cn(
                       'border-b border-[var(--color-border)] transition-colors',
                       !editMode && 'cursor-pointer hover:bg-[var(--color-accent)]/5',
