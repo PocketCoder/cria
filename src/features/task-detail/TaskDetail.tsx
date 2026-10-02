@@ -30,7 +30,13 @@ import { useIsMobile } from '@/lib/useIsMobile';
 import { ChipRow } from './TaskChips';
 import { DetailCard } from './DetailCard';
 import { DetailChrome, DetailSections, MarkDoneButton, TaskTitle } from './DetailParts';
-import { countRelated, taskWebUrl, type OpenSection, type Picker } from './taskDetailLogic';
+import {
+  countRelated,
+  escapeClosesInspector,
+  taskWebUrl,
+  type OpenSection,
+  type Picker,
+} from './taskDetailLogic';
 
 export function TaskDetail() {
   // **All hooks before any early return** — React's hook-order rule.
@@ -86,7 +92,7 @@ export function TaskDetail() {
   useEffect(() => {
     if (!selectedId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedTask(null);
+      if (escapeClosesInspector(e, cardRef.current)) setSelectedTask(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -472,6 +478,9 @@ function SubtasksBlock({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
+                  // Cancels the search only, not the inspector behind it.
+                  e.preventDefault();
+                  e.stopPropagation();
                   setAdding(false);
                   setQuery('');
                 } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {

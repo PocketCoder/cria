@@ -20,6 +20,19 @@ export function taskWebUrl(
     : null;
 }
 
+/**
+ * Whether an Escape keydown should close the inspector. Not when something
+ * else already consumed it (popovers, the lightbox and the editor's discard
+ * prompt all preventDefault), nor while a modal sits above the inspector. The
+ * mobile sheet is itself a `[role="dialog"]`, so `card` is exempt from the
+ * modal check.
+ */
+export function escapeClosesInspector(e: KeyboardEvent, card: Element | null): boolean {
+  if (e.key !== 'Escape' || e.defaultPrevented) return false;
+  const modals = document.querySelectorAll('[role="dialog"], dialog[open]');
+  return !Array.from(modals).some((m) => m !== card);
+}
+
 /** Collapsing a section that is already open closes it. */
 export function toggleSection(current: OpenSection, section: Exclude<OpenSection, null>): OpenSection {
   return current === section ? null : section;

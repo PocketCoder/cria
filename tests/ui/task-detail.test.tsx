@@ -1,7 +1,7 @@
 import './mocks';
 import { Profiler } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { createEvent, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { createTask, getTaskByLocalId } from '@/db/tasks';
@@ -91,6 +91,47 @@ describe('TaskDetail smoke', () => {
     await screen.findByRole('heading', { name: 'Fix the shelf' });
     await user.keyboard('{Escape}');
     await waitFor(() => expect(useUi.getState().selectedTaskLocalId).toBeNull());
+  });
+
+  it('ignores an Escape that something else already consumed', async () => {
+    useUi.setState({ selectedTaskLocalId: taskId });
+    renderWithProviders(<TaskDetail />);
+    await screen.findByRole('heading', { name: 'Fix the shelf' });
+
+    const esc = createEvent.keyDown(document.body, { key: 'Escape', cancelable: true });
+    esc.preventDefault();
+    fireEvent(document.body, esc);
+    expect(useUi.getState().selectedTaskLocalId).toBe(taskId);
+  });
+
+  it('ignores Escape while a modal dialog is open above the inspector', async () => {
+    useUi.setState({ selectedTaskLocalId: taskId });
+    renderWithProviders(<TaskDetail />);
+    await screen.findByRole('heading', { name: 'Fix the shelf' });
+
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(useUi.getState().selectedTaskLocalId).toBe(taskId);
+
+    dialog.remove();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(useUi.getState().selectedTaskLocalId).toBeNull();
+  });
+
+  it('cancels the subtask search on Escape without closing the inspector', async () => {
+    const user = userEvent.setup();
+    useUi.setState({ selectedTaskLocalId: taskId });
+    renderWithProviders(<TaskDetail />);
+
+    await user.click(await screen.findByRole('button', { name: /add subtask/i }));
+    const input = await screen.findByRole('textbox', { name: 'Search tasks' });
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('textbox', { name: 'Search tasks' })).not.toBeInTheDocument();
+    expect(useUi.getState().selectedTaskLocalId).toBe(taskId);
+    expect(input).not.toBeInTheDocument();
   });
 });
 

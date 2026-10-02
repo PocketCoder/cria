@@ -270,6 +270,10 @@ function EditView({
         e.preventDefault();
         void keyHandlersRef.current.handleSave();
       } else if (e.key === 'Escape') {
+        // ProseMirror's keydown listener runs first and preventDefaults an
+        // Escape the slash menu or @mention popup consumed. Leave that one
+        // alone, or dismissing a menu pops the discard prompt.
+        if (e.defaultPrevented) return;
         e.preventDefault();
         if (dirty && !window.confirm('Discard unsaved changes?')) return;
         keyHandlersRef.current.onCancel();

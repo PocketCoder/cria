@@ -193,11 +193,13 @@ function ReminderPicker({
         onClose();
       }
     };
-    window.addEventListener('keydown', onKey);
+    // Capture, so its preventDefault lands before the inspector's own
+    // window-level Escape handler (registered earlier) decides to close.
+    window.addEventListener('keydown', onKey, true);
     // pointerdown so dismissal feels immediate
     window.addEventListener('pointerdown', onClick);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('pointerdown', onClick);
     };
   }, [onClose]);
