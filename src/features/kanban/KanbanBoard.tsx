@@ -182,7 +182,7 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
   if (isError) {
     return (
       <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-8">
-        <p className="text-sm text-[var(--color-warning)]">
+        <p className="text-sm text-[var(--color-warning-text)]">
           Couldn't load board{error instanceof Error ? `: ${error.message}` : ''}.
         </p>
       </section>

@@ -36,7 +36,7 @@ function SyncStatusButton({
     status.icon === 'offline' ? CloudOff : status.icon === 'alert' ? CloudAlert : CloudUpload;
   const tone = status.destructive
     ? 'text-[var(--color-destructive)]'
-    : 'text-[var(--color-warning)]';
+    : 'text-[var(--color-warning-text)]';
   return (
     <button
       type="button"

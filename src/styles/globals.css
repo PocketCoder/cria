@@ -49,6 +49,11 @@
   --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
+  /* *-text: success/warning as text or icon colour. The base tokens are
+     fills (light amber is 2.2:1 on paper); these clear 4.5:1 on
+     background/card/muted. Dark equals the base, which already passes. */
+  --color-success-text:      oklch(50% 0.14 150);
+  --color-warning-text:      oklch(50% 0.11 70);
   --color-ring:              oklch(55% 0.16 300);
   /* Formerly ink-filled (FAB, Add task, Mark done, selected palette row);
      now purple. Dark mode swaps to the lighter purple + dark ink. */
@@ -83,7 +88,9 @@
     --color-destructive-foreground:oklch(17% 0.045 300);
     --color-success:           oklch(72% 0.13 150);
     --color-warning:           oklch(80% 0.12 85);
-    --color-ring:              oklch(67% 0.14 300);
+    --color-success-text:      oklch(72% 0.13 150);
+    --color-warning-text:      oklch(80% 0.12 85);
+    --color-ring:             oklch(67% 0.14 300);
     --color-inverse:           oklch(67% 0.14 300);
     --color-inverse-foreground:oklch(17% 0.045 300);
     --prio-low:                oklch(62% 0.12 240);
@@ -413,6 +420,8 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
+  --color-success-text:      oklch(50% 0.14 150);
+  --color-warning-text:      oklch(50% 0.11 70);
   --color-ring:              oklch(55% 0.16 300);
   /* Formerly ink-filled (FAB, Add task, Mark done, selected palette row);
      now purple. Dark mode swaps to the lighter purple + dark ink. */
@@ -444,6 +453,8 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-destructive-foreground:oklch(17% 0.045 300);
   --color-success:           oklch(72% 0.13 150);
   --color-warning:           oklch(80% 0.12 85);
+  --color-success-text:      oklch(72% 0.13 150);
+  --color-warning-text:      oklch(80% 0.12 85);
   --color-ring:              oklch(67% 0.14 300);
   --color-inverse:           oklch(67% 0.14 300);
   --color-inverse-foreground:oklch(17% 0.045 300);

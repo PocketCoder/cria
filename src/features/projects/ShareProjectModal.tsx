@@ -166,7 +166,7 @@ export function ShareProjectModal({
 
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {!online && (
-            <p className="text-xs text-[var(--color-warning,#b45309)]">
+            <p className="text-xs text-[var(--color-warning-text,#b45309)]">
               You're offline — sharing needs a connection.
             </p>
           )}

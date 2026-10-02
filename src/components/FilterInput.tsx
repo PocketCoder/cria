@@ -16,8 +16,8 @@ import {
 const KIND_COLOR: Record<SpanKind, string> = {
   field: 'var(--color-primary)',
   operator: 'var(--color-muted-foreground)',
-  value: 'var(--color-success, #15803d)',
-  logical: 'var(--color-warning, #b45309)',
+  value: 'var(--color-success-text, #15803d)',
+  logical: 'var(--color-warning-text, #b45309)',
   paren: 'var(--color-muted-foreground)',
   unknown: 'var(--color-destructive)',
 };

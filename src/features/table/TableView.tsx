@@ -164,7 +164,7 @@ export function TableView({ project, view }: TableViewProps) {
       </div>
 
       {isError ? (
-        <p className="border-t border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-warning)]">
+        <p className="border-t border-[var(--color-border)] px-6 py-2 text-xs text-[var(--color-warning-text)]">
           Couldn't refresh{error instanceof Error ? `: ${error.message}` : ''}.
         </p>
       ) : null}

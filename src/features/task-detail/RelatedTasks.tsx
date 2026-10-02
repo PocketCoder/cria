@@ -135,7 +135,7 @@ export function RelatedTasks({
                     className="group flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
                   >
                     {r.otherTaskDone ? (
-                      <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-success,var(--color-primary))]" />
+                      <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-success-text,var(--color-primary))]" />
                     ) : (
                       <Square className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
                     )}
@@ -168,7 +168,7 @@ export function RelatedTasks({
                       type="button"
                       onClick={() => void handleRemove(r)}
                       aria-label="Remove relation"
-                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
+                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

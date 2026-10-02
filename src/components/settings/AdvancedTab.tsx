@@ -110,7 +110,7 @@ export function AdvancedTab() {
                 <span className="text-xs text-[var(--color-muted-foreground)]">Checking…</span>
               )}
               {updaterState.kind === 'available' && (
-                <span className="text-xs text-[var(--color-success)]">Update available!</span>
+                <span className="text-xs text-[var(--color-success-text)]">Update available!</span>
               )}
               {updaterState.kind === 'error' && (
                 <span className="text-xs text-[var(--color-destructive)]">Check failed</span>

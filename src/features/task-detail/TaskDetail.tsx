@@ -174,7 +174,7 @@ export function TaskDetail() {
   if (isError || !task) {
     return (
       <DetailCard onClose={close} cardRef={cardRef}>
-        <p className="px-[26px] py-5 text-sm text-[var(--color-warning)]">
+        <p className="px-[26px] py-5 text-sm text-[var(--color-warning-text)]">
           Could not load task details.
         </p>
       </DetailCard>

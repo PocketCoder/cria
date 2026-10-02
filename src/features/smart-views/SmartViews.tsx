@@ -346,7 +346,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
               <button
                 onClick={handleDelete}
                 aria-label="Delete task"
-                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning-text)] cursor-pointer"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

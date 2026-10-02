@@ -103,7 +103,7 @@ export function ReminderPill({
                   type="button"
                   aria-label="Remove reminder"
                   onClick={() => removeAt(i)}
-                  className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)]"
+                  className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning-text)]"
                 >
                   <X className="h-3 w-3" />
                 </button>

@@ -152,7 +152,7 @@ function SavedFilterFields({
       </div>
 
       {!online && (
-        <p className="text-xs text-[var(--color-warning,#b45309)]">
+        <p className="text-xs text-[var(--color-warning-text,#b45309)]">
           You're offline — saving filters needs a connection.
         </p>
       )}

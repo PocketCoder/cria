@@ -25,7 +25,7 @@ export function smartLabel(d: Date, formatDate: (d: Date) => string): string {
 export function smartColor(d: Date): string {
   const diff = dayDelta(d);
   if (diff < 0) return 'var(--color-destructive)';
-  if (diff === 0) return 'var(--color-success)';
+  if (diff === 0) return 'var(--color-success-text)';
   return 'var(--color-primary)';
 }
 

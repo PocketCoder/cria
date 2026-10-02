@@ -164,7 +164,7 @@ export function BucketHeader({
           className={cn(
             'ml-auto shrink-0 text-footnote tabular-nums',
             atLimit
-              ? 'font-medium text-[var(--color-warning)]'
+              ? 'font-medium text-[var(--color-warning-text)]'
               : 'text-[var(--color-muted-foreground)]',
           )}
         >
@@ -315,7 +315,7 @@ function BucketMenu({
 
           <button
             onClick={handleDeleteBucket}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--color-warning)] hover:bg-[var(--color-accent)]/10 cursor-pointer"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--color-warning-text)] hover:bg-[var(--color-accent)]/10 cursor-pointer"
           >
             <Trash2 className="h-3 w-3" /> Delete
           </button>

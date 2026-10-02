@@ -275,7 +275,7 @@ export function TaskList({ project, view }: TaskListProps) {
       </DndContext>
 
       {isError ? (
-        <p className="border-t border-[var(--color-border)] px-7 py-2 text-xs text-[var(--color-warning)]">
+        <p className="border-t border-[var(--color-border)] px-7 py-2 text-xs text-[var(--color-warning-text)]">
           Couldn't refresh
           {error instanceof Error ? `: ${error.message}` : ''}.
         </p>
@@ -490,7 +490,7 @@ const TaskRow = memo(function TaskRow({
                 <button
                   onClick={handleDelete}
                   aria-label="Delete task"
-                  className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+                  className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning-text)] cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

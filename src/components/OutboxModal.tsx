@@ -159,7 +159,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
               disabled={nothing}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--color-muted)] disabled:opacity-50"
             >
-              {copied === 'all' ? <Check className="h-3.5 w-3.5 text-[var(--color-success)]" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied === 'all' ? <Check className="h-3.5 w-3.5 text-[var(--color-success-text)]" /> : <Copy className="h-3.5 w-3.5" />}
               {copied === 'all' ? 'Copied' : 'Copy all'}
             </button>
           </div>
@@ -171,7 +171,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
         >
           {isLoading && <p className="text-sm">Loading…</p>}
           {isError && (
-            <p className="text-sm text-[var(--color-warning)]">Failed to load outbox.</p>
+            <p className="text-sm text-[var(--color-warning-text)]">Failed to load outbox.</p>
           )}
           {nothing && (
             <p className="text-sm text-[var(--color-muted-foreground)]">
@@ -208,7 +208,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
           {deadRows.length > 0 && (
             <section className={cn(rows.length > 0 && 'mt-6')}>
               <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="group-label text-[var(--color-warning)]">
+                <h3 className="group-label text-[var(--color-warning-text)]">
                   Failed to sync ({deadRows.length})
                 </h3>
                 <div className="flex items-center gap-3">
@@ -223,7 +223,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
                   <button
                     type="button"
                     onClick={() => void clearDeadLetters()}
-                    className="text-xs font-medium text-[var(--color-muted-foreground)] underline hover:text-[var(--color-warning)]"
+                    className="text-xs font-medium text-[var(--color-muted-foreground)] underline hover:text-[var(--color-warning-text)]"
                   >
                     Clear all
                   </button>
@@ -337,7 +337,7 @@ function OpCardError({ error, emphasise }: { error: string | null; emphasise: bo
     <p
       className={cn(
         'mt-2 break-words text-xs leading-snug',
-        emphasise ? 'text-[var(--color-warning)]' : 'text-[var(--color-foreground)]',
+        emphasise ? 'text-[var(--color-warning-text)]' : 'text-[var(--color-foreground)]',
       )}
     >
       {error}
@@ -367,7 +367,7 @@ function OpCardActions({
         onClick={onCopy}
         className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
       >
-        {copied ? <Check className="h-3.5 w-3.5 text-[var(--color-success)]" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <Check className="h-3.5 w-3.5 text-[var(--color-success-text)]" /> : <Copy className="h-3.5 w-3.5" />}
         {copied ? 'Copied' : 'Copy'}
       </button>
       {dead && onRetry ? (

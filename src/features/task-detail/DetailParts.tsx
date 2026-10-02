@@ -46,7 +46,7 @@ export function DetailChrome({
       >
         <Star
           className="h-[15px] w-[15px]"
-          style={{ color: task.isFavorite ? 'var(--color-warning)' : undefined }}
+          style={{ color: task.isFavorite ? 'var(--color-warning-text)' : undefined }}
           fill={task.isFavorite ? 'currentColor' : 'none'}
         />
       </button>
@@ -63,7 +63,7 @@ export function DetailChrome({
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer"
           >
             {copied ? (
-              <Check className="h-3.5 w-3.5 text-[var(--color-success)]" />
+              <Check className="h-3.5 w-3.5 text-[var(--color-success-text)]" />
             ) : (
               <Plus className="h-3.5 w-3.5" />
             )}

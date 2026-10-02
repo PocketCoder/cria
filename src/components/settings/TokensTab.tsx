@@ -137,7 +137,7 @@ export function TokensTab({ disabled }: Props) {
             </Button>
           ) : newTokenValue ? (
             <div className="space-y-2">
-              <p className="text-xs text-[var(--color-success)]">Token created — copy it now, it won't be shown again.</p>
+              <p className="text-xs text-[var(--color-success-text)]">Token created — copy it now, it won't be shown again.</p>
               <div className="flex gap-2">
                 <code className="flex-1 rounded bg-[var(--color-muted)] px-2 py-1 text-xs break-all">{newTokenValue}</code>
                 <Button size="sm" onClick={copyToken}>{copied ? 'Copied!' : 'Copy'}</Button>
@@ -218,7 +218,7 @@ export function TokensTab({ disabled }: Props) {
             ))}
           {newCaldavToken && (
             <div className="space-y-2">
-              <p className="text-xs text-[var(--color-success)]">Token created — copy it now, it won't be shown again.</p>
+              <p className="text-xs text-[var(--color-success-text)]">Token created — copy it now, it won't be shown again.</p>
               <div className="flex gap-2">
                 <code className="flex-1 rounded bg-[var(--color-muted)] px-2 py-1 text-xs break-all">{newCaldavToken}</code>
                 <Button

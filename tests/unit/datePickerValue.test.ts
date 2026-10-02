@@ -38,7 +38,7 @@ describe('smart label and colour', () => {
 
   it('colours overdue, today and future', () => {
     expect(smartColor(daysFromNow(-2))).toBe('var(--color-destructive)');
-    expect(smartColor(daysFromNow(0))).toBe('var(--color-success)');
+    expect(smartColor(daysFromNow(0))).toBe('var(--color-success-text)');
     expect(smartColor(daysFromNow(2))).toBe('var(--color-primary)');
   });
 });
@@ -68,7 +68,7 @@ describe('describePickerValue', () => {
     ).toISOString();
     const r = describePickerValue(iso, { ...base, smart: true });
     expect(r.display).toBe('Today');
-    expect(r.chipColor).toBe('var(--color-success)');
+    expect(r.chipColor).toBe('var(--color-success-text)');
   });
 
   it('appends the time for timed values when time is enabled', () => {

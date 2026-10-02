@@ -195,7 +195,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Teams</h3>
       {disabled && (
-        <p className="mb-2 text-xs text-[var(--color-warning)]">
+        <p className="mb-2 text-xs text-[var(--color-warning-text)]">
           You're offline — team management needs a connection.
         </p>
       )}

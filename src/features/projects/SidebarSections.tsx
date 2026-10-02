@@ -456,7 +456,7 @@ export function ProjectsSection({ onShare }: { onShare: (project: Project) => vo
       )}
 
       {isError ? (
-        <p className="mt-2 px-2 text-xs text-[var(--color-warning)]">
+        <p className="mt-2 px-2 text-xs text-[var(--color-warning-text)]">
           Couldn't refresh
           {error instanceof Error ? `: ${error.message}` : ''}.
         </p>

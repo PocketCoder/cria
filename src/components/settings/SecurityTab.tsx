@@ -81,7 +81,7 @@ function PasswordSection({ disabled }: Props) {
           inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
         {passwordError && <p className="text-xs text-[var(--color-destructive)]">{passwordError}</p>}
-        {passwordSuccess && <p className="text-xs text-[var(--color-success)]">{passwordSuccess}</p>}
+        {passwordSuccess && <p className="text-xs text-[var(--color-success-text)]">{passwordSuccess}</p>}
         <Button onClick={handlePasswordChange} size="sm" disabled={disabled}>Change Password</Button>
       </div>
     </section>
@@ -131,7 +131,7 @@ function EmailSection({ disabled }: Props) {
           inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
         {emailError && <p className="text-xs text-[var(--color-destructive)]">{emailError}</p>}
-        {emailSuccess && <p className="text-xs text-[var(--color-success)]">{emailSuccess}</p>}
+        {emailSuccess && <p className="text-xs text-[var(--color-success-text)]">{emailSuccess}</p>}
         <Button onClick={handleEmailChange} size="sm" disabled={disabled}>Update Email</Button>
       </div>
     </section>
@@ -284,7 +284,7 @@ function TotpEnabledPanel({
 }) {
   return (
     <div>
-      <p className="mb-2 text-sm text-[var(--color-success)]">TOTP is enabled</p>
+      <p className="mb-2 text-sm text-[var(--color-success-text)]">TOTP is enabled</p>
       {!showDisableDialog ? (
         <Button variant="destructive" size="sm" onClick={onShowDisable} disabled={disabled}>
           Disable TOTP
