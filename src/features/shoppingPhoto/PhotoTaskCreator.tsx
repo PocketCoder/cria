@@ -1,27 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Loader2, X, Plus, Trash2, Sparkles } from 'lucide-react';
-import { createTask } from '@/db/tasks';
-import { applyLabelsByTitle } from '@/db/labels';
+import { Camera, X } from 'lucide-react';
 import { useSelectableProjects } from '@/queries/projects';
 import { useSettings } from '@/stores/settings';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import { extractListItems, type OcrEngine } from './ocr';
+import { createTasksFromItems, selectedItems, type DraftItem } from './photoItems';
+import { PhotoExtracting, PhotoPrompt, PhotoReview } from './PhotoReview';
 
 type Phase = 'idle' | 'extracting' | 'review' | 'saving' | 'error';
-
-interface DraftItem {
-  id: number;
-  text: string;
-  include: boolean;
-}
 
 /**
  * Photograph a shopping list → one task per line item.
@@ -111,24 +98,14 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
     else if (phase === 'idle') onClose(); // cancelled the initial picker
   };
 
-  const includedCount = items.filter((i) => i.include && i.text.trim()).length;
+  const includedCount = selectedItems(items).length;
 
   const handleCreate = async () => {
-    const chosen = items.filter((i) => i.include && i.text.trim());
+    const chosen = selectedItems(items);
     if (chosen.length === 0 || !projectId) return;
     setPhase('saving');
-    const tag = label.trim();
     try {
-      for (const item of chosen) {
-        const task = await createTask({ title: item.text.trim(), projectLocalId: projectId });
-        if (tag && task.localId) {
-          try {
-            await applyLabelsByTitle(task.localId, [tag]);
-          } catch (err) {
-            console.warn('[shopping-photo] label apply failed:', err);
-          }
-        }
-      }
+      await createTasksFromItems(chosen, projectId, label);
       onClose();
     } catch (err) {
       console.error('[shopping-photo] task creation failed:', err);
@@ -168,166 +145,47 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {phase === 'extracting' && (
-        <div className="flex flex-col items-center gap-3 py-10 text-[var(--color-muted-foreground)]">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <p className="text-sm">Reading your list…</p>
-        </div>
-      )}
+      {phase === 'extracting' && <PhotoExtracting />}
 
       {phase === 'idle' && (
-        <div className="flex flex-col items-center gap-3 py-10">
-          <p className="text-sm text-[var(--color-muted-foreground)]">
-            Choose a photo of your shopping list.
-          </p>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90"
-          >
-            <Camera className="h-4 w-4" /> Choose photo
-          </button>
-        </div>
+        <PhotoPrompt
+          message="Choose a photo of your shopping list."
+          buttonLabel="Choose photo"
+          className="flex flex-col items-center gap-3 py-10"
+          messageClassName="text-sm text-[var(--color-muted-foreground)]"
+          onPick={() => fileInputRef.current?.click()}
+        />
       )}
 
       {phase === 'error' && (
-        <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <p className="text-sm text-[var(--color-foreground)]">{error}</p>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90"
-          >
-            <Camera className="h-4 w-4" /> Try another photo
-          </button>
-        </div>
+        <PhotoPrompt
+          message={error}
+          buttonLabel="Try another photo"
+          className="flex flex-col items-center gap-3 py-8 text-center"
+          messageClassName="text-sm text-[var(--color-foreground)]"
+          onPick={() => fileInputRef.current?.click()}
+        />
       )}
 
       {(phase === 'review' || phase === 'saving') && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-caption text-[var(--color-muted-foreground)]">
-            <span>
-              {includedCount} item{includedCount === 1 ? '' : 's'} selected
-            </span>
-            {engine === 'vision' && (
-              <span className="flex items-center gap-1" title="Read on-device with Apple Vision">
-                <Sparkles className="h-3 w-3" /> On-device
-              </span>
-            )}
-          </div>
-
-          <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
-            {items.map((item) => (
-              <li key={item.id} className="group flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={item.include}
-                  onChange={(e) =>
-                    setItems((prev) =>
-                      prev.map((i) =>
-                        i.id === item.id ? { ...i, include: e.target.checked } : i,
-                      ),
-                    )
-                  }
-                  className="h-4 w-4 shrink-0 accent-[var(--color-primary)]"
-                  aria-label={`Include ${item.text}`}
-                />
-                <input
-                  type="text"
-                  value={item.text}
-                  onChange={(e) =>
-                    setItems((prev) =>
-                      prev.map((i) =>
-                        i.id === item.id ? { ...i, text: e.target.value } : i,
-                      ),
-                    )
-                  }
-                  className={cn(
-                    'flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-ring)] focus:outline-none',
-                    !item.include && 'text-[var(--color-muted-foreground)] line-through',
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                  className="hover-reveal shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
-                  aria-label={`Remove ${item.text}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <button
-            type="button"
-            onClick={() => {
-              const id = nextId.current++;
-              setItems((prev) => [...prev, { id, text: '', include: true }]);
-            }}
-            className="flex items-center gap-1 text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add item
-          </button>
-
-          <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
-            <label className="flex items-center justify-between gap-2 text-caption">
-              <span className="text-[var(--color-muted-foreground)]">Project</span>
-              <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger
-                  className="w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-sm"
-                  aria-label="Project"
-                >
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.localId} value={p.localId}>
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
-                          style={p.hexColor ? { backgroundColor: p.hexColor } : undefined}
-                        />
-                        {p.title}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex items-center justify-between gap-2 text-caption">
-              <span className="text-[var(--color-muted-foreground)]">Label (optional)</span>
-              <input
-                type="text"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g. shopping"
-                className="w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-sm placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-              />
-            </label>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={phase === 'saving' || includedCount === 0 || !projectId}
-              onClick={handleCreate}
-              className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
-            >
-              {phase === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {phase === 'saving'
-                ? 'Adding…'
-                : `Add ${includedCount} task${includedCount === 1 ? '' : 's'}`}
-            </button>
-          </div>
-        </div>
+        <PhotoReview
+          items={items}
+          setItems={setItems}
+          includedCount={includedCount}
+          engine={engine}
+          saving={phase === 'saving'}
+          projects={projects}
+          projectId={projectId}
+          setProjectId={setProjectId}
+          label={label}
+          setLabel={setLabel}
+          onAddItem={() => {
+            const id = nextId.current++;
+            setItems((prev) => [...prev, { id, text: '', include: true }]);
+          }}
+          onCancel={onClose}
+          onCreate={handleCreate}
+        />
       )}
     </>
   );
