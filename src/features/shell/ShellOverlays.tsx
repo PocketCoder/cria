@@ -110,7 +110,12 @@ export function MobileSearchOverlay({ search }: { search: ShellSearch }) {
   } = search;
   const focusSearch = useFocusOnMount<HTMLInputElement>(searchInputRef);
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-background)] safe-top">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-[var(--color-background)] safe-top"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search"
+    >
       <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />

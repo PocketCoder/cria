@@ -146,6 +146,33 @@ describe('useShortcuts', () => {
     el.remove();
   });
 
+  it('ignores plain shortcuts behind an aria-modal overlay with no dialog role', () => {
+    const el = document.createElement('div');
+    el.setAttribute('aria-modal', 'true');
+    document.body.appendChild(el);
+    const done = vi.fn();
+    const del = vi.fn();
+    onShortcut('task.done', done);
+    onShortcut('task.delete', del);
+    // Focus on the body (e.g. after clicking a non-input area of the overlay).
+    press('t');
+    press('Backspace');
+    expect(done).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+    el.remove();
+  });
+
+  it('still fires task shortcuts beside the docked (complementary) inspector', () => {
+    const el = document.createElement('aside');
+    el.setAttribute('role', 'complementary');
+    document.body.appendChild(el);
+    const spy = vi.fn();
+    onShortcut('task.done', spy);
+    press('t');
+    expect(spy).toHaveBeenCalledTimes(1);
+    el.remove();
+  });
+
   it('does not fire shortcuts while typing in an input', () => {
     const spy = vi.fn();
     onShortcut('task.done', spy);

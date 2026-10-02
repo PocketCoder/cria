@@ -59,6 +59,9 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ramble"
       className={cn(
         'fixed inset-0 z-50',
         isMobile ? '' : 'flex items-start justify-center bg-black/50 pt-24',

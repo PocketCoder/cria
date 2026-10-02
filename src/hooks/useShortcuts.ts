@@ -94,8 +94,10 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       // (caught above) or nowhere in particular (a bare button, or the
       // document body) — either way the shortcut set must not act on the
       // view/task behind it, so check for any open dialog regardless of
-      // where focus landed.
-      if (document.querySelector('[role="dialog"], dialog[open]')) return;
+      // where focus landed. Hand-rolled overlays count too: they carry
+      // role="dialog" / aria-modal="true" (the docked desktop inspector is
+      // role="complementary" on purpose, so it does not).
+      if (document.querySelector('dialog[open], [role="dialog"], [aria-modal="true"]')) return;
       const key = eventToKey(e);
       if (!key) return;
 

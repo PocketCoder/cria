@@ -108,7 +108,12 @@ export function CommandPalette({
   let flatIdx = 0;
 
   return (
-    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]">
+    <div
+      className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+    >
       <BackdropDismiss onDismiss={onClose} />
       <div className="relative w-[560px] overflow-hidden rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]">
         <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-4">

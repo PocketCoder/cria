@@ -233,6 +233,9 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add from Photo"
       className={cn(
         'fixed inset-0 z-50',
         isMobile ? '' : 'flex items-start justify-center bg-black/50 pt-24',
