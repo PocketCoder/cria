@@ -523,7 +523,7 @@ export function Shell() {
         {/* Content pane — a white card floating on the paper canvas. */}
         <div
           className={cn(
-            'flex min-w-0 flex-1 flex-col bg-[var(--color-card)]',
+            'flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-card)]',
             !isMobile && !sidebarCollapsed && 'rounded-l-xl border-l border-[var(--color-border)]',
           )}
         >
@@ -588,7 +588,7 @@ export function Shell() {
             </header>
           )}
 
-          <main className="flex min-w-0 flex-1 flex-col">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             {renderMain()}
           </main>
         </div>
