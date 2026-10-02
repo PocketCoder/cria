@@ -9,7 +9,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts', 'src/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/ui/**/*.test.tsx', 'src/**/*.test.ts'],
+    // UI smoke tests render React trees, so they need a DOM. Everything else
+    // keeps the default `node` environment (or its own docblock).
+    environmentMatchGlobs: [['tests/ui/**', 'jsdom']],
     // Polyfills window.localStorage for jsdom-env tests (zustand persist needs
     // it); no-ops under the node environment. See tests/setup.ts.
     setupFiles: ['./tests/setup.ts'],
