@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -184,7 +184,9 @@ export function TableView({ project, view }: TableViewProps) {
   const [editMode, setEditMode] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, DraftFields>>({});
   const draftsRef = useRef(drafts);
-  draftsRef.current = drafts;
+  useLayoutEffect(() => {
+    draftsRef.current = drafts;
+  });
 
   const flush = useCallback((pending: Record<string, DraftFields>) => {
     for (const [localId, patch] of Object.entries(pending)) {

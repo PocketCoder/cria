@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLatestRef } from '../../lib/useLatestRef';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   DndContext,
@@ -164,10 +165,8 @@ export function GanttChart({
     [viewLocalId, projectLocalId, sortableItems, nodes, queryClient],
   );
 
-  const dragRef = useRef<DragState | null>(null);
-  dragRef.current = drag;
-  const cbRef = useRef({ onUpdateDates, onOpenTask });
-  cbRef.current = { onUpdateDates, onOpenTask };
+  const dragRef = useLatestRef<DragState | null>(drag);
+  const cbRef = useLatestRef({ onUpdateDates, onOpenTask });
 
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);

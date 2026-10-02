@@ -9,6 +9,7 @@ import { uploadAttachment } from '@/sync/attachments';
 import { buildAttachmentUrl, isAttachmentUrl, parseAttachmentUrl } from '@/sync/attachments';
 import { ImageLightbox } from './ImageLightbox';
 import { useEffect, useState, useRef } from 'react';
+import { useLatestRef } from '../../lib/useLatestRef';
 import {
   Bold,
   Italic,
@@ -708,8 +709,7 @@ function EditView({
 
   // Cmd/Ctrl+Enter to save while editor has focus. Handlers via refs so a
   // new onSave/onCancel (e.g. after switching tasks) is always the one called.
-  const keyHandlersRef = useRef({ handleSave, onCancel });
-  keyHandlersRef.current = { handleSave, onCancel };
+  const keyHandlersRef = useLatestRef({ handleSave, onCancel });
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom;
@@ -725,7 +725,7 @@ function EditView({
     };
     dom.addEventListener('keydown', handler);
     return () => dom.removeEventListener('keydown', handler);
-  }, [editor, dirty]);
+  }, [editor, dirty, keyHandlersRef]);
 
   // Persist task-list checkbox toggles immediately. We can't use
   // editorProps.handleClick — TipTap's TaskItem node view sets

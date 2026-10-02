@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { useLatestRef } from './useLatestRef';
 
 export const SWIPE_COMPLETE_THRESHOLD = 80;
 export const SWIPE_DELETE_THRESHOLD = 160;
@@ -27,12 +28,9 @@ export function useSwipeGesture<T extends HTMLElement>({
   const ref = useRef<T>(null);
   const [isSwiping, setIsSwiping] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
-  const onCompleteRef = useRef(onComplete);
-  const onDeleteRef = useRef(onDelete);
+  const onCompleteRef = useLatestRef(onComplete);
+  const onDeleteRef = useLatestRef(onDelete);
   const swipeOccurredRef = useRef(false);
-
-  onCompleteRef.current = onComplete;
-  onDeleteRef.current = onDelete;
 
   useEffect(() => {
     const el = ref.current;
@@ -115,7 +113,7 @@ export function useSwipeGesture<T extends HTMLElement>({
       el.removeEventListener('touchcancel', onTouchEnd);
       el.removeEventListener('click', onClick);
     };
-  }, [disabled]);
+  }, [disabled, onCompleteRef, onDeleteRef]);
 
   return { ref, isSwiping, swipeOffset };
 }

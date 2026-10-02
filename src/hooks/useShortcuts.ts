@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useLatestRef } from '../lib/useLatestRef';
 import { useUi } from '@/stores/ui';
 import { createKeyMatcher, eventToKey } from '@/lib/keySequence';
 import { SHORTCUTS, MATCHABLE_SHORTCUTS } from '@/lib/shortcuts';
@@ -21,8 +22,7 @@ interface ShortcutHandlers {
  * (task detail card, task list). Context gates run at dispatch time.
  */
 export function useShortcuts(handlers: ShortcutHandlers) {
-  const handlersRef = useRef(handlers);
-  handlersRef.current = handlers;
+  const handlersRef = useLatestRef(handlers);
 
   // Read fresh UI state at dispatch time without re-mounting the listener.
   const uiRef = useRef(useUi.getState());
@@ -123,5 +123,5 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       clearTimeout(timer);
       window.removeEventListener('keydown', handler);
     };
-  }, []);
+  }, [handlersRef]);
 }

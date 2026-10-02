@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLatestRef } from '../../lib/useLatestRef';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Star,
@@ -1179,8 +1180,7 @@ function DetailCard({
   const sheetRef = useRef<HTMLDivElement>(null);
   const [sheetOffset, setSheetOffset] = useState(0);
   const offsetRef = useRef(0);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const onCloseRef = useLatestRef(onClose);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -1243,7 +1243,7 @@ function DetailCard({
       el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [isMobile]);
+  }, [isMobile, onCloseRef]);
 
   return (
     <>

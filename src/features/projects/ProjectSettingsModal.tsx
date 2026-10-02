@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useLatestRef } from '../../lib/useLatestRef';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
@@ -143,8 +144,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
   // Cmd+Enter to save. Via a ref so the handler always saves the latest
   // field values (depending on [canSave] alone saved stale state).
-  const handleSaveRef = useRef(handleSave);
-  handleSaveRef.current = handleSave;
+  const handleSaveRef = useLatestRef(handleSave);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -154,7 +154,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [handleSaveRef]);
 
   return (
     <div

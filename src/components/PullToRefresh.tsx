@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, type ReactNode } from 'react';
+import { useLatestRef } from '../lib/useLatestRef';
 import { RefreshCw } from 'lucide-react';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
@@ -20,8 +21,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
   const [pullDistance, setPullDistance] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pullDistanceRef = useRef(0);
-  const onRefreshRef = useRef(onRefresh);
-  onRefreshRef.current = onRefresh;
+  const onRefreshRef = useLatestRef(onRefresh);
 
   // The effect is gated on `isMobile` *inside* the body (not via an early
   // return before it): a `return` ahead of a hook changes the hook count when
@@ -123,7 +123,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       scrollEl.removeEventListener('touchend', onTouchEnd);
       scrollEl.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, [isMobile]);
+  }, [isMobile, onRefreshRef]);
 
   if (!isMobile) return <>{children}</>;
 
