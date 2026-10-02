@@ -705,11 +705,13 @@ ul[data-type="taskList"] li > div > p {
   animation: cria-pop-in 200ms var(--spring-soft);
 }
 
-/* Centred modal: backdrop fades, the panel (first child) scales up. */
+/* Centred modal: backdrop fades, the panel scales up. The panel is whatever
+   sits beside the click-away layer (BackdropDismiss is the first child, so
+   `:first-child` would animate the invisible layer instead). */
 .dialog-backdrop {
   animation: fade-in 180ms ease-out;
 }
-.dialog-backdrop > :first-child {
+.dialog-backdrop > :not([data-backdrop-dismiss]) {
   animation: cria-dialog-in 280ms var(--spring-soft);
 }
 
