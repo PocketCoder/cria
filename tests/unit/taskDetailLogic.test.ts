@@ -61,6 +61,7 @@ describe('taskRepeatLabel', () => {
   it('describes repeats', () => {
     expect(taskRepeatLabel({ repeatAfter: 0, repeatMode: 0 })).toBe('Never');
     expect(taskRepeatLabel({ repeatAfter: 100, repeatMode: 1 })).toBe('Monthly');
+    expect(taskRepeatLabel({ repeatAfter: 0, repeatMode: 1 })).toBe('Monthly');
     expect(taskRepeatLabel({ repeatAfter: 2592000, repeatMode: 0 })).toBe('Every 1 month');
     expect(taskRepeatLabel({ repeatAfter: 5184000, repeatMode: 0 })).toBe('Every 2 months');
     expect(taskRepeatLabel({ repeatAfter: 86400, repeatMode: 0 })).toBe('Every 1 day');

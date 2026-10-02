@@ -24,6 +24,7 @@ import type { TaskAssignee } from '@/domain/task-assignee';
 import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
 import { cn } from '@/lib/cn';
+import { isRepeating } from '@/lib/repeatLabel';
 import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -655,8 +656,10 @@ export function InlineRepeat({
     await updateTask(task.localId, { repeatAfter: after, repeatMode: m });
   };
 
-  const label = task.repeatAfter > 0
-    ? `Repeats ${mode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
+  // Monthly mode ignores repeatAfter (often 0), so it can't gate on that alone.
+  const repeating = isRepeating(task.repeatAfter, task.repeatMode);
+  const label = repeating
+    ? `Repeats ${task.repeatMode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
     : 'Set repeating';
 
   return (
@@ -716,7 +719,7 @@ export function InlineRepeat({
           </div>
 
           {/* Clear */}
-          {task.repeatAfter > 0 && (
+          {repeating && (
             <button
               onClick={() => save(0, 0)}
               className="self-start rounded px-2 py-0.5 text-footnote text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"

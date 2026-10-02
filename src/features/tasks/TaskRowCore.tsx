@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import { Paperclip, RefreshCw, CheckSquare, Square } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { isRepeating } from '@/lib/repeatLabel';
 import { priorityColor } from '@/components/ui/priority';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { TaskCheck } from '@/components/ui/task-check';
@@ -44,7 +45,7 @@ function SuppressedSignals({ task, signals }: { task: Task; signals: RowSignals 
           Checklist {checklist.checked}/{checklist.total}
         </span>
       ) : null}
-      {task.repeatAfter > 0 ? (
+      {isRepeating(task.repeatAfter, task.repeatMode) ? (
         <span className="flex items-center gap-1.5">
           <RefreshCw className="h-3.5 w-3.5 shrink-0" />
           Repeats
@@ -99,10 +100,11 @@ function RowMeta({ task, labels, hasAttachments, checklist, projectTitle }: RowM
         hasAttachments,
         checklistTotal: checklist.total,
         repeatAfter: task.repeatAfter,
+        repeatMode: task.repeatMode,
         percentDone: task.percentDone,
         hexColor: task.hexColor,
       }),
-    [labels.length, hasAttachments, checklist.total, task.repeatAfter, task.percentDone, task.hexColor],
+    [labels.length, hasAttachments, checklist.total, task.repeatAfter, task.repeatMode, task.percentDone, task.hexColor],
   );
 
   return (

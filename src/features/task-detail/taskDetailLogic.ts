@@ -70,8 +70,9 @@ export function reminderSummary(reminders: TaskReminder[], fmt: DateFormatters):
 }
 
 export function taskRepeatLabel(task: Pick<Task, 'repeatAfter' | 'repeatMode'>): string {
-  if (task.repeatAfter <= 0) return 'Never';
+  // Monthly mode ignores repeatAfter (often 0), so test the mode first.
   if (task.repeatMode === 1) return 'Monthly';
+  if (task.repeatAfter <= 0) return 'Never';
   const s = task.repeatAfter;
   if (s >= 2592000 && s % 2592000 === 0) return `Every ${s / 2592000} month${s / 2592000 > 1 ? 's' : ''}`;
   if (s >= 86400 && s % 86400 === 0) return `Every ${s / 86400} day${s / 86400 > 1 ? 's' : ''}`;

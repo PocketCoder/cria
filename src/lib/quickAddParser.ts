@@ -74,7 +74,7 @@ const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
 // is consumed here and not by chrono-node.
 const RECURRENCE_RE = /(?:^|\s)((?:every\s+\d+\s+(?:day|week|month|year|hour)s?|every\s+(?:day|week|month|year|hour)|(?:daily|weekly|monthly|yearly|hourly)|every\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)))(?=\s|$)/gi;
 
-const SECONDS = { day: 86400, week: 604800, year: 31536000, hour: 3600 } as const;
+const SECONDS = { day: 86400, week: 604800, month: 2592000, year: 31536000, hour: 3600 } as const;
 
 function parseRecurrence(text: string): { repeatAfter: number | null; repeatMode: number | null } | null {
   const lower = text.toLowerCase();
@@ -83,7 +83,14 @@ function parseRecurrence(text: string): { repeatAfter: number | null; repeatMode
   if (nUnit) {
     const n = parseInt(nUnit[1]!, 10);
     const unit = nUnit[2]!;
-    if (unit === 'month') return { repeatAfter: null, repeatMode: 1 };
+    if (unit === 'month') {
+      // Vikunja's monthly mode (repeat_mode 1) ignores repeat_after, so it can
+      // only express "every month". "every N months" (N > 1) is approximated as
+      // N x 30 days, the same model the inspector's month unit uses, rather
+      // than silently collapsing to monthly and dropping the N.
+      if (n === 1) return { repeatAfter: null, repeatMode: 1 };
+      return { repeatAfter: n * SECONDS.month, repeatMode: 0 };
+    }
     if (unit in SECONDS) return { repeatAfter: n * SECONDS[unit as keyof typeof SECONDS], repeatMode: 0 };
     return { repeatAfter: null, repeatMode: null };
   }

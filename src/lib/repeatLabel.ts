@@ -1,3 +1,12 @@
+/**
+ * Whether a task repeats at all. Monthly mode (`repeatMode` 1) ignores
+ * `repeatAfter` on the server and quick-add leaves it at 0, so checking the
+ * interval alone misses it.
+ */
+export function isRepeating(repeatAfter: number | null, repeatMode: number | null): boolean {
+  return repeatMode === 1 || (repeatAfter ?? 0) > 0;
+}
+
 /** Human label for a task's recurrence (monthly mode, or an interval in seconds). */
 export function repeatLabel(repeatAfter: number | null, repeatMode: number | null): string {
   if (repeatMode === 1) return 'Monthly';

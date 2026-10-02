@@ -161,3 +161,31 @@ describe('TaskDetail subtasks block', () => {
     expect(errors.filter((e) => e.includes('Maximum update depth'))).toEqual([]);
   });
 });
+
+describe('TaskDetail repeat row', () => {
+  it('shows a monthly repeat and lets it be removed', async () => {
+    const user = userEvent.setup();
+    const projectId = await seedProject(2, 'Bills');
+    // Quick-add monthly: repeatMode 1 with no interval.
+    const monthly = await createTask({
+      title: 'Pay rent',
+      projectLocalId: projectId,
+      repeatAfter: 0,
+      repeatMode: 1,
+    });
+    useUi.setState({ selectedTaskLocalId: monthly.localId });
+    renderWithProviders(<TaskDetail />);
+
+    const row = await screen.findByRole('button', { name: /^Repeat\s*Monthly$/ });
+    await user.click(row);
+
+    expect(await screen.findByRole('button', { name: 'Repeats monthly' })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Remove repeat' }));
+
+    await waitFor(async () => {
+      const t = await getTaskByLocalId(monthly.localId);
+      expect(t?.repeatMode).toBe(0);
+      expect(t?.repeatAfter).toBe(0);
+    });
+  });
+});

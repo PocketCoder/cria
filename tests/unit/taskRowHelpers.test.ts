@@ -11,6 +11,7 @@ const none = {
   hasAttachments: false,
   checklistTotal: 0,
   repeatAfter: 0,
+  repeatMode: 0,
   percentDone: 0,
   hexColor: null,
 };
@@ -27,6 +28,7 @@ describe('countSuppressedSignals', () => {
         hasAttachments: true,
         checklistTotal: 2,
         repeatAfter: 86400,
+        repeatMode: 0,
         percentDone: 0.5,
         hexColor: 'ff0000',
       }),
@@ -36,6 +38,10 @@ describe('countSuppressedSignals', () => {
   it('counts a single signal', () => {
     expect(countSuppressedSignals({ ...none, hasAttachments: true })).toBe(1);
     expect(countSuppressedSignals({ ...none, hexColor: '' })).toBe(0);
+  });
+
+  it('counts a monthly repeat that has no interval', () => {
+    expect(countSuppressedSignals({ ...none, repeatAfter: 0, repeatMode: 1 })).toBe(1);
   });
 });
 

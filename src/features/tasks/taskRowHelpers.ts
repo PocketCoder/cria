@@ -3,6 +3,7 @@ import { dueCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
 import { impactComplete } from '@/utils/haptics';
+import { isRepeating } from '@/lib/repeatLabel';
 import type { Task } from '@/domain/task';
 
 export function formatDue(iso: string): string {
@@ -58,6 +59,7 @@ export function countSuppressedSignals(s: {
   hasAttachments: boolean;
   checklistTotal: number;
   repeatAfter: number;
+  repeatMode: number;
   percentDone: number;
   hexColor: string | null | undefined;
 }): number {
@@ -65,7 +67,7 @@ export function countSuppressedSignals(s: {
     (s.labelCount > 0 ? 1 : 0) +
     (s.hasAttachments ? 1 : 0) +
     (s.checklistTotal > 0 ? 1 : 0) +
-    (s.repeatAfter > 0 ? 1 : 0) +
+    (isRepeating(s.repeatAfter, s.repeatMode) ? 1 : 0) +
     (s.percentDone > 0 ? 1 : 0) +
     (s.hexColor ? 1 : 0)
   );

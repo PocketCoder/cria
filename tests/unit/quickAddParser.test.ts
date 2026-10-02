@@ -205,6 +205,19 @@ describe('parseQuickAdd', () => {
     }
   });
 
+  it('keeps "every 1 month" as monthly mode', () => {
+    const r = parseQuickAdd('Pay rent every 1 month', NOW);
+    expect(r.repeatAfter).toBeNull();
+    expect(r.repeatMode).toBe(1);
+  });
+
+  it('approximates "every N months" (N > 1) as N x 30 days instead of dropping N', () => {
+    const r = parseQuickAdd('Dentist every 3 months', NOW);
+    expect(r.repeatAfter).toBe(3 * 2592000);
+    expect(r.repeatMode).toBe(0);
+    expect(r.title).toBe('Dentist');
+  });
+
   it('leaves unparseable "every" phrases in the title', () => {
     const r = parseQuickAdd('Review every detail', NOW);
     expect(r.repeatAfter).toBeNull();
