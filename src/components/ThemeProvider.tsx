@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 import { useSettings, type ColorScheme } from '@/stores/settings';
 
 function applyTheme(scheme: ColorScheme) {
@@ -15,7 +15,9 @@ function applyTheme(scheme: ColorScheme) {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const colorScheme = useSettings((s) => s.colorScheme);
 
-  useEffect(() => {
+  // Layout effect so the class lands inside flushSync, which the theme view
+  // transition needs to snapshot the new colours (see AppearanceTab).
+  useLayoutEffect(() => {
     applyTheme(colorScheme);
 
     if (colorScheme !== 'system') return;

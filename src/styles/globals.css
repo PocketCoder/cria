@@ -314,6 +314,73 @@ body {
   overflow: hidden;
 }
 
+/* ── View transitions (src/lib/viewTransition.ts) ─────────────────────────
+   The root snapshot doesn't animate, so chrome (sidebar, tab bar, header
+   buttons) never flashes; only the named parts below move. `html[data-vt]`
+   is the kind of transition that's running. */
+.vt-title { view-transition-name: view-title; }
+.vt-pane { view-transition-name: main-pane; }
+.vt-inspector { view-transition-name: inspector; }
+.vt-task-title { view-transition-name: task-title; }
+
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; }
+
+::view-transition-group(*) {
+  animation-duration: var(--duration-slide);
+  animation-timing-function: var(--spring-snappy);
+}
+
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-rise-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes vt-slide-in-right { from { opacity: 0; transform: translateX(24px); } }
+@keyframes vt-slide-out-right { to { opacity: 0; transform: translateX(24px); } }
+
+/* Navigating to another view or project: old content fades, new rises in. */
+html[data-vt='nav']::view-transition-old(view-title),
+html[data-vt='nav']::view-transition-old(main-pane) {
+  animation: vt-fade-out 120ms ease-out both;
+}
+html[data-vt='nav']::view-transition-new(view-title),
+html[data-vt='nav']::view-transition-new(main-pane) {
+  animation: vt-rise-in var(--duration-slide) var(--spring-snappy) both;
+}
+
+/* List/Kanban/Table/Gantt: same chrome, so only the tasks crossfade. */
+html[data-vt='view']::view-transition-old(main-pane) { animation: vt-fade-out 120ms ease-out both; }
+html[data-vt='view']::view-transition-new(main-pane) { animation: fade-in 180ms ease-out both; }
+
+/* Inspector: the pane snaps to its new width under the sliding panel
+   (stretching a snapshot of text looks worse than a clean snap). */
+html[data-vt='task'] .vt-pane { view-transition-name: none; }
+html[data-vt='task']::view-transition-new(inspector):only-child {
+  animation: vt-slide-in-right var(--duration-slide) var(--spring-snappy) both;
+}
+html[data-vt='task']::view-transition-old(inspector):only-child {
+  animation: vt-slide-out-right 180ms var(--spring-snappy) both;
+}
+/* Row title ↔ inspector title: morph the box, crossfade the text. */
+::view-transition-old(task-title),
+::view-transition-new(task-title) {
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
+}
+
+/* Theme: a circle grows from the pointer. Nothing else is named, so the whole
+   page is one snapshot. */
+html[data-vt='theme'] .vt-title,
+html[data-vt='theme'] .vt-pane,
+html[data-vt='theme'] .vt-inspector,
+html[data-vt='theme'] .vt-task-title { view-transition-name: none; }
+@keyframes vt-reveal {
+  from { clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%)); }
+  to { clip-path: circle(150vmax at var(--vt-x, 50%) var(--vt-y, 50%)); }
+}
+html[data-vt='theme']::view-transition-new(root) {
+  animation: vt-reveal 480ms var(--spring-smooth);
+}
+
 /* Honour reduce-motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
