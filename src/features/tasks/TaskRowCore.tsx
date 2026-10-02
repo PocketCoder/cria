@@ -170,7 +170,7 @@ function RowLeading({ task, selecting, isSelected, onToggle, onToggleSelect }: R
       </button>
     );
   }
-  return <TaskCheck checked={task.done} onToggle={onToggle} />;
+  return <TaskCheck checked={task.done} title={task.title} onToggle={onToggle} />;
 }
 
 /* ─── the shared row ─── */

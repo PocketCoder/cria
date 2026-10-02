@@ -11,10 +11,13 @@ const SPARKS = [0, 60, 120, 180, 240, 300];
  */
 export function TaskCheck({
   checked,
+  title,
   onToggle,
   className,
 }: {
   checked: boolean;
+  /** Task title: the checkbox's accessible name, so screen readers can tell rows apart. */
+  title: string;
   onToggle: () => void;
   className?: string;
 }) {
@@ -30,7 +33,7 @@ export function TaskCheck({
       type="button"
       role="checkbox"
       aria-checked={checked}
-      aria-label={checked ? 'Done' : 'Not done'}
+      aria-label={title}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
