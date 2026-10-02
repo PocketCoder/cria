@@ -116,7 +116,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
       onClick={onClose}
     >
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
+        className="bg-[var(--color-card)] border border-[var(--color-border)] flex h-[min(80vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
@@ -146,7 +146,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
             ))}
           </nav>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="min-w-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable]">
             {renderTab()}
           </div>
         </div>
