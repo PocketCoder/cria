@@ -18,7 +18,7 @@ import { useIsMobile } from '@/lib/useIsMobile';
 import { Switch } from '@/components/ui/switch';
 import { useLabels } from '@/queries/labels';
 import { useSelectableProjects } from '@/queries/projects';
-import { PRIORITY_META } from '@/components/ui/priority-select';
+import { PRIORITY_META } from '@/components/ui/priority';
 import { useDisplay } from '@/stores/display';
 import {
   sectionsFor,

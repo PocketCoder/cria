@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { useTaskLabels } from '@/queries/taskLabels';
-import { priorityColor } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { LabelChips } from './LabelChips';
 import type { Task } from '@/domain/task';
 

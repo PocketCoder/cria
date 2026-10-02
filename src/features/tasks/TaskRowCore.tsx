@@ -3,7 +3,7 @@ import { format, startOfDay, isBefore } from 'date-fns';
 import { Paperclip, RefreshCw, CheckSquare, Square } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
-import { priorityColor } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { TaskHoverPreview } from './TaskHoverPreview';
 import { LabelChips } from './LabelChips';

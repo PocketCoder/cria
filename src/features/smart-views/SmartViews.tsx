@@ -5,7 +5,7 @@ import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useNow, useUi } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { priorityColor } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';

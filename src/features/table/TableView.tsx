@@ -17,7 +17,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { PrioritySelect, priorityColor } from '@/components/ui/priority-select';
+import { PrioritySelect } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { useProjectTasks } from '@/queries/tasks';
 import { useProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';

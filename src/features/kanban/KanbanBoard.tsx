@@ -21,7 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
 import { useKanbanBoard, type KanbanColumn } from '@/queries/kanban';
 import { toCalendarDate } from '@/lib/dateFormat';
-import { priorityColor } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { useProjectTaskLabels } from '@/queries/taskLabels';
 import { KanbanFilterPopup } from './KanbanFilterPopup';
 import {

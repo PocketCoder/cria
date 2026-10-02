@@ -6,7 +6,7 @@ import { useLabels } from '@/queries/labels';
 import { searchTasks, updateTask } from '@/db/tasks';
 import { cn } from '@/lib/cn';
 import { formatDue } from '@/features/tasks/TaskRowCore';
-import { priorityColor } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings, Search } from 'lucide-react';
 
 interface PaletteAction {

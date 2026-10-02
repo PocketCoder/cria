@@ -5,7 +5,7 @@ import { useDisplay } from '@/stores/display';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSelectableProjects } from '@/queries/projects';
 import { Calendar } from '@/components/ui/calendar';
-import { PRIORITY_META } from '@/components/ui/priority-select';
+import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, getTaskByLocalId } from '@/db/tasks';
 import { impactComplete, impactDeleted } from '@/utils/haptics';
 

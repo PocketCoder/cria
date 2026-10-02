@@ -17,7 +17,7 @@ import { useDisplay } from '@/stores/display';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSelectableProjects } from '@/queries/projects';
 import { Calendar } from '@/components/ui/calendar';
-import { PRIORITY_META } from '@/components/ui/priority-select';
+import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, duplicateTask } from '@/db/tasks';
 import { getAuthSnapshot } from '@/auth/store';
 import { toCalendarDate } from '@/lib/dateFormat';
