@@ -197,9 +197,8 @@ export function CommandPalette({
     );
   }, [query, actions]);
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [filtered.length]);
+  // Selection resets in the query onChange; clamp covers the list shrinking.
+  const activeIndex = Math.min(selectedIndex, Math.max(filtered.length - 1, 0));
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -219,22 +218,22 @@ export function CommandPalette({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+      setSelectedIndex(Math.min(activeIndex + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex((i) => Math.max(i - 1, 0));
+      setSelectedIndex(Math.max(activeIndex - 1, 0));
     } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       // ⌘⏎ completes the selected task without leaving the palette.
-      const t = filtered[selectedIndex];
+      const t = filtered[activeIndex];
       if (t?.taskLocalId) {
         e.preventDefault();
         void updateTask(t.taskLocalId, { done: true }).then(() => {
           queryClient.invalidateQueries({ queryKey: ['palette-tasks'] });
         });
       }
-    } else if (e.key === 'Enter' && filtered[selectedIndex]) {
+    } else if (e.key === 'Enter' && filtered[activeIndex]) {
       e.preventDefault();
-      filtered[selectedIndex].onSelect();
+      filtered[activeIndex].onSelect();
     }
   };
 
@@ -273,7 +272,10 @@ export function CommandPalette({
             placeholder="Search tasks, actions, projects, labels…"
             className="min-w-0 flex-1 bg-transparent py-3 text-sm text-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
             onKeyDown={handleKeyDown}
           />
           <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-muted-foreground)]">
@@ -294,7 +296,7 @@ export function CommandPalette({
               </p>
               {group.items.map((item) => {
                 const idx = flatIdx++;
-                const isSelected = idx === selectedIndex;
+                const isSelected = idx === activeIndex;
                 const right = item.taskLocalId
                   ? [item.subtitle, item.dueDate ? formatDue(item.dueDate) : null]
                       .filter(Boolean)

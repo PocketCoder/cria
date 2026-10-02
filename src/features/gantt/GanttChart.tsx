@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
 import { useLatestRef } from '../../lib/useLatestRef';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -103,15 +104,7 @@ export function GanttChart({
     () => nodes.filter((n) => n.indentLevel === 0).map((n) => n.task.localId),
     [nodes],
   );
-  const [sortableItems, setSortableItems] = useState<string[]>(rootOrder);
-  useEffect(() => {
-    setSortableItems((prev) => {
-      if (prev.length === rootOrder.length && prev.every((id, i) => id === rootOrder[i])) {
-        return prev;
-      }
-      return rootOrder;
-    });
-  }, [rootOrder]);
+  const [sortableItems, setSortableItems] = useOptimisticOrder(rootOrder);
 
   const orderedNodes = useMemo(
     () => reorderRootBlocks(nodes, sortableItems),
@@ -162,7 +155,7 @@ export function GanttChart({
         console.error('[gantt] failed to reorder task:', err);
       }
     },
-    [viewLocalId, projectLocalId, sortableItems, nodes, queryClient],
+    [viewLocalId, projectLocalId, sortableItems, setSortableItems, nodes, queryClient],
   );
 
   const dragRef = useLatestRef<DragState | null>(drag);

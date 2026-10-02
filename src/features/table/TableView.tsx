@@ -27,6 +27,7 @@ import { updateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { playCompletionSound } from '@/utils/sound';
 import { cn } from '@/lib/cn';
+import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
 import type { Project } from '@/domain/project';
 import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
@@ -262,20 +263,9 @@ export function TableView({ project, view }: TableViewProps) {
   // optimistic id array, update it directly in handleDragEnd, AND drive the
   // rendered rows from it (see `orderedRows`) so the DOM and the
   // SortableContext never disagree about where a row sits.
-  const [sortableItems, setSortableItems] = useState<string[]>(() =>
-    sorted.map((t) => t.localId),
-  );
-  // Sync with the sorted query result when it refetches, but avoid infinite
-  // loops: return the same reference from the updater when the ids match.
-  useEffect(() => {
-    setSortableItems((prev) => {
-      const next = sorted.map((t) => t.localId);
-      if (prev.length === next.length && prev.every((id, i) => id === next[i])) {
-        return prev;
-      }
-      return next;
-    });
-  }, [sorted]);
+  // The override is dropped whenever the sorted query result changes.
+  const sortedIds = useMemo(() => sorted.map((t) => t.localId), [sorted]);
+  const [sortableItems, setSortableItems] = useOptimisticOrder(sortedIds);
 
   // Render rows in `sortableItems` order so an optimistic reorder shows up in
   // the same commit that updates the SortableContext — the row stays where it
@@ -348,7 +338,7 @@ export function TableView({ project, view }: TableViewProps) {
         setReorderError(true);
       }
     },
-    [view, orderedRows, clearSort, qc, project.localId],
+    [view, orderedRows, setSortableItems, clearSort, qc, project.localId],
   );
 
   const shownColumns = useMemo(

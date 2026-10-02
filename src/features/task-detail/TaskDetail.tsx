@@ -771,20 +771,15 @@ function AddChip({
   picker: Picker;
   setPicker: (p: Picker) => void;
 }) {
-  const [view, setView] = useState<'menu' | 'start' | 'end' | 'colour' | 'label'>('menu');
-  const [open, setOpen] = useState(false);
+  const [viewState, setView] = useState<'menu' | 'start' | 'end' | 'colour' | 'label'>('menu');
+  const [openState, setOpen] = useState(false);
 
   // The `label` / `colour` keyboard shortcuts route through `picker`: open the
-  // popover straight to that sub-view instead of the menu.
-  useEffect(() => {
-    if (picker === 'label') {
-      setView('label');
-      setOpen(true);
-    } else if (picker === 'colour') {
-      setView('colour');
-      setOpen(true);
-    }
-  }, [picker]);
+  // popover straight to that sub-view instead of the menu. Derived from the
+  // prop (no effect) so there is no stale first paint.
+  const forced = picker === 'label' || picker === 'colour' ? picker : null;
+  const view = forced ?? viewState;
+  const open = openState || forced !== null;
 
   return (
     <Popover

@@ -25,6 +25,7 @@ import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
+import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
 import { updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { listSubtaskRelationsForProject } from '@/db/relations';
@@ -181,20 +182,9 @@ export function TaskList({ project, view }: TaskListProps) {
   // a state array that we update directly, separate from the query cache,
   // AND drive the rendered root order from it (see `orderedRoots`) so the
   // DOM and the SortableContext never disagree about where a row sits.
-  const [sortableItems, setSortableItems] = useState<string[]>(() =>
-    taskTree.map((n) => n.task.localId),
-  );
-  // Sync with taskTree when the query refetches, but avoid infinite loops:
-  // return the same reference from the updater when IDs are unchanged.
-  useEffect(() => {
-    setSortableItems((prev) => {
-      const next = taskTree.map((n) => n.task.localId);
-      if (prev.length === next.length && prev.every((id, i) => id === next[i])) {
-        return prev;
-      }
-      return next;
-    });
-  }, [taskTree]);
+  // The override is dropped whenever taskTree changes (query refetch).
+  const rootIds = useMemo(() => taskTree.map((n) => n.task.localId), [taskTree]);
+  const [sortableItems, setSortableItems] = useOptimisticOrder(rootIds);
 
   // Render the active roots in `sortableItems` order so an optimistic reorder
   // shows up in the DOM in the same commit that updates the SortableContext —
@@ -287,7 +277,7 @@ export function TaskList({ project, view }: TaskListProps) {
         setReorderError(true);
       }
     },
-    [view, taskTree],
+    [view, taskTree, setSortableItems],
   );
 
   return (
