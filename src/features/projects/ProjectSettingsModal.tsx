@@ -161,6 +161,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label="Edit This Project"
       onClick={onClose}
     >
       <div

@@ -71,6 +71,7 @@ export function SavedFilterModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label={existing ? 'Edit filter' : 'New filter'}
       onClick={onClose}
     >
       <div

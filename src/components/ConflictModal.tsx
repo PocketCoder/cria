@@ -60,6 +60,7 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label={conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'}
       onClick={onClose}
     >
       <div

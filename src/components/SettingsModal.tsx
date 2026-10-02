@@ -113,6 +113,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label="Settings"
       onClick={onClose}
     >
       <div
