@@ -1,5 +1,5 @@
-import { format, startOfDay, isBefore, isSameDay, addDays } from 'date-fns';
-import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
+import { format, isBefore, isSameDay, addDays } from 'date-fns';
+import { dueCalendarDate, dueDayKey } from '@/lib/dateFormat';
 import type { TaskGroup } from '@/queries/smartViews';
 import type { DisplayCtx } from '@/lib/displayConfig';
 import type { TaskWithProject } from '@/db/tasks';
@@ -11,7 +11,7 @@ export function todaySectioner(visible: TaskWithProject[], ctx: DisplayCtx): Tas
   const completed: TaskWithProject[] = [];
   for (const t of visible) {
     if (t.done) completed.push(t);
-    else if (t.dueDate && isBefore(startOfDay(toCalendarDate(t.dueDate)), ctx.today)) overdue.push(t);
+    else if (t.dueDate && isBefore(dueCalendarDate(t.dueDate), ctx.today)) overdue.push(t);
     else today.push(t);
   }
   const out: TaskGroup[] = [];

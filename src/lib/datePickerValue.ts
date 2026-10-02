@@ -1,4 +1,4 @@
-import { toCalendarDate } from '@/lib/dateFormat';
+import { dueCalendarDate, hasTimeOfDay, timedIso } from '@/lib/dateFormat';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const DAY_MS = 86_400_000;
@@ -39,11 +39,9 @@ export function parseValue(v: string | null): {
   if (!v) return { hasTime: false, timeStr: '09:00' };
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return { hasTime: false, timeStr: '09:00' };
-  const midnightUTC =
-    d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
   return {
     date: d,
-    hasTime: !midnightUTC,
+    hasTime: hasTimeOfDay(v),
     timeStr: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
   };
 }
@@ -65,7 +63,7 @@ export function describePickerValue(
   if (value) {
     const parsed = parseValue(value);
     try {
-      const cal = toCalendarDate(value);
+      const cal = dueCalendarDate(value);
       selectedDate = parsed.hasTime ? parsed.date ?? cal : cal;
       display = opts.smart
         ? smartLabel(selectedDate, opts.formatDate)
@@ -94,5 +92,5 @@ export function toPickerIso(
     return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
   }
   const [hh, mm] = time.split(':').map((n) => Number(n) || 0);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0, 0).toISOString();
+  return timedIso(new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0, 0));
 }

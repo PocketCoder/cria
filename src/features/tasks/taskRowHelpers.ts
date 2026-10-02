@@ -1,5 +1,5 @@
 import { format, startOfDay, isBefore } from 'date-fns';
-import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
+import { dueCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { updateTask } from '@/db/tasks';
 import { playCompletionSound } from '@/utils/sound';
 import { impactComplete } from '@/utils/haptics';
@@ -7,7 +7,7 @@ import type { Task } from '@/domain/task';
 
 export function formatDue(iso: string): string {
   try {
-    const base = format(toCalendarDate(iso), 'd MMM');
+    const base = format(dueCalendarDate(iso), 'd MMM');
     return hasTimeOfDay(iso) ? `${base}, ${formatTime(iso)}` : base;
   } catch {
     return iso;
@@ -28,7 +28,7 @@ export function countChecklistItems(
 
 export function isOverdue(iso: string): boolean {
   try {
-    return isBefore(startOfDay(toCalendarDate(iso)), startOfDay(new Date()));
+    return isBefore(dueCalendarDate(iso), startOfDay(new Date()));
   } catch {
     return false;
   }

@@ -99,7 +99,11 @@ describe('toPickerIso', () => {
     );
   });
 
-  it('treats an unparsable time as midnight local', () => {
-    expect(toPickerIso(d, false, 'xx:yy', true)).toBe(new Date(2030, 4, 17, 0, 0).toISOString());
+  it('treats an unparsable time as midnight local, still timed', () => {
+    const iso = toPickerIso(d, false, 'xx:yy', true)!;
+    const out = new Date(iso);
+    expect([out.getHours(), out.getMinutes()]).toEqual([0, 0]);
+    // Never collapses onto the all-day (UTC midnight) encoding, whatever the zone.
+    expect(parseValue(iso).hasTime).toBe(true);
   });
 });

@@ -33,6 +33,7 @@
  */
 
 import * as chrono from 'chrono-node';
+import { timedIso } from '@/lib/dateFormat';
 
 export interface QuickAddResult {
   title: string;
@@ -221,7 +222,7 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     // local datetime ISO.
     const timed = r.start.isCertain('hour');
     const iso = timed
-      ? date.toISOString()
+      ? timedIso(date)
       : new Date(
           Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
         ).toISOString();

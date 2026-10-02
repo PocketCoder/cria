@@ -1,4 +1,4 @@
-import { toCalendarDate } from '@/lib/dateFormat';
+import { dueCalendarDate } from '@/lib/dateFormat';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import type { KanbanColumn } from '@/queries/kanban';
 import type { Bucket, TaskBucket } from '@/domain/bucket';
@@ -56,7 +56,7 @@ export function findTaskInColumns(
 
 export function formatShortDate(iso: string): string {
   try {
-    const d = toCalendarDate(iso);
+    const d = dueCalendarDate(iso);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   } catch {
     return iso;

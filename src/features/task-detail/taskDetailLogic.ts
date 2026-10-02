@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { formatRelativeReminder } from '@/lib/period';
-import { toCalendarDate, hasTimeOfDay, type DateFormatters } from '@/lib/dateFormat';
+import { dueCalendarDate, hasTimeOfDay, type DateFormatters } from '@/lib/dateFormat';
 import type { TaskReminder, ReminderRelation } from '@/db/reminders';
 import type { Task } from '@/domain/task';
 
@@ -52,7 +52,7 @@ export function utcMidnightIso(date: Date | undefined | null): string | null {
 
 export function formatDueChip(iso: string): string {
   try {
-    const base = format(toCalendarDate(iso), 'EEE d MMM');
+    const base = format(dueCalendarDate(iso), 'EEE d MMM');
     return hasTimeOfDay(iso) ? `${base}, ${format(new Date(iso), 'HH:mm')}` : base;
   } catch {
     return iso;

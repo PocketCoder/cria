@@ -7,7 +7,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { PrioritySelect } from '@/components/ui/priority-select';
 import { PRIORITY_LABELS, priorityColor } from '@/components/ui/priority';
 import { COLOR_PRESETS } from '@/lib/colorPresets';
-import { toCalendarDate } from '@/lib/dateFormat';
+import { dueCalendarDate, toCalendarDate } from '@/lib/dateFormat';
 import { cn } from '@/lib/cn';
 import type { Task } from '@/domain/task';
 import type { Label } from '@/domain/label';
@@ -95,7 +95,7 @@ export function ChipRow({
         </PopoverTrigger>
         <PopoverContent align="start" sideOffset={6} className="w-auto p-2">
           <Calendar
-            selected={task.dueDate ? toCalendarDate(task.dueDate) : undefined}
+            selected={task.dueDate ? dueCalendarDate(task.dueDate) : undefined}
             onSelect={(date) => {
               void onSetDate('dueDate', utcMidnightIso(date));
             }}
