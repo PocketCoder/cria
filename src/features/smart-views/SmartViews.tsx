@@ -3,6 +3,7 @@ import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { format, startOfDay, addDays } from 'date-fns';
 import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
+import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
 import { prefersReducedMotion } from '@/lib/viewTransition';
 import { findDayGroupKey, todaySectioner, upcomingDayLabel, upcomingSectioner } from './sectioners';
 import { Check, Trash2, X } from 'lucide-react';
@@ -527,7 +528,7 @@ function NothingDue({ doneCount }: { doneCount: number }) {
   }, [upcoming, doneCount]);
 
   const pullForward = useCallback((ids: string[]) => {
-    const iso = new Date().toISOString();
+    const iso = utcMidnightIso(new Date());
     for (const id of ids) void updateTask(id, { dueDate: iso });
   }, []);
 

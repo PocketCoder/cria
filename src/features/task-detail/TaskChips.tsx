@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import type { Task } from '@/domain/task';
 import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
-import { formatDueChip, utcMidnightIso, type Picker } from './taskDetailLogic';
+import { formatDueChip, pickDayIso, type Picker } from './taskDetailLogic';
 
 type DateField = 'dueDate' | 'startDate' | 'endDate';
 type OnSetDate = (field: DateField, value: string | null) => Promise<void>;
@@ -97,7 +97,7 @@ export function ChipRow({
           <Calendar
             selected={task.dueDate ? dueCalendarDate(task.dueDate) : undefined}
             onSelect={(date) => {
-              void onSetDate('dueDate', utcMidnightIso(date));
+              void onSetDate('dueDate', pickDayIso(date, task.dueDate));
             }}
             onClear={() => void onSetDate('dueDate', null)}
           />
@@ -345,7 +345,7 @@ function AddChipView({
       <Calendar
         selected={currentIso ? toCalendarDate(currentIso) : undefined}
         onSelect={(date) => {
-          void onSetDate(field, utcMidnightIso(date));
+          void onSetDate(field, pickDayIso(date, currentIso));
         }}
         onClear={() => void onSetDate(field, null)}
       />

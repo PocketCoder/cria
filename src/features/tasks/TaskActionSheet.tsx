@@ -23,6 +23,7 @@ import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, duplicateTask } from '@/db/tasks';
 import { getAuthSnapshot } from '@/auth/store';
 import { toCalendarDate } from '@/lib/dateFormat';
+import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
 import { impactDeleted } from '@/utils/haptics';
 import type { Task } from '@/domain/task';
 
@@ -43,7 +44,7 @@ function Inner({ task }: { task: Task }) {
   const [picker, setPicker] = useState<Picker>(null);
 
   const setDate = (field: 'dueDate' | 'endDate', d: Date | undefined) => {
-    void updateTask(task.localId, { [field]: d ? d.toISOString() : null });
+    void updateTask(task.localId, { [field]: utcMidnightIso(d) });
     close();
   };
 

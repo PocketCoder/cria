@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettings } from '@/stores/settings';
 import { dueCalendarDate, dueDayKey, hasTimeOfDay, timedIso } from '@/lib/dateFormat';
 import { formatDue, isOverdue } from '@/features/tasks/taskRowHelpers';
-import { formatDueChip } from '@/features/task-detail/taskDetailLogic';
+import { formatDueChip, pickDayIso, utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
 import { todaySectioner } from '@/features/smart-views/sectioners';
 import { groupToday, upcomingFrom } from '@/queries/smartViews';
 import { parseValue, toPickerIso } from '@/lib/datePickerValue';
@@ -117,6 +117,45 @@ describe('writers never emit a timed value that reads back as all-day', () => {
     const r = parseQuickAdd('Dinner tomorrow at 8pm', now);
     expect(hasTimeOfDay(r.dueDate)).toBe(true);
     expect(formatDueChip(r.dueDate!)).toBe('Sat 3 Oct, 20:00');
+  });
+});
+
+describe.each([LONDON, NEW_YORK, AUCKLAND, 'UTC'])('picking a day in %s', (tz) => {
+  it('utcMidnightIso stores the picked day as all-day, unlike local-midnight toISOString', () => {
+    setTz(tz);
+    const picked = new Date(2026, 9, 3); // local midnight, as the Calendar emits
+    const iso = utcMidnightIso(picked)!;
+    expect(iso).toBe('2026-10-03T00:00:00.000Z');
+    expect(hasTimeOfDay(iso)).toBe(false);
+    expect(dueDayKey(iso)).toBe('2026-10-03');
+    expect(utcMidnightIso(undefined)).toBeNull();
+  });
+
+  it('pickDayIso keeps an all-day task all-day', () => {
+    setTz(tz);
+    const iso = pickDayIso(new Date(2026, 9, 5), '2026-10-03T00:00:00.000Z');
+    expect(iso).toBe('2026-10-05T00:00:00.000Z');
+    expect(pickDayIso(new Date(2026, 9, 5), null)).toBe('2026-10-05T00:00:00.000Z');
+    expect(pickDayIso(undefined, '2026-10-03T00:00:00.000Z')).toBeNull();
+  });
+
+  it('pickDayIso moves a timed task to the new local day, keeping its local time', () => {
+    setTz(tz);
+    const current = timedIso(new Date(2026, 9, 3, 14, 30)); // 14:30 local on 3 Oct
+    const iso = pickDayIso(new Date(2026, 9, 5), current)!;
+    expect(hasTimeOfDay(iso)).toBe(true);
+    expect(dueCalendarDate(iso)).toEqual(new Date(2026, 9, 5));
+    expect(formatDueChip(iso)).toBe('Mon 5 Oct, 14:30');
+  });
+});
+
+describe('pickDayIso on a timed task near UTC midnight', () => {
+  it('New York: 8pm stays timed (not collapsed to all-day) on the new day', () => {
+    setTz(NEW_YORK);
+    const current = timedIso(new Date(2026, 9, 2, 20, 0)); // 00:00:01Z
+    const iso = pickDayIso(new Date(2026, 9, 6), current)!;
+    expect(hasTimeOfDay(iso)).toBe(true);
+    expect(formatDueChip(iso)).toBe('Tue 6 Oct, 20:00');
   });
 });
 

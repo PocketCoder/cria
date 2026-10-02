@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { formatRelativeReminder } from '@/lib/period';
-import { dueCalendarDate, hasTimeOfDay, type DateFormatters } from '@/lib/dateFormat';
+import { dueCalendarDate, hasTimeOfDay, timedIso, type DateFormatters } from '@/lib/dateFormat';
 import type { TaskReminder, ReminderRelation } from '@/db/reminders';
 import type { Task } from '@/domain/task';
 
@@ -48,6 +48,21 @@ export function utcMidnightIso(date: Date | undefined | null): string | null {
   return date
     ? new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())).toISOString()
     : null;
+}
+
+/**
+ * The ISO to store when a new day is picked for a task whose date is currently
+ * `currentIso`. An all-day (or empty) date stays all-day; a timed one keeps its
+ * local time-of-day on the new day, so re-picking the day never drops the time.
+ */
+export function pickDayIso(
+  date: Date | undefined | null,
+  currentIso: string | null | undefined,
+): string | null {
+  if (!date) return null;
+  if (!currentIso || !hasTimeOfDay(currentIso)) return utcMidnightIso(date);
+  const t = new Date(currentIso);
+  return timedIso(new Date(date.getFullYear(), date.getMonth(), date.getDate(), t.getHours(), t.getMinutes(), 0, 0));
 }
 
 export function formatDueChip(iso: string): string {

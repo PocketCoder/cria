@@ -7,6 +7,7 @@ import { useSelectableProjects } from '@/queries/projects';
 import { Calendar } from '@/components/ui/calendar';
 import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, getTaskByLocalId } from '@/db/tasks';
+import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
 import { impactComplete, impactDeleted } from '@/utils/haptics';
 
 type Picker = 'schedule' | 'move' | 'priority' | null;
@@ -32,7 +33,7 @@ export function SelectionBar() {
   };
 
   const complete = () => { void eachUpdate({ done: true }).then(() => { impactComplete(); stop(); }); };
-  const schedule = (d: Date | undefined) => { void eachUpdate({ dueDate: d ? d.toISOString() : null }).then(stop); };
+  const schedule = (d: Date | undefined) => { void eachUpdate({ dueDate: utcMidnightIso(d) }).then(stop); };
   const setPriority = (p: number) => { void eachUpdate({ priority: p }).then(stop); };
   const move = (projectLocalId: string) => {
     void Promise.all(ids.map((id) => moveTask(id, projectLocalId).catch(() => {}))).then(stop);
