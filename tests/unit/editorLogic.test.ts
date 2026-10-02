@@ -96,12 +96,22 @@ describe('slash commands', () => {
     );
     expect(filterCommands('zzzz')).toEqual([]);
   });
-  it('routes the image command through the registered trigger', () => {
-    const trigger = vi.fn();
-    setImagePickerTrigger(trigger);
-    COMMANDS.find((c) => c.key === 'image')!.action({} as never);
-    expect(trigger).toHaveBeenCalledTimes(1);
-    setImagePickerTrigger(null);
-    expect(() => COMMANDS.find((c) => c.key === 'image')!.action({} as never)).not.toThrow();
+  it('routes the image command to the picker of the editor it runs in', () => {
+    const image = COMMANDS.find((c) => c.key === 'image')!;
+    const editorA = {} as never;
+    const editorB = {} as never;
+    const triggerA = vi.fn();
+    const triggerB = vi.fn();
+    setImagePickerTrigger(editorA, triggerA);
+    setImagePickerTrigger(editorB, triggerB);
+    image.action(editorA);
+    expect(triggerA).toHaveBeenCalledTimes(1);
+    expect(triggerB).not.toHaveBeenCalled();
+    // One editor unmounting must not clear the other's picker.
+    setImagePickerTrigger(editorB, null);
+    image.action(editorA);
+    expect(triggerA).toHaveBeenCalledTimes(2);
+    expect(() => image.action(editorB)).not.toThrow();
+    expect(triggerB).not.toHaveBeenCalled();
   });
 });

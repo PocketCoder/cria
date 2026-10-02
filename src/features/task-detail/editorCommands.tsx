@@ -16,15 +16,19 @@ import {
   Image,
 } from 'lucide-react';
 
-let imagePickerTrigger: (() => void) | null = null;
+// Keyed by editor instance so several editors can be mounted at once (task
+// description + new-comment): "/image" must open the picker of the editor it
+// was typed in, and one editor unmounting must not clear another's entry.
+const imagePickers = new WeakMap<Editor, () => void>();
 
-/** Register (or clear) what the slash menu's "Image" command opens. */
-export function setImagePickerTrigger(fn: (() => void) | null) {
-  imagePickerTrigger = fn;
+/** Register (or clear) what the slash menu's "Image" command opens in `editor`. */
+export function setImagePickerTrigger(editor: Editor, fn: (() => void) | null) {
+  if (fn) imagePickers.set(editor, fn);
+  else imagePickers.delete(editor);
 }
 
-function triggerImagePicker() {
-  imagePickerTrigger?.();
+function triggerImagePicker(editor: Editor) {
+  imagePickers.get(editor)?.();
 }
 
 export const COMMANDS = [
@@ -124,7 +128,7 @@ export const COMMANDS = [
     label: 'Image',
     description: 'Upload an image from your computer',
     icon: <Image className="h-4 w-4" />,
-    action: () => triggerImagePicker(),
+    action: (editor: Editor) => triggerImagePicker(editor),
   },
 ];
 

@@ -125,11 +125,6 @@ function EditView({
     imageInputRef.current?.click();
   };
 
-  useEffect(() => {
-    setImagePickerTrigger(handleImagePick);
-    return () => { setImagePickerTrigger(null); };
-  }, []);
-
   const [uploadingImage, setUploadingImage] = useState(false);
   // Last image-upload error surfaced inline above the editor. Same
   // motivation as AttachmentList's opError: offline uploads fail hard
@@ -246,6 +241,13 @@ function EditView({
       checkSlash(editorInstance);
     },
   });
+
+  // Register this editor's own picker for the slash menu's "/image".
+  useEffect(() => {
+    if (!editor) return;
+    setImagePickerTrigger(editor, () => imageInputRef.current?.click());
+    return () => setImagePickerTrigger(editor, null);
+  }, [editor]);
 
   // Ref mirror of `saving`: a quick double Cmd+Enter fires before React
   // re-renders, so state alone would let both through and post twice.
