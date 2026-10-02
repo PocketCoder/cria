@@ -68,3 +68,22 @@ private func generate(
     }
 }
 #endif
+
+/// `"available"`, or why the on-device model can't be used (e.g.
+/// `deviceNotEligible`, `appleIntelligenceNotEnabled`, `modelNotReady`,
+/// `unsupportedOS`). Cheap; the UI checks it once to decide whether to show
+/// AI buttons at all. Malloc'd C string, freed by Rust.
+@_cdecl("cria_ai_availability")
+public func criaAiAvailability() -> UnsafeMutablePointer<CChar> {
+    var status = "unsupportedOS"
+    #if canImport(FoundationModels)
+    if #available(macOS 26, iOS 26, *) {
+        switch SystemLanguageModel.default.availability {
+        case .available: status = "available"
+        case .unavailable(let reason): status = String(describing: reason)
+        @unknown default: status = "unavailable"
+        }
+    }
+    #endif
+    return strdup(status)!
+}

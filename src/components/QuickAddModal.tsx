@@ -8,7 +8,8 @@ import { useCurrentUser } from '@/queries/user';
 import { parseQuickAdd, type QuickAddResult } from '@/lib/quickAddParser';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
-import { ArrowUp, Camera, CalendarDays, Tag, Bell } from 'lucide-react';
+import { ArrowUp, Camera, CalendarDays, Tag, Bell, Mic } from 'lucide-react';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { PrioritySelect, priorityColor } from '@/components/ui/priority-select';
 import { DatePicker } from '@/components/DatePicker';
@@ -305,6 +306,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const activeView = useUi((s) => s.activeView);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const aiAvailable = useAiAvailable();
   const selectedProjectId =
     activeView?.kind === 'project' ? activeView.localId : null;
   const { data: projects = [] } = useSelectableProjects();
@@ -677,6 +679,23 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
                 <code className="font-mono text-[var(--color-primary)]">!2</code>
               </span>
               <div className="flex shrink-0 items-center gap-1.5">
+                {aiAvailable && (
+                  <button
+                    type="button"
+                    aria-label="Ramble"
+                    title="Ramble: talk freely, get a list of tasks"
+                    onClick={() => {
+                      // Carry over anything already typed.
+                      const ui = useUi.getState();
+                      if (text.trim() && !ui.rambleDraft.trim()) ui.setRambleDraft(text);
+                      onClose();
+                      ui.setRambleOpen(true);
+                    }}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+                  >
+                    <Mic className="h-5 w-5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label="Add tasks from a photo"

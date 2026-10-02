@@ -14,6 +14,9 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { extractListItems, type OcrEngine } from './ocr';
+import { generate } from '@/tauri/ai';
+import { aiErrorMessage, clip, parseLines, TIDY_LIST_INSTRUCTIONS } from '@/lib/aiPrompts';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 
 type Phase = 'idle' | 'extracting' | 'review' | 'saving' | 'error';
 
@@ -113,6 +116,32 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
   const includedCount = items.filter((i) => i.include && i.text.trim()).length;
 
+  // On-device model clean-up of the OCR'd lines (typos, split items, prices).
+  // Replaces the list; the user still reviews before anything is created.
+  const aiAvailable = useAiAvailable();
+  const [tidying, setTidying] = useState(false);
+  const tidy = async () => {
+    const lines = items.filter((i) => i.include && i.text.trim()).map((i) => i.text.trim());
+    if (lines.length === 0) return;
+    setTidying(true);
+    setError(null);
+    try {
+      const out = await generate({
+        title: 'Tidying your list',
+        instructions: TIDY_LIST_INSTRUCTIONS,
+        prompt: clip(lines.join('\n')),
+      });
+      const cleaned = parseLines(out, 100);
+      if (cleaned.length > 0) {
+        setItems(cleaned.map((text) => ({ id: nextId.current++, text, include: true })));
+      }
+    } catch (err) {
+      setError(aiErrorMessage(err));
+    } finally {
+      setTidying(false);
+    }
+  };
+
   const handleCreate = async () => {
     const chosen = items.filter((i) => i.include && i.text.trim());
     if (chosen.length === 0 || !projectId) return;
@@ -209,12 +238,27 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
             <span>
               {includedCount} item{includedCount === 1 ? '' : 's'} selected
             </span>
-            {engine === 'vision' && (
-              <span className="flex items-center gap-1" title="Read on-device with Apple Vision">
-                <Sparkles className="h-3 w-3" /> On-device
-              </span>
+            {aiAvailable ? (
+              <button
+                type="button"
+                disabled={tidying || phase === 'saving'}
+                onClick={() => void tidy()}
+                title="Fix misreadings and drop prices/headings (on-device)"
+                className="flex items-center gap-1 hover:text-[var(--color-foreground)] disabled:opacity-60"
+              >
+                {tidying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {tidying ? 'Tidying…' : 'Tidy up'}
+              </button>
+            ) : (
+              engine === 'vision' && (
+                <span className="flex items-center gap-1" title="Read on-device with Apple Vision">
+                  <Sparkles className="h-3 w-3" /> On-device
+                </span>
+              )
             )}
           </div>
+
+          {error && <p className="text-caption text-[var(--color-destructive)]">{error}</p>}
 
           <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
             {items.map((item) => (

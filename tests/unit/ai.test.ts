@@ -7,7 +7,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('@/tauri/notification', () => ({ sendNotification }));
 vi.mock('@/lib/platform', () => ({ isMobilePlatform: () => mobile.value }));
 
-import { generate } from '@/tauri/ai';
+import { generate, aiAvailability } from '@/tauri/ai';
 
 const focus = (hasFocus: boolean) => vi.stubGlobal('document', { hasFocus: () => hasFocus });
 
@@ -42,6 +42,13 @@ describe('tauri/ai generate', () => {
       title: args.title,
       body: 'Failed: unavailable: appleIntelligenceNotEnabled',
     });
+  });
+
+  it('reports availability, and unsupportedOS when the command is missing', async () => {
+    invoke.mockResolvedValue('available');
+    expect(await aiAvailability()).toBe('available');
+    invoke.mockRejectedValue(new Error('not in tauri'));
+    expect(await aiAvailability()).toBe('unsupportedOS');
   });
 
   it('leaves notifying to native code on mobile', async () => {

@@ -42,6 +42,8 @@ import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
 import { CommentSection } from './CommentSection';
 import { RelatedTasks } from './RelatedTasks';
+import { BreakDown } from './BreakDown';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
 import { toggleTaskDone } from '@/features/tasks/TaskRowCore';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -406,7 +408,12 @@ export function TaskDetail() {
           />
         </section>
 
-        <SubtasksBlock taskLocalId={task.localId} projectLocalId={task.projectLocalId} />
+        <SubtasksBlock
+          taskLocalId={task.localId}
+          projectLocalId={task.projectLocalId}
+          title={task.title}
+          description={task.description}
+        />
 
         <div className="mt-5 border-t border-[var(--color-border)] pt-1.5">
           <CollapsedRow
@@ -920,11 +927,16 @@ function LabelList({
 function SubtasksBlock({
   taskLocalId,
   projectLocalId,
+  title,
+  description,
 }: {
   taskLocalId: string;
   projectLocalId: string;
+  title: string;
+  description: string | null;
 }) {
   const qc = useQueryClient();
+  const aiAvailable = useAiAvailable();
   const { data: relations = [] } = useQuery({
     queryKey: ['relations', taskLocalId],
     queryFn: () => listRelationsForTask(taskLocalId),
@@ -1095,14 +1107,30 @@ function SubtasksBlock({
           ) : null}
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 rounded-md px-1 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          <Plus className="h-[15px] w-[15px]" />
-          Add subtask
-        </button>
+        <div className="flex flex-wrap items-center gap-x-3">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-2 rounded-md px-1 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
+          >
+            <Plus className="h-[15px] w-[15px]" />
+            Add subtask
+          </button>
+          {aiAvailable && (
+            <BreakDown
+              title={title}
+              description={description}
+              existing={subtasks.map((s) => s.otherTaskTitle ?? '')}
+              onAdd={async (titles) => {
+                for (const t of titles) {
+                  const created = await createTask({ projectLocalId, title: t });
+                  await addRelation(taskLocalId, created.localId, 'subtask');
+                }
+                await refresh();
+              }}
+            />
+          )}
+        </div>
       )}
     </section>
   );

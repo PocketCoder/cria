@@ -260,6 +260,13 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
   `Info.ios.plist`. No paid account or entitlement needed for any of it.
 - Smoke test against the real model:
   `cargo test --lib ai -- --ignored --nocapture` (in `src-tauri/`).
+- Prompts live in [src/lib/aiPrompts.ts](src/lib/aiPrompts.ts). The model
+  never does date maths: it writes dates in words (or quick-add / filter
+  syntax) and the existing parsers resolve them. To iterate on a prompt, write
+  `<name>.instr` + `<name>.prompt` files to a folder and run
+  `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
+- AI buttons render only when `useAiAvailable()` is true, so unsupported
+  devices never see them.
 
 ### `pnpm dev` indirectly requires `cargo`
 

@@ -36,6 +36,19 @@ export async function generate(args: GenerateArgs): Promise<string> {
   }
 }
 
+/**
+ * `"available"`, or why the model can't run (`appleIntelligenceNotEnabled`,
+ * `deviceNotEligible`, `modelNotReady`, `unsupportedOS`…). Never throws:
+ * outside Tauri (Vite browser, tests) it reports `unsupportedOS`.
+ */
+export async function aiAvailability(): Promise<string> {
+  try {
+    return await invoke<string>('ai_availability');
+  } catch {
+    return 'unsupportedOS';
+  }
+}
+
 function notifyIfAway(title: string, body: string): void {
   if (isMobilePlatform() || document.hasFocus()) return;
   void sendNotification({ title, body });
