@@ -388,18 +388,42 @@ function SubtasksBlock({
     await qc.invalidateQueries({ queryKey: ['relations', taskLocalId] });
   };
 
+  // Ref, not state: a second Enter / click lands before React re-renders, so
+  // only a synchronous flag stops it creating or linking a duplicate.
+  const submittingRef = useRef(false);
+
   const handlePick = async (otherLocalId: string) => {
-    await addRelation(taskLocalId, otherLocalId, 'subtask');
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    const typed = query;
     setQuery('');
-    await refresh();
+    try {
+      await addRelation(taskLocalId, otherLocalId, 'subtask');
+      await refresh();
+    } catch (err) {
+      setQuery(typed);
+      throw err;
+    } finally {
+      submittingRef.current = false;
+    }
   };
 
   // New subtask lands in the parent's project, then gets linked.
   const handleCreate = async () => {
     const title = query.trim();
-    if (!title) return;
-    const created = await createTask({ projectLocalId, title });
-    await handlePick(created.localId);
+    if (!title || submittingRef.current) return;
+    submittingRef.current = true;
+    setQuery('');
+    try {
+      const created = await createTask({ projectLocalId, title });
+      await addRelation(taskLocalId, created.localId, 'subtask');
+      await refresh();
+    } catch (err) {
+      setQuery(title);
+      throw err;
+    } finally {
+      submittingRef.current = false;
+    }
   };
 
   const handleRemove = async (r: { otherTaskLocalId: string | null; otherTaskServerId: number | null }) => {

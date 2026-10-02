@@ -450,12 +450,17 @@ function AddTaskFooter({
   const [showNewInput, setShowNewInput] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
+  // Ref, not state: a second Enter lands before the title is cleared (it is
+  // only cleared once the async writes finish), so it would add a duplicate.
+  const addingRef = useRef(false);
+
   const handleAddTask = async () => {
     // WIP limits are advisory: the column highlights when over the limit
     // (see the count indicator) but never blocks adding — matching drag,
     // where over-limit drops are already allowed.
     const built = buildKanbanTaskInput(newTitle, projectLocalId);
-    if (!built) return;
+    if (!built || addingRef.current) return;
+    addingRef.current = true;
     try {
       const task = await createTask(built.input);
       if (task.localId) {
@@ -468,6 +473,8 @@ function AddTaskFooter({
       setShowNewInput(false);
     } catch (err) {
       console.error('[kanban] failed to create task:', err);
+    } finally {
+      addingRef.current = false;
     }
   };
 

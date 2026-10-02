@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { createBucket } from '@/db/buckets';
 
@@ -6,15 +6,22 @@ export function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
   const [showInput, setShowInput] = useState(false);
   const [title, setTitle] = useState('');
 
+  // Ref, not state: the title is only cleared after the async write, so a
+  // second Enter in that window would create a duplicate column.
+  const creatingRef = useRef(false);
+
   const handleCreate = async () => {
     const trimmed = title.trim();
-    if (!trimmed) return;
+    if (!trimmed || creatingRef.current) return;
+    creatingRef.current = true;
     try {
       await createBucket({ title: trimmed, viewLocalId });
       setTitle('');
       setShowInput(false);
     } catch (err) {
       console.error('[kanban] failed to create bucket:', err);
+    } finally {
+      creatingRef.current = false;
     }
   };
 

@@ -247,14 +247,20 @@ function EditView({
     },
   });
 
+  // Ref mirror of `saving`: a quick double Cmd+Enter fires before React
+  // re-renders, so state alone would let both through and post twice.
+  const savingRef = useRef(false);
+
   const handleSave = async () => {
     if (!editor) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const html = editor.getHTML();
       await onSave(looksEmptyHtml(html) ? '' : html);
       setDirty(false);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -268,6 +274,7 @@ function EditView({
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
+        if (savingRef.current) return;
         void keyHandlersRef.current.handleSave();
       } else if (e.key === 'Escape') {
         // ProseMirror's keydown listener runs first and preventDefaults an

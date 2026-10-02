@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createEvent, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
-import { createTask, getTaskByLocalId } from '@/db/tasks';
+import { createTask, getTaskByLocalId, listTasksForProject } from '@/db/tasks';
 import { useUi } from '@/stores/ui';
 import { renderWithProviders, resetDb, signIn } from './render';
 import { seedProject } from '../unit/_helpers';
@@ -157,6 +157,29 @@ describe('TaskDetail subtasks block', () => {
 
     expect(screen.queryByRole('textbox', { name: 'Search tasks' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add subtask/i })).toBeInTheDocument();
+  });
+
+  it('creates one subtask when Enter is pressed twice in quick succession', async () => {
+    const user = userEvent.setup();
+    useUi.setState({ selectedTaskLocalId: taskId });
+    renderWithProviders(<TaskDetail />);
+
+    await user.click(await screen.findByRole('button', { name: /add subtask/i }));
+    const input = await screen.findByRole('textbox', { name: 'Search tasks' });
+    await user.type(input, 'Sand the edges');
+    // Both presses land before the async create finishes or React re-renders.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(async () => {
+      const tasks = await listTasksForProject((await getTaskByLocalId(taskId))!.projectLocalId);
+      expect(tasks.filter((t) => t.title === 'Sand the edges')).toHaveLength(1);
+    });
+    await waitFor(() => expect(input).toHaveValue(''));
+    // Let any stray second create finish before the final count.
+    await new Promise((r) => setTimeout(r, 100));
+    const tasks = await listTasksForProject((await getTaskByLocalId(taskId))!.projectLocalId);
+    expect(tasks.filter((t) => t.title === 'Sand the edges')).toHaveLength(1);
   });
 
   it('settles after mount without a render loop', async () => {

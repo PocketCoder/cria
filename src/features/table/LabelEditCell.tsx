@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Tags } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useTaskLabels } from '@/queries/taskLabels';
@@ -32,15 +32,22 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
     );
   };
 
+  // Ref, not state: `search` is only cleared after the async writes, so a
+  // second Enter in that window would create a duplicate label.
+  const creatingRef = useRef(false);
+
   const createAndAdd = async () => {
     const title = search.trim();
-    if (!title) return;
+    if (!title || creatingRef.current) return;
+    creatingRef.current = true;
     try {
       const label = await createLabel({ title });
       await toggleTaskLabel(taskLocalId, label.localId);
       setSearch('');
     } catch (e) {
       console.error('[table] create label failed:', e);
+    } finally {
+      creatingRef.current = false;
     }
   };
 
