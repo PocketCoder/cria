@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Star,
@@ -19,7 +19,7 @@ import {
 import { format } from 'date-fns';
 import { useUi } from '@/stores/ui';
 import { onShortcut } from '@/lib/shortcutBus';
-import { getTaskByLocalId, updateTask, moveTask, searchTasks, deleteTask } from '@/db/tasks';
+import { getTaskByLocalId, createTask, updateTask, moveTask, searchTasks, deleteTask } from '@/db/tasks';
 import { getProjectByLocalId, listProjects } from '@/db/projects';
 import { searchProjectUsers } from '@/api/users';
 import { toggleTaskLabel } from '@/db/labels';
@@ -405,7 +405,7 @@ export function TaskDetail() {
           />
         </section>
 
-        <SubtasksBlock taskLocalId={task.localId} />
+        <SubtasksBlock taskLocalId={task.localId} projectLocalId={task.projectLocalId} />
 
         <div className="mt-5 border-t border-[var(--color-border)] pt-1.5">
           <CollapsedRow
@@ -512,21 +512,17 @@ export function TaskDetail() {
 
 /* ─── chip row ─── */
 
-function Chip({
-  children,
-  onClick,
-  dashed = false,
-  className,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  dashed?: boolean;
-  className?: string;
-}) {
+// forwardRef + prop spread: Radix `PopoverTrigger asChild` needs the ref to
+// anchor the popover and passes aria/data-state props through.
+const Chip = forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { dashed?: boolean }
+>(function Chip({ children, dashed = false, className, ...rest }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
-      onClick={onClick}
+      {...rest}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-[5px] text-[12.5px] transition-colors cursor-pointer',
         dashed
@@ -538,7 +534,7 @@ function Chip({
       {children}
     </button>
   );
-}
+});
 
 function Dot({ color }: { color: string }) {
   return (
@@ -920,7 +916,13 @@ function LabelList({
 
 /* ─── subtasks ─── */
 
-function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
+function SubtasksBlock({
+  taskLocalId,
+  projectLocalId,
+}: {
+  taskLocalId: string;
+  projectLocalId: string;
+}) {
   const qc = useQueryClient();
   const { data: relations = [] } = useQuery({
     queryKey: ['relations', taskLocalId],
@@ -963,6 +965,14 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
     await addRelation(taskLocalId, otherLocalId, 'subtask');
     setQuery('');
     await refresh();
+  };
+
+  // New subtask lands in the parent's project, then gets linked.
+  const handleCreate = async () => {
+    const title = query.trim();
+    if (!title) return;
+    const created = await createTask({ projectLocalId, title });
+    await handlePick(created.localId);
   };
 
   const handleRemove = async (r: { otherTaskLocalId: string | null; otherTaskServerId: number | null }) => {
@@ -1047,14 +1057,28 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
                 if (e.key === 'Escape') {
                   setAdding(false);
                   setQuery('');
+                } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void handleCreate();
                 }
               }}
-              placeholder="Search tasks…"
+              placeholder="New subtask or search…"
               className="w-full bg-transparent text-[13.5px] focus:outline-none"
             />
           </div>
-          {results.length > 0 ? (
-            <div className="mt-1 flex max-h-40 flex-col overflow-y-auto">
+          {query.trim() ? (
+            <div className="mt-1 flex max-h-48 flex-col overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => void handleCreate()}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+                <span className="min-w-0 flex-1 truncate">
+                  Create “{query.trim()}”
+                </span>
+                <span className="text-[11px] text-[var(--color-muted-foreground)]">Enter</span>
+              </button>
               {results.map((r) => (
                 <button
                   key={r.localId}
