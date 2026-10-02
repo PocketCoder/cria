@@ -11,8 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
 import { reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
-import { reorderTasksByIds } from '@/lib/taskOrder';
-import type { Task } from '@/domain/task';
+import { setProjectTaskOrder } from '@/queries/tasks';
 import { reorderRootBlocks, type GanttTaskNode } from './buildGanttTaskTree';
 
 /**
@@ -64,9 +63,7 @@ export function useGanttReorder(
       // of subtasks/relations would otherwise re-derive the old order.
       if (projectLocalId) {
         const displayOrder = reorderRootBlocks(nodes, orderedIds).map((n) => n.task.localId);
-        queryClient.setQueryData<Task[]>(['tasks', projectLocalId], (old) =>
-          old ? reorderTasksByIds(old, displayOrder) : old,
-        );
+        setProjectTaskOrder(queryClient, projectLocalId, displayOrder);
       }
 
       const positionOf = (id: string) =>

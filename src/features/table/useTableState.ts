@@ -11,7 +11,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { updateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
-import { orderTasksByIds, reorderTasksByIds } from '@/lib/taskOrder';
+import { orderTasksByIds } from '@/lib/taskOrder';
+import { setProjectTaskOrder } from '@/queries/tasks';
 import type { Task } from '@/domain/task';
 import type { ProjectView } from '@/domain/view';
 import type { Project } from '@/domain/project';
@@ -144,9 +145,7 @@ export function useTableReorder({
       // displayed order is consistent from the drop through the refetch.
       setSortableItems(orderedIds);
       clearSort();
-      qc.setQueryData<Task[]>(['tasks', projectLocalId], (old) =>
-        old ? reorderTasksByIds(old, orderedIds) : old,
-      );
+      setProjectTaskOrder(qc, projectLocalId, orderedIds);
 
       // Midpoint only works when the neighbours have distinct, non-null
       // positions. Locally-created tasks start at position=null, so the first

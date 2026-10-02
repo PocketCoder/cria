@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { listTasksForProject, listTasksForProjectFiltered, listTasksFilteredAllProjects } from '@/db/tasks';
 import { getSavedFilterByServerId } from '@/db/savedFilters';
 import { subscribe } from '@/db/bus';
@@ -9,6 +9,7 @@ import { parseFilterQuery } from '@/lib/filterQueryParser';
 import { compileFilterAndSort } from '@/lib/filterCompiler';
 import type { FilterNode } from '@/lib/filterQueryParser';
 import type { SortRule } from '@/lib/sortEngine';
+import { reorderTasksByIds } from '@/lib/taskOrder';
 import type { Task } from '@/domain/task';
 import type { Project } from '@/domain/project';
 
@@ -32,6 +33,22 @@ function parseFilter(expr: string): {
     console.warn('parseFilter: invalid filter expression', expr, err);
     return { ast: null, hasDoneFilter: false };
   }
+}
+
+/**
+ * Optimistically reorder every cached task list of a project. `useProjectTasks`
+ * keys its cache by `['tasks', projectId, filter, sortRule, includeNulls]`, so
+ * a write must prefix-match on the project id: the bare `['tasks', projectId]`
+ * key is one nobody reads, and writing it leaves the visible rows unchanged.
+ */
+export function setProjectTaskOrder(
+  queryClient: QueryClient,
+  projectLocalId: string,
+  orderedIds: string[],
+): void {
+  queryClient.setQueriesData<Task[]>({ queryKey: ['tasks', projectLocalId] }, (old) =>
+    Array.isArray(old) ? reorderTasksByIds(old, orderedIds) : old,
+  );
 }
 
 export function useProjectTasks(
