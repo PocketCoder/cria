@@ -186,7 +186,7 @@ function DoneCheckbox({ task }: { task: Task }) {
       checked={task.done}
       onChange={handleToggle}
       onClick={(e) => e.stopPropagation()}
-      aria-label={task.done ? 'Done' : 'Not done'}
+      aria-label={task.title}
       className="h-4 w-4 cursor-pointer rounded accent-[var(--color-primary)]"
     />
   );
