@@ -1,4 +1,7 @@
+import { format } from 'date-fns';
 import type { Task, TaskUpdate } from '@/domain/task';
+import { dueCalendarDate } from '@/lib/dateFormat';
+import { pickDayIso } from '@/features/task-detail/taskDetailLogic';
 import type { ColumnKey, SortState, VisibleState } from './useTableConfig';
 
 export type DraftFields = Partial<
@@ -25,16 +28,19 @@ export const DATE_COLUMN_FIELD = {
   created: 'createdAt',
 } as const satisfies Partial<Record<ColumnKey, keyof Task>>;
 
-/** ISO (midnight UTC) → `YYYY-MM-DD` for a native date input. */
+/** Stored ISO → `YYYY-MM-DD` for a native date input: the day the task shows on. */
 export function toDateInputValue(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  return Number.isNaN(d.getTime()) ? '' : format(dueCalendarDate(iso), 'yyyy-MM-dd');
 }
 
-/** `YYYY-MM-DD` → midnight-UTC ISO, or null when cleared. */
-export function fromDateInputValue(v: string): string | null {
-  return v ? `${v}T00:00:00.000Z` : null;
+/**
+ * `YYYY-MM-DD` → ISO to store, or null when cleared. An all-day (or empty)
+ * date stays all-day; a timed one keeps its time on the new day.
+ */
+export function fromDateInputValue(v: string, currentIso?: string | null): string | null {
+  return v ? pickDayIso(new Date(`${v}T00:00:00`), currentIso) : null;
 }
 
 /** Clamp a percent-done input to 0–100; non-numbers become 0. */

@@ -160,7 +160,7 @@ export function EditField({
           aria-label={columnKey === 'dueDate' ? 'Due date' : columnKey === 'startDate' ? 'Start date' : 'End date'}
           type="date"
           value={toDateInputValue(value)}
-          onChange={(e) => onChange(columnKey, fromDateInputValue(e.target.value))}
+          onChange={(e) => onChange(columnKey, fromDateInputValue(e.target.value, value))}
           className={EDIT_INPUT_CLS}
         />
       );

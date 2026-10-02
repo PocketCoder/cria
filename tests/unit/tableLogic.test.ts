@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { format } from 'date-fns';
 import {
   DATE_COLUMN_FIELD,
   EDITABLE_COLUMNS,
@@ -17,6 +18,14 @@ describe('date input helpers', () => {
   it('round-trips midnight UTC', () => {
     expect(toDateInputValue('2030-05-17T00:00:00.000Z')).toBe('2030-05-17');
     expect(fromDateInputValue('2030-05-17')).toBe('2030-05-17T00:00:00.000Z');
+  });
+  it('keeps the time of a timed value when its day is changed', () => {
+    const timed = '2030-05-17T14:30:00.000Z';
+    expect(toDateInputValue(timed)).toBe(format(new Date(timed), 'yyyy-MM-dd'));
+    const moved = fromDateInputValue('2030-05-20', timed);
+    expect(moved).not.toBeNull();
+    const d = new Date(moved!);
+    expect(format(d, 'yyyy-MM-dd HH:mm')).toBe(`2030-05-20 ${format(new Date(timed), 'HH:mm')}`);
   });
   it('handles empty and invalid values', () => {
     expect(toDateInputValue(null)).toBe('');

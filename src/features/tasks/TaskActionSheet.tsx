@@ -22,8 +22,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, duplicateTask } from '@/db/tasks';
 import { getAuthSnapshot } from '@/auth/store';
-import { toCalendarDate } from '@/lib/dateFormat';
-import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
+import { dueCalendarDate } from '@/lib/dateFormat';
+import { pickDayIso } from '@/features/task-detail/taskDetailLogic';
 import { impactDeleted } from '@/utils/haptics';
 import type { Task } from '@/domain/task';
 
@@ -44,7 +44,7 @@ function Inner({ task }: { task: Task }) {
   const [picker, setPicker] = useState<Picker>(null);
 
   const setDate = (field: 'dueDate' | 'endDate', d: Date | undefined) => {
-    void updateTask(task.localId, { [field]: utcMidnightIso(d) });
+    void updateTask(task.localId, { [field]: pickDayIso(d, task[field]) });
     close();
   };
 
@@ -54,7 +54,7 @@ function Inner({ task }: { task: Task }) {
         <Calendar
           selected={
             (picker === 'schedule' ? task.dueDate : task.endDate)
-              ? toCalendarDate((picker === 'schedule' ? task.dueDate : task.endDate)!)
+              ? dueCalendarDate((picker === 'schedule' ? task.dueDate : task.endDate)!)
               : undefined
           }
           onSelect={(d) => setDate(picker === 'schedule' ? 'dueDate' : 'endDate', d)}
