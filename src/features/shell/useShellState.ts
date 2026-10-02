@@ -42,6 +42,16 @@ export function useShellSearch(
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prevViewRef = useRef<ActiveView | null>(null);
 
+  // Leave the search view. The mobile overlay can be cancelled before anything
+  // is typed, so there may be no remembered view (and phones have no sidebar
+  // to pick one from): fall back to Today rather than a blank pane.
+  const leaveSearch = () => {
+    if (activeView?.kind === 'search' || prevViewRef.current) {
+      setActiveView(prevViewRef.current ?? { kind: 'today' });
+    }
+    prevViewRef.current = null;
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     setSearchQuery(v);
@@ -49,15 +59,13 @@ export function useShellSearch(
       prevViewRef.current = activeView;
       setActiveView({ kind: 'search' });
     } else if (!v.trim() && activeView?.kind === 'search') {
-      setActiveView(prevViewRef.current);
-      prevViewRef.current = null;
+      leaveSearch();
     }
   };
 
   const handleSearchClear = () => {
     setSearchQuery('');
-    setActiveView(prevViewRef.current);
-    prevViewRef.current = null;
+    leaveSearch();
     setMobileSearchOpen(false);
     searchInputRef.current?.focus();
   };
