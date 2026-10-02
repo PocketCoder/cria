@@ -22,6 +22,7 @@ export function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
     return (
       <div className="flex h-fit w-72 shrink-0 flex-col gap-2 rounded-lg border border-dashed border-[var(--color-border)] p-3">
         <input
+          aria-label="New bucket name"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {

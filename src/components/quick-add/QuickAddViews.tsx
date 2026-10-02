@@ -91,6 +91,7 @@ export function MobileQuickAdd({
               className="text-[21px] font-medium leading-[1.35] tracking-[-0.015em]"
             />
             <input
+              aria-label="Note"
               type="text"
               placeholder="Add a note…"
               className="mt-2 w-full bg-transparent text-[15px] text-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"
@@ -170,6 +171,7 @@ export function DesktopQuickAdd({
 }: DesktopProps) {
   return (
     <div
+      role="presentation"
       className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
       onClick={onClose}
     >

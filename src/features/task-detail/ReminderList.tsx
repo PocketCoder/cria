@@ -19,6 +19,7 @@ import {
   type PeriodUnit,
 } from '@/lib/period';
 import { InlineWarning } from '@/components/InlineWarning';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 
 /**
  * Reminders for a task: list + add + remove. Edits go through the
@@ -277,6 +278,7 @@ function CustomForm({
   onCancel: () => void;
   onAdded: () => void;
 }) {
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const [amount, setAmount] = useState(1);
   const [unit, setUnit] = useState<PeriodUnit>('hours');
   const [direction, setDirection] = useState<'before' | 'after'>('before');
@@ -308,10 +310,11 @@ function CustomForm({
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <input
+          aria-label="Reminder amount"
           type="number"
           min={1}
           value={amount}
-          autoFocus
+          ref={focusOnMount}
           onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 0))}
           className="w-14 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
         />
@@ -378,6 +381,7 @@ function AbsoluteForm({
 }) {
   // Seed 1h from now so the Add button isn't disabled by an empty
   // WebKit datetime-local placeholder.
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const [draft, setDraft] = useState(() =>
     toLocalInput(new Date(Date.now() + 60 * 60 * 1000)),
   );
@@ -407,9 +411,10 @@ function AbsoluteForm({
       }}
     >
       <input
+        aria-label="Reminder date and time"
         type="datetime-local"
         value={draft}
-        autoFocus
+        ref={focusOnMount}
         onChange={(e) => setDraft(e.target.value)}
         className="w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
       />

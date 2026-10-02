@@ -74,6 +74,7 @@ export function SavedFilterModal({
       className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label={existing ? 'Edit filter' : 'New filter'}
       onClick={onClose}
     >
       <div
@@ -96,10 +97,12 @@ export function SavedFilterModal({
 
         <div className="space-y-3 p-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+            <label htmlFor="saved-filter-title" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Title
             </label>
             <input
+              id="saved-filter-title"
+              aria-label="Title"
               type="text"
               autoFocus
               value={title}
@@ -110,11 +113,12 @@ export function SavedFilterModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+            <label htmlFor="saved-filter-query" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Filter query
             </label>
             {aiAvailable && <DescribeFilter onQuery={setQuery} />}
             <FilterInput
+              id="saved-filter-query"
               value={query}
               onChange={setQuery}
               rows={3}
@@ -131,10 +135,12 @@ export function SavedFilterModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+            <label htmlFor="saved-filter-description" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Description <span className="font-normal">(optional)</span>
             </label>
             <input
+              id="saved-filter-description"
+              aria-label="Description"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}

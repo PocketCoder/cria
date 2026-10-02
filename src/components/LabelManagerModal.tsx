@@ -89,6 +89,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
       className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label="Manage labels"
       onClick={onClose}
     >
       <div
@@ -123,12 +124,14 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                   {editingId === label.localId ? (
                     <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5">
                       <input
+                        aria-label="Label colour"
                         type="color"
                         value={editingColor || '#000000'}
                         onChange={(e) => setEditingColor(e.target.value)}
                         className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent p-0"
                       />
                       <input
+                        aria-label="Label name"
                         type="text"
                         autoFocus
                         value={editingTitle}
@@ -144,6 +147,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                         className="min-w-0 flex-1 rounded bg-transparent px-1 text-sm focus:outline-none"
                       />
                       <button
+                        aria-label="Save label name"
                         type="button"
                         onClick={() => void handleRenameSave(label.localId)}
                         className="rounded p-0.5 text-[var(--color-primary)] hover:bg-[var(--color-muted)]"
@@ -186,6 +190,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
               {creating ? (
                 <li className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5">
                   <input
+                    aria-label="New label name"
                     type="text"
                     autoFocus
                     value={newTitle}

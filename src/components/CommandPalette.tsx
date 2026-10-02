@@ -108,6 +108,7 @@ export function CommandPalette({
 
   return (
     <div
+      role="presentation"
       className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
       onClick={onClose}
     >
@@ -118,6 +119,7 @@ export function CommandPalette({
         <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-4">
           <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
           <input
+            aria-label="Command palette search"
             ref={inputRef}
             type="text"
             placeholder="Search tasks, actions, projects, labels…"

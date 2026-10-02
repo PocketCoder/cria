@@ -59,6 +59,7 @@ function PasswordSection({ disabled }: Props) {
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Password</h3>
       <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
         <input
+          aria-label="Current password"
           type="password"
           value={oldPassword}
           onChange={(e) => setOldPassword(e.target.value)}
@@ -66,6 +67,7 @@ function PasswordSection({ disabled }: Props) {
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
         <input
+          aria-label="New password"
           type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
@@ -73,6 +75,7 @@ function PasswordSection({ disabled }: Props) {
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
         <input
+          aria-label="Confirm new password"
           type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
@@ -116,6 +119,7 @@ function EmailSection({ disabled }: Props) {
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Email</h3>
       <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
         <input
+          aria-label="New email address"
           type="email"
           value={newEmail}
           onChange={(e) => setNewEmail(e.target.value)}
@@ -123,6 +127,7 @@ function EmailSection({ disabled }: Props) {
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
         <input
+          aria-label="Current password"
           type="password"
           value={emailPassword}
           onChange={(e) => setEmailPassword(e.target.value)}
@@ -226,6 +231,7 @@ function TotpSection({ disabled }: Props) {
               </p>
             )}
             <input
+              aria-label="Authenticator code"
               type="text"
               value={totpPasscode}
               onChange={(e) => setTotpPasscode(e.target.value)}
@@ -290,6 +296,7 @@ function TotpEnabledPanel({
       ) : (
         <div className="space-y-2">
           <input
+            aria-label="Current password"
             type="password"
             value={disablePassword}
             onChange={(e) => onPasswordChange(e.target.value)}

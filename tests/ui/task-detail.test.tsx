@@ -38,7 +38,7 @@ describe('TaskDetail smoke', () => {
     useUi.setState({ selectedTaskLocalId: taskId });
     renderWithProviders(<TaskDetail />);
 
-    await user.click(await screen.findByRole('heading', { name: 'Fix the shelf' }));
+    await user.click(await screen.findByRole('button', { name: 'Fix the shelf' }));
     const input = await screen.findByDisplayValue('Fix the shelf');
     await user.clear(input);
     await user.type(input, 'Fix the shelf properly{Enter}');

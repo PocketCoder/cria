@@ -202,6 +202,7 @@ export function InlineProgress({
       {expanded && (
         <div className="mx-3 mb-1 flex items-center gap-2">
           <input
+            aria-label="Percent done"
             type="range"
             min={0}
             max={100}
@@ -261,6 +262,7 @@ export function InlineColor({
           <div className="mb-1.5 flex flex-wrap gap-1">
             {COLOR_PRESETS.map((hex) => (
               <button
+                aria-label={`Colour ${hex}`}
                 key={hex}
                 onClick={() => handleSelect(hex === task.hexColor ? null : hex)}
                 className={cn(
@@ -281,6 +283,7 @@ export function InlineColor({
             </button>
           </div>
           <input
+            aria-label="Custom colour hex"
             type="text"
             value={customHex}
             onChange={(e) => setCustomHex(e.target.value)}
@@ -359,6 +362,7 @@ export function InlineLabels({
       {expanded && (
         <div className="mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
           <input
+            aria-label="Search or create label"
             type="text"
             placeholder="Search or create…"
             value={search}
@@ -668,6 +672,7 @@ export function InlineRepeat({
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-[var(--color-muted-foreground)]">Every</span>
             <input
+              aria-label="Repeat interval"
               type="number"
               min={1}
               value={value}

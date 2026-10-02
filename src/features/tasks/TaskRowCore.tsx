@@ -241,6 +241,9 @@ export const TaskRowCore = memo(function TaskRowCore({
     <div
       data-task-row={task.localId}
       data-done={task.done || undefined}
+      // Pointer convenience only: the title below is the focusable control, and
+      // its click bubbles up here.
+      role="presentation"
       onClick={onOpen}
       style={style}
       className={cn(
@@ -269,18 +272,36 @@ export const TaskRowCore = memo(function TaskRowCore({
         />
         {titleSlot ?? (
           <TaskHoverPreview task={task} className="min-w-0 flex-1">
-            <p
-              className={cn(
-                'truncate text-sm leading-snug',
-                titleWeight === 'medium' && 'font-medium',
-                task.done && 'text-[var(--color-muted-foreground)]',
-              )}
-              title={task.title}
-            >
-              <span className="task-strike" data-done={task.done || undefined}>
-                {task.title}
-              </span>
-            </p>
+            {onOpen ? (
+              // No onClick of its own: Enter/Space synthesise a click that
+              // bubbles to the row's onOpen.
+              <button
+                type="button"
+                className={cn(
+                  'block w-full cursor-pointer truncate text-left text-sm leading-snug',
+                  titleWeight === 'medium' && 'font-medium',
+                  task.done && 'text-[var(--color-muted-foreground)]',
+                )}
+                title={task.title}
+              >
+                <span className="task-strike" data-done={task.done || undefined}>
+                  {task.title}
+                </span>
+              </button>
+            ) : (
+              <p
+                className={cn(
+                  'truncate text-sm leading-snug',
+                  titleWeight === 'medium' && 'font-medium',
+                  task.done && 'text-[var(--color-muted-foreground)]',
+                )}
+                title={task.title}
+              >
+                <span className="task-strike" data-done={task.done || undefined}>
+                  {task.title}
+                </span>
+              </p>
+            )}
           </TaskHoverPreview>
         )}
         <span className="ml-auto flex shrink-0 items-center">

@@ -47,6 +47,7 @@ function TeamRow({ teamId, name, disabled }: { teamId: number; name: string; dis
         </button>
         {renaming ? (
           <input
+            aria-label="Team name"
             type="text"
             autoFocus
             value={draft}
@@ -85,6 +86,7 @@ function TeamRow({ teamId, name, disabled }: { teamId: number; name: string; dis
               Yes
             </button>
             <button
+              aria-label="Cancel delete"
               type="button"
               onClick={() => setConfirmDelete(false)}
               className="rounded px-1 py-0.5 hover:bg-[var(--color-muted)]"
@@ -210,6 +212,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
       <div className="mt-2">
         {creating ? (
           <input
+            aria-label="New team name"
             type="text"
             autoFocus
             value={newName}

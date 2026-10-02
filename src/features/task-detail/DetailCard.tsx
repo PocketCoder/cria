@@ -92,7 +92,7 @@ export function DetailCard({
   return (
     <>
       {isMobile && (
-        <div className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
+        <div role="presentation" className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
       )}
       <aside
         ref={cardRef}

@@ -461,6 +461,7 @@ function SubtasksBlock({
           <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1.5">
             <Search className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
             <input
+              aria-label="Search tasks"
               autoFocus
               type="text"
               value={query}

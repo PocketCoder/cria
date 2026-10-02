@@ -121,6 +121,7 @@ export function EditField({
     case 'title':
       return (
         <input
+          aria-label="Title"
           type="text"
           value={draft?.title ?? task.title}
           onChange={(e) => onChange('title', e.target.value)}
@@ -138,6 +139,7 @@ export function EditField({
     case 'percentDone':
       return (
         <input
+          aria-label="Percent done"
           type="number"
           min={0}
           max={100}
@@ -155,6 +157,7 @@ export function EditField({
       const value = draftVal !== undefined ? draftVal : current;
       return (
         <input
+          aria-label={columnKey === 'dueDate' ? 'Due date' : columnKey === 'startDate' ? 'Start date' : 'End date'}
           type="date"
           value={toDateInputValue(value)}
           onChange={(e) => onChange(columnKey, fromDateInputValue(e.target.value))}

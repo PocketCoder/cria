@@ -129,6 +129,7 @@ function BucketHeader({
     <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <button
+          aria-label={collapsed ? 'Expand bucket' : 'Collapse bucket'}
           onClick={onToggleCollapse}
           className="cursor-pointer text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
         >
@@ -137,6 +138,7 @@ function BucketHeader({
         {renaming ? (
           <div className="flex items-center gap-1">
             <input
+              aria-label="Bucket name"
               ref={renameInputRef}
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
@@ -256,6 +258,7 @@ function BucketMenu({
   return (
     <div className="relative">
       <button
+        aria-label="Bucket options"
         onClick={() => setShowMenu(!showMenu)}
         className="cursor-pointer rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-accent)]/10"
       >
@@ -349,6 +352,7 @@ function LimitRow({
     <div className="flex items-center gap-1 px-3 py-1.5">
       <Gauge className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
       <input
+        aria-label="Task limit"
         type="number"
         min={0}
         autoFocus
@@ -469,6 +473,7 @@ function AddTaskFooter({
       {showNewInput ? (
         <div className="flex items-center gap-1">
           <input
+            aria-label="New task title"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onKeyDown={(e) => {
@@ -480,12 +485,14 @@ function AddTaskFooter({
             className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-xs placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
           />
           <button
+            aria-label="Cancel new task"
             onClick={() => { setShowNewInput(false); setNewTitle(''); }}
             className="cursor-pointer rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
           >
             <X className="h-3.5 w-3.5" />
           </button>
           <button
+            aria-label="Add task"
             onClick={() => void handleAddTask()}
             className="cursor-pointer rounded p-0.5 text-[var(--color-primary)] hover:text-[var(--color-primary)]/80"
           >

@@ -197,6 +197,7 @@ export function LabelsSection() {
         ))}
         {creatingLabel ? (
           <input
+            aria-label="New label name"
             type="text"
             autoFocus
             value={newLabelTitle}
@@ -421,6 +422,7 @@ export function ProjectsSection({ onShare }: { onShare: (project: Project) => vo
 
       {creating ? (
         <input
+          aria-label="New project name"
           type="text"
           autoFocus
           value={newTitle}

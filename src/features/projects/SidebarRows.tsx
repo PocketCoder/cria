@@ -78,11 +78,13 @@ export function NavItem({
 /* ────────────────────────── shared row pieces ─────────────────────────── */
 
 function RenameInput({
+  label,
   value,
   onChange,
   onSave,
   onCancel,
 }: {
+  label: string;
   value: string;
   onChange: (v: string) => void;
   onSave: () => void;
@@ -91,6 +93,7 @@ function RenameInput({
   return (
     <li>
       <input
+        aria-label={label}
         type="text"
         autoFocus
         value={value}
@@ -268,6 +271,7 @@ export function ProjectRow({
   if (isEditing) {
     return (
       <RenameInput
+        label="Project name"
         value={editingTitle}
         onChange={onChangeRename}
         onSave={onSaveRename}
@@ -451,6 +455,7 @@ function ColorPicker({ project, onDone }: { project: Project; onDone: () => void
     <div className="flex flex-wrap gap-1 px-2 py-1.5">
       {PROJECT_COLORS.map((c) => (
         <button
+          aria-label={`Set colour ${c}`}
           key={c}
           onClick={async () => {
             await updateProject(project.localId, {
@@ -521,6 +526,7 @@ export function LabelRow({
   if (isEditing) {
     return (
       <RenameInput
+        label="Label name"
         value={editingTitle}
         onChange={onChangeRename}
         onSave={onSaveRename}

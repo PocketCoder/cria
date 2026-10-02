@@ -133,6 +133,7 @@ export function ReminderPill({
         </p>
         <div className="flex items-center gap-1.5 px-1 pb-1">
           <input
+            aria-label="Reminder date and time"
             type="datetime-local"
             value={absDraft}
             onChange={(e) => setAbsDraft(e.target.value)}

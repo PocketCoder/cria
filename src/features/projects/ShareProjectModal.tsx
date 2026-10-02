@@ -45,6 +45,7 @@ function PermissionSelect({
 }) {
   return (
     <select
+      aria-label="Permission"
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(Number(e.target.value) as Permission)}
@@ -144,6 +145,7 @@ export function ShareProjectModal({
       className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label={`Share “${project.title}”`}
       onClick={onClose}
     >
       <div
@@ -228,6 +230,7 @@ function UnsyncedNotice({ onClose }: { onClose: () => void }) {
       className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-label="Share project"
       onClick={onClose}
     >
       <div
@@ -371,6 +374,7 @@ function TeamsPanel({
     <>
       <div className="flex items-center gap-2">
         <select
+          aria-label="Team"
           value={newTeamId}
           onChange={(e) => setNewTeamId(parseTeamSelection(e.target.value))}
           className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
@@ -456,6 +460,7 @@ function LinksPanel({
       <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2.5">
         <div className="flex items-center gap-2">
           <input
+            aria-label="Link name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -466,6 +471,7 @@ function LinksPanel({
         </div>
         <div className="flex items-center gap-2">
           <input
+            aria-label="Link password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

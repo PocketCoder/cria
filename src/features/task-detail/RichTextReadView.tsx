@@ -157,6 +157,7 @@ export function ReadView({
     <div className="min-w-0 max-w-full space-y-2">
       <div
         ref={containerRef}
+        role="presentation"
         className="prose prose-sm max-w-none break-words text-sm leading-relaxed [&_a]:cursor-pointer [&_a]:underline [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-center [&_ul[data-type=taskList]_li]:gap-1.5 [&_ul[data-type=taskList]_li>label]:flex [&_ul[data-type=taskList]_li>label]:items-start [&_ul[data-type=taskList]_li>label]:gap-1.5 [&_ul[data-type=taskList]_li>label>input]:shrink-0 [&_ul[data-type=taskList]_li>label>input]:accent-[var(--color-primary)] [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md cursor-default"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
         onClick={onContainerClick}

@@ -124,6 +124,7 @@ export function GanttBar({
   const { node, resolved, left, width, top, height, color, isPlaceholder, label } = placement;
   return (
     <div
+      aria-label={`${node.task.title}, ${label}`}
       role="button"
       tabIndex={0}
       onPointerDown={(ev) => onStartDrag(node, 'move', ev)}

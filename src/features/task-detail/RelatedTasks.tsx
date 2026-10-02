@@ -20,6 +20,7 @@ import {
 import { searchTasks, type TaskWithProject } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
 import { useUi } from '@/stores/ui';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import {
   TASK_RELATION_PICKABLE_KINDS,
   type TaskRelationKind,
@@ -235,6 +236,7 @@ function AddRelationRow({
 }) {
   const qc = useQueryClient();
   const [kind, setKind] = useState<TaskRelationKind>(pickableKinds[0] ?? 'related');
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TaskWithProject[]>([]);
   const [busy, setBusy] = useState(false);
@@ -330,8 +332,9 @@ function AddRelationRow({
           </SelectContent>
         </Select>
         <input
+          aria-label="Search tasks"
           type="text"
-          autoFocus
+          ref={focusOnMount}
           placeholder="Search tasks…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

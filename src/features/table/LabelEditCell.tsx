@@ -6,6 +6,7 @@ import { useLabels } from '@/queries/labels';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelChips } from '@/features/tasks/LabelChips';
 import { cn } from '@/lib/cn';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 
 /**
  * Editable labels cell for the table's edit mode: a popover to search /
@@ -18,6 +19,7 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
   const { data: current = [] } = useTaskLabels(taskLocalId);
   const { data: all = [] } = useLabels();
   const [search, setSearch] = useState('');
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const currentIds = new Set(current.map((l) => l.localId));
 
   const term = search.trim().toLowerCase();
@@ -60,7 +62,8 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-52 p-1">
         <input
-          autoFocus
+          aria-label="Search or create label"
+          ref={focusOnMount}
           type="text"
           placeholder="Search or create…"
           value={search}

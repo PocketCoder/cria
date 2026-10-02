@@ -131,6 +131,7 @@ export function PhotoReview({
               aria-label={`Include ${item.text}`}
             />
             <input
+              aria-label="Item text"
               type="text"
               value={item.text}
               onChange={(e) => setItems((prev) => setItemText(prev, item.id, e.target.value))}

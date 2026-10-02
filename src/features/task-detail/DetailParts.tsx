@@ -112,6 +112,7 @@ export function TaskTitle({
   if (editing) {
     return (
       <input
+        aria-label="Task title"
         type="text"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -125,14 +126,19 @@ export function TaskTitle({
   return (
     <h2
       data-inspector-title
-      className="vt-task-title mb-[18px] w-fit max-w-full cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
-      onClick={() => {
-        setDraft(task.title);
-        setEditing(true);
-      }}
-      title="Click to edit"
+      className="vt-task-title mb-[18px] w-fit max-w-full text-[21px] font-semibold leading-[1.28] tracking-[-0.025em]"
     >
-      {task.title}
+      <button
+        type="button"
+        className="block w-full cursor-pointer text-left transition-colors hover:opacity-80"
+        onClick={() => {
+          setDraft(task.title);
+          setEditing(true);
+        }}
+        title="Click to edit"
+      >
+        {task.title}
+      </button>
     </h2>
   );
 }

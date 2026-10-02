@@ -148,6 +148,7 @@ export function TokensTab({ disabled }: Props) {
           ) : (
             <div className="space-y-2">
               <input
+                aria-label="Token description"
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
@@ -155,6 +156,7 @@ export function TokensTab({ disabled }: Props) {
                 className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
               <input
+                aria-label="Token expiry date"
                 type="date"
                 value={newExpiry}
                 onChange={(e) => setNewExpiry(e.target.value)}

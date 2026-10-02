@@ -12,6 +12,7 @@ import { useLabels } from '@/queries/labels';
 import { LabelChips } from '@/features/tasks/LabelChips';
 import type { Label } from '@/domain/label';
 import { cn } from '@/lib/cn';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 
 /**
  * Label picker for the task-CREATE flow — works with plain title strings, not
@@ -34,6 +35,7 @@ export function LabelPicker({
 }) {
   const { data: all = [] } = useLabels();
   const [search, setSearch] = useState('');
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
 
   const selectedLower = new Set(value.map((t) => t.toLowerCase()));
   const term = search.trim().toLowerCase();
@@ -91,7 +93,8 @@ export function LabelPicker({
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6} className="w-56 p-1">
         <input
-          autoFocus
+          aria-label="Search or create label"
+          ref={focusOnMount}
           type="text"
           placeholder="Search or create…"
           value={search}
