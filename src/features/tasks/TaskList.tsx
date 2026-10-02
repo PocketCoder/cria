@@ -48,7 +48,8 @@ import {
 } from '@/components/ui/context-menu';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { TaskHoverPreview } from './TaskHoverPreview';
-import { TaskRowCore, countChecklistItems } from './TaskRowCore';
+import { TaskRowCore } from './TaskRowCore';
+import { countChecklistItems } from './taskRowHelpers';
 
 // Collect a task and all its descendants from the task tree
 function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {

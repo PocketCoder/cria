@@ -1,67 +1,14 @@
 import { memo, useMemo } from 'react';
-import { format, startOfDay, isBefore } from 'date-fns';
 import { Paperclip, RefreshCw, CheckSquare, Square } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { toCalendarDate, hasTimeOfDay, formatTime } from '@/lib/dateFormat';
 import { priorityColor } from '@/components/ui/priority';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { TaskHoverPreview } from './TaskHoverPreview';
 import { LabelChips } from './LabelChips';
-import { updateTask } from '@/db/tasks';
-import { playCompletionSound } from '@/utils/sound';
-import { impactComplete } from '@/utils/haptics';
+import { formatDue, isOverdue, toggleTaskDone, countSuppressedSignals } from './taskRowHelpers';
 import { Check } from 'lucide-react';
 import type { Task } from '@/domain/task';
 import type { Label } from '@/domain/label';
-
-/* ─── shared helpers ─── */
-
-export function formatDue(iso: string): string {
-  try {
-    const base = format(toCalendarDate(iso), 'd MMM');
-    return hasTimeOfDay(iso) ? `${base}, ${formatTime(iso)}` : base;
-  } catch {
-    return iso;
-  }
-}
-
-export function countChecklistItems(
-  html: string | null | undefined,
-): { checked: number; total: number } {
-  if (!html) return { checked: 0, total: 0 };
-  const inputs = html.match(/<input\s[^>]*?type="checkbox"[^>]*?>/gi) ?? [];
-  let checked = 0;
-  for (const input of inputs) {
-    if (/\bchecked\s*[= >]/i.test(input)) checked++;
-  }
-  return { checked, total: inputs.length };
-}
-
-export function isOverdue(iso: string): boolean {
-  try {
-    return isBefore(startOfDay(toCalendarDate(iso)), startOfDay(new Date()));
-  } catch {
-    return false;
-  }
-}
-
-/** Returns whether the update actually went through — callers with a
- * side effect chained to completion (e.g. the Now block dropping the
- * task) must check this rather than assuming success. */
-export async function toggleTaskDone(task: Task): Promise<boolean> {
-  const nowDone = !task.done;
-  try {
-    await updateTask(task.localId, { done: nowDone });
-    if (nowDone) {
-      playCompletionSound();
-      impactComplete();
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed to toggle task:', err);
-    return false;
-  }
-}
 
 /* ─── +n suppressed-signals popover ─── */
 
@@ -127,6 +74,111 @@ function SuppressedSignals({ task, signals }: { task: Task; signals: RowSignals 
   );
 }
 
+/* ─── date · project · +n ─── */
+
+interface RowMetaProps extends RowSignals {
+  task: Task;
+  projectTitle: string | null;
+}
+
+function RowMeta({ task, labels, hasAttachments, checklist, projectTitle }: RowMetaProps) {
+  const dueLabel = useMemo(
+    () => (task.dueDate ? formatDue(task.dueDate) : null),
+    [task.dueDate],
+  );
+  const overdue = useMemo(
+    () => (task.dueDate ? isOverdue(task.dueDate) : false),
+    [task.dueDate],
+  );
+
+  const suppressed = useMemo(
+    () =>
+      countSuppressedSignals({
+        labelCount: labels.length,
+        hasAttachments,
+        checklistTotal: checklist.total,
+        repeatAfter: task.repeatAfter,
+        percentDone: task.percentDone,
+        hexColor: task.hexColor,
+      }),
+    [labels.length, hasAttachments, checklist.total, task.repeatAfter, task.percentDone, task.hexColor],
+  );
+
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+      {dueLabel ? (
+        <span className={cn('whitespace-nowrap tabular-nums', overdue && 'text-[var(--color-destructive)]')}>
+          {dueLabel}
+        </span>
+      ) : null}
+      {projectTitle ? <span className="truncate">{projectTitle}</span> : null}
+      {suppressed > 0 ? (
+        <span className="shrink-0">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`${suppressed} more`}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="rounded px-1 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ring)]"
+              >
+                +{suppressed}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={6} className="p-2.5">
+              <SuppressedSignals task={task} signals={{ hasAttachments, checklist, labels }} />
+            </PopoverContent>
+          </Popover>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/* ─── select toggle or done checkbox ─── */
+
+interface RowLeadingProps {
+  task: Task;
+  selecting: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
+  onToggleSelect?: () => void;
+}
+
+function RowLeading({ task, selecting, isSelected, onToggle, onToggleSelect }: RowLeadingProps) {
+  if (selecting) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelect?.();
+        }}
+        aria-label={isSelected ? 'Deselect' : 'Select'}
+        className={cn(
+          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
+          isSelected
+            ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+            : 'border-[var(--color-muted-foreground)]',
+        )}
+      >
+        {isSelected && <Check className="h-3 w-3" />}
+      </button>
+    );
+  }
+  return (
+    <input
+      type="checkbox"
+      checked={task.done}
+      onChange={onToggle}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={task.done ? 'Done' : 'Not done'}
+      className="task-check"
+    />
+  );
+}
+
 /* ─── the shared row ─── */
 
 export interface TaskRowCoreProps {
@@ -177,61 +229,10 @@ export const TaskRowCore = memo(function TaskRowCore({
   className,
   titleWeight = 'normal',
 }: TaskRowCoreProps) {
-  const dueLabel = useMemo(
-    () => (task.dueDate ? formatDue(task.dueDate) : null),
-    [task.dueDate],
-  );
-  const overdue = useMemo(
-    () => (task.dueDate ? isOverdue(task.dueDate) : false),
-    [task.dueDate],
-  );
-
-  const suppressed = useMemo(
-    () =>
-      (labels.length > 0 ? 1 : 0) +
-      (hasAttachments ? 1 : 0) +
-      (checklist.total > 0 ? 1 : 0) +
-      (task.repeatAfter > 0 ? 1 : 0) +
-      (task.percentDone > 0 ? 1 : 0) +
-      (task.hexColor ? 1 : 0),
-    [labels.length, hasAttachments, checklist.total, task.repeatAfter, task.percentDone, task.hexColor],
-  );
-
   const handleToggle = () => {
     if (onToggle) onToggle();
     else void toggleTaskDone(task);
   };
-
-  const meta = (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
-      {dueLabel ? (
-        <span className={cn('whitespace-nowrap tabular-nums', overdue && 'text-[var(--color-destructive)]')}>
-          {dueLabel}
-        </span>
-      ) : null}
-      {projectTitle ? <span className="truncate">{projectTitle}</span> : null}
-      {suppressed > 0 ? (
-        <span className="shrink-0">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label={`${suppressed} more`}
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="rounded px-1 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ring)]"
-              >
-                +{suppressed}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" sideOffset={6} className="p-2.5">
-              <SuppressedSignals task={task} signals={{ hasAttachments, checklist, labels }} />
-            </PopoverContent>
-          </Popover>
-        </span>
-      ) : null}
-    </span>
-  );
 
   return (
     <div
@@ -254,33 +255,13 @@ export const TaskRowCore = memo(function TaskRowCore({
         />
       ) : null}
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        {selecting ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSelect?.();
-            }}
-            aria-label={isSelected ? 'Deselect' : 'Select'}
-            className={cn(
-              'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
-              isSelected
-                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                : 'border-[var(--color-muted-foreground)]',
-            )}
-          >
-            {isSelected && <Check className="h-3 w-3" />}
-          </button>
-        ) : (
-          <input
-            type="checkbox"
-            checked={task.done}
-            onChange={handleToggle}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={task.done ? 'Done' : 'Not done'}
-            className="task-check"
-          />
-        )}
+        <RowLeading
+          task={task}
+          selecting={selecting}
+          isSelected={isSelected}
+          onToggle={handleToggle}
+          onToggleSelect={onToggleSelect}
+        />
         {titleSlot ?? (
           <TaskHoverPreview task={task} className="min-w-0 flex-1">
             <p
@@ -295,7 +276,15 @@ export const TaskRowCore = memo(function TaskRowCore({
             </p>
           </TaskHoverPreview>
         )}
-        <span className="ml-auto flex shrink-0 items-center">{meta}</span>
+        <span className="ml-auto flex shrink-0 items-center">
+          <RowMeta
+            task={task}
+            labels={labels}
+            hasAttachments={hasAttachments}
+            checklist={checklist}
+            projectTitle={projectTitle}
+          />
+        </span>
       </div>
       {actions}
     </div>

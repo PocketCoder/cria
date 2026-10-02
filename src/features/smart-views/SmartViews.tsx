@@ -34,11 +34,8 @@ import {
 } from '@/lib/displayConfig';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
-import {
-  TaskRowCore,
-  countChecklistItems,
-  toggleTaskDone,
-} from '@/features/tasks/TaskRowCore';
+import { TaskRowCore } from '@/features/tasks/TaskRowCore';
+import { countChecklistItems, toggleTaskDone } from '@/features/tasks/taskRowHelpers';
 import { updateTask, type TaskWithProject } from '@/db/tasks';
 
 /* ─────────────────────────── shared chrome ─────────────────────────── */

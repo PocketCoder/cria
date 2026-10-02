@@ -43,7 +43,7 @@ import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
 import { CommentSection } from './CommentSection';
 import { RelatedTasks } from './RelatedTasks';
-import { toggleTaskDone } from '@/features/tasks/TaskRowCore';
+import { toggleTaskDone } from '@/features/tasks/taskRowHelpers';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { PrioritySelect } from '@/components/ui/priority-select';

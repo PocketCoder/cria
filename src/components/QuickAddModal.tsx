@@ -17,7 +17,7 @@ import { LabelPicker } from '@/components/ui/label-picker';
 import { RecurrencePicker } from '@/components/ui/recurrence-picker';
 import { ReminderPill } from '@/components/ui/reminder-pill';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { formatDue } from '@/features/tasks/TaskRowCore';
+import { formatDue } from '@/features/tasks/taskRowHelpers';
 import type { TaskInput } from '@/domain/task';
 import type { Project } from '@/domain/project';
 
