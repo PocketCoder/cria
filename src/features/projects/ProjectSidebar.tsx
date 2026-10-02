@@ -76,7 +76,7 @@ function NavItem({
         'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px]',
         'hover:bg-[var(--color-muted)]',
         isSelected &&
-          'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]',
+          'bg-[var(--color-muted)] font-medium text-[color:var(--color-foreground)]',
       )}
     >
       <Icon
@@ -860,8 +860,8 @@ function ProjectRow({
               onClick={onSelect}
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
-                'hover:bg-[var(--color-muted)]',
-                isSelected && 'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]',
+                'hover:bg-[var(--color-muted)] hover:text-[color:var(--color-foreground)]',
+                isSelected && 'bg-[var(--color-muted)] font-medium text-[color:var(--color-foreground)]',
               )}
             >
               <span
@@ -1107,7 +1107,7 @@ function LabelRow({
             className={cn(
               'flex w-full items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
               'hover:bg-[var(--color-muted)]',
-              isSelected && 'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]',
+              isSelected && 'bg-[var(--color-muted)] font-medium text-[color:var(--color-foreground)]',
             )}
           >
             <span
