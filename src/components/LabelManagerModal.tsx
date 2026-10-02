@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useLabels } from '@/queries/labels';
 import {
   createLabel,
@@ -90,11 +91,10 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
       role="dialog"
       aria-modal="true"
       aria-label="Manage labels"
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[80vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[80vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Manage labels</h2>

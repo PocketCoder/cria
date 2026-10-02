@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useLatestRef } from '../../lib/useLatestRef';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -162,11 +163,10 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
       role="dialog"
       aria-modal="true"
       aria-label="Edit This Project"
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
       >
         {/* ── Header ── */}
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">

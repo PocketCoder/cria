@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { X, Trash2, Copy, Check, Lock, Loader2 } from 'lucide-react';
 import {
@@ -146,11 +147,10 @@ export function ShareProjectModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Share “${project.title}”`}
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Share “{project.title}”</h2>
@@ -231,11 +231,10 @@ function UnsyncedNotice({ onClose }: { onClose: () => void }) {
       role="dialog"
       aria-modal="true"
       aria-label="Share project"
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
       >
         <p className="text-sm">Sync this project before sharing it.</p>
         <button

@@ -9,6 +9,7 @@ import { formatDue } from '@/features/tasks/taskRowHelpers';
 import { priorityColor } from '@/components/ui/priority';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
 import { Search } from 'lucide-react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { buildPaletteActions, type PaletteAction } from '@/components/paletteActions';
 import { filterPaletteActions, groupPaletteActions, paletteRightLabel } from '@/lib/paletteFilter';
 
@@ -107,15 +108,9 @@ export function CommandPalette({
   let flatIdx = 0;
 
   return (
-    <div
-      role="presentation"
-      className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
-      onClick={onClose}
-    >
-      <div
-        className="w-[560px] overflow-hidden rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]">
+      <BackdropDismiss onDismiss={onClose} />
+      <div className="relative w-[560px] overflow-hidden rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]">
         <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-4">
           <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
           <input

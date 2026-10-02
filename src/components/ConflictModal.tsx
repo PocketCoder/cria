@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { useConflicts } from '@/queries/conflicts';
 import {
@@ -61,11 +62,10 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
       role="dialog"
       aria-modal="true"
       aria-label={conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'}
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--color-border)]"
-        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--color-border)]"
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-4">
           <h2 className="text-[17px] font-semibold tracking-[-0.02em]">

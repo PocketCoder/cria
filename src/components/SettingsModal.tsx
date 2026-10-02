@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useCurrentUser } from '@/queries/user';
 import { useOnline } from '@/hooks/useOnline';
 import { pushUserSettings, type UserSettingsInput, SETTINGS_DEFAULTS } from '@/api/userSettings';
@@ -124,11 +125,10 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex h-[min(80vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex h-[min(80vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <div className="flex items-center gap-2">

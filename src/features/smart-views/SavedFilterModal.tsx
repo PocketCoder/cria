@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { X, Loader2 } from 'lucide-react';
 import { parseFilterQuery } from '@/lib/filterQueryParser';
 import { FilterInput } from '@/components/FilterInput';
@@ -75,11 +76,10 @@ export function SavedFilterModal({
       role="dialog"
       aria-modal="true"
       aria-label={existing ? 'Edit filter' : 'New filter'}
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">

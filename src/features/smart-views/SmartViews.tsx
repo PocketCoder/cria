@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, memo } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { format, startOfDay, addDays } from 'date-fns';
 import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
 import { todaySectioner, upcomingDayLabel, upcomingSectioner } from './sectioners';
@@ -472,7 +473,7 @@ function PickerSheet({
   if (isMobile) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
-        <div role="presentation" className="sheet-backdrop absolute inset-0" onClick={onClose} />
+        <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
         <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
@@ -481,12 +482,9 @@ function PickerSheet({
     );
   }
   return (
-    <div role="presentation" className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
-      <div
-        role="presentation"
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--sheet-border)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20">
+      <BackdropDismiss onDismiss={onClose} />
+      <div className="relative flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
         {header}
         <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
       </div>

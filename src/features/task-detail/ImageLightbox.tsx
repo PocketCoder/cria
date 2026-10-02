@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { X, Download, Loader2 } from 'lucide-react';
 import { downloadAttachment } from '@/sync/attachments';
 import { getAttachmentObjectUrl } from './tiptapImageExtension';
@@ -71,13 +72,12 @@ export function ImageLightbox({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6"
-      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={fileName}
     >
-      <div
-        className="relative max-h-full max-w-full"
-        // Don't close when clicking the image itself / chrome.
-        onClick={(e) => e.stopPropagation()}
-      >
+      <BackdropDismiss onDismiss={onClose} />
+      <div className="relative max-h-full max-w-full">
         <div className="absolute -top-2 right-0 flex translate-y-[-100%] gap-1">
           <button
             type="button"

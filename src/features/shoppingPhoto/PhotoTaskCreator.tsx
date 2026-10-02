@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { Camera, X } from 'lucide-react';
 import { useSelectableProjects } from '@/queries/projects';
 import { useSettings } from '@/stores/settings';
@@ -225,34 +226,27 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      role="presentation"
       className={cn(
         'fixed inset-0 z-50',
         isMobile ? '' : 'flex items-start justify-center bg-black/50 pt-24',
       )}
-      onClick={isMobile ? undefined : onClose}
     >
       {hiddenInput}
       {isMobile ? (
         <>
-          <div role="presentation" className="sheet-backdrop absolute inset-0" onClick={onClose} />
-          <div
-            role="presentation"
-            className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--color-card)] px-4 pb-8 pt-2 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
+          <div className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--color-card)] px-4 pb-8 pt-2 shadow-lg">
             <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {body}
           </div>
         </>
       ) : (
-        <div
-          role="presentation"
-          className="bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {body}
-        </div>
+        <>
+          <BackdropDismiss onDismiss={onClose} />
+          <div className="relative bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg">
+            {body}
+          </div>
+        </>
       )}
     </div>
   );

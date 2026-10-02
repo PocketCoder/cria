@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Star, Ellipsis, X, Plus, Bell, Paperclip, MessageSquare, RefreshCw, Check, ChevronRight, Link2 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/cn';
@@ -91,6 +92,18 @@ export function TaskTitle({
   draft: string;
   setDraft: (v: string) => void;
 }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // Leaving the input with Enter/Escape unmounts the focused element; hand
+  // focus back to the title button so keyboard users keep their place. A blur
+  // save must not do this (focus already went somewhere else on purpose).
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    if (!editing && restoreFocus.current) {
+      restoreFocus.current = false;
+      buttonRef.current?.focus();
+    }
+  }, [editing]);
+
   const handleSave = async () => {
     const trimmed = draft.trim();
     if (trimmed && trimmed !== task.title) {
@@ -102,9 +115,11 @@ export function TaskTitle({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      restoreFocus.current = true;
       void handleSave();
     } else if (e.key === 'Escape') {
       e.stopPropagation();
+      restoreFocus.current = true;
       setEditing(false);
     }
   };
@@ -129,6 +144,7 @@ export function TaskTitle({
       className="vt-task-title mb-[18px] w-fit max-w-full text-[21px] font-semibold leading-[1.28] tracking-[-0.025em]"
     >
       <button
+        ref={buttonRef}
         type="button"
         className="block w-full cursor-pointer text-left transition-colors hover:opacity-80"
         onClick={() => {

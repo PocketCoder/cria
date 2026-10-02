@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import {
   useOutboxRows,
   useDeadLetters,
@@ -128,11 +129,10 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
       role="dialog"
       aria-modal="true"
       aria-label="Sync queue"
-      onClick={onClose}
     >
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
       >
         {/* Sticky header + action toolbar */}
         <div className="shrink-0 border-b border-[var(--color-border)]">

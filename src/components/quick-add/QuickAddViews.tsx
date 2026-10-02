@@ -1,6 +1,7 @@
 import type { MutableRefObject, FormEvent, KeyboardEvent, RefObject } from 'react';
 import { ArrowUp, Camera, Mic } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import type { QuickAddResult } from '@/lib/quickAddParser';
 import { TokenInput } from './TokenInput';
 import { SetChips } from './SetChips';
@@ -62,9 +63,8 @@ export function MobileQuickAdd({
       role="dialog"
       aria-modal="true"
       aria-label="Add task"
-      onClick={onClose}
     >
-      <div className="sheet-backdrop absolute inset-0" />
+      <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
       <div
         ref={panelRef}
         className={cn(
@@ -76,7 +76,6 @@ export function MobileQuickAdd({
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           transition: drag.current.active ? 'none' : 'transform 240ms var(--spring-snappy)',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-1 h-[5px] w-[38px] rounded-full bg-[var(--color-muted-foreground)]/30" />
         <form onSubmit={onSubmit}>
@@ -170,15 +169,9 @@ export function DesktopQuickAdd({
   chipProps,
 }: DesktopProps) {
   return (
-    <div
-      role="presentation"
-      className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]"
-      onClick={onClose}
-    >
-      <div
-        className="w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]">
+      <BackdropDismiss onDismiss={onClose} />
+      <div className="relative w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]">
         <form onSubmit={onSubmit}>
           <div className="px-5 pt-5">
             <TokenInput

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { X } from 'lucide-react';
 import { useLatestRef } from '@/lib/useLatestRef';
 import { cn } from '@/lib/cn';
@@ -92,7 +93,7 @@ export function DetailCard({
   return (
     <>
       {isMobile && (
-        <div role="presentation" className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
+        <BackdropDismiss onDismiss={onClose} className="sheet-backdrop fixed z-40" />
       )}
       <aside
         ref={cardRef}

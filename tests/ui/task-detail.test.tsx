@@ -1,7 +1,7 @@
 import './mocks';
 import { Profiler } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { createTask, getTaskByLocalId } from '@/db/tasks';
@@ -46,6 +46,23 @@ describe('TaskDetail smoke', () => {
 
     await waitFor(async () => {
       expect((await getTaskByLocalId(taskId))?.title).toBe('Fix the shelf properly');
+    });
+  });
+
+  it('keeps the title a heading with a button and returns focus after editing', async () => {
+    const user = userEvent.setup();
+    useUi.setState({ selectedTaskLocalId: taskId });
+    renderWithProviders(<TaskDetail />);
+
+    const heading = await screen.findByRole('heading', { name: 'Fix the shelf' });
+    const button = within(heading).getByRole('button', { name: 'Fix the shelf' });
+    button.focus();
+    await user.keyboard('{Enter}');
+    const input = await screen.findByDisplayValue('Fix the shelf');
+    expect(input).toHaveFocus();
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Fix the shelf' })).toHaveFocus();
     });
   });
 
