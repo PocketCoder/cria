@@ -24,14 +24,17 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import type { Project } from '@/domain/project';
-import { taskCount, type Draft, type Phase } from './rambleLogic';
+import { hasTitle, projectPreview, taskCount, type Draft, type Phase } from './rambleLogic';
 
 export function RambleHeader({
   reviewing,
+  backDisabled,
   onBack,
   onClose,
 }: {
   reviewing: boolean;
+  /** Back is inert while saving: the input step would let Organise replace drafts mid-save. */
+  backDisabled: boolean;
   onBack: () => void;
   onClose: () => void;
 }) {
@@ -42,7 +45,8 @@ export function RambleHeader({
           <button
             type="button"
             onClick={onBack}
-            className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            disabled={backDisabled}
+            className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50 disabled:hover:text-[var(--color-muted-foreground)]"
             aria-label="Back to ramble"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -169,7 +173,14 @@ export function RambleReview({
 
       <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
         {drafts.map((d) => (
-          <DraftRow key={d.id} draft={d} onUpdate={onUpdate} onDelete={onDelete} />
+          <DraftRow
+            key={d.id}
+            draft={d}
+            projects={projects}
+            fallbackProjectId={projectId}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+          />
         ))}
       </ul>
 
@@ -226,10 +237,14 @@ export function RambleReview({
 
 function DraftRow({
   draft: d,
+  projects,
+  fallbackProjectId,
   onUpdate,
   onDelete,
 }: {
   draft: Draft;
+  projects: Project[];
+  fallbackProjectId: string;
   onUpdate: (id: number, patch: Partial<Draft>) => void;
   onDelete: (id: number) => void;
 }) {
@@ -253,7 +268,12 @@ function DraftRow({
             !d.include && 'text-[var(--color-muted-foreground)] line-through',
           )}
         />
-        <DraftChips line={d.line} />
+        <DraftChips
+          line={d.line}
+          included={d.include}
+          projects={projects}
+          fallbackProjectId={fallbackProjectId}
+        />
       </div>
       <button
         type="button"
@@ -268,10 +288,23 @@ function DraftRow({
 }
 
 /** Read-only preview of what a draft line will set, so the user can check before adding. */
-function DraftChips({ line }: { line: string }) {
+function DraftChips({
+  line,
+  included,
+  projects,
+  fallbackProjectId,
+}: {
+  line: string;
+  included: boolean;
+  projects: Project[];
+  fallbackProjectId: string;
+}) {
   const { formatDate, formatDateTime } = useDateFormatter();
   const p = useMemo(() => parseQuickAdd(line), [line]);
-  const chips: Array<{ key: string; icon: ReactNode; text: string }> = [];
+  const chips: Array<{ key: string; icon: ReactNode; text: string; warn?: boolean }> = [];
+  // Token-only lines ("+Home tomorrow") have no title and are skipped on save.
+  if (included && line.trim() && !hasTitle(line))
+    chips.push({ key: 'skip', icon: <X className="h-3 w-3" />, text: 'No title, will be skipped', warn: true });
   if (p.dueDate)
     chips.push({
       key: 'due',
@@ -280,7 +313,15 @@ function DraftChips({ line }: { line: string }) {
     });
   if (p.repeatAfter !== null || p.repeatMode !== null)
     chips.push({ key: 'repeat', icon: <Repeat className="h-3 w-3" />, text: 'Repeats' });
-  if (p.projectTitle) chips.push({ key: 'project', icon: <Folder className="h-3 w-3" />, text: p.projectTitle });
+  if (p.projectTitle) {
+    const pv = projectPreview(projects, p.projectTitle, fallbackProjectId);
+    chips.push({
+      key: 'project',
+      icon: <Folder className="h-3 w-3" />,
+      text: pv.text,
+      warn: pv.unresolved,
+    });
+  }
   for (const l of p.labelTitles) chips.push({ key: `l-${l}`, icon: <Tag className="h-3 w-3" />, text: l });
   if (p.priority) chips.push({ key: 'prio', icon: <Flag className="h-3 w-3" />, text: `P${p.priority}` });
   if (chips.length === 0) return null;
@@ -289,7 +330,10 @@ function DraftChips({ line }: { line: string }) {
       {chips.map((c) => (
         <span
           key={c.key}
-          className="inline-flex items-center gap-1 rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-[11px] text-[var(--color-muted-foreground)]"
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-[11px] text-[var(--color-muted-foreground)]',
+            c.warn && 'text-[var(--color-destructive)]',
+          )}
         >
           {c.icon}
           {c.text}

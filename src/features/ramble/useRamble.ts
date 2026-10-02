@@ -26,12 +26,23 @@ export function useRamble(onClose: () => void) {
   const activeView = useUi((s) => s.activeView);
   const text = useUi((s) => s.rambleDraft);
   const setText = useUi((s) => s.setRambleDraft);
+  const pendingLines = useUi((s) => s.rambleLines);
+  const setPendingLines = useUi((s) => s.setRambleLines);
 
   const [phase, setPhase] = useState<Phase>('input');
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const nextId = useRef(0);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  // False once the sheet is closed; the model call can't be cancelled, so it
+  // may still resolve afterwards.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   // Tasks with no (known) +project land here; defaults to the open project.
   const [projectId, setProjectId] = useState('');
@@ -45,8 +56,21 @@ export function useRamble(onClose: () => void) {
     textRef.current?.focus({ preventScroll: true });
   }, []);
 
+  // Lines organised while the sheet was closed: review them on reopen.
+  useEffect(() => {
+    if (!pendingLines || phase !== 'input') return;
+    setDrafts(draftsFromLines(pendingLines, nextId.current));
+    nextId.current += pendingLines.length;
+    setPendingLines(null);
+    setError(null);
+    setPhase('review');
+  }, [pendingLines, phase, setPendingLines]);
+
   const organise = async () => {
-    if (!text.trim() || phase === 'thinking') return;
+    // Only from the input step: not mid-organise, and not mid-save (the save
+    // loop is still creating the old drafts).
+    if (!text.trim() || phase !== 'input') return;
+    setPendingLines(null);
     setPhase('thinking');
     setError(null);
     try {
@@ -59,6 +83,11 @@ export function useRamble(onClose: () => void) {
         prompt: clip(text.trim()),
       });
       const lines = parseLines(out);
+      if (!alive.current) {
+        // Closed while organising: keep the result for the next open.
+        if (lines.length > 0) setPendingLines(lines);
+        return;
+      }
       if (lines.length === 0) {
         setError("Couldn't find any tasks in that. Try saying what you need to do.");
         setPhase('input');
@@ -68,6 +97,7 @@ export function useRamble(onClose: () => void) {
       nextId.current += lines.length;
       setPhase('review');
     } catch (err) {
+      if (!alive.current) return;
       setError(aiErrorMessage(err));
       setPhase('input');
     }
@@ -86,6 +116,7 @@ export function useRamble(onClose: () => void) {
         (d) => savedIds.add(d.id),
       );
       setText('');
+      setPendingLines(null);
       onClose();
     } catch (err) {
       console.error('[ramble] task creation failed:', err);

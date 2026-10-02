@@ -1,4 +1,5 @@
 import type { Project } from '@/domain/project';
+import { parseQuickAdd } from '@/lib/quickAddParser';
 import type { ActiveView } from '@/stores/ui';
 
 export type Phase = 'input' | 'thinking' | 'review' | 'saving';
@@ -14,9 +15,44 @@ export function draftsFromLines(lines: readonly string[], firstId: number): Draf
   return lines.map((line, i) => ({ id: firstId + i, line, include: true }));
 }
 
-/** Drafts that will actually be created: ticked and not blank. */
+/** Whether a line still has a title once its quick-add tokens are stripped. */
+export function hasTitle(line: string): boolean {
+  return parseQuickAdd(line.trim()).title !== '';
+}
+
+/**
+ * Drafts that will actually be created: ticked and with a title. A line of
+ * only tokens ("+Home tomorrow") has no title, and creation skips it.
+ */
 export function chosenDrafts(drafts: readonly Draft[]): Draft[] {
-  return drafts.filter((d) => d.include && d.line.trim());
+  return drafts.filter((d) => d.include && hasTitle(d.line));
+}
+
+/** The project a `+Name` token refers to, matched case-insensitively. */
+export function findProjectByTitle<T extends Pick<Project, 'title'>>(
+  projects: readonly T[],
+  title: string,
+): T | undefined {
+  const wanted = title.toLowerCase();
+  return projects.find((p) => p.title.toLowerCase() === wanted);
+}
+
+/**
+ * Preview for a `+Name` token: the project it resolves to, or (unknown name)
+ * the fallback project it will really land in.
+ */
+export function projectPreview(
+  projects: readonly Pick<Project, 'localId' | 'title'>[],
+  requested: string,
+  fallbackProjectId: string,
+): { text: string; unresolved: boolean } {
+  const found = findProjectByTitle(projects, requested);
+  if (found) return { text: found.title, unresolved: false };
+  const fallback = projects.find((p) => p.localId === fallbackProjectId);
+  return {
+    text: fallback ? `No “${requested}”, using ${fallback.title}` : `No project “${requested}”`,
+    unresolved: true,
+  };
 }
 
 export function patchDraft(drafts: readonly Draft[], id: number, patch: Partial<Draft>): Draft[] {

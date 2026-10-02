@@ -6,7 +6,10 @@ import {
   defaultProjectId,
   dictationHint,
   draftsFromLines,
+  findProjectByTitle,
+  hasTitle,
   patchDraft,
+  projectPreview,
   removeDraft,
   taskCount,
   withoutSaved,
@@ -28,6 +31,31 @@ describe('rambleLogic', () => {
       { id: 2, line: '   ', include: true },
     ];
     expect(chosenDrafts(drafts).map((d) => d.id)).toEqual([0]);
+  });
+
+  it('leaves out token-only lines that have no title to create', () => {
+    const drafts = draftsFromLines(['Buy milk +Home', '+Home tomorrow', '!3 *errands', 'Call mum'], 0);
+    expect(chosenDrafts(drafts).map((d) => d.line)).toEqual(['Buy milk +Home', 'Call mum']);
+    expect(hasTitle('+Home tomorrow')).toBe(false);
+    expect(hasTitle('  Plan trip  ')).toBe(true);
+  });
+
+  it('previews a known project by name and an unknown one as the fallback', () => {
+    const projects = [
+      { localId: 'a', title: 'Inbox' },
+      { localId: 'b', title: 'Health' },
+    ];
+    expect(findProjectByTitle(projects, 'health')).toBe(projects[1]);
+    expect(findProjectByTitle(projects, 'Home')).toBeUndefined();
+    expect(projectPreview(projects, 'HEALTH', 'a')).toEqual({ text: 'Health', unresolved: false });
+    expect(projectPreview(projects, 'Home', 'a')).toEqual({
+      text: 'No “Home”, using Inbox',
+      unresolved: true,
+    });
+    expect(projectPreview(projects, 'Home', '')).toEqual({
+      text: 'No project “Home”',
+      unresolved: true,
+    });
   });
 
   it('patches, removes and appends without mutating the input', () => {

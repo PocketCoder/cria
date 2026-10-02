@@ -2,6 +2,7 @@ import { parseQuickAdd } from '@/lib/quickAddParser';
 import { createTask } from '@/db/tasks';
 import { applyLabelsByTitle } from '@/db/labels';
 import type { Project } from '@/domain/project';
+import { findProjectByTitle } from './rambleLogic';
 
 /**
  * Create one task from a quick-add line ("Call dentist next tue +Health *calls !3").
@@ -17,8 +18,7 @@ export async function createFromQuickAdd(
 ): Promise<void> {
   const parsed = parseQuickAdd(line);
   if (!parsed.title) return;
-  const wanted = parsed.projectTitle?.toLowerCase();
-  const project = wanted ? ctx.projects.find((p) => p.title.toLowerCase() === wanted) : undefined;
+  const project = parsed.projectTitle ? findProjectByTitle(ctx.projects, parsed.projectTitle) : undefined;
   const task = await createTask({
     title: parsed.title,
     projectLocalId: project?.localId ?? ctx.fallbackProjectId,

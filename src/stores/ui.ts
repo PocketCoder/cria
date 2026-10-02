@@ -27,6 +27,8 @@ interface UiState {
   rambleOpen: boolean;
   /** Unsent ramble text, kept across close/reopen so a slip doesn't lose it. */
   rambleDraft: string;
+  /** Transient: lines organised after the sheet was closed, for the next open to review. */
+  rambleLines: string[] | null;
   setActiveView: (view: ActiveView | null) => void;
   /** Convenience for the common "open a project" path. */
   setSelectedProject: (id: string | null) => void;
@@ -35,6 +37,7 @@ interface UiState {
   setPhotoCaptureOpen: (open: boolean) => void;
   setRambleOpen: (open: boolean) => void;
   setRambleDraft: (text: string) => void;
+  setRambleLines: (lines: string[] | null) => void;
 }
 
 /** Bumped by every `setSelectedTask`; lets a deferred view commit spot a newer selection. */
@@ -111,6 +114,7 @@ export const useUi = create<UiState>()(
       photoCaptureOpen: false,
       rambleOpen: false,
       rambleDraft: '',
+      rambleLines: null,
       setActiveView: (view) => {
         // The view commit can land a frame late (View Transition). Clear the
         // selection only if nothing selected a task in between, else
@@ -139,6 +143,7 @@ export const useUi = create<UiState>()(
       setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
       setRambleOpen: (open) => set({ rambleOpen: open }),
       setRambleDraft: (text) => set({ rambleDraft: text }),
+      setRambleLines: (lines) => set({ rambleLines: lines }),
     }),
     {
       name: 'cria:ui/v2',

@@ -26,7 +26,12 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
 
   const body = (
     <>
-      <RambleHeader reviewing={reviewing} onBack={() => r.setPhase('input')} onClose={onClose} />
+      <RambleHeader
+        reviewing={reviewing}
+        backDisabled={r.phase === 'saving'}
+        onBack={() => r.setPhase('input')}
+        onClose={onClose}
+      />
       {reviewing ? (
         <RambleReview
           phase={r.phase}
