@@ -693,7 +693,7 @@ function EditField({
           step={5}
           value={draft?.percentDone ?? task.percentDone}
           onChange={(e) =>
-            onChange('percentDone', Math.max(0, Math.min(100, Number(e.target.value))))
+            onChange('percentDone', Number.isFinite(e.target.valueAsNumber) ? Math.max(0, Math.min(100, e.target.valueAsNumber)) : 0)
           }
           className={EDIT_INPUT_CLS}
         />

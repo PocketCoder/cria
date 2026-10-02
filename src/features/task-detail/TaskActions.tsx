@@ -675,7 +675,7 @@ export function InlineRepeat({
               type="number"
               min={1}
               value={value}
-              onChange={(e) => setValue(Math.max(1, Number(e.target.value)))}
+              onChange={(e) => setValue(Number.isFinite(e.target.valueAsNumber) ? Math.max(1, e.target.valueAsNumber) : 1)}
               className="w-14 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-xs text-center"
             />
             <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>

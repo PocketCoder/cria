@@ -91,7 +91,7 @@ export function RecurrencePicker({
               min={1}
               value={value}
               onChange={(e) => {
-                const v = Math.max(1, Number(e.target.value));
+                const v = Number.isFinite(e.target.valueAsNumber) ? Math.max(1, e.target.valueAsNumber) : 1;
                 setValue(v);
                 apply(v, unit, mode);
               }}
