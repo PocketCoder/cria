@@ -45,7 +45,9 @@
   --color-primary-foreground:oklch(99% 0 0);
   --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
-  --color-destructive:       oklch(58% 0.22 27);
+  /* Used as both fill and text, so it is held at >= 4.5:1 on muted (and on a
+     10% self-tint over muted) and under destructive-foreground. */
+  --color-destructive:       oklch(55% 0.22 27);
   --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
@@ -416,7 +418,7 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-primary-foreground:oklch(99% 0 0);
   --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
-  --color-destructive:       oklch(58% 0.22 27);
+  --color-destructive:       oklch(55% 0.22 27);
   --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
