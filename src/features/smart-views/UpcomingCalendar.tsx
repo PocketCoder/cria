@@ -33,6 +33,9 @@ export function UpcomingCalendar({
   const [expanded, setExpanded] = useState(false);
   const [month, setMonth] = useState(selected);
   useEffect(() => setMonth(selected), [selected]);
+  // Bumped by the Today button so the strip re-parks even when `selected` is
+  // already today (the user may have swiped away from it since).
+  const [resetTick, setResetTick] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const wso = (weekStartsOn % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -45,14 +48,15 @@ export function UpcomingCalendar({
     );
   }, [today, wso]);
 
-  // Keep the strip parked on the week that contains `selected`.
+  // Keep the strip parked on the week that contains `selected`; `resetTick`
+  // re-runs this without `selected` changing.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el || expanded) return;
     const selStart = startOfWeek(selected, { weekStartsOn: wso }).getTime();
     const idx = weeks.findIndex((ws) => ws.getTime() === selStart);
     if (idx >= 0) el.scrollLeft = idx * el.clientWidth;
-  }, [selected, expanded, weeks, wso]);
+  }, [selected, expanded, weeks, wso, resetTick]);
 
   const renderDayCell = (d: Date) => {
     const isToday = isSameDay(d, today);
@@ -116,6 +120,7 @@ export function UpcomingCalendar({
             onClick={() => {
               onPickDay(today);
               setMonth(today);
+              setResetTick((n) => n + 1);
             }}
             className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-muted)]"
           >

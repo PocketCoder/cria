@@ -9,6 +9,7 @@ import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { useToday } from '@/hooks/useToday';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -587,7 +588,7 @@ export function UpcomingView() {
   const { data: user } = useCurrentUser();
   const tasks = useMemo(() => flatten(groups), [groups]);
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
-  const today = useMemo(() => startOfDay(new Date()), []);
+  const today = useToday();
 
   const taskDays = useMemo(() => {
     const s = new Set<string>();
