@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FieldLabel } from '@/components/ui/field-label';
+import { LabeledInput } from '@/components/ui/labeled-input';
 import {
   listApiTokens,
   createApiToken,
@@ -148,23 +148,20 @@ export function TokensTab({ disabled }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              <FieldLabel label="Token description">
-              <input
+              <LabeledInput
+                label="Token description"
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Token description"
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+                inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
-              </FieldLabel>
-              <FieldLabel label="Expiry date (optional)">
-              <input
+              <LabeledInput
+                label="Expiry date (optional)"
                 type="date"
                 value={newExpiry}
                 onChange={(e) => setNewExpiry(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+                inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
-              </FieldLabel>
               {routes.length > 0 && (
                 <div>
                   <p className="mb-1 text-xs text-[var(--color-muted-foreground)]">Permissions (optional):</p>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FieldLabel } from '@/components/ui/field-label';
+import { LabeledInput } from '@/components/ui/labeled-input';
 import {
   getTotpStatus,
   enrollTotp,
@@ -59,33 +59,27 @@ function PasswordSection({ disabled }: Props) {
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Password</h3>
       <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
-        <FieldLabel label="Current password">
-        <input
+        <LabeledInput
+          label="Current password"
           type="password"
           value={oldPassword}
           onChange={(e) => setOldPassword(e.target.value)}
-          placeholder="Current password"
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+          inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
-        </FieldLabel>
-        <FieldLabel label="New password">
-        <input
+        <LabeledInput
+          label="New password"
           type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          placeholder="New password"
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+          inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
-        </FieldLabel>
-        <FieldLabel label="Confirm new password">
-        <input
+        <LabeledInput
+          label="Confirm new password"
           type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder="Confirm new password"
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+          inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
-        </FieldLabel>
         {passwordError && <p className="text-xs text-[var(--color-destructive)]">{passwordError}</p>}
         {passwordSuccess && <p className="text-xs text-[var(--color-success)]">{passwordSuccess}</p>}
         <Button onClick={handlePasswordChange} size="sm" disabled={disabled}>Change Password</Button>
@@ -122,24 +116,20 @@ function EmailSection({ disabled }: Props) {
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Email</h3>
       <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
-        <FieldLabel label="New email address">
-        <input
+        <LabeledInput
+          label="New email address"
           type="email"
           value={newEmail}
           onChange={(e) => setNewEmail(e.target.value)}
-          placeholder="New email address"
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+          inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
-        </FieldLabel>
-        <FieldLabel label="Current password">
-        <input
+        <LabeledInput
+          label="Current password"
           type="password"
           value={emailPassword}
           onChange={(e) => setEmailPassword(e.target.value)}
-          placeholder="Current password"
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+          inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
         />
-        </FieldLabel>
         {emailError && <p className="text-xs text-[var(--color-destructive)]">{emailError}</p>}
         {emailSuccess && <p className="text-xs text-[var(--color-success)]">{emailSuccess}</p>}
         <Button onClick={handleEmailChange} size="sm" disabled={disabled}>Update Email</Button>
@@ -236,16 +226,15 @@ function TotpSection({ disabled }: Props) {
                 Secret: <code className="rounded bg-[var(--color-muted)] px-1">{totpData.secret}</code>
               </p>
             )}
-            <FieldLabel label="Authenticator code">
-            <input
+            <LabeledInput
+              label="Authenticator code"
               type="text"
               value={totpPasscode}
               onChange={(e) => setTotpPasscode(e.target.value)}
               placeholder="6-digit code"
               maxLength={6}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+              inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
             />
-            </FieldLabel>
             {totpError && <p className="text-xs text-[var(--color-destructive)]">{totpError}</p>}
             <Button onClick={handleEnable} size="sm" disabled={disabled || totpPasscode.length !== 6}>
               Confirm & Enable
@@ -302,15 +291,13 @@ function TotpEnabledPanel({
         </Button>
       ) : (
         <div className="space-y-2">
-          <FieldLabel label="Current password">
-          <input
+          <LabeledInput
+            label="Current password"
             type="password"
             value={disablePassword}
             onChange={(e) => onPasswordChange(e.target.value)}
-            placeholder="Current password"
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+            inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
           />
-          </FieldLabel>
           {totpError && <p className="text-xs text-[var(--color-destructive)]">{totpError}</p>}
           <div className="flex gap-2">
             <Button variant="destructive" size="sm" onClick={onConfirmDisable} disabled={disabled || !disablePassword}>
