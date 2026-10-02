@@ -21,6 +21,7 @@ import { listRemindersForTask, type TaskReminder } from '@/db/reminders';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { RichTextEditor } from './RichTextEditor';
 import { BreakDown } from './BreakDown';
+import { addSubtasks } from './breakDownLogic';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
 import { toggleTaskDone } from '@/features/tasks/taskRowHelpers';
 import type { Task } from '@/domain/task';
@@ -538,12 +539,16 @@ function SubtasksBlock({
               title={title}
               description={description}
               existing={subtasks.map((s) => s.otherTaskTitle ?? '')}
-              onAdd={async (titles) => {
-                for (const t of titles) {
-                  const created = await createTask({ projectLocalId, title: t });
-                  await addRelation(taskLocalId, created.localId, 'subtask');
+              onAdd={async (drafts, progress) => {
+                try {
+                  await addSubtasks(drafts, {
+                    create: async (title) => (await createTask({ projectLocalId, title })).localId,
+                    link: (localId) => addRelation(taskLocalId, localId, 'subtask'),
+                    ...progress,
+                  });
+                } finally {
+                  await refresh();
                 }
-                await refresh();
               }}
             />
           )}

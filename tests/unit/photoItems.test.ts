@@ -15,6 +15,7 @@ import {
   selectedLabel,
   setItemIncluded,
   setItemText,
+  withoutSaved,
   type DraftItem,
 } from '@/features/shoppingPhoto/photoItems';
 
@@ -71,5 +72,23 @@ describe('createTasksFromItems', () => {
     await expect(
       createTasksFromItems([{ id: 1, text: 'a', include: true }], 'p1', ''),
     ).rejects.toThrow('boom');
+  });
+
+  it('reports items saved before a mid-batch failure, so a retry skips them', async () => {
+    const five: DraftItem[] = ['a', 'b', 'c', 'd', 'e'].map((text, i) => ({
+      id: i,
+      text,
+      include: true,
+    }));
+    createTask.mockImplementation(async ({ title }: { title: string }) => {
+      if (title === 'c') throw new Error('boom');
+      return { localId: `t-${title}` };
+    });
+    const savedIds = new Set<number>();
+    await expect(
+      createTasksFromItems(five, 'p1', '', (item) => savedIds.add(item.id)),
+    ).rejects.toThrow('boom');
+    expect([...savedIds]).toEqual([0, 1]);
+    expect(withoutSaved(five, savedIds).map((i) => i.text)).toEqual(['c', 'd', 'e']);
   });
 });

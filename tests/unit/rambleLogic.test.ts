@@ -1,13 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   appendBlankDraft,
   chosenDrafts,
+  createDrafts,
   defaultProjectId,
   dictationHint,
   draftsFromLines,
   patchDraft,
   removeDraft,
   taskCount,
+  withoutSaved,
 } from '@/features/ramble/rambleLogic';
 
 describe('rambleLogic', () => {
@@ -59,5 +61,26 @@ describe('rambleLogic', () => {
   it('words the dictation hint per platform', () => {
     expect(dictationHint(true)).toContain('microphone');
     expect(dictationHint(false)).toContain('dictation key');
+  });
+});
+
+describe('saving a batch of drafts', () => {
+  const drafts = draftsFromLines(['a', 'b', 'c', 'd', 'e'], 0);
+
+  it('reports each draft saved before a mid-batch failure, so a retry skips them', async () => {
+    const create = vi.fn(async (d: { line: string }) => {
+      if (d.line === 'c') throw new Error('boom');
+    });
+    const savedIds = new Set<number>();
+    await expect(createDrafts(drafts, create, (d) => savedIds.add(d.id))).rejects.toThrow('boom');
+    expect([...savedIds]).toEqual([0, 1]);
+
+    const remaining = withoutSaved(drafts, savedIds);
+    expect(remaining.map((d) => d.line)).toEqual(['c', 'd', 'e']);
+
+    create.mockClear();
+    create.mockResolvedValue(undefined);
+    await createDrafts(chosenDrafts(remaining), create, (d) => savedIds.add(d.id));
+    expect(create.mock.calls.map(([d]) => d.line)).toEqual(['c', 'd', 'e']);
   });
 });

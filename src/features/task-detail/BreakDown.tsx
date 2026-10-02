@@ -3,11 +3,13 @@ import { Loader2, Sparkles, X } from 'lucide-react';
 import { generate } from '@/tauri/ai';
 import { aiErrorMessage, parseLines, subtaskPrompt, SUBTASK_INSTRUCTIONS } from '@/lib/aiPrompts';
 import { cn } from '@/lib/cn';
-
-interface Suggestion {
-  title: string;
-  include: boolean;
-}
+import {
+  applyProgress,
+  chosenSubtasks,
+  type Suggestion,
+  type SubtaskDraft,
+  type SubtaskProgress,
+} from './breakDownLogic';
 
 /**
  * "Break down": the on-device model suggests subtasks for a task; the user
@@ -25,7 +27,8 @@ export function BreakDown({
   description: string | null;
   /** Current subtask titles, skipped from suggestions. */
   existing: string[];
-  onAdd: (titles: string[]) => Promise<void>;
+  /** Creates and links each draft, reporting progress so a failed batch can be resumed. */
+  onAdd: (drafts: SubtaskDraft[], progress: SubtaskProgress) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +55,24 @@ export function BreakDown({
   };
 
   const add = async () => {
-    const chosen = suggestions?.filter((s) => s.include && s.title.trim()).map((s) => s.title.trim()) ?? [];
+    const chosen = chosenSubtasks(suggestions ?? []);
     if (chosen.length === 0) return;
     setBusy(true);
+    setError(null);
+    const created = new Map<number, string>();
+    const linked = new Set<number>();
     try {
-      await onAdd(chosen);
+      await onAdd(chosen, {
+        onCreated: (index, localId) => created.set(index, localId),
+        onLinked: (index) => linked.add(index),
+      });
       setSuggestions(null);
     } catch (err) {
-      setError(aiErrorMessage(err));
+      // Keep only what is left: linked ones are done, created-but-unlinked ones
+      // are remembered so a retry links them instead of making duplicates.
+      setSuggestions((prev) => prev && applyProgress(prev, created, linked));
+      const done = linked.size > 0 ? `Added ${linked.size} of ${chosen.length}. ` : '';
+      setError(done + aiErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -113,6 +126,7 @@ export function BreakDown({
             aria-label="Subtask"
             type="text"
             value={s.title}
+            readOnly={!!s.createdId}
             onChange={(e) =>
               setSuggestions((prev) => prev!.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))
             }

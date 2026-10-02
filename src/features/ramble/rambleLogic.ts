@@ -27,6 +27,26 @@ export function removeDraft(drafts: readonly Draft[], id: number): Draft[] {
   return drafts.filter((d) => d.id !== id);
 }
 
+/** Drafts left to save after `savedIds` were created, so a retry skips them. */
+export function withoutSaved(drafts: readonly Draft[], savedIds: ReadonlySet<number>): Draft[] {
+  return drafts.filter((d) => !savedIds.has(d.id));
+}
+
+/**
+ * Create `chosen` in order, calling `onSaved` after each succeeds. Stops and
+ * rethrows on the first failure, so the caller knows exactly which were saved.
+ */
+export async function createDrafts(
+  chosen: readonly Draft[],
+  create: (draft: Draft) => Promise<void>,
+  onSaved: (draft: Draft) => void,
+): Promise<void> {
+  for (const d of chosen) {
+    await create(d);
+    onSaved(d);
+  }
+}
+
 export function appendBlankDraft(drafts: readonly Draft[], id: number): Draft[] {
   return [...drafts, { id, line: '', include: true }];
 }

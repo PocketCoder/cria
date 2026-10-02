@@ -9,7 +9,8 @@ import { extractListItems, type OcrEngine } from './ocr';
 import { generate } from '@/tauri/ai';
 import { aiErrorMessage, clip, parseLines, TIDY_LIST_INSTRUCTIONS } from '@/lib/aiPrompts';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
-import { createTasksFromItems, selectedItems, type DraftItem } from './photoItems';
+import { partialSaveMessage } from '@/lib/partialSave';
+import { createTasksFromItems, selectedItems, withoutSaved, type DraftItem } from './photoItems';
 import { PhotoExtracting, PhotoPrompt, PhotoReview } from './PhotoReview';
 
 type Phase = 'idle' | 'extracting' | 'review' | 'saving' | 'error';
@@ -135,12 +136,15 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
     const chosen = selectedItems(items);
     if (chosen.length === 0 || !projectId) return;
     setPhase('saving');
+    const savedIds = new Set<number>();
     try {
-      await createTasksFromItems(chosen, projectId, label);
+      await createTasksFromItems(chosen, projectId, label, (item) => savedIds.add(item.id));
       onClose();
     } catch (err) {
       console.error('[shopping-photo] task creation failed:', err);
-      setError('Some tasks could not be created. Please try again.');
+      // Tasks already created must not come back on retry as duplicates.
+      setItems((prev) => withoutSaved(prev, savedIds));
+      setError(partialSaveMessage(savedIds.size, chosen.length));
       setPhase('error');
     }
   };

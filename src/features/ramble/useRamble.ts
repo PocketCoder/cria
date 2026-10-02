@@ -4,14 +4,17 @@ import { aiErrorMessage, parseLines, rambleInstructions, clip } from '@/lib/aiPr
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { useUi } from '@/stores/ui';
+import { partialSaveMessage } from '@/lib/partialSave';
 import { createFromQuickAdd } from './createFromQuickAdd';
 import {
   appendBlankDraft,
   chosenDrafts,
+  createDrafts,
   defaultProjectId,
   draftsFromLines,
   patchDraft,
   removeDraft,
+  withoutSaved,
   type Draft,
   type Phase,
 } from './rambleLogic';
@@ -75,15 +78,20 @@ export function useRamble(onClose: () => void) {
   const addAll = async () => {
     if (chosen.length === 0 || !projectId) return;
     setPhase('saving');
+    const savedIds = new Set<number>();
     try {
-      for (const d of chosen) {
-        await createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId });
-      }
+      await createDrafts(
+        chosen,
+        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId }),
+        (d) => savedIds.add(d.id),
+      );
       setText('');
       onClose();
     } catch (err) {
       console.error('[ramble] task creation failed:', err);
-      setError('Some tasks could not be created. Please try again.');
+      // Tasks already created must not come back on retry as duplicates.
+      setDrafts((prev) => withoutSaved(prev, savedIds));
+      setError(partialSaveMessage(savedIds.size, chosen.length));
       setPhase('review');
     }
   };

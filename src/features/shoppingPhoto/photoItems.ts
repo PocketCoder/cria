@@ -34,11 +34,21 @@ export function addButtonLabel(count: number): string {
   return `Add ${count} task${count === 1 ? '' : 's'}`;
 }
 
-/** One task per chosen item in `projectId`, optionally tagged (label failures are non-fatal). */
+/** Items left to save after `savedIds` were created, so a retry skips them. */
+export function withoutSaved(items: DraftItem[], savedIds: ReadonlySet<number>): DraftItem[] {
+  return items.filter((i) => !savedIds.has(i.id));
+}
+
+/**
+ * One task per chosen item in `projectId`, optionally tagged (label failures are non-fatal).
+ * `onSaved` fires after each item is created, so a mid-batch failure still tells the caller
+ * which ones landed.
+ */
 export async function createTasksFromItems(
   chosen: DraftItem[],
   projectId: string,
   label: string,
+  onSaved?: (item: DraftItem) => void,
 ): Promise<void> {
   const tag = label.trim();
   for (const item of chosen) {
@@ -50,5 +60,6 @@ export async function createTasksFromItems(
         console.warn('[shopping-photo] label apply failed:', err);
       }
     }
+    onSaved?.(item);
   }
 }
