@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const { extractListItems, createTasksFromItems } = vi.hoisted(() => ({
+const { extractListItems, createTasksFromItems, generate } = vi.hoisted(() => ({
   extractListItems: vi.fn(),
   createTasksFromItems: vi.fn(),
+  generate: vi.fn(),
 }));
+
+vi.mock('@/tauri/ai', () => ({ generate, aiAvailability: async () => 'available' }));
+vi.mock('@/hooks/useAiAvailable', () => ({ useAiAvailable: () => true }));
 
 vi.mock('@/features/shoppingPhoto/ocr', () => ({ extractListItems }));
 vi.mock('@/features/shoppingPhoto/photoItems', async (orig) => ({
@@ -24,6 +28,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   extractListItems.mockReset();
   createTasksFromItems.mockReset();
+  generate.mockReset();
 });
 
 function pickPhoto(container: HTMLElement) {
@@ -61,5 +66,52 @@ describe('PhotoTaskCreator save failure', () => {
     const { container } = renderWithProviders(<PhotoTaskCreator onClose={() => undefined} />);
     pickPhoto(container);
     expect(await screen.findByRole('button', { name: 'Try another photo' })).toBeInTheDocument();
+  });
+});
+
+describe('PhotoTaskCreator tidy up', () => {
+  it('locks editing and Add while tidying, then offers a one-step undo', async () => {
+    const user = userEvent.setup();
+    extractListItems.mockResolvedValue({ engine: 'tesseract', items: ['Mlk', 'Eggs 1.20'] });
+    let finish: (out: string) => void = () => undefined;
+    generate.mockReturnValue(new Promise<string>((resolve) => (finish = resolve)));
+
+    const { container } = renderWithProviders(<PhotoTaskCreator onClose={() => undefined} />);
+    pickPhoto(container);
+    await screen.findByDisplayValue('Mlk');
+    await user.click(screen.getByRole('button', { name: /tidy up/i }));
+
+    expect(await screen.findByText('Tidying…')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Mlk')).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Include Mlk' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove Mlk' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /add item/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^add \d+ tasks?$/i })).toBeDisabled();
+
+    finish('Milk\nEggs');
+    expect(await screen.findByDisplayValue('Milk')).toBeEnabled();
+    expect(screen.queryByDisplayValue('Mlk')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^add \d+ tasks?$/i })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: /undo tidy/i }));
+    expect(screen.getByDisplayValue('Mlk')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Eggs 1.20')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /undo tidy/i })).not.toBeInTheDocument();
+  });
+
+  it('drops the undo snapshot once tasks are being created', async () => {
+    const user = userEvent.setup();
+    extractListItems.mockResolvedValue({ engine: 'tesseract', items: ['Mlk'] });
+    generate.mockResolvedValue('Milk');
+    createTasksFromItems.mockRejectedValue(new Error('network down'));
+
+    const { container } = renderWithProviders(<PhotoTaskCreator onClose={() => undefined} />);
+    pickPhoto(container);
+    await screen.findByDisplayValue('Mlk');
+    await user.click(screen.getByRole('button', { name: /tidy up/i }));
+    await screen.findByDisplayValue('Milk');
+    await user.click(screen.getByRole('button', { name: /^add \d+ tasks?$/i }));
+    await screen.findByText(/please try again/i);
+    expect(screen.queryByRole('button', { name: /undo tidy/i })).not.toBeInTheDocument();
   });
 });

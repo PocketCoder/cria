@@ -107,12 +107,25 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
   const includedCount = selectedItems(items).length;
 
   // On-device model clean-up of the OCR'd lines (typos, split items, prices).
-  // Replaces the list; the user still reviews before anything is created.
+  // Replaces the list; the user still reviews before anything is created. The
+  // list is locked while it runs (the result would overwrite edits), a result
+  // that lands after the modal closed is dropped, and the pre-tidy list is kept
+  // for one "Undo tidy" since the model may drop lines (or clip long input).
   const aiAvailable = useAiAvailable();
   const [tidying, setTidying] = useState(false);
+  const [undoItems, setUndoItems] = useState<DraftItem[] | null>(null);
+  const tidyRun = useRef(0);
+  useEffect(
+    () => () => {
+      tidyRun.current++;
+    },
+    [],
+  );
   const tidy = async () => {
+    const before = items;
     const lines = items.filter((i) => i.include && i.text.trim()).map((i) => i.text.trim());
     if (lines.length === 0) return;
+    const run = ++tidyRun.current;
     setTidying(true);
     setError(null);
     try {
@@ -121,20 +134,28 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
         instructions: TIDY_LIST_INSTRUCTIONS,
         prompt: clip(lines.join('\n')),
       });
+      if (run !== tidyRun.current) return;
       const cleaned = parseLines(out, 100);
       if (cleaned.length > 0) {
         setItems(cleaned.map((text) => ({ id: nextId.current++, text, include: true })));
+        setUndoItems(before);
       }
     } catch (err) {
-      setError(aiErrorMessage(err));
+      if (run === tidyRun.current) setError(aiErrorMessage(err));
     } finally {
-      setTidying(false);
+      if (run === tidyRun.current) setTidying(false);
     }
+  };
+
+  const undoTidy = () => {
+    if (undoItems) setItems(undoItems);
+    setUndoItems(null);
   };
 
   const handleCreate = async () => {
     const chosen = selectedItems(items);
-    if (chosen.length === 0 || !projectId) return;
+    if (tidying || chosen.length === 0 || !projectId) return;
+    setUndoItems(null); // a pre-tidy list would resurrect items saved below
     setPhase('saving');
     const savedIds = new Set<number>();
     try {
@@ -214,6 +235,8 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
           aiAvailable={aiAvailable}
           tidying={tidying}
           onTidy={() => void tidy()}
+          canUndoTidy={undoItems !== null}
+          onUndoTidy={undoTidy}
           saving={phase === 'saving'}
           projects={projects}
           projectId={projectId}

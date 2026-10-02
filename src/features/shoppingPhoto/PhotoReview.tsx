@@ -1,4 +1,4 @@
-import { Camera, Loader2, Plus, Trash2, Sparkles } from 'lucide-react';
+import { Camera, Loader2, Plus, Trash2, Sparkles, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   Select,
@@ -64,6 +64,8 @@ interface ReviewProps {
   aiAvailable: boolean;
   tidying: boolean;
   onTidy: () => void;
+  canUndoTidy: boolean;
+  onUndoTidy: () => void;
   saving: boolean;
   projects: Project[];
   projectId: string;
@@ -84,6 +86,8 @@ export function PhotoReview({
   aiAvailable,
   tidying,
   onTidy,
+  canUndoTidy,
+  onUndoTidy,
   saving,
   projects,
   projectId,
@@ -99,16 +103,29 @@ export function PhotoReview({
       <div className="flex items-center justify-between text-caption text-[var(--color-muted-foreground)]">
         <span>{selectedLabel(includedCount)}</span>
         {aiAvailable ? (
-          <button
-            type="button"
-            disabled={tidying || saving}
-            onClick={onTidy}
-            title="Fix misreadings and drop prices/headings (on-device)"
-            className="flex items-center gap-1 hover:text-[var(--color-foreground)] disabled:opacity-60"
-          >
-            {tidying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            {tidying ? 'Tidying…' : 'Tidy up'}
-          </button>
+          <span className="flex items-center gap-3">
+            {canUndoTidy && (
+              <button
+                type="button"
+                disabled={tidying || saving}
+                onClick={onUndoTidy}
+                title="Restore the list as it was before tidying"
+                className="flex items-center gap-1 hover:text-[var(--color-foreground)] disabled:opacity-60"
+              >
+                <Undo2 className="h-3 w-3" /> Undo tidy
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={tidying || saving}
+              onClick={onTidy}
+              title="Fix misreadings and drop prices/headings (on-device)"
+              className="flex items-center gap-1 hover:text-[var(--color-foreground)] disabled:opacity-60"
+            >
+              {tidying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              {tidying ? 'Tidying…' : 'Tidy up'}
+            </button>
+          </span>
         ) : (
           engine === 'vision' && (
             <span className="flex items-center gap-1" title="Read on-device with Apple Vision">
@@ -126,6 +143,7 @@ export function PhotoReview({
             <input
               type="checkbox"
               checked={item.include}
+              disabled={tidying}
               onChange={(e) => setItems((prev) => setItemIncluded(prev, item.id, e.target.checked))}
               className="h-4 w-4 shrink-0 accent-[var(--color-primary)]"
               aria-label={`Include ${item.text}`}
@@ -134,6 +152,7 @@ export function PhotoReview({
               aria-label="Item text"
               type="text"
               value={item.text}
+              disabled={tidying}
               onChange={(e) => setItems((prev) => setItemText(prev, item.id, e.target.value))}
               className={cn(
                 'flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-ring)] focus:outline-none',
@@ -142,6 +161,7 @@ export function PhotoReview({
             />
             <button
               type="button"
+              disabled={tidying}
               onClick={() => setItems((prev) => removeItem(prev, item.id))}
               className="hover-reveal shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
               aria-label={`Remove ${item.text}`}
@@ -154,8 +174,9 @@ export function PhotoReview({
 
       <button
         type="button"
+        disabled={tidying}
         onClick={onAddItem}
-        className="flex items-center gap-1 text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+        className="flex items-center gap-1 text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-60"
       >
         <Plus className="h-3.5 w-3.5" /> Add item
       </button>
@@ -178,7 +199,7 @@ export function PhotoReview({
         </button>
         <button
           type="button"
-          disabled={saving || includedCount === 0 || !projectId}
+          disabled={saving || tidying || includedCount === 0 || !projectId}
           onClick={onCreate}
           className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
         >
