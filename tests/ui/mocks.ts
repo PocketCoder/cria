@@ -164,6 +164,34 @@ export function stubFetch(): void {
 }
 
 // jsdom gaps the UI relies on.
+/**
+ * jsdom has no `showModal()`/`close()`. This models the parts the app relies
+ * on: `open` state, modal flag, a `close` event, and focus returning to the
+ * previously focused element. Focus trapping and Escape → `cancel` are browser
+ * behaviour; tests dispatch `cancel` themselves.
+ */
+function polyfillDialog() {
+  const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+    __returnFocus?: Element | null;
+  };
+  if (typeof proto.showModal === 'function') return;
+  proto.showModal = function showModal(this: typeof proto) {
+    if (this.open) throw new DOMException('Already open', 'InvalidStateError');
+    this.__returnFocus = document.activeElement;
+    this.setAttribute('open', '');
+    this.setAttribute('data-modal', 'true');
+  };
+  proto.close = function close(this: typeof proto) {
+    if (!this.open) return;
+    this.removeAttribute('open');
+    this.removeAttribute('data-modal');
+    const back = this.__returnFocus;
+    this.__returnFocus = null;
+    if (back instanceof HTMLElement) back.focus();
+    this.dispatchEvent(new Event('close'));
+  };
+}
+
 function installDomPolyfills(): void {
   if (typeof window.matchMedia !== 'function') {
     window.matchMedia = (query: string) =>
@@ -190,6 +218,7 @@ function installDomPolyfills(): void {
   g.ResizeObserver ??= NoopObserver;
   g.IntersectionObserver ??= NoopObserver;
   Element.prototype.scrollIntoView ??= () => undefined;
+  polyfillDialog();
   Element.prototype.hasPointerCapture ??= () => false;
   Element.prototype.releasePointerCapture ??= () => undefined;
 }

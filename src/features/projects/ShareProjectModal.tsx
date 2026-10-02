@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { LabeledInput } from '@/components/ui/labeled-input';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
@@ -143,12 +144,8 @@ export function ShareProjectModal({
   }
 
   return (
-    <div
-      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Share “${project.title}”`}
-    >
+    <ModalDialog label={`Share “${project.title}”`} onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
@@ -221,18 +218,15 @@ export function ShareProjectModal({
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 
 function UnsyncedNotice({ onClose }: { onClose: () => void }) {
   return (
-    <div
-      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Share project"
-    >
+    <ModalDialog label="Share project" onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
@@ -246,7 +240,8 @@ function UnsyncedNotice({ onClose }: { onClose: () => void }) {
           Close
         </button>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 

@@ -182,6 +182,7 @@ export function FilterInput({
             accept(suggestions[highlightIdx] ?? suggestions[0]!);
           } else if (e.key === 'Escape') {
             e.stopPropagation();
+            e.preventDefault(); // dismiss suggestions, not a surrounding dialog
             setDismissed(true);
           }
         }}

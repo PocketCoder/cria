@@ -121,6 +121,31 @@ describe('useShortcuts', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('ignores plain shortcuts while a native <dialog> is open, and resumes after', () => {
+    const dialog = document.createElement('dialog');
+    document.body.appendChild(dialog);
+    dialog.setAttribute('open', '');
+    press('g');
+    press('o');
+    expect(useUi.getState().activeView).toEqual({ kind: 'project', localId: 'p1' });
+
+    dialog.removeAttribute('open');
+    press('g');
+    press('o');
+    expect(useUi.getState().activeView).toEqual({ kind: 'today' });
+    dialog.remove();
+  });
+
+  it('ignores plain shortcuts while an ARIA dialog is open', () => {
+    const el = document.createElement('div');
+    el.setAttribute('role', 'dialog');
+    document.body.appendChild(el);
+    press('g');
+    press('o');
+    expect(useUi.getState().activeView).toEqual({ kind: 'project', localId: 'p1' });
+    el.remove();
+  });
+
   it('does not fire shortcuts while typing in an input', () => {
     const spy = vi.fn();
     onShortcut('task.done', spy);

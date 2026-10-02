@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { useConflicts } from '@/queries/conflicts';
@@ -57,12 +58,8 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
   };
 
   return (
-    <div
-      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'}
-    >
+    <ModalDialog label={conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'} onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--color-border)]"
@@ -105,7 +102,8 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 

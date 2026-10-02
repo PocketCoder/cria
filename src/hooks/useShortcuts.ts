@@ -95,7 +95,7 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       // document body) — either way the shortcut set must not act on the
       // view/task behind it, so check for any open dialog regardless of
       // where focus landed.
-      if (document.querySelector('[role="dialog"]')) return;
+      if (document.querySelector('[role="dialog"], dialog[open]')) return;
       const key = eventToKey(e);
       if (!key) return;
 

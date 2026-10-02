@@ -58,7 +58,7 @@ export function TaskDetail() {
       if (cardRef.current?.contains(t)) return;
       if (
         t.closest(
-          '[data-task-row],[data-radix-popper-content-wrapper],[role="dialog"],[role="menu"],[data-sonner-toast]',
+          '[data-task-row],[data-radix-popper-content-wrapper],[role="dialog"],dialog,[role="menu"],[data-sonner-toast]',
         )
       )
         return;

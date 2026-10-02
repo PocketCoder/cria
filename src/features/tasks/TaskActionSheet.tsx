@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import {
   ChevronLeft,
@@ -133,25 +134,29 @@ function Inner({ task }: { task: Task }) {
 
   if (isMobile) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Task actions">
-        <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-        <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-1 shadow-xl animate-[sheet-up_300ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
-          <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
-          {header}
-          <div className="min-h-0 overflow-y-auto">{body}</div>
+      <ModalDialog label="Task actions" onClose={close}>
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
+          <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-1 shadow-xl animate-[sheet-up_300ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
+            <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
+            {header}
+            <div className="min-h-0 overflow-y-auto">{body}</div>
+          </div>
         </div>
-      </div>
+      </ModalDialog>
     );
   }
 
   return (
-    <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <BackdropDismiss onDismiss={close} />
-      <div className="relative w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
-        {header}
-        <div className="max-h-[70vh] overflow-y-auto">{body}</div>
+    <ModalDialog label="Task actions" onClose={close}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <BackdropDismiss onDismiss={close} />
+        <div className="relative w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
+          {header}
+          <div className="max-h-[70vh] overflow-y-auto">{body}</div>
+        </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import {
   useOutboxRows,
@@ -124,12 +125,8 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
   const nothing = !isLoading && rows.length === 0 && deadRows.length === 0;
 
   return (
-    <div
-      className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Sync queue"
-    >
+    <ModalDialog label="Sync queue" onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
@@ -255,7 +252,8 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 

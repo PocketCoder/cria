@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useLatestRef } from '../../lib/useLatestRef';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
@@ -134,14 +135,8 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
     }
   };
 
-  // Escape key
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  // Escape is handled by the native dialog (ModalDialog → onClose); the editor's
+  // slash menu preventDefaults it when it consumes the key.
 
   // Cmd+Enter to save. Via a ref so the handler always saves the latest
   // field values (depending on [canSave] alone saved stale state).
@@ -158,12 +153,8 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
   }, [handleSaveRef]);
 
   return (
-    <div
-      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit This Project"
-    >
+    <ModalDialog label="Edit This Project" onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
@@ -330,7 +321,8 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
           </div>
         </footer>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 
