@@ -70,8 +70,11 @@ export function ModalDialog({
         onClose();
       }}
       // Closed by the browser without a cancel (e.g. a second Escape press).
-      onClose={() => {
-        if (!unmounting.current) onClose();
+      // `close` fires asynchronously, so under StrictMode's setup/cleanup/setup
+      // the event from the cleanup's `close()` arrives after the dialog has
+      // been reopened: ignore it unless the dialog really is closed now.
+      onClose={(e) => {
+        if (!unmounting.current && !e.currentTarget.open) onClose();
       }}
     >
       {open ? children : null}

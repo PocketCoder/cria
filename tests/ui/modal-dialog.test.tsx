@@ -1,7 +1,7 @@
 import './mocks';
-import { useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
@@ -105,7 +105,7 @@ describe('ModalDialog', () => {
     render(<Harness onCloseSpy={spy} />);
     const { dialog } = await openDialog(user);
     (dialog as HTMLDialogElement).close();
-    expect(spy).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
   });
 
   it('does not call onClose again when unmounting closes the dialog', async () => {
@@ -115,5 +115,22 @@ describe('ModalDialog', () => {
     await openDialog(user);
     unmount();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('stays open under StrictMode, ignoring the stale close from the simulated remount', async () => {
+    const spy = vi.fn();
+    render(
+      <StrictMode>
+        <ModalDialog label="Demo dialog" onClose={spy}>
+          <button type="button">Inside</button>
+        </ModalDialog>
+      </StrictMode>,
+    );
+    // Let the queued `close` event from the StrictMode cleanup land.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(spy).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Demo dialog' })).toHaveAttribute('open');
   });
 });

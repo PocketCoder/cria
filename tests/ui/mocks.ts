@@ -166,9 +166,10 @@ export function stubFetch(): void {
 // jsdom gaps the UI relies on.
 /**
  * jsdom has no `showModal()`/`close()`. This models the parts the app relies
- * on: `open` state, modal flag, a `close` event, and focus returning to the
- * previously focused element. Focus trapping and Escape → `cancel` are browser
- * behaviour; tests dispatch `cancel` themselves.
+ * on: `open` state, modal flag, an asynchronous `close` event (queued as a
+ * task, as in browsers), and focus returning to the previously focused
+ * element. Focus trapping and Escape → `cancel` are browser behaviour; tests
+ * dispatch `cancel` themselves.
  */
 function polyfillDialog() {
   const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
@@ -188,7 +189,7 @@ function polyfillDialog() {
     const back = this.__returnFocus;
     this.__returnFocus = null;
     if (back instanceof HTMLElement) back.focus();
-    this.dispatchEvent(new Event('close'));
+    setTimeout(() => this.dispatchEvent(new Event('close')), 0);
   };
 }
 
