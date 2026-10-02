@@ -46,6 +46,7 @@
   --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
   --color-destructive:       oklch(58% 0.22 27);
+  --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
   --color-ring:              oklch(55% 0.16 300);
@@ -79,6 +80,7 @@
     --color-accent:            oklch(67% 0.14 300);
     --color-accent-foreground: oklch(17% 0.045 300);
     --color-destructive:       oklch(70% 0.16 25);
+    --color-destructive-foreground:oklch(17% 0.045 300);
     --color-success:           oklch(72% 0.13 150);
     --color-warning:           oklch(80% 0.12 85);
     --color-ring:              oklch(67% 0.14 300);
@@ -408,6 +410,7 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
   --color-destructive:       oklch(58% 0.22 27);
+  --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
   --color-ring:              oklch(55% 0.16 300);
@@ -438,6 +441,7 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-accent:            oklch(67% 0.14 300);
   --color-accent-foreground: oklch(17% 0.045 300);
   --color-destructive:       oklch(70% 0.16 25);
+  --color-destructive-foreground:oklch(17% 0.045 300);
   --color-success:           oklch(72% 0.13 150);
   --color-warning:           oklch(80% 0.12 85);
   --color-ring:              oklch(67% 0.14 300);
