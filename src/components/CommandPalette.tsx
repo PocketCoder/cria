@@ -7,22 +7,9 @@ import { searchTasks, updateTask } from '@/db/tasks';
 import { cn } from '@/lib/cn';
 import { formatDue } from '@/features/tasks/taskRowHelpers';
 import { priorityColor } from '@/components/ui/priority';
-import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings, Search } from 'lucide-react';
-
-interface PaletteAction {
-  id: string;
-  label: string;
-  subtitle: string;
-  group: string;
-  keywords: string;
-  icon: React.ReactNode;
-  onSelect: () => void;
-  /** Task rows carry a priority bar + right-aligned `project · due` so the
-   * palette doubles as triage. */
-  taskLocalId?: string;
-  priority?: number;
-  dueDate?: string | null;
-}
+import { Search } from 'lucide-react';
+import { buildPaletteActions, type PaletteAction } from '@/components/paletteActions';
+import { filterPaletteActions, groupPaletteActions, paletteRightLabel } from '@/lib/paletteFilter';
 
 export function CommandPalette({
   onClose,
@@ -55,147 +42,22 @@ export function CommandPalette({
     return () => clearTimeout(timer);
   }, [query]);
 
-  const actions = useMemo<PaletteAction[]>(() => {
-    const list: PaletteAction[] = [];
+  const actions = useMemo<PaletteAction[]>(
+    () =>
+      buildPaletteActions({
+        projects,
+        labels,
+        tasks,
+        setActiveView,
+        setSelectedProject,
+        onClose,
+        onOpenQuickAdd,
+        onOpenSettings,
+      }),
+    [projects, labels, tasks, setActiveView, setSelectedProject, onClose, onOpenQuickAdd, onOpenSettings],
+  );
 
-    list.push({
-      id: 'view-today',
-      label: 'Today',
-      subtitle: 'View',
-      group: 'Views',
-      keywords: 'today smart view overdue',
-      icon: <Calendar className="h-4 w-4" />,
-      onSelect: () => {
-        setActiveView({ kind: 'today' });
-        onClose();
-      },
-    });
-    list.push({
-      id: 'view-upcoming',
-      label: 'Upcoming',
-      subtitle: 'View',
-      group: 'Views',
-      keywords: 'upcoming smart view future',
-      icon: <Calendar className="h-4 w-4" />,
-      onSelect: () => {
-        setActiveView({ kind: 'upcoming' });
-        onClose();
-      },
-    });
-    list.push({
-      id: 'view-inbox',
-      label: 'Inbox',
-      subtitle: 'View',
-      group: 'Views',
-      keywords: 'inbox smart view',
-      icon: <Inbox className="h-4 w-4" />,
-      onSelect: () => {
-        setActiveView({ kind: 'inbox' });
-        onClose();
-      },
-    });
-    list.push({
-      id: 'view-favorites',
-      label: 'Favorites',
-      subtitle: 'View',
-      group: 'Views',
-      keywords: 'favorites smart view starred',
-      icon: <Star className="h-4 w-4" />,
-      onSelect: () => {
-        setActiveView({ kind: 'favorites' });
-        onClose();
-      },
-    });
-
-    for (const p of projects) {
-      list.push({
-        id: `project-${p.localId}`,
-        label: p.title,
-        subtitle: 'Project',
-        group: 'Projects',
-        keywords: `project ${p.title}`,
-        icon: <FileText className="h-4 w-4" />,
-        onSelect: () => {
-          setSelectedProject(p.localId);
-          onClose();
-        },
-      });
-    }
-
-    for (const l of labels) {
-      list.push({
-        id: `label-${l.localId}`,
-        label: l.title,
-        subtitle: 'Label',
-        group: 'Labels',
-        keywords: `label ${l.title}`,
-        icon: <Tag className="h-4 w-4" />,
-        onSelect: () => {
-          setActiveView({ kind: 'label', localId: l.localId });
-          onClose();
-        },
-      });
-    }
-
-    for (const t of tasks) {
-      list.push({
-        id: `task-${t.localId}`,
-        label: t.title,
-        subtitle: t.projectTitle,
-        group: 'Tasks',
-        keywords: `task ${t.title} ${t.projectTitle}`,
-        icon: null,
-        taskLocalId: t.localId,
-        priority: t.priority,
-        dueDate: t.dueDate,
-        onSelect: () => {
-          useUi.setState({
-            activeView: { kind: 'project', localId: t.projectLocalId },
-            selectedTaskLocalId: t.localId,
-          });
-          onClose();
-        },
-      });
-    }
-
-    list.push({
-      id: 'action-quick-add',
-      label: 'Quick Add',
-      subtitle: 'Action',
-      group: 'Actions',
-      keywords: 'quick add create task',
-      icon: <Plus className="h-4 w-4" />,
-      onSelect: () => {
-        onClose();
-        onOpenQuickAdd();
-      },
-    });
-    list.push({
-      id: 'action-settings',
-      label: 'Settings',
-      subtitle: 'Action',
-      group: 'Actions',
-      keywords: 'settings preferences options configure',
-      icon: <Settings className="h-4 w-4" />,
-      onSelect: () => {
-        onClose();
-        onOpenSettings();
-      },
-    });
-
-    return list;
-  }, [projects, labels, tasks, setActiveView, setSelectedProject, onClose, onOpenQuickAdd, onOpenSettings]);
-
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    if (!q) return actions;
-    return actions.filter(
-      (a) =>
-        a.label.toLowerCase().includes(q) ||
-        a.keywords.toLowerCase().includes(q) ||
-        a.subtitle.toLowerCase().includes(q),
-    );
-  }, [query, actions]);
+  const filtered = useMemo(() => filterPaletteActions(actions, query), [query, actions]);
 
   // Selection resets in the query onChange; clamp covers the list shrinking.
   const activeIndex = Math.min(selectedIndex, Math.max(filtered.length - 1, 0));
@@ -237,21 +99,7 @@ export function CommandPalette({
     }
   };
 
-  const grouped = useMemo(() => {
-    const groupOrder = ['Views', 'Projects', 'Labels', 'Tasks', 'Actions'];
-    const groupMap = new Map<string, PaletteAction[]>();
-    for (const item of filtered) {
-      const arr = groupMap.get(item.group) ?? [];
-      arr.push(item);
-      groupMap.set(item.group, arr);
-    }
-    const result: { name: string; items: PaletteAction[] }[] = [];
-    for (const name of groupOrder) {
-      const items = groupMap.get(name);
-      if (items?.length) result.push({ name, items });
-    }
-    return result;
-  }, [filtered]);
+  const grouped = useMemo(() => groupPaletteActions(filtered), [filtered]);
 
   let flatIdx = 0;
 
@@ -296,53 +144,13 @@ export function CommandPalette({
               </p>
               {group.items.map((item) => {
                 const idx = flatIdx++;
-                const isSelected = idx === activeIndex;
-                const right = item.taskLocalId
-                  ? [item.subtitle, item.dueDate ? formatDue(item.dueDate) : null]
-                      .filter(Boolean)
-                      .join(' · ')
-                  : item.subtitle;
                 return (
-                  <button
+                  <PaletteRow
                     key={item.id}
-                    className={cn(
-                      'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors',
-                      isSelected
-                        ? 'bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]'
-                        : 'text-[var(--color-foreground)] hover:bg-[var(--color-muted)]',
-                    )}
-                    onClick={() => item.onSelect()}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                  >
-                    {item.taskLocalId ? (
-                      <span
-                        className="h-4 w-[3px] shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            (item.priority ?? 0) > 2
-                              ? priorityColor(item.priority ?? 0)
-                              : 'transparent',
-                        }}
-                      />
-                    ) : (
-                      <span className="flex w-[3px] shrink-0 justify-center">
-                        <span className="opacity-60">{item.icon}</span>
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
-                    {right ? (
-                      <span
-                        className={cn(
-                          'shrink-0 text-[11.5px]',
-                          isSelected
-                            ? 'text-[var(--color-inverse-foreground)]/70'
-                            : 'text-[var(--color-muted-foreground)]',
-                        )}
-                      >
-                        {right}
-                      </span>
-                    ) : null}
-                  </button>
+                    item={item}
+                    isSelected={idx === activeIndex}
+                    onHover={() => setSelectedIndex(idx)}
+                  />
                 );
               })}
             </div>
@@ -356,5 +164,56 @@ export function CommandPalette({
         </div>
       </div>
     </div>
+  );
+}
+
+function PaletteRow({
+  item,
+  isSelected,
+  onHover,
+}: {
+  item: PaletteAction;
+  isSelected: boolean;
+  onHover: () => void;
+}) {
+  const right = paletteRightLabel(item, formatDue);
+  return (
+    <button
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors',
+        isSelected
+          ? 'bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]'
+          : 'text-[var(--color-foreground)] hover:bg-[var(--color-muted)]',
+      )}
+      onClick={() => item.onSelect()}
+      onMouseEnter={onHover}
+    >
+      {item.taskLocalId ? (
+        <span
+          className="h-4 w-[3px] shrink-0 rounded-full"
+          style={{
+            backgroundColor:
+              (item.priority ?? 0) > 2 ? priorityColor(item.priority ?? 0) : 'transparent',
+          }}
+        />
+      ) : (
+        <span className="flex w-[3px] shrink-0 justify-center">
+          <span className="opacity-60">{item.icon}</span>
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+      {right ? (
+        <span
+          className={cn(
+            'shrink-0 text-[11.5px]',
+            isSelected
+              ? 'text-[var(--color-inverse-foreground)]/70'
+              : 'text-[var(--color-muted-foreground)]',
+          )}
+        >
+          {right}
+        </span>
+      ) : null}
+    </button>
   );
 }
