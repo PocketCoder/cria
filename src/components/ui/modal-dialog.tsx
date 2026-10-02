@@ -17,6 +17,12 @@ import { pushModalDialog } from '@/lib/modalStack';
  * that must stay usable above an open dialog has to render inside it, so the
  * Radix portals (Popover, Select, ContextMenu) and the undo toast target the
  * topmost dialog via `useTopModalDialog()` instead of `document.body`.
+ *
+ * `showModal()` only exists from Safari / iOS 15.4, and calling it on older
+ * WebKit would throw and take the tree down. There the dialog degrades to a
+ * plain fixed overlay (`data-modal-fallback`, see globals.css): the `open`
+ * attribute is set by hand, Escape is handled on keydown (no native `cancel`),
+ * and focus is restored on close. The background is not made inert.
  */
 export function ModalDialog({
   label,
@@ -32,6 +38,8 @@ export function ModalDialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const unmounting = useRef(false);
+  // True when this dialog was opened without `showModal()` (old WebKit).
+  const fallback = useRef(false);
   // Children render only once the dialog is open: a closed dialog is
   // display:none, so anything that focuses itself on mount would be a no-op.
   const [open, setOpen] = useState(false);
@@ -40,13 +48,32 @@ export function ModalDialog({
     const el = ref.current;
     if (!el) return;
     unmounting.current = false;
-    if (!el.open) el.showModal();
+    // `open` is undefined on browsers without <dialog>, so test the attribute.
+    const isOpen = el.hasAttribute('open');
+    fallback.current = typeof el.showModal !== 'function';
+    const returnFocus = document.activeElement;
+    if (fallback.current) {
+      if (!isOpen) {
+        // Later dialogs paint above earlier ones whatever their DOM order.
+        el.style.zIndex = String(1000 + document.querySelectorAll('[data-modal-fallback]').length);
+        el.setAttribute('data-modal-fallback', '');
+        el.setAttribute('open', '');
+      }
+    } else if (!isOpen) {
+      el.showModal();
+    }
     const unregister = pushModalDialog(el);
     setOpen(true);
     return () => {
       unmounting.current = true;
       unregister();
-      if (el.open) el.close();
+      if (fallback.current) {
+        el.removeAttribute('open');
+        el.removeAttribute('data-modal-fallback');
+        if (returnFocus instanceof HTMLElement) returnFocus.focus();
+      } else if (el.open) {
+        el.close();
+      }
     };
   }, []);
 
@@ -70,6 +97,13 @@ export function ModalDialog({
         className,
       )}
       onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      // No native `cancel` without showModal(): handle Escape here. Local
+      // Escape handlers inside have already called preventDefault().
+      onKeyDown={(e) => {
+        if (!fallback.current || e.key !== 'Escape' || e.defaultPrevented) return;
         e.preventDefault();
         onClose();
       }}

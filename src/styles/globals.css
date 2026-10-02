@@ -715,6 +715,18 @@ ul[data-type="taskList"] li > div > p {
   animation: cria-pop-in 200ms var(--spring-soft);
 }
 
+/* <dialog> opened without showModal() (Safari / iOS before 15.4): there is no
+   top layer or UA dialog styling, so pin it over the page by hand. z-index is
+   set inline per dialog. */
+dialog[data-modal-fallback] {
+  display: block;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
 /* Centred modal: backdrop fades, the panel scales up. The panel is whatever
    sits beside the click-away layer (BackdropDismiss is the first child, so
    `:first-child` would animate the invisible layer instead). */

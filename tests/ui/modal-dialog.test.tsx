@@ -1,6 +1,6 @@
 import './mocks';
 import { StrictMode, useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModalDialog } from '@/components/ui/modal-dialog';
@@ -132,5 +132,100 @@ describe('ModalDialog', () => {
     });
     expect(spy).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Demo dialog' })).toHaveAttribute('open');
+  });
+});
+
+describe('ModalDialog without showModal() (Safari / iOS before 15.4)', () => {
+  type Proto = Partial<Pick<HTMLDialogElement, 'showModal' | 'close'>>;
+  const proto = HTMLDialogElement.prototype as Proto;
+  const saved = { showModal: proto.showModal, close: proto.close };
+
+  function simulateOldWebKit() {
+    delete proto.showModal;
+    delete proto.close;
+  }
+
+  afterEach(() => {
+    proto.showModal = saved.showModal;
+    proto.close = saved.close;
+  });
+
+  it('opens as a fixed overlay instead of throwing', async () => {
+    simulateOldWebKit();
+    const user = userEvent.setup();
+    render(<Harness onCloseSpy={() => undefined} />);
+    const { dialog } = await openDialog(user);
+    expect(dialog).toHaveAttribute('open');
+    expect(dialog).toHaveAttribute('data-modal-fallback');
+    expect(dialog).not.toHaveAttribute('data-modal');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
+  it('stacks a later dialog above an earlier one', () => {
+    simulateOldWebKit();
+    render(
+      <>
+        <ModalDialog label="First" onClose={() => undefined}>
+          <button type="button">One</button>
+        </ModalDialog>
+        <ModalDialog label="Second" onClose={() => undefined}>
+          <button type="button">Two</button>
+        </ModalDialog>
+      </>,
+    );
+    const z = (name: string) => Number(screen.getByRole('dialog', { name }).style.zIndex);
+    expect(z('First')).toBeGreaterThan(0);
+    expect(z('Second')).toBeGreaterThan(z('First'));
+  });
+
+  it('closes once on Escape keydown, unless a local handler already used it', async () => {
+    simulateOldWebKit();
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    render(<Harness onCloseSpy={spy} focusInput />);
+    await openDialog(user);
+
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const used = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    input.addEventListener('keydown', (e) => e.preventDefault(), { once: true });
+    input.dispatchEvent(used);
+    expect(spy).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the trigger once closed', async () => {
+    simulateOldWebKit();
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    render(<Harness onCloseSpy={spy} />);
+    const { trigger } = await openDialog(user);
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(trigger).toHaveFocus();
+  });
+
+  it('survives StrictMode remounting', () => {
+    simulateOldWebKit();
+    render(
+      <StrictMode>
+        <ModalDialog label="Demo dialog" onClose={() => undefined}>
+          <button type="button">Inside</button>
+        </ModalDialog>
+      </StrictMode>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Demo dialog' })).toHaveAttribute('open');
+    expect(screen.getByRole('button', { name: 'Inside' })).toBeInTheDocument();
+  });
+
+  it('leaves Escape keydown to the native cancel event when showModal() exists', async () => {
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    render(<Harness onCloseSpy={spy} />);
+    await openDialog(user);
+    await user.keyboard('{Escape}');
+    expect(spy).not.toHaveBeenCalled();
   });
 });
