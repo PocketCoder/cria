@@ -243,6 +243,31 @@ ignores the `pnpm` field and warns on every command. New deps with native
 binaries may need adding to `allowBuilds`; `pnpm ignored-builds` lists any
 that were skipped.
 
+### On-device AI is a Swift bridge, not objc2
+
+Foundation Models is Swift-only, so `objc2` can't reach it (Vision in
+`ocr.rs` is ObjC, so it can). [src-tauri/swift/CriaAI](src-tauri/swift/CriaAI)
+exposes one `@_cdecl` C function; [build.rs](src-tauri/build.rs) compiles it
+via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
+- swift-rs 1.0.7 expects the old SwiftPM output dir; Swift 6.4 writes
+  `out/Products/<Cfg>`, so `build.rs` searches for `libCriaAI.a` itself.
+- Needs `-rpath /usr/lib/swift` (else dyld can't find `libswift_Concurrency`)
+  and `-weak_framework FoundationModels` (else pre-26 OSes crash at launch).
+- The Swift call blocks on a semaphore: keep the command `async` +
+  `spawn_blocking`, never sync (sync commands run on the main thread).
+- iOS runs each call as a `BGContinuedProcessingTask` (system Live Activity);
+  identifiers must match `BGTaskSchedulerPermittedIdentifiers` in
+  `Info.ios.plist`. No paid account or entitlement needed for any of it.
+- Smoke test against the real model:
+  `cargo test --lib ai -- --ignored --nocapture` (in `src-tauri/`).
+- Prompts live in [src/lib/aiPrompts.ts](src/lib/aiPrompts.ts). The model
+  never does date maths: it writes dates in words (or quick-add / filter
+  syntax) and the existing parsers resolve them. To iterate on a prompt, write
+  `<name>.instr` + `<name>.prompt` files to a folder and run
+  `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
+- AI buttons render only when `useAiAvailable()` is true, so unsupported
+  devices never see them.
+
 ### `pnpm dev` indirectly requires `cargo`
 
 `pnpm dev` → `tauri dev` → `cargo metadata`. If a fresh shell can't find

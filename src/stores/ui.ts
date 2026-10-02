@@ -23,12 +23,18 @@ interface UiState {
   sidebarCollapsed: boolean;
   /** Transient: the "create tasks from a photo" capture modal is open. */
   photoCaptureOpen: boolean;
+  /** Transient: the Ramble (speak → many tasks) sheet is open. */
+  rambleOpen: boolean;
+  /** Unsent ramble text, kept across close/reopen so a slip doesn't lose it. */
+  rambleDraft: string;
   setActiveView: (view: ActiveView | null) => void;
   /** Convenience for the common "open a project" path. */
   setSelectedProject: (id: string | null) => void;
   setSelectedTask: (id: string | null) => void;
   toggleSidebar: () => void;
   setPhotoCaptureOpen: (open: boolean) => void;
+  setRambleOpen: (open: boolean) => void;
+  setRambleDraft: (text: string) => void;
 }
 
 function viewKey(v: ActiveView | null): string {
@@ -100,6 +106,8 @@ export const useUi = create<UiState>()(
       selectedTaskLocalId: null,
       sidebarCollapsed: false,
       photoCaptureOpen: false,
+      rambleOpen: false,
+      rambleDraft: '',
       setActiveView: (view) => {
         const commit = () => set({ activeView: view, selectedTaskLocalId: null });
         const kind = navKind(get().activeView, view);
@@ -115,6 +123,8 @@ export const useUi = create<UiState>()(
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
+      setRambleOpen: (open) => set({ rambleOpen: open }),
+      setRambleDraft: (text) => set({ rambleDraft: text }),
     }),
     {
       name: 'cria:ui/v2',
