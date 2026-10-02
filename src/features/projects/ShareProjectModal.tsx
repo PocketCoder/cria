@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { X, Trash2, Copy, Check, Lock, Loader2 } from 'lucide-react';
 import {
   listProjectUsers,
@@ -24,8 +24,15 @@ import { getAuthSnapshot } from '@/auth/store';
 import { useOnline } from '@/hooks/useOnline';
 import { cn } from '@/lib/cn';
 import type { Project } from '@/domain/project';
+import {
+  availableTeams,
+  buildLinkShareInput,
+  parseTeamSelection,
+  shareErrorMessage,
+} from './shareLogic';
 
 type Tab = 'users' | 'teams' | 'links';
+type Mutate = UseMutationResult<void, Error, () => Promise<void>>;
 
 function PermissionSelect({
   value,
@@ -126,31 +133,10 @@ export function ShareProjectModal({
     }
   };
 
-  const err = mutate.error ? String((mutate.error as Error).message ?? mutate.error) : null;
+  const err = shareErrorMessage(mutate.error);
 
   if (projectId == null) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        role="dialog"
-        aria-modal="true"
-        onClick={onClose}
-      >
-        <div
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <p className="text-sm">Sync this project before sharing it.</p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-3 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)]"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    );
+    return <UnsyncedNotice onClose={onClose} />;
   }
 
   return (
@@ -176,23 +162,7 @@ export function ShareProjectModal({
           </button>
         </header>
 
-        <div className="flex gap-1 border-b border-[var(--color-border)] px-3 pt-2">
-          {(['users', 'teams', 'links'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cn(
-                'rounded-t-md px-3 py-1.5 text-sm capitalize',
-                tab === t
-                  ? 'border border-b-0 border-[var(--color-border)] bg-[var(--color-card)] font-medium'
-                  : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
-              )}
-            >
-              {t === 'links' ? 'Share links' : t}
-            </button>
-          ))}
-        </div>
+        <TabBar tab={tab} onChange={setTab} />
 
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {!online && (
@@ -203,219 +173,358 @@ export function ShareProjectModal({
           {err && <p className="text-xs text-[var(--color-destructive)]">{err}</p>}
 
           {tab === 'users' && (
-            <>
-              <div className="flex items-start gap-2">
-                <div className="flex-1">
-                  <UserSearchCombobox
-                    placeholder="Add a user…"
-                    onSelect={(u) =>
-                      mutate.mutate(() =>
-                        addProjectUser(projectId, u.username, newUserPermission),
-                      )
-                    }
-                  />
-                </div>
-                <PermissionSelect value={newUserPermission} onChange={setNewUserPermission} />
-              </div>
-              <ul className="space-y-1">
-                {(usersQ.data ?? []).map((u) => (
-                  <li
-                    key={u.serverId}
-                    className="flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {u.name || u.username}
-                      <span className="ml-1.5 text-xs text-[var(--color-muted-foreground)]">
-                        @{u.username}
-                      </span>
-                    </span>
-                    <PermissionSelect
-                      value={u.permission}
-                      disabled={!online}
-                      onChange={(p) =>
-                        mutate.mutate(() =>
-                          updateProjectUserPermission(projectId, u.serverId, p),
-                        )
-                      }
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Remove ${u.username}`}
-                      onClick={() =>
-                        mutate.mutate(() => removeProjectUser(projectId, u.serverId))
-                      }
-                      className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-                {usersQ.isSuccess && usersQ.data.length === 0 && (
-                  <p className="py-2 text-center text-xs text-[var(--color-muted-foreground)]">
-                    Not shared with any users yet.
-                  </p>
-                )}
-              </ul>
-            </>
+            <UsersPanel
+              projectId={projectId}
+              online={online}
+              mutate={mutate}
+              users={usersQ.data}
+              loaded={usersQ.isSuccess}
+              newPermission={newUserPermission}
+              setNewPermission={setNewUserPermission}
+            />
           )}
 
           {tab === 'teams' && (
-            <>
-              <div className="flex items-center gap-2">
-                <select
-                  value={newTeamId}
-                  onChange={(e) => setNewTeamId(e.target.value ? Number(e.target.value) : '')}
-                  className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
-                >
-                  <option value="">Select a team…</option>
-                  {(allTeamsQ.data ?? [])
-                    .filter((t) => !(teamsQ.data ?? []).some((s) => s.serverId === t.serverId))
-                    .map((t) => (
-                      <option key={t.serverId} value={t.serverId}>
-                        {t.name}
-                      </option>
-                    ))}
-                </select>
-                <PermissionSelect value={newTeamPermission} onChange={setNewTeamPermission} />
-                <button
-                  type="button"
-                  disabled={newTeamId === '' || !online}
-                  onClick={() => {
-                    if (newTeamId === '') return;
-                    mutate.mutate(() => addProjectTeam(projectId, newTeamId, newTeamPermission));
-                    setNewTeamId('');
-                  }}
-                  className="rounded-md bg-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)] disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </div>
-              <ul className="space-y-1">
-                {(teamsQ.data ?? []).map((t) => (
-                  <li
-                    key={t.serverId}
-                    className="flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm">{t.name}</span>
-                    <PermissionSelect
-                      value={t.permission}
-                      disabled={!online}
-                      onChange={(p) =>
-                        mutate.mutate(() =>
-                          updateProjectTeamPermission(projectId, t.serverId, p),
-                        )
-                      }
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Remove ${t.name}`}
-                      onClick={() =>
-                        mutate.mutate(() => removeProjectTeam(projectId, t.serverId))
-                      }
-                      className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-                {teamsQ.isSuccess && teamsQ.data.length === 0 && (
-                  <p className="py-2 text-center text-xs text-[var(--color-muted-foreground)]">
-                    Not shared with any teams yet.
-                  </p>
-                )}
-              </ul>
-            </>
+            <TeamsPanel
+              projectId={projectId}
+              online={online}
+              mutate={mutate}
+              shared={teamsQ.data}
+              sharedLoaded={teamsQ.isSuccess}
+              allTeams={allTeamsQ.data}
+              newTeamId={newTeamId}
+              setNewTeamId={setNewTeamId}
+              newPermission={newTeamPermission}
+              setNewPermission={setNewTeamPermission}
+            />
           )}
 
           {tab === 'links' && (
-            <>
-              <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2.5">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={linkName}
-                    onChange={(e) => setLinkName(e.target.value)}
-                    placeholder="Name (optional)"
-                    className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
-                  />
-                  <PermissionSelect value={linkPermission} onChange={setLinkPermission} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="password"
-                    value={linkPassword}
-                    onChange={(e) => setLinkPassword(e.target.value)}
-                    placeholder="Password (optional)"
-                    className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
-                  />
-                  <button
-                    type="button"
-                    disabled={!online || mutate.isPending}
-                    onClick={() => {
-                      mutate.mutate(() =>
-                        createLinkShare(projectId, {
-                          permission: linkPermission,
-                          name: linkName.trim() || undefined,
-                          password: linkPassword || undefined,
-                        }),
-                      );
-                      setLinkName('');
-                      setLinkPassword('');
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)] disabled:opacity-50"
-                  >
-                    {mutate.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                    Create link
-                  </button>
-                </div>
-              </div>
-              <ul className="space-y-1">
-                {(linksQ.data ?? []).map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {s.name || `Link #${s.id}`}
-                      <span className="ml-1.5 text-xs text-[var(--color-muted-foreground)]">
-                        {PERMISSION_LABELS[s.permission]}
-                      </span>
-                      {s.hasPassword && (
-                        <Lock className="ml-1 inline h-3 w-3 text-[var(--color-muted-foreground)]" />
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Copy share link"
-                      onClick={() => void copyShareUrl(s.hash)}
-                      className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-                    >
-                      {copiedHash === s.hash ? (
-                        <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Delete share link"
-                      onClick={() => mutate.mutate(() => deleteLinkShare(projectId, s.id))}
-                      className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-                {linksQ.isSuccess && linksQ.data.length === 0 && (
-                  <p className="py-2 text-center text-xs text-[var(--color-muted-foreground)]">
-                    No share links yet.
-                  </p>
-                )}
-              </ul>
-            </>
+            <LinksPanel
+              projectId={projectId}
+              online={online}
+              mutate={mutate}
+              links={linksQ.data}
+              loaded={linksQ.isSuccess}
+              name={linkName}
+              setName={setLinkName}
+              password={linkPassword}
+              setPassword={setLinkPassword}
+              permission={linkPermission}
+              setPermission={setLinkPermission}
+              copiedHash={copiedHash}
+              onCopy={(hash) => void copyShareUrl(hash)}
+            />
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function UnsyncedNotice({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm">Sync this project before sharing it.</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-3 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)]"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+  return (
+    <div className="flex gap-1 border-b border-[var(--color-border)] px-3 pt-2">
+      {(['users', 'teams', 'links'] as Tab[]).map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => onChange(t)}
+          className={cn(
+            'rounded-t-md px-3 py-1.5 text-sm capitalize',
+            tab === t
+              ? 'border border-b-0 border-[var(--color-border)] bg-[var(--color-card)] font-medium'
+              : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
+          )}
+        >
+          {t === 'links' ? 'Share links' : t}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const ROW_CLASS =
+  'flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5';
+const REMOVE_CLASS =
+  'rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]';
+const EMPTY_CLASS = 'py-2 text-center text-xs text-[var(--color-muted-foreground)]';
+
+type UserShares = Awaited<ReturnType<typeof listProjectUsers>>;
+type TeamShares = Awaited<ReturnType<typeof listProjectTeams>>;
+type AllTeams = Awaited<ReturnType<typeof listTeams>>;
+type LinkShares = Awaited<ReturnType<typeof listLinkShares>>;
+
+interface PanelBase {
+  projectId: number;
+  online: boolean;
+  mutate: Mutate;
+}
+
+function UsersPanel({
+  projectId,
+  online,
+  mutate,
+  users,
+  loaded,
+  newPermission,
+  setNewPermission,
+}: PanelBase & {
+  users: UserShares | undefined;
+  loaded: boolean;
+  newPermission: Permission;
+  setNewPermission: (p: Permission) => void;
+}) {
+  return (
+    <>
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <UserSearchCombobox
+            placeholder="Add a user…"
+            onSelect={(u) =>
+              mutate.mutate(() => addProjectUser(projectId, u.username, newPermission))
+            }
+          />
+        </div>
+        <PermissionSelect value={newPermission} onChange={setNewPermission} />
+      </div>
+      <ul className="space-y-1">
+        {(users ?? []).map((u) => (
+          <li key={u.serverId} className={ROW_CLASS}>
+            <span className="min-w-0 flex-1 truncate text-sm">
+              {u.name || u.username}
+              <span className="ml-1.5 text-xs text-[var(--color-muted-foreground)]">
+                @{u.username}
+              </span>
+            </span>
+            <PermissionSelect
+              value={u.permission}
+              disabled={!online}
+              onChange={(p) =>
+                mutate.mutate(() => updateProjectUserPermission(projectId, u.serverId, p))
+              }
+            />
+            <button
+              type="button"
+              aria-label={`Remove ${u.username}`}
+              onClick={() => mutate.mutate(() => removeProjectUser(projectId, u.serverId))}
+              className={REMOVE_CLASS}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </li>
+        ))}
+        {loaded && users?.length === 0 && (
+          <p className={EMPTY_CLASS}>Not shared with any users yet.</p>
+        )}
+      </ul>
+    </>
+  );
+}
+
+function TeamsPanel({
+  projectId,
+  online,
+  mutate,
+  shared,
+  sharedLoaded,
+  allTeams,
+  newTeamId,
+  setNewTeamId,
+  newPermission,
+  setNewPermission,
+}: PanelBase & {
+  shared: TeamShares | undefined;
+  sharedLoaded: boolean;
+  allTeams: AllTeams | undefined;
+  newTeamId: number | '';
+  setNewTeamId: (id: number | '') => void;
+  newPermission: Permission;
+  setNewPermission: (p: Permission) => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <select
+          value={newTeamId}
+          onChange={(e) => setNewTeamId(parseTeamSelection(e.target.value))}
+          className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
+        >
+          <option value="">Select a team…</option>
+          {availableTeams(allTeams, shared).map((t) => (
+            <option key={t.serverId} value={t.serverId}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        <PermissionSelect value={newPermission} onChange={setNewPermission} />
+        <button
+          type="button"
+          disabled={newTeamId === '' || !online}
+          onClick={() => {
+            if (newTeamId === '') return;
+            mutate.mutate(() => addProjectTeam(projectId, newTeamId, newPermission));
+            setNewTeamId('');
+          }}
+          className="rounded-md bg-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)] disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
+      <ul className="space-y-1">
+        {(shared ?? []).map((t) => (
+          <li key={t.serverId} className={ROW_CLASS}>
+            <span className="min-w-0 flex-1 truncate text-sm">{t.name}</span>
+            <PermissionSelect
+              value={t.permission}
+              disabled={!online}
+              onChange={(p) =>
+                mutate.mutate(() => updateProjectTeamPermission(projectId, t.serverId, p))
+              }
+            />
+            <button
+              type="button"
+              aria-label={`Remove ${t.name}`}
+              onClick={() => mutate.mutate(() => removeProjectTeam(projectId, t.serverId))}
+              className={REMOVE_CLASS}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </li>
+        ))}
+        {sharedLoaded && shared?.length === 0 && (
+          <p className={EMPTY_CLASS}>Not shared with any teams yet.</p>
+        )}
+      </ul>
+    </>
+  );
+}
+
+function LinksPanel({
+  projectId,
+  online,
+  mutate,
+  links,
+  loaded,
+  name,
+  setName,
+  password,
+  setPassword,
+  permission,
+  setPermission,
+  copiedHash,
+  onCopy,
+}: PanelBase & {
+  links: LinkShares | undefined;
+  loaded: boolean;
+  name: string;
+  setName: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  permission: Permission;
+  setPermission: (p: Permission) => void;
+  copiedHash: string | null;
+  onCopy: (hash: string) => void;
+}) {
+  return (
+    <>
+      <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2.5">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Name (optional)"
+            className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
+          />
+          <PermissionSelect value={permission} onChange={setPermission} />
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password (optional)"
+            className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"
+          />
+          <button
+            type="button"
+            disabled={!online || mutate.isPending}
+            onClick={() => {
+              mutate.mutate(() =>
+                createLinkShare(projectId, buildLinkShareInput(permission, name, password)),
+              );
+              setName('');
+              setPassword('');
+            }}
+            className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)] disabled:opacity-50"
+          >
+            {mutate.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+            Create link
+          </button>
+        </div>
+      </div>
+      <ul className="space-y-1">
+        {(links ?? []).map((s) => (
+          <li key={s.id} className={ROW_CLASS}>
+            <span className="min-w-0 flex-1 truncate text-sm">
+              {s.name || `Link #${s.id}`}
+              <span className="ml-1.5 text-xs text-[var(--color-muted-foreground)]">
+                {PERMISSION_LABELS[s.permission]}
+              </span>
+              {s.hasPassword && (
+                <Lock className="ml-1 inline h-3 w-3 text-[var(--color-muted-foreground)]" />
+              )}
+            </span>
+            <button
+              type="button"
+              aria-label="Copy share link"
+              onClick={() => onCopy(s.hash)}
+              className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            >
+              {copiedHash === s.hash ? (
+                <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </button>
+            <button
+              type="button"
+              aria-label="Delete share link"
+              onClick={() => mutate.mutate(() => deleteLinkShare(projectId, s.id))}
+              className={REMOVE_CLASS}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </li>
+        ))}
+        {loaded && links?.length === 0 && <p className={EMPTY_CLASS}>No share links yet.</p>}
+      </ul>
+    </>
   );
 }
