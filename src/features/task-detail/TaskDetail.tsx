@@ -363,6 +363,7 @@ export function TaskDetail() {
 
         {titleEditing ? (
           <input
+            aria-label="Task title"
             type="text"
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}

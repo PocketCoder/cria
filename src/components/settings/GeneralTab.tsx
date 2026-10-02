@@ -299,6 +299,7 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
           <div className="flex items-center justify-between">
             <Label>Overdue reminder time</Label>
             <input
+              aria-label="Overdue reminder time"
               type="time"
               value={overdueRemindersTime}
               onChange={(e) => handleOverdueRemindersTimeChange(e.target.value)}

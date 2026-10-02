@@ -38,6 +38,7 @@ function PermissionSelect({
 }) {
   return (
     <select
+      aria-label="Permission"
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(Number(e.target.value) as Permission)}
@@ -263,6 +264,7 @@ export function ShareProjectModal({
             <>
               <div className="flex items-center gap-2">
                 <select
+                  aria-label="Team"
                   value={newTeamId}
                   onChange={(e) => setNewTeamId(e.target.value ? Number(e.target.value) : '')}
                   className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-sm outline-none"

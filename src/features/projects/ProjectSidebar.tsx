@@ -798,6 +798,7 @@ function ProjectRow({
     return (
       <li>
         <input
+          aria-label="Project name"
           type="text"
           autoFocus
           value={editingTitle}
@@ -966,6 +967,7 @@ function ProjectRow({
                       <div className="flex flex-wrap gap-1 px-2 py-1.5">
                         {PROJECT_COLORS.map((c) => (
                           <button
+                            aria-label={`Set colour ${c}`}
                             key={c}
                             onClick={async () => {
                               await updateProject(project.localId, {
@@ -1079,6 +1081,7 @@ function LabelRow({
     return (
       <li>
         <input
+          aria-label="Project name"
           type="text"
           autoFocus
           value={editingTitle}

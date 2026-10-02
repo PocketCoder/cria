@@ -87,6 +87,7 @@ export function RecurrencePicker({
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-[var(--color-muted-foreground)]">Every</span>
             <input
+              aria-label="Repeat interval"
               type="number"
               min={1}
               value={value}

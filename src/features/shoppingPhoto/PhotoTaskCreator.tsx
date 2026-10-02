@@ -233,6 +233,7 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
                   aria-label={`Include ${item.text}`}
                 />
                 <input
+                  aria-label="Item text"
                   type="text"
                   value={item.text}
                   onChange={(e) =>

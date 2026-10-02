@@ -131,6 +131,7 @@ export function SavedFilterModal({
               Description <span className="font-normal">(optional)</span>
             </label>
             <input
+              aria-label="Description"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}

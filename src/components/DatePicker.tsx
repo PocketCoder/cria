@@ -189,6 +189,7 @@ export function DatePicker({
               All day
             </label>
             <input
+              aria-label="Time"
               type="time"
               value={timeStr}
               disabled={allDay}

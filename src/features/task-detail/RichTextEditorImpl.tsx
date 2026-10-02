@@ -342,6 +342,7 @@ function ReadView({
 
   const editBtn = (
     <button
+      aria-label="Edit description"
       type="button"
       onClick={onEdit}
       className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-muted-foreground)] shadow-sm transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"

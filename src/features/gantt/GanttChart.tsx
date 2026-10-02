@@ -510,6 +510,7 @@ export function GanttChart({
 
             {placements.map(({ node, resolved, left, width, top, height, color, isPlaceholder, label }) => (
               <div
+                aria-label={`${node.task.title}, ${label}`}
                 key={node.task.localId}
                 role="button"
                 tabIndex={0}

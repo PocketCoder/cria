@@ -308,6 +308,7 @@ function CustomForm({
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <input
+          aria-label="Reminder amount"
           type="number"
           min={1}
           value={amount}
@@ -407,6 +408,7 @@ function AbsoluteForm({
       }}
     >
       <input
+        aria-label="Reminder date and time"
         type="datetime-local"
         value={draft}
         autoFocus
