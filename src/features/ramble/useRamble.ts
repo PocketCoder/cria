@@ -105,21 +105,41 @@ export function useRamble(onClose: () => void) {
 
   const chosen = chosenDrafts(drafts);
 
+  // Closing is inert while saving: the save loop can't be cancelled and its
+  // completion would close (or clear) a sheet the user has since reopened.
+  const close = () => {
+    if (phase !== 'saving') onClose();
+  };
+
   const addAll = async () => {
     if (chosen.length === 0 || !projectId) return;
     setPhase('saving');
     const savedIds = new Set<number>();
+    const savedText = text;
+    const remaining = drafts;
     try {
       await createDrafts(
         chosen,
         (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId }),
         (d) => savedIds.add(d.id),
       );
+      if (!alive.current) {
+        // Unmounted mid-save: the sheet is gone, and a reopened one is not
+        // ours to close. Only drop the draft text if it is still the saved one.
+        if (useUi.getState().rambleDraft === savedText) setText('');
+        return;
+      }
       setText('');
       setPendingLines(null);
       onClose();
     } catch (err) {
       console.error('[ramble] task creation failed:', err);
+      if (!alive.current) {
+        // Keep the unsaved lines for the next open, so a retry skips the saved ones.
+        const left = withoutSaved(remaining, savedIds).map((d) => d.line);
+        if (left.length > 0 && useUi.getState().rambleLines === null) setPendingLines(left);
+        return;
+      }
       // Tasks already created must not come back on retry as duplicates.
       setDrafts((prev) => withoutSaved(prev, savedIds));
       setError(partialSaveMessage(savedIds.size, chosen.length));
@@ -142,6 +162,7 @@ export function useRamble(onClose: () => void) {
     textRef,
     phase,
     setPhase,
+    close,
     error,
     drafts,
     chosen,

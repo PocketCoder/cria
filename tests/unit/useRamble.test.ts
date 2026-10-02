@@ -90,4 +90,89 @@ describe('useRamble', () => {
     await organising;
     expect(useUi.getState().rambleLines).toBeNull();
   });
+
+  describe('closing while saving', () => {
+    async function startSave(onClose: () => void) {
+      generate.mockResolvedValue('Call mum\nBuy milk');
+      const view = renderHook(() => useRamble(onClose));
+      await act(() => view.result.current.organise());
+      return view;
+    }
+
+    it('ignores close until the save finishes', async () => {
+      const onClose = vi.fn();
+      const save = deferred<void>();
+      createFromQuickAdd.mockReturnValue(save.promise);
+      const { result } = await startSave(onClose);
+
+      let adding!: Promise<void>;
+      act(() => {
+        adding = result.current.addAll();
+      });
+      act(() => result.current.close());
+      expect(onClose).not.toHaveBeenCalled();
+
+      save.resolve();
+      await act(() => adding);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes normally when not saving', async () => {
+      const onClose = vi.fn();
+      const { result } = await startSave(onClose);
+      act(() => result.current.close());
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not close or wipe a reopened sheet when a save finishes after unmount', async () => {
+      const onClose = vi.fn();
+      const save = deferred<void>();
+      createFromQuickAdd.mockReturnValue(save.promise);
+      const first = await startSave(onClose);
+      let adding!: Promise<void>;
+      act(() => {
+        adding = first.result.current.addAll();
+      });
+
+      first.unmount();
+      useUi.setState({ rambleDraft: 'something new', rambleLines: ['Pending line'] });
+      save.resolve();
+      await adding;
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(useUi.getState().rambleDraft).toBe('something new');
+      expect(useUi.getState().rambleLines).toEqual(['Pending line']);
+    });
+
+    it('clears the saved draft text when a save finishes after unmount', async () => {
+      const save = deferred<void>();
+      createFromQuickAdd.mockReturnValue(save.promise);
+      const first = await startSave(() => {});
+      let adding!: Promise<void>;
+      act(() => {
+        adding = first.result.current.addAll();
+      });
+      first.unmount();
+      save.resolve();
+      await adding;
+      expect(useUi.getState().rambleDraft).toBe('');
+    });
+
+    it('keeps only the unsaved lines for the next open when a save fails after unmount', async () => {
+      const onClose = vi.fn();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      createFromQuickAdd.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('boom'));
+      const first = await startSave(onClose);
+      let adding!: Promise<void>;
+      act(() => {
+        adding = first.result.current.addAll();
+      });
+      first.unmount();
+      await adding;
+      errorSpy.mockRestore();
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(useUi.getState().rambleLines).toEqual(['Buy milk']);
+    });
+  });
 });

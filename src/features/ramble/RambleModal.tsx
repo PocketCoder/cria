@@ -20,7 +20,7 @@ import { useRamble } from './useRamble';
 export function RambleModal({ onClose }: { onClose: () => void }) {
   const isMobile = useIsMobile();
   const r = useRamble(onClose);
-  useEscapeKey(onClose);
+  useEscapeKey(r.close);
 
   const reviewing = r.phase === 'review' || r.phase === 'saving';
 
@@ -28,9 +28,9 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
     <>
       <RambleHeader
         reviewing={reviewing}
-        backDisabled={r.phase === 'saving'}
+        busy={r.phase === 'saving'}
         onBack={() => r.setPhase('input')}
-        onClose={onClose}
+        onClose={r.close}
       />
       {reviewing ? (
         <RambleReview
@@ -44,7 +44,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
           onUpdate={r.updateDraft}
           onDelete={r.deleteDraft}
           onAddBlank={r.addBlankDraft}
-          onCancel={onClose}
+          onCancel={r.close}
           onAddAll={() => void r.addAll()}
         />
       ) : (
@@ -74,7 +74,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
     >
       {isMobile ? (
         <>
-          <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
+          <BackdropDismiss onDismiss={r.close} className="sheet-backdrop" />
           <div className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--color-card)] px-4 pb-8 pt-2 shadow-lg">
             <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {body}
@@ -82,7 +82,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
         </>
       ) : (
         <>
-          <BackdropDismiss onDismiss={onClose} />
+          <BackdropDismiss onDismiss={r.close} />
           <div className="relative bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg">
             {body}
           </div>

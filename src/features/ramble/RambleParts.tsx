@@ -28,13 +28,16 @@ import { hasTitle, projectPreview, taskCount, type Draft, type Phase } from './r
 
 export function RambleHeader({
   reviewing,
-  backDisabled,
+  busy,
   onBack,
   onClose,
 }: {
   reviewing: boolean;
-  /** Back is inert while saving: the input step would let Organise replace drafts mid-save. */
-  backDisabled: boolean;
+  /**
+   * Saving: Back and Close are inert. Back would let Organise replace drafts
+   * mid-save; closing would let the save finish against a reopened sheet.
+   */
+  busy: boolean;
   onBack: () => void;
   onClose: () => void;
 }) {
@@ -45,7 +48,7 @@ export function RambleHeader({
           <button
             type="button"
             onClick={onBack}
-            disabled={backDisabled}
+            disabled={busy}
             className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50 disabled:hover:text-[var(--color-muted-foreground)]"
             aria-label="Back to ramble"
           >
@@ -58,7 +61,8 @@ export function RambleHeader({
       </h2>
       <button
         onClick={onClose}
-        className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+        disabled={busy}
+        className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50 disabled:hover:text-[var(--color-muted-foreground)]"
         aria-label="Close"
       >
         <X className="h-4 w-4" />
@@ -217,7 +221,8 @@ export function RambleReview({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md px-3 py-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+          disabled={saving}
+          className="rounded-md px-3 py-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50"
         >
           Cancel
         </button>
