@@ -9,7 +9,7 @@ import { ExternalLink } from 'lucide-react';
 import { isMobilePlatform } from '@/lib/platform';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { invoke } from '@tauri-apps/api/core';
+import { pushTraySettings } from '@/lib/traySettings';
 import pkg from '../../../package.json';
 
 export function AdvancedTab() {
@@ -60,35 +60,38 @@ export function AdvancedTab() {
                 checked={trayIconEnabled}
                 onCheckedChange={(newVal) => {
                   setTrayIconEnabledInStore(newVal);
-                  void invoke('set_tray_visible', { visible: newVal });
+                  pushTraySettings(useSettings.getState());
                 }}
               />
             </div>
-            {trayIconEnabled && (
-              <>
-                <div className="flex items-center justify-between">
-                  <Label>Close to tray</Label>
-                  <Switch
-                    checked={closeToTray}
-                    onCheckedChange={(newVal) => {
-                      setCloseToTrayInStore(newVal);
-                      void invoke('set_close_to_tray', { enabled: newVal });
-                    }}
-                  />
-                </div>
-                {closeToTray && (
-                  <div className="flex items-center justify-between">
-                    <Label>Hide dock icon when closed</Label>
-                    <Switch
-                      checked={hideDockOnTray}
-                      onCheckedChange={(newVal) => {
-                        setHideDockOnTrayInStore(newVal);
-                        void invoke('set_hide_dock_on_tray', { enabled: newVal });
-                      }}
-                    />
-                  </div>
-                )}
-              </>
+            <div className="flex items-center justify-between">
+              <Label>Close to tray</Label>
+              <Switch
+                checked={closeToTray}
+                disabled={!trayIconEnabled}
+                onCheckedChange={(newVal) => {
+                  setCloseToTrayInStore(newVal);
+                  pushTraySettings(useSettings.getState());
+                }}
+              />
+            </div>
+            {closeToTray && (
+              <div className="flex items-center justify-between">
+                <Label>Hide dock icon when closed</Label>
+                <Switch
+                  checked={hideDockOnTray}
+                  disabled={!trayIconEnabled}
+                  onCheckedChange={(newVal) => {
+                    setHideDockOnTrayInStore(newVal);
+                    pushTraySettings(useSettings.getState());
+                  }}
+                />
+              </div>
+            )}
+            {!trayIconEnabled && (
+              <p className="text-xs text-[var(--color-muted-foreground)]">
+                Turn on the tray icon to use these options.
+              </p>
             )}
           </>
         )}

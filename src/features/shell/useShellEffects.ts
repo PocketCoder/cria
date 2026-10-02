@@ -1,9 +1,9 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import { register, unregister } from '@/tauri/globalShortcut';
 import { useSettings } from '@/stores/settings';
 import { isMobilePlatform } from '@/lib/platform';
+import { pushTraySettings } from '@/lib/traySettings';
 import { nativeNotify } from '@/utils/notify';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { getDb } from '@/db';
@@ -63,15 +63,13 @@ export function useTrayQuickAdd(setShowQuickAdd: SetFlag): void {
  * Push the persisted tray settings to Rust on startup. Rust boots with its own
  * defaults (close to tray on, dock icon shown), so without this a saved "off"
  * is ignored until the toggle is touched again. The persist store hydrates
- * synchronously from localStorage, so it is already populated here.
+ * synchronously from localStorage, so it is already populated here. Close to
+ * tray and hide-dock are sent as false while the tray icon is off.
  */
 export function useTraySettingsSync(): void {
   useEffect(() => {
     if (isMobilePlatform()) return; // tray commands are desktop-only Rust-side
-    const { trayIconEnabled, closeToTray, hideDockOnTray } = useSettings.getState();
-    invoke('set_tray_visible', { visible: trayIconEnabled }).catch(() => {});
-    invoke('set_close_to_tray', { enabled: closeToTray }).catch(() => {});
-    invoke('set_hide_dock_on_tray', { enabled: hideDockOnTray }).catch(() => {});
+    pushTraySettings(useSettings.getState());
   }, []);
 }
 
