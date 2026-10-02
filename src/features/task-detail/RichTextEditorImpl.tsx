@@ -288,6 +288,8 @@ function EditView({
   // the doc state is already correct by the time our listener runs;
   // we just need to persist. Native `change` bubbles through the
   // editor DOM, so one listener at the root catches every checkbox.
+  // Goes through keyHandlersRef (like Cmd+Enter) so it calls the current
+  // onSave, not the one captured when the editor was created.
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom;
