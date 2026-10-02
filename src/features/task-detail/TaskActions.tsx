@@ -652,8 +652,20 @@ export function InlineRepeat({
     setMode(task.repeatMode);
   }, [task.repeatAfter, task.repeatMode]);
 
+  // Monthly mode ignores repeatAfter, so always store it as 0 there.
   const save = async (after: number, m: number) => {
-    await updateTask(task.localId, { repeatAfter: after, repeatMode: m });
+    await updateTask(task.localId, { repeatAfter: m === 1 ? 0 : after, repeatMode: m });
+  };
+
+  const pickMode = (m: number) => {
+    // Leaving monthly with the untouched 1-hour default would save a 1-hour
+    // repeat; seed 1 month instead.
+    if (m !== 1 && mode === 1 && value === 1 && unit === 'hour') {
+      setUnit('month');
+      void save(SECONDS.MONTH, m);
+      return;
+    }
+    void save(valueUnitToSeconds(value, unit), m);
   };
 
   // Monthly mode ignores repeatAfter (often 0), so it can't gate on that alone.
@@ -705,7 +717,7 @@ export function InlineRepeat({
             {([0, 1, 2] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => save(valueUnitToSeconds(value, unit), m)}
+                onClick={() => pickMode(m)}
                 className={cn(
                   'flex-1 rounded px-1.5 py-1 text-footnote transition-colors',
                   m === mode

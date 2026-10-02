@@ -234,4 +234,51 @@ describe('TaskDetail repeat row', () => {
       expect(t?.repeatAfter).toBe(0);
     });
   });
+
+  it.each([
+    ['From creation date', 0],
+    ['From completion date', 2],
+  ])('seeds one month when switching a monthly repeat to %s', async (label, mode) => {
+    const user = userEvent.setup();
+    const projectId = await seedProject(2, 'Bills');
+    const monthly = await createTask({
+      title: 'Pay rent',
+      projectLocalId: projectId,
+      repeatAfter: 0,
+      repeatMode: 1,
+    });
+    useUi.setState({ selectedTaskLocalId: monthly.localId });
+    renderWithProviders(<TaskDetail />);
+
+    await user.click(await screen.findByRole('button', { name: /^Repeat\s*Monthly$/ }));
+    await user.click(await screen.findByRole('button', { name: label }));
+
+    await waitFor(async () => {
+      const t = await getTaskByLocalId(monthly.localId);
+      expect(t?.repeatMode).toBe(mode);
+      expect(t?.repeatAfter).toBe(2_592_000);
+    });
+  });
+
+  it('clears the interval when switching an interval repeat to monthly', async () => {
+    const user = userEvent.setup();
+    const projectId = await seedProject(2, 'Bills');
+    const weekly = await createTask({
+      title: 'Water plants',
+      projectLocalId: projectId,
+      repeatAfter: 604_800,
+      repeatMode: 0,
+    });
+    useUi.setState({ selectedTaskLocalId: weekly.localId });
+    renderWithProviders(<TaskDetail />);
+
+    await user.click(await screen.findByRole('button', { name: /^Repeat\s*Every 7 days$/ }));
+    await user.click(await screen.findByRole('button', { name: 'Monthly (same day)' }));
+
+    await waitFor(async () => {
+      const t = await getTaskByLocalId(weekly.localId);
+      expect(t?.repeatMode).toBe(1);
+      expect(t?.repeatAfter).toBe(0);
+    });
+  });
 });

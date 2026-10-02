@@ -72,7 +72,20 @@ export function RecurrencePicker({
   const mode = repeatMode ?? 0;
   const summary = summarise(repeatAfter, repeatMode);
 
-  const apply = (v: number, u: Unit, m: number) => onChange(valueUnitToSeconds(v, u), m);
+  // Monthly mode ignores repeatAfter, so always emit 0 there.
+  const apply = (v: number, u: Unit, m: number) =>
+    onChange(m === 1 ? 0 : valueUnitToSeconds(v, u), m);
+
+  const pickMode = (m: number) => {
+    // Leaving monthly with the untouched 1-hour default would emit a 1-hour
+    // repeat; seed 1 month instead.
+    if (m !== 1 && mode === 1 && value === 1 && unit === 'hour') {
+      setUnit('month');
+      apply(1, 'month', m);
+      return;
+    }
+    apply(value, unit, m);
+  };
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -132,7 +145,7 @@ export function RecurrencePicker({
               <button
                 key={m}
                 type="button"
-                onClick={() => apply(value, unit, m)}
+                onClick={() => pickMode(m)}
                 className={cn(pickerRowClass, m === mode && summary && 'bg-[var(--color-muted)]')}
               >
                 <span className="min-w-0 flex-1 truncate">{REPEAT_MODE_LABELS[m]}</span>
