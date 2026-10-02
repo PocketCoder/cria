@@ -1,14 +1,13 @@
-import { useMemo, useState } from 'react';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { X, Loader2 } from 'lucide-react';
-import { parseFilterQuery } from '@/lib/filterQueryParser';
 import { FilterInput } from '@/components/FilterInput';
-import { createSavedFilter, updateSavedFilter } from '@/api/savedFilters';
-import { useOnline } from '@/hooks/useOnline';
 import { Switch } from '@/components/ui/switch';
 import type { SavedFilter } from '@/db/savedFilters';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import { DescribeFilter } from './DescribeFilter';
+import type { FilterForm } from './savedFilterLogic';
+import { useSavedFilterForm } from './useSavedFilterForm';
 
 /**
  * Create/edit a Vikunja saved filter. The query is validated live with the
@@ -22,69 +21,20 @@ export function SavedFilterModal({
   existing?: SavedFilter | null;
   onClose: () => void;
 }) {
-  const online = useOnline();
-  const aiAvailable = useAiAvailable();
-  const [title, setTitle] = useState(existing?.title ?? '');
-  const [description, setDescription] = useState(existing?.description ?? '');
-  const [query, setQuery] = useState(existing?.filterQuery ?? '');
-  const [includeNulls, setIncludeNulls] = useState(
-    existing?.filterIncludeNulls ?? false,
-  );
-  const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const parseError = useMemo(() => {
-    if (!query.trim()) return null;
-    try {
-      parseFilterQuery(query, new Date());
-      return null;
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    }
-  }, [query]);
-
-  const canSave =
-    online && !busy && title.trim().length > 0 && query.trim().length > 0 && !parseError;
-
-  const handleSave = async () => {
-    if (!canSave) return;
-    setBusy(true);
-    setSaveError(null);
-    try {
-      const input = {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        filter: query.trim(),
-        filterIncludeNulls: includeNulls,
-      };
-      if (existing) {
-        await updateSavedFilter(existing.serverId, input);
-      } else {
-        await createSavedFilter(input);
-      }
-      onClose();
-    } catch (err) {
-      console.error('[saved-filter] save failed:', err);
-      setSaveError(err instanceof Error ? err.message : 'Save failed');
-      setBusy(false);
-    }
-  };
+  const f = useSavedFilterForm(existing, onClose);
+  const heading = existing ? 'Edit filter' : 'New filter';
 
   return (
     <div
       className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={existing ? 'Edit filter' : 'New filter'}
+      aria-label={heading}
     >
       <BackdropDismiss onDismiss={onClose} />
-      <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
-      >
+      <div className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg">
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <h2 className="text-sm font-semibold">
-            {existing ? 'Edit filter' : 'New filter'}
-          </h2>
+          <h2 className="text-sm font-semibold">{heading}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -95,78 +45,13 @@ export function SavedFilterModal({
           </button>
         </header>
 
-        <div className="space-y-3 p-4">
-          <div>
-            <label htmlFor="saved-filter-title" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
-              Title
-            </label>
-            <input
-              id="saved-filter-title"
-              aria-label="Title"
-              type="text"
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. High priority"
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="saved-filter-query" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
-              Filter query
-            </label>
-            {aiAvailable && <DescribeFilter onQuery={setQuery} />}
-            <FilterInput
-              id="saved-filter-query"
-              value={query}
-              onChange={setQuery}
-              rows={3}
-              placeholder="done = false && priority >= 3"
-            />
-            {parseError ? (
-              <p className="mt-1 text-xs text-[var(--color-destructive)]">{parseError}</p>
-            ) : (
-              <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-                Fields: done, priority, percentDone, dueDate, startDate, endDate,
-                labels, assignees, project. Combine with && and ||.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="saved-filter-description" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
-              Description <span className="font-normal">(optional)</span>
-            </label>
-            <input
-              id="saved-filter-description"
-              aria-label="Description"
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]"
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">Include tasks without a value</p>
-              <p className="text-xs text-[var(--color-muted-foreground)]">
-                e.g. tasks with no due date when filtering by dueDate
-              </p>
-            </div>
-            <Switch checked={includeNulls} onCheckedChange={setIncludeNulls} />
-          </div>
-
-          {!online && (
-            <p className="text-xs text-[var(--color-warning,#b45309)]">
-              You're offline — saving filters needs a connection.
-            </p>
-          )}
-          {saveError && (
-            <p className="text-xs text-[var(--color-destructive)]">{saveError}</p>
-          )}
-        </div>
+        <SavedFilterFields
+          form={f.form}
+          setField={f.setField}
+          parseError={f.parseError}
+          online={f.online}
+          saveError={f.saveError}
+        />
 
         <footer className="flex justify-end gap-2 border-t border-[var(--color-border)] px-4 py-3">
           <button
@@ -178,15 +63,104 @@ export function SavedFilterModal({
           </button>
           <button
             type="button"
-            disabled={!canSave}
-            onClick={() => void handleSave()}
+            disabled={!f.canSave}
+            onClick={() => void f.save()}
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] disabled:opacity-50"
           >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {f.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {existing ? 'Save' : 'Create'}
           </button>
         </footer>
       </div>
+    </div>
+  );
+}
+
+function SavedFilterFields({
+  form,
+  setField,
+  parseError,
+  online,
+  saveError,
+}: {
+  form: FilterForm;
+  setField: <K extends keyof FilterForm>(key: K, value: FilterForm[K]) => void;
+  parseError: string | null;
+  online: boolean;
+  saveError: string | null;
+}) {
+  const aiAvailable = useAiAvailable();
+  const focusTitle = useFocusOnMount<HTMLInputElement>();
+  return (
+    <div className="space-y-3 p-4">
+      <div>
+        <label htmlFor="saved-filter-title" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+          Title
+        </label>
+        <input
+          id="saved-filter-title"
+          type="text"
+          ref={focusTitle}
+          value={form.title}
+          onChange={(e) => setField('title', e.target.value)}
+          placeholder="e.g. High priority"
+          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="saved-filter-query" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+          Filter query
+        </label>
+        {aiAvailable && <DescribeFilter onQuery={(q) => setField('query', q)} />}
+        <FilterInput
+          id="saved-filter-query"
+          value={form.query}
+          onChange={(q) => setField('query', q)}
+          rows={3}
+          placeholder="done = false && priority >= 3"
+        />
+        {parseError ? (
+          <p className="mt-1 text-xs text-[var(--color-destructive)]">{parseError}</p>
+        ) : (
+          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+            Fields: done, priority, percentDone, dueDate, startDate, endDate,
+            labels, assignees, project. Combine with && and ||.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="saved-filter-description" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+          Description <span className="font-normal">(optional)</span>
+        </label>
+        <input
+          id="saved-filter-description"
+          type="text"
+          value={form.description}
+          onChange={(e) => setField('description', e.target.value)}
+          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm">Include tasks without a value</p>
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            e.g. tasks with no due date when filtering by dueDate
+          </p>
+        </div>
+        <Switch checked={form.includeNulls} onCheckedChange={(v) => setField('includeNulls', v)} />
+      </div>
+
+      {!online && (
+        <p className="text-xs text-[var(--color-warning,#b45309)]">
+          You're offline — saving filters needs a connection.
+        </p>
+      )}
+      {saveError && (
+        <p className="text-xs text-[var(--color-destructive)]">{saveError}</p>
+      )}
     </div>
   );
 }
