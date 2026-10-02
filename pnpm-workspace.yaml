@@ -9,3 +9,8 @@ allowBuilds:
 # reinstall and aborts on the modules-dir purge prompt. Deps are installed by
 # the caller already, so skip the check.
 verifyDepsBeforeRun: false
+# Supply-chain hardening: don't install versions published in the last 7 days
+# (minutes, so 10080 = 7d), and refuse packages whose provenance/signature
+# trust is weaker than an earlier release.
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
