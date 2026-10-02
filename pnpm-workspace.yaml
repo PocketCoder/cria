@@ -10,7 +10,7 @@ allowBuilds:
 # the caller already, so skip the check.
 verifyDepsBeforeRun: false
 # Supply-chain hardening: don't install versions published in the last 7 days
-# (minutes, so 10080 = 7d), and refuse packages whose provenance/signature
-# trust is weaker than an earlier release.
+# (minutes, so 10080 = 7d). `trustPolicy: no-downgrade` was tried and dropped:
+# it rejects old-major backports (nanoid 3, semver 6, vite 5, ...) that lack
+# provenance, which broke `pnpm install --frozen-lockfile` in CI.
 minimumReleaseAge: 10080
-trustPolicy: no-downgrade
