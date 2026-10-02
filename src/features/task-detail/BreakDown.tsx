@@ -99,8 +99,9 @@ export function BreakDown({
         </button>
       </div>
       {suggestions.map((s, i) => (
-        <label key={i} className="flex items-center gap-2 py-1 text-[13.5px]">
+        <div key={i} className="flex items-center gap-2 py-1 text-[13.5px]">
           <input
+            aria-label={`Include ${s.title}`}
             type="checkbox"
             checked={s.include}
             onChange={(e) =>
@@ -109,6 +110,7 @@ export function BreakDown({
             className="h-3.5 w-3.5 shrink-0 accent-[var(--color-primary)]"
           />
           <input
+            aria-label="Subtask"
             type="text"
             value={s.title}
             onChange={(e) =>
@@ -119,7 +121,7 @@ export function BreakDown({
               !s.include && 'text-[var(--color-muted-foreground)] line-through',
             )}
           />
-        </label>
+        </div>
       ))}
       {error && <p className="text-[12px] text-[var(--color-destructive)]">{error}</p>}
       <div className="mt-1 flex justify-end">

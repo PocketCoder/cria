@@ -50,6 +50,7 @@ export function DescribeFilter({ onQuery }: { onQuery: (q: string) => void }) {
     <div className="mb-2">
       <div className="flex items-center gap-2">
         <input
+          aria-label="Describe the filter"
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}

@@ -156,6 +156,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
       {(phase === 'input' || phase === 'thinking') && (
         <div className="space-y-3">
           <textarea
+            aria-label="Everything on your mind"
             ref={textRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -218,6 +219,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
                 />
                 <div className="min-w-0 flex-1">
                   <input
+                    aria-label="Task"
                     type="text"
                     value={d.line}
                     onChange={(e) => updateDraft(d.id, { line: e.target.value })}
@@ -306,8 +308,9 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
     >
       {isMobile ? (
         <>
-          <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
+          <div role="presentation" className="sheet-backdrop absolute inset-0" onClick={onClose} />
           <div
+            role="presentation"
             className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--color-card)] px-4 pb-8 pt-2 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
