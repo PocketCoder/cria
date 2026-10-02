@@ -1,27 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLatestRef } from '../../lib/useLatestRef';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Star,
-  Ellipsis,
-  X,
-  Plus,
-  Calendar as CalendarIcon,
-  Bell,
-  Paperclip,
-  MessageSquare,
-  RefreshCw,
-  Check,
-  ChevronRight,
-  Trash2,
-  Search,
-  Link2,
-} from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Check, Trash2, Search } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { onShortcut } from '@/lib/shortcutBus';
 import { getTaskByLocalId, updateTask, moveTask, searchTasks, deleteTask } from '@/db/tasks';
-import { getProjectByLocalId, listProjects } from '@/db/projects';
+import { getProjectByLocalId } from '@/db/projects';
 import { searchProjectUsers } from '@/api/users';
 import { toggleTaskLabel } from '@/db/labels';
 import { subscribe } from '@/db/bus';
@@ -34,33 +17,18 @@ import {
   addRelation,
   removeRelation,
 } from '@/db/relations';
-import { listRemindersForTask, type TaskReminder, type ReminderRelation } from '@/db/reminders';
-import { formatRelativeReminder } from '@/lib/period';
-import { useDateFormatter, toCalendarDate, hasTimeOfDay, type DateFormatters } from '@/lib/dateFormat';
+import { listRemindersForTask, type TaskReminder } from '@/db/reminders';
+import { useDateFormatter } from '@/lib/dateFormat';
 import { RichTextEditor } from './RichTextEditor';
-import { TaskActions, InlineRepeat } from './TaskActions';
-import { COLOR_PRESETS } from '@/lib/colorPresets';
-import { AttachmentList } from './AttachmentList';
-import { ReminderList } from './ReminderList';
-import { CommentSection } from './CommentSection';
-import { RelatedTasks } from './RelatedTasks';
 import { toggleTaskDone } from '@/features/tasks/taskRowHelpers';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { PrioritySelect } from '@/components/ui/priority-select';
-import { PRIORITY_LABELS, priorityColor } from '@/components/ui/priority';
 import type { Task } from '@/domain/task';
-import type { Label } from '@/domain/label';
-import type { Project } from '@/domain/project';
 import { getAuthSnapshot } from '@/auth/store';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
-
-type OpenSection = 'reminders' | 'attachments' | 'comments' | 'related' | 'repeat' | 'more' | null;
-
-/** Which chip picker is open. Controlled so keyboard shortcuts (d/p/m/l/c) can
- * open the same popovers the chips open on click. */
-type Picker = 'due' | 'priority' | 'project' | 'label' | 'colour' | null;
+import { ChipRow } from './TaskChips';
+import { DetailCard } from './DetailCard';
+import { DetailChrome, DetailSections, MarkDoneButton, TaskTitle } from './DetailParts';
+import { countRelated, taskWebUrl, type OpenSection, type Picker } from './taskDetailLogic';
 
 export function TaskDetail() {
   // **All hooks before any early return** — React's hook-order rule.
@@ -132,56 +100,17 @@ export function TaskDetail() {
   const { data: labels = [] } = useTaskLabels(selectedId);
   const { data: allLabels = [] } = useLabels();
 
-  // Fixed shortcut set: copy family + "open project" (upstream u / . / ⌘.).
-  useEffect(() => {
-    if (!task) return;
-    const copyText = async (text: string) => {
-      try {
-        await navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      } catch {
-        /* clipboard may be unavailable */
-      }
-    };
-    const url = () => {
-      const { serverUrl } = getAuthSnapshot();
-      return task.serverId && serverUrl
-        ? `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`
-        : null;
-    };
-    const id = task.identifier ?? task.title;
-    const subs = [
-      onShortcut('task.copyId', () => void copyText(id)),
-      onShortcut('task.copyIdTitle', () => void copyText(`${id} ${task.title}`)),
-      onShortcut('task.copyIdTitleUrl', () =>
-        void copyText(`${id} ${task.title} ${url() ?? ''}`.trim()),
-      ),
-      onShortcut('task.copyUrl', () => void copyText(url() ?? task.title)),
-      onShortcut('task.openProject', () =>
-        useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
-      ),
-      // Direct actions.
-      onShortcut('task.done', () => void toggleTaskDone(task)),
-      onShortcut('task.favorite', () =>
-        void updateTask(task.localId, { isFavorite: !task.isFavorite }),
-      ),
-      onShortcut('task.delete', () => {
-        // Mirror TaskActions' "Delete forever?" confirmation — the mouse
-        // path never deletes in one step, so the shortcut shouldn't either.
-        if (!window.confirm('Delete this task forever?')) return;
-        void deleteTask(task.localId).then(() => setSelectedTask(null));
-      }),
-      // Picker-opening actions — open the same popover/section the mouse uses.
-      onShortcut('task.priority', () => setPicker('priority')),
-      onShortcut('task.dueDate', () => setPicker('due')),
-      onShortcut('task.move', () => setPicker('project')),
-      onShortcut('task.labels', () => setPicker('label')),
-      onShortcut('task.color', () => setPicker('colour')),
-      onShortcut('task.assign', () => setOpenSection('more')),
-    ];
-    return () => subs.forEach((u) => u());
-  });
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard may be unavailable */
+    }
+  };
+
+  useTaskShortcuts(task, { copyText, setPicker, setOpenSection, setSelectedTask });
 
   const { data: taskProject } = useQuery({
     queryKey: ['project-of-task', task?.projectLocalId ?? null],
@@ -215,9 +144,7 @@ export function TaskDetail() {
     staleTime: 30_000,
     queryFn: () => listRelationsForTask(task!.localId),
   });
-  const relatedCount = relations.filter(
-    (r) => r.kind !== 'subtask' && r.kind !== 'parenttask',
-  ).length;
+  const relatedCount = countRelated(relations);
 
   // No selection: the inspector collapses entirely (both platforms) so the
   // content pane reclaims the width — no empty placeholder column.
@@ -245,35 +172,8 @@ export function TaskDetail() {
     );
   }
 
-  const handleTitleEdit = () => {
-    setTitleDraft(task.title);
-    setTitleEditing(true);
-  };
-
-  const handleTitleSave = async () => {
-    const trimmed = titleDraft.trim();
-    if (trimmed && trimmed !== task.title) {
-      await updateTask(task.localId, { title: trimmed });
-    }
-    setTitleEditing(false);
-  };
-
-  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      void handleTitleSave();
-    } else if (e.key === 'Escape') {
-      e.stopPropagation();
-      setTitleEditing(false);
-    }
-  };
-
   const handleDescriptionSave = async (next: string) => {
     await updateTask(task.localId, { description: next });
-  };
-
-  const handleDeleted = () => {
-    setSelectedTask(null);
   };
 
   const handleToggleLabel = async (labelLocalId: string) => {
@@ -291,67 +191,16 @@ export function TaskDetail() {
 
   const handleCopyLink = async () => {
     const { serverUrl } = getAuthSnapshot();
-    const text =
-      task.serverId && serverUrl
-        ? `${serverUrl.replace(/\/+$/, '')}/tasks/${task.serverId}`
-        : task.title;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard may be unavailable */
-    }
+    await copyText(taskWebUrl(task, serverUrl) ?? task.title);
   };
 
   const chrome = (
-    <div className="flex items-center gap-0.5">
-      <button
-        type="button"
-        onClick={() => void updateTask(task.localId, { isFavorite: !task.isFavorite })}
-        aria-label={task.isFavorite ? 'Unfavourite' : 'Favourite'}
-        className="rounded p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
-      >
-        <Star
-          className="h-[15px] w-[15px]"
-          style={{ color: task.isFavorite ? 'var(--color-warning)' : undefined }}
-          fill={task.isFavorite ? 'currentColor' : 'none'}
-        />
-      </button>
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label="More actions"
-            className="rounded p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
-          >
-            <Ellipsis className="h-[15px] w-[15px]" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={6} className="w-44 p-1">
-          <button
-            type="button"
-            onClick={() => void handleCopyLink()}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer"
-          >
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-[var(--color-success)]" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
-            {copied ? 'Copied!' : 'Copy link'}
-          </button>
-        </PopoverContent>
-      </Popover>
-      <button
-        type="button"
-        onClick={close}
-        aria-label="Close details"
-        className="rounded p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
-      >
-        <X className="h-[15px] w-[15px]" />
-      </button>
-    </div>
+    <DetailChrome
+      task={task}
+      copied={copied}
+      onCopyLink={() => void handleCopyLink()}
+      onClose={close}
+    />
   );
 
   return (
@@ -363,25 +212,13 @@ export function TaskDetail() {
           </p>
         ) : null}
 
-        {titleEditing ? (
-          <input
-            type="text"
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={() => void handleTitleSave()}
-            onKeyDown={handleTitleKeyDown}
-            autoFocus
-            className="mb-[18px] w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-          />
-        ) : (
-          <h2
-            className="mb-[18px] cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
-            onClick={handleTitleEdit}
-            title="Click to edit"
-          >
-            {task.title}
-          </h2>
-        )}
+        <TaskTitle
+          task={task}
+          editing={titleEditing}
+          setEditing={setTitleEditing}
+          draft={titleDraft}
+          setDraft={setTitleDraft}
+        />
 
         <ChipRow
           task={task}
@@ -410,510 +247,71 @@ export function TaskDetail() {
 
         <SubtasksBlock taskLocalId={task.localId} />
 
-        <div className="mt-5 border-t border-[var(--color-border)] pt-1.5">
-          <CollapsedRow
-            icon={<Bell className="h-[15px] w-[15px]" />}
-            label="Reminders"
-            value={reminderSummary(reminders, dateFmt)}
-            expanded={openSection === 'reminders'}
-            onToggle={() =>
-              setOpenSection(openSection === 'reminders' ? null : 'reminders')
-            }
-          >
-            <ReminderList taskLocalId={task.localId} hideHeader />
-          </CollapsedRow>
-          <CollapsedRow
-            icon={<Paperclip className="h-[15px] w-[15px]" />}
-            label="Attachments"
-            value={attachments.length > 0 ? `${attachments.length}` : 'None'}
-            expanded={openSection === 'attachments'}
-            onToggle={() =>
-              setOpenSection(openSection === 'attachments' ? null : 'attachments')
-            }
-          >
-            <AttachmentList
-              taskLocalId={task.localId}
-              taskServerId={task.serverId}
-              hideHeader
-            />
-          </CollapsedRow>
-          <CollapsedRow
-            icon={<MessageSquare className="h-[15px] w-[15px]" />}
-            label="Comments"
-            value={comments.length > 0 ? `${comments.length}` : 'None'}
-            expanded={openSection === 'comments'}
-            onToggle={() =>
-              setOpenSection(openSection === 'comments' ? null : 'comments')
-            }
-          >
-            <CommentSection
-              taskLocalId={task.localId}
-              taskServerId={task.serverId}
-              mentionSearch={mentionSearch}
-              hideHeader
-            />
-          </CollapsedRow>
-          <CollapsedRow
-            icon={<Link2 className="h-[15px] w-[15px]" />}
-            label="Related"
-            value={relatedCount > 0 ? `${relatedCount}` : 'None'}
-            expanded={openSection === 'related'}
-            onToggle={() =>
-              setOpenSection(openSection === 'related' ? null : 'related')
-            }
-          >
-            <RelatedTasks
-              taskLocalId={task.localId}
-              taskServerId={task.serverId}
-              hideHeader
-              excludeSubtasks
-            />
-          </CollapsedRow>
-          <CollapsedRow
-            icon={<RefreshCw className="h-[15px] w-[15px]" />}
-            label="Repeat"
-            value={repeatLabel(task)}
-            expanded={openSection === 'repeat'}
-            onToggle={() =>
-              setOpenSection(openSection === 'repeat' ? null : 'repeat')
-            }
-          >
-            <InlineRepeat
-              task={task}
-              expanded={openSection === 'repeat'}
-              onToggle={() => setOpenSection(openSection === 'repeat' ? null : 'repeat')}
-            />
-          </CollapsedRow>
-          <CollapsedRow
-            icon={<Ellipsis className="h-[15px] w-[15px]" />}
-            label="More"
-            value={undefined}
-            hint="progress · move · duplicate"
-            expanded={openSection === 'more'}
-            onToggle={() =>
-              setOpenSection(openSection === 'more' ? null : 'more')
-            }
-          >
-            <div className="px-1 pb-1">
-              <TaskActions task={task} onDeleted={handleDeleted} />
-            </div>
-          </CollapsedRow>
-        </div>
+        <DetailSections
+          task={task}
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+          reminders={reminders}
+          attachmentCount={attachments.length}
+          commentCount={comments.length}
+          relatedCount={relatedCount}
+          mentionSearch={mentionSearch}
+          dateFmt={dateFmt}
+          onDeleted={() => setSelectedTask(null)}
+        />
 
-        <button
-          type="button"
-          onClick={() => void toggleTaskDone(task)}
-          className="mt-[22px] flex w-full items-center justify-center gap-2 rounded-[9px] bg-[var(--color-inverse)] px-3 py-[11px] text-[13.5px] font-medium text-[var(--color-inverse-foreground)] transition-opacity hover:opacity-90 cursor-pointer"
-        >
-          <Check className="h-[15px] w-[15px]" strokeWidth={2} />
-          {task.done ? 'Mark not done' : 'Mark done'}
-        </button>
+        <MarkDoneButton task={task} />
       </div>
     </DetailCard>
   );
 }
 
-/* ─── chip row ─── */
-
-function Chip({
-  children,
-  onClick,
-  dashed = false,
-  className,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  dashed?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-[5px] text-[12.5px] transition-colors cursor-pointer',
-        dashed
-          ? 'border border-dashed border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
-          : 'border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-foreground)] hover:bg-[var(--color-muted)]',
-        className,
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Dot({ color }: { color: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="h-1.5 w-1.5 shrink-0 rounded-full"
-      style={{ background: color }}
-    />
-  );
-}
-
-function ChipRow({
-  task,
-  labels,
-  project,
-  allLabels,
-  picker,
-  setPicker,
-  onToggleLabel,
-  onSetDate,
-  onMoveProject,
-  onSetPriority,
-  onSetColor,
-}: {
-  task: Task;
-  labels: Label[];
-  project: Project | null;
-  allLabels: Label[];
-  picker: Picker;
-  setPicker: (p: Picker) => void;
-  onToggleLabel: (labelLocalId: string) => Promise<void>;
-  onSetDate: (field: 'dueDate' | 'startDate' | 'endDate', value: string | null) => Promise<void>;
-  onMoveProject: (projectLocalId: string) => void;
-  onSetPriority: (p: number) => void;
-  onSetColor: (hex: string) => void;
-}) {
-
-  return (
-    <div className="mb-[22px] flex flex-wrap gap-1.5">
-      <ProjectChip
-        project={project}
-        onMove={onMoveProject}
-        open={picker === 'project'}
-        onOpenChange={(o) => setPicker(o ? 'project' : null)}
-      />
-
-      <Popover open={picker === 'due'} onOpenChange={(o) => setPicker(o ? 'due' : null)}>
-        <PopoverTrigger asChild>
-          <Chip>
-            <CalendarIcon className="h-3 w-3" />
-            {task.dueDate ? formatDueChip(task.dueDate) : 'Due date'}
-          </Chip>
-        </PopoverTrigger>
-        <PopoverContent align="start" sideOffset={6} className="w-auto p-2">
-          <Calendar
-            selected={task.dueDate ? toCalendarDate(task.dueDate) : undefined}
-            onSelect={(date) => {
-              void onSetDate(
-                'dueDate',
-                date ? new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())).toISOString() : null,
-              );
-            }}
-            onClear={() => void onSetDate('dueDate', null)}
-          />
-        </PopoverContent>
-      </Popover>
-
-      <Popover open={picker === 'priority'} onOpenChange={(o) => setPicker(o ? 'priority' : null)}>
-        <PopoverTrigger asChild>
-          <Chip>
-            {task.priority > 2 ? (
-              <span
-                className="h-3 w-[3px] shrink-0 rounded-[2px]"
-                style={{ background: priorityColor(task.priority) }}
-              />
-            ) : null}
-            {PRIORITY_LABELS[task.priority] ?? 'Priority'}
-          </Chip>
-        </PopoverTrigger>
-        <PopoverContent align="start" sideOffset={6} className="w-48 p-1">
-          <PrioritySelect
-            value={task.priority}
-            onChange={(p) => void onSetPriority(p)}
-          />
-        </PopoverContent>
-      </Popover>
-
-      {labels.map((label) => (
-        <LabelPickerPopover
-          key={label.localId}
-          trigger={
-            <Chip onClick={undefined}>
-              <Dot color={label.hexColor || 'var(--color-muted-foreground)'} />
-              {label.title}
-            </Chip>
-          }
-          labels={labels}
-          allLabels={allLabels}
-          onToggleLabel={onToggleLabel}
-        />
-      ))}
-
-      <AddChip
-        labels={labels}
-        allLabels={allLabels}
-        onToggleLabel={onToggleLabel}
-        onSetDate={onSetDate}
-        onSetColor={onSetColor}
-        task={task}
-        picker={picker}
-        setPicker={setPicker}
-      />
-    </div>
-  );
-}
-
-function ProjectChip({
-  project,
-  onMove,
-  open,
-  onOpenChange,
-}: {
-  project: Project | null;
-  onMove: (projectLocalId: string) => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { data: projects = [] } = useQuery({
-    queryKey: ['all-projects'],
-    queryFn: listProjects,
-    staleTime: 30_000,
+/** Fixed shortcut set: copy family + "open project" (upstream u / . / ⌘.) plus direct actions. */
+function useTaskShortcuts(
+  task: Task | null | undefined,
+  actions: {
+    copyText: (text: string) => Promise<void>;
+    setPicker: (p: Picker) => void;
+    setOpenSection: (s: OpenSection) => void;
+    setSelectedTask: (id: string | null) => void;
+  },
+): void {
+  const { copyText, setPicker, setOpenSection, setSelectedTask } = actions;
+  useEffect(() => {
+    if (!task) return;
+    const url = () => taskWebUrl(task, getAuthSnapshot().serverUrl);
+    const id = task.identifier ?? task.title;
+    const subs = [
+      onShortcut('task.copyId', () => void copyText(id)),
+      onShortcut('task.copyIdTitle', () => void copyText(`${id} ${task.title}`)),
+      onShortcut('task.copyIdTitleUrl', () =>
+        void copyText(`${id} ${task.title} ${url() ?? ''}`.trim()),
+      ),
+      onShortcut('task.copyUrl', () => void copyText(url() ?? task.title)),
+      onShortcut('task.openProject', () =>
+        useUi.getState().setActiveView({ kind: 'project', localId: task.projectLocalId }),
+      ),
+      // Direct actions.
+      onShortcut('task.done', () => void toggleTaskDone(task)),
+      onShortcut('task.favorite', () =>
+        void updateTask(task.localId, { isFavorite: !task.isFavorite }),
+      ),
+      onShortcut('task.delete', () => {
+        // Mirror TaskActions' "Delete forever?" confirmation — the mouse
+        // path never deletes in one step, so the shortcut shouldn't either.
+        if (!window.confirm('Delete this task forever?')) return;
+        void deleteTask(task.localId).then(() => setSelectedTask(null));
+      }),
+      // Picker-opening actions — open the same popover/section the mouse uses.
+      onShortcut('task.priority', () => setPicker('priority')),
+      onShortcut('task.dueDate', () => setPicker('due')),
+      onShortcut('task.move', () => setPicker('project')),
+      onShortcut('task.labels', () => setPicker('label')),
+      onShortcut('task.color', () => setPicker('colour')),
+      onShortcut('task.assign', () => setOpenSection('more')),
+    ];
+    return () => subs.forEach((u) => u());
   });
-  return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Chip>
-          <Dot color={project?.hexColor || 'var(--color-muted-foreground)'} />
-          {project?.title ?? 'Project'}
-        </Chip>
-      </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-56 p-1">
-        <div className="flex max-h-64 flex-col overflow-y-auto">
-          {projects.map((p) => (
-            <button
-              key={p.localId}
-              type="button"
-              onClick={() => void onMove(p.localId)}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer',
-                p.localId === project?.localId && 'bg-[var(--color-muted)]',
-              )}
-            >
-              <Dot color={p.hexColor || 'var(--color-muted-foreground)'} />
-              <span className="min-w-0 flex-1 truncate">{p.title}</span>
-              {p.localId === project?.localId ? (
-                <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-              ) : null}
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function LabelPickerPopover({
-  trigger,
-  labels,
-  allLabels,
-  onToggleLabel,
-}: {
-  trigger: React.ReactNode;
-  labels: Label[];
-  allLabels: Label[];
-  onToggleLabel: (labelLocalId: string) => Promise<void>;
-}) {
-  const applied = new Set(labels.map((l) => l.localId));
-  return (
-    <Popover>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-56 p-1">
-        <div className="flex max-h-64 flex-col overflow-y-auto">
-          {allLabels.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-[var(--color-muted-foreground)]">
-              No labels yet — create one in the sidebar.
-            </p>
-          ) : (
-            allLabels.map((label) => {
-              const on = applied.has(label.localId);
-              return (
-                <button
-                  key={label.localId}
-                  type="button"
-                  onClick={() => void onToggleLabel(label.localId)}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer',
-                    on && 'bg-[var(--color-muted)]',
-                  )}
-                >
-                  <Dot color={label.hexColor || 'var(--color-muted-foreground)'} />
-                  <span className="min-w-0 flex-1 truncate">{label.title}</span>
-                  {on ? <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : null}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function AddChip({
-  labels,
-  allLabels,
-  onToggleLabel,
-  onSetDate,
-  onSetColor,
-  task,
-  picker,
-  setPicker,
-}: {
-  labels: Label[];
-  allLabels: Label[];
-  onToggleLabel: (labelLocalId: string) => Promise<void>;
-  onSetDate: (field: 'dueDate' | 'startDate' | 'endDate', value: string | null) => Promise<void>;
-  onSetColor: (hex: string) => void;
-  task: Task;
-  picker: Picker;
-  setPicker: (p: Picker) => void;
-}) {
-  const [viewState, setView] = useState<'menu' | 'start' | 'end' | 'colour' | 'label'>('menu');
-  const [openState, setOpen] = useState(false);
-
-  // The `label` / `colour` keyboard shortcuts route through `picker`: open the
-  // popover straight to that sub-view instead of the menu. Derived from the
-  // prop (no effect) so there is no stale first paint.
-  const forced = picker === 'label' || picker === 'colour' ? picker : null;
-  const view = forced ?? viewState;
-  const open = openState || forced !== null;
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (o) {
-          // Mouse-opened (no pending picker) → start at the menu.
-          if (picker !== 'label' && picker !== 'colour') setView('menu');
-        } else {
-          setPicker(null);
-        }
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Chip dashed>
-          <Plus className="h-3 w-3" />
-          Add
-        </Chip>
-      </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-64 p-1">
-        {view === 'menu' ? (
-          <div className="flex flex-col">
-            {[
-              { key: 'start' as const, label: 'Start date' },
-              { key: 'end' as const, label: 'End date' },
-              { key: 'colour' as const, label: 'Colour' },
-              { key: 'label' as const, label: 'Label' },
-            ].map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setView(item.key)}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer"
-              >
-                <ChevronRight className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
-                {item.label}
-              </button>
-            ))}
-          </div>
-        ) : view === 'colour' ? (
-          <div className="p-1">
-            <div className="grid grid-cols-5 gap-1.5">
-              {COLOR_PRESETS.map((hex) => (
-                <button
-                  key={hex}
-                  type="button"
-                  onClick={() => void onSetColor(hex)}
-                  aria-label={hex}
-                  className={cn(
-                    'h-7 w-7 rounded-md border border-[var(--color-border)] transition-transform hover:scale-110 cursor-pointer',
-                    task.hexColor === hex && 'ring-2 ring-[var(--color-ring)]',
-                  )}
-                  style={{ background: hex }}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => void onSetColor(null as unknown as string)}
-              className="mt-2 w-full rounded-md px-2 py-1.5 text-left text-[13.5px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] cursor-pointer"
-            >
-              Remove colour
-            </button>
-          </div>
-        ) : view === 'label' ? (
-          <LabelList labels={labels} allLabels={allLabels} onToggleLabel={onToggleLabel} />
-        ) : (
-          <div className="p-2">
-            <Calendar
-              selected={
-                view === 'start' && task.startDate
-                  ? toCalendarDate(task.startDate)
-                  : view === 'end' && task.endDate
-                    ? toCalendarDate(task.endDate)
-                    : undefined
-              }
-              onSelect={(date) => {
-                void onSetDate(
-                  view === 'start' ? 'startDate' : 'endDate',
-                  date ? new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())).toISOString() : null,
-                );
-              }}
-              onClear={() =>
-                void onSetDate(view === 'start' ? 'startDate' : 'endDate', null)
-              }
-            />
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function LabelList({
-  labels,
-  allLabels,
-  onToggleLabel,
-}: {
-  labels: Label[];
-  allLabels: Label[];
-  onToggleLabel: (labelLocalId: string) => Promise<void>;
-}) {
-  const applied = new Set(labels.map((l) => l.localId));
-  return (
-    <div className="flex max-h-64 flex-col overflow-y-auto">
-      {allLabels.length === 0 ? (
-        <p className="px-2 py-1.5 text-xs text-[var(--color-muted-foreground)]">
-          No labels yet — create one in the sidebar.
-        </p>
-      ) : (
-        allLabels.map((label) => {
-          const on = applied.has(label.localId);
-          return (
-            <button
-              key={label.localId}
-              type="button"
-              onClick={() => void onToggleLabel(label.localId)}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-[var(--color-muted)] cursor-pointer',
-                on && 'bg-[var(--color-muted)]',
-              )}
-            >
-              <Dot color={label.hexColor || 'var(--color-muted-foreground)'} />
-              <span className="min-w-0 flex-1 truncate">{label.title}</span>
-              {on ? <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : null}
-            </button>
-          );
-        })
-      )}
-    </div>
-  );
 }
 
 /* ─── subtasks ─── */
@@ -1078,209 +476,5 @@ function SubtasksBlock({ taskLocalId }: { taskLocalId: string }) {
         </button>
       )}
     </section>
-  );
-}
-
-/* ─── collapsed rows ─── */
-
-function CollapsedRow({
-  icon,
-  label,
-  value,
-  hint,
-  expanded,
-  onToggle,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value?: string;
-  hint?: string;
-  expanded: boolean;
-  onToggle: () => void;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="border-t border-[var(--color-border)] py-1">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-2.5 rounded-[7px] px-1.5 py-2 text-left text-[13.5px] text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer"
-      >
-        <span className="shrink-0 text-[var(--color-muted-foreground)]">{icon}</span>
-        <span className="flex-1">{label}</span>
-        {hint ? (
-          <span className="text-[11.5px] text-[var(--color-muted-foreground)]">{hint}</span>
-        ) : value ? (
-          <span className="text-xs text-[var(--color-muted-foreground)]">{value}</span>
-        ) : null}
-        <ChevronRight
-          className={cn(
-            'h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)] transition-transform',
-            expanded && 'rotate-90',
-          )}
-        />
-      </button>
-      {expanded ? <div className="pb-1">{children}</div> : null}
-    </div>
-  );
-}
-
-/* ─── helpers ─── */
-
-function formatDueChip(iso: string): string {
-  try {
-    const base = format(toCalendarDate(iso), 'EEE d MMM');
-    return hasTimeOfDay(iso) ? `${base}, ${format(new Date(iso), 'HH:mm')}` : base;
-  } catch {
-    return iso;
-  }
-}
-
-function reminderSummary(reminders: TaskReminder[], fmt: DateFormatters): string {
-  if (reminders.length === 0) return 'None';
-  const r = reminders[0]!;
-  if (r.relativePeriod != null && r.relativeTo) {
-    return formatRelativeReminder(r.relativePeriod, r.relativeTo as ReminderRelation);
-  }
-  if (r.reminderAt) return fmt.formatDateTime(r.reminderAt);
-  return 'Reminder';
-}
-
-function repeatLabel(task: Task): string {
-  if (task.repeatAfter <= 0) return 'Never';
-  if (task.repeatMode === 1) return 'Monthly';
-  const s = task.repeatAfter;
-  if (s >= 2592000 && s % 2592000 === 0) return `Every ${s / 2592000} month${s / 2592000 > 1 ? 's' : ''}`;
-  if (s >= 86400 && s % 86400 === 0) return `Every ${s / 86400} day${s / 86400 > 1 ? 's' : ''}`;
-  if (s >= 3600 && s % 3600 === 0) return `Every ${s / 3600} hour${s / 3600 > 1 ? 's' : ''}`;
-  return `Every ${s}s`;
-}
-
-/**
- * The inspector chrome: a permanent right-hand column on desktop (in-flow
- * flex item beside the list) and an iOS-style sheet on mobile. The chrome
- * strip (favourite / overflow / close) renders at the top, right-aligned.
- */
-function DetailCard({
-  onClose,
-  header,
-  cardRef,
-  children,
-}: {
-  onClose: () => void;
-  header?: React.ReactNode;
-  cardRef?: React.Ref<HTMLElement>;
-  children: React.ReactNode;
-}) {
-  const isMobile = useIsMobile();
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const [sheetOffset, setSheetOffset] = useState(0);
-  const offsetRef = useRef(0);
-  const onCloseRef = useLatestRef(onClose);
-
-  useEffect(() => {
-    if (!isMobile) return;
-    const el = sheetRef.current;
-    if (!el) return;
-
-    const THRESHOLD = 8;
-    let startX = 0;
-    let startY = 0;
-    let atTop = false;
-    let dragging = false;
-    let decided = false;
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      startX = e.touches[0]!.clientX;
-      startY = e.touches[0]!.clientY;
-      atTop = el.scrollTop <= 0;
-      dragging = false;
-      decided = false;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      if (!dragging) {
-        if (decided || !atTop) return;
-        const dx = e.touches[0]!.clientX - startX;
-        const dy = e.touches[0]!.clientY - startY;
-        if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
-        if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) {
-          decided = true;
-          return;
-        }
-        dragging = true;
-        decided = true;
-        startY = e.touches[0]!.clientY;
-      }
-      e.preventDefault();
-      const dy = Math.max(0, e.touches[0]!.clientY - startY);
-      offsetRef.current = dy;
-      setSheetOffset(dy);
-    };
-
-    const onTouchEnd = () => {
-      if (!dragging) return;
-      dragging = false;
-      const dy = offsetRef.current;
-      offsetRef.current = 0;
-      if (dy > 120) onCloseRef.current();
-      else setSheetOffset(0);
-    };
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd);
-    el.addEventListener('touchcancel', onTouchEnd);
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-      el.removeEventListener('touchcancel', onTouchEnd);
-    };
-  }, [isMobile, onCloseRef]);
-
-  return (
-    <>
-      {isMobile && (
-        <div className="sheet-backdrop fixed inset-0 z-40" onClick={onClose} />
-      )}
-      <aside
-        ref={cardRef}
-        // Desktop is a docked side panel, not a modal: useShortcuts suppresses
-        // every shortcut while any [role="dialog"] exists, so a dialog role
-        // here would kill the task shortcuts. Mobile is a modal sheet.
-        role={isMobile ? 'dialog' : 'complementary'}
-        aria-label="Task details"
-        className={cn(
-          'flex flex-col overflow-hidden',
-          isMobile
-            ? 'fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-2xl bg-[var(--color-card)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)] animate-[sheet-up_350ms_var(--spring-snappy)]'
-            : 'relative w-[372px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-background)]',
-        )}
-        style={isMobile && sheetOffset > 0 ? { transform: `translateY(${sheetOffset}px)`, transition: 'none' } : undefined}
-      >
-        <div ref={sheetRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {isMobile && (
-            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
-          )}
-          <header className="flex shrink-0 items-center justify-end px-3.5 py-[13px]">
-            {header ?? (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close details"
-                className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </header>
-          {children}
-        </div>
-      </aside>
-    </>
   );
 }
