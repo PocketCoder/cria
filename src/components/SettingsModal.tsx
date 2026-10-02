@@ -72,6 +72,16 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
     };
   }, [user]);
 
+  // Escape closes the modal, unless something inside already handled it
+  // (Radix selects/popovers and inline edits call preventDefault).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
   const pushSettings = (patch: UserSettingsInput) => {
     settingsRef.current = {
       ...settingsRef.current,

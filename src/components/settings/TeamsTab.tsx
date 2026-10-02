@@ -56,6 +56,7 @@ function TeamRow({ teamId, name, disabled }: { teamId: number; name: string; dis
                 mutate.mutate(() => renameTeam(teamId, draft.trim()));
                 setRenaming(false);
               } else if (e.key === 'Escape') {
+                e.preventDefault(); // cancel the edit, not the whole Settings modal
                 setDraft(name);
                 setRenaming(false);
               }
@@ -220,6 +221,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
                 setNewName('');
                 setCreating(false);
               } else if (e.key === 'Escape') {
+                e.preventDefault(); // cancel the edit, not the whole Settings modal
                 setCreating(false);
                 setNewName('');
               }
