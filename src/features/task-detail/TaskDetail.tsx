@@ -372,7 +372,8 @@ export function TaskDetail() {
           />
         ) : (
           <h2
-            className="mb-[18px] cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
+            data-inspector-title
+            className="vt-task-title mb-[18px] w-fit max-w-full cursor-pointer text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] transition-colors hover:opacity-80"
             onClick={handleTitleEdit}
             title="Click to edit"
           >
@@ -1282,7 +1283,7 @@ function DetailCard({
         role={isMobile ? 'dialog' : 'complementary'}
         aria-label="Task details"
         className={cn(
-          'flex flex-col overflow-hidden',
+          'vt-inspector flex flex-col overflow-hidden',
           isMobile
             ? 'fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-2xl bg-[var(--color-card)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)] animate-[sheet-up_350ms_var(--spring-snappy)]'
             : 'relative w-[372px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-background)]',

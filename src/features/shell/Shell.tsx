@@ -415,7 +415,7 @@ export function Shell() {
       {isMobile && (
         <header className="flex select-none items-center border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2">
           <div className="flex flex-1 items-center gap-2">
-            <h1 className="nav-title-large">
+            <h1 className="vt-title nav-title-large">
               {getViewTitle()}
             </h1>
           </div>
@@ -547,7 +547,7 @@ export function Shell() {
                   </button>
                 )}
                 <div className="min-w-0 flex-1">
-                <h1 className="truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
+                <h1 className="vt-title truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
                   {getViewTitle()}
                 </h1>
                 <p className="mt-1.5 truncate text-sm text-[var(--color-muted-foreground)]">
@@ -588,7 +588,7 @@ export function Shell() {
             </header>
           )}
 
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <main className="vt-pane flex min-h-0 min-w-0 flex-1 flex-col">
             {renderMain()}
           </main>
         </div>
