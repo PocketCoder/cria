@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import { cn } from '@/lib/cn';
+import { useTopModalDialog } from '@/lib/modalStack';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
 export const ContextMenu = ContextMenuPrimitive.Root;
@@ -50,7 +51,7 @@ export const ContextMenuContent = forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
 >(({ className, ...props }, ref) => (
-  <ContextMenuPrimitive.Portal>
+  <ContextMenuPrimitive.Portal container={useTopModalDialog() ?? undefined}>
     <ContextMenuPrimitive.Content
       ref={ref}
       className={cn(

@@ -1,6 +1,7 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { forwardRef, type ComponentPropsWithoutRef, type ElementRef } from 'react';
 import { cn } from '@/lib/cn';
+import { useTopModalDialog } from '@/lib/modalStack';
 
 export const Popover = PopoverPrimitive.Root;
 export const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -10,12 +11,14 @@ export const PopoverAnchor = PopoverPrimitive.Anchor;
  * Floating panel container. Themed against our `--color-card` /
  * `--color-border` tokens so it sits cleanly on top of whichever pane
  * it anchors against (TaskActions sidebar, future Cmd+K palette, etc.).
+ * Portals into the open modal dialog, if any: `document.body` is inert and
+ * painted underneath while one is open.
  */
 export const PopoverContent = forwardRef<
   ElementRef<typeof PopoverPrimitive.Content>,
   ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = 'start', sideOffset = 4, ...props }, ref) => (
-  <PopoverPrimitive.Portal>
+  <PopoverPrimitive.Portal container={useTopModalDialog() ?? undefined}>
     <PopoverPrimitive.Content
       ref={ref}
       align={align}

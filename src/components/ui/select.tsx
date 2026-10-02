@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { cn } from '@/lib/cn';
+import { useTopModalDialog } from '@/lib/modalStack';
 import { ChevronDown, Check } from 'lucide-react';
 
 export const Select = SelectPrimitive.Root;
@@ -34,7 +35,7 @@ export const SelectContent = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(({ className, children, position = 'popper', ...props }, ref) => (
-  <SelectPrimitive.Portal>
+  <SelectPrimitive.Portal container={useTopModalDialog() ?? undefined}>
     <SelectPrimitive.Content
       ref={ref}
       className={cn(

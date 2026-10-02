@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { pushModalDialog } from '@/lib/modalStack';
 
 /**
  * Native modal `<dialog>` shell. `showModal()` gives the browser's own focus
@@ -12,9 +13,10 @@ import { cn } from '@/lib/cn';
  * that use Escape for something local (cancel a rename, dismiss suggestions)
  * must `preventDefault()` it so the dialog is not dismissed too.
  *
- * Do not use for content that opens portalled pickers (Radix Select, Popover,
- * ContextMenu): they render in `document.body`, outside the dialog, so they
- * would be inert and painted underneath the top layer.
+ * Dialogs stack: a later `showModal()` sits above earlier ones. Anything else
+ * that must stay usable above an open dialog has to render inside it, so the
+ * Radix portals (Popover, Select, ContextMenu) and the undo toast target the
+ * topmost dialog via `useTopModalDialog()` instead of `document.body`.
  */
 export function ModalDialog({
   label,
@@ -39,9 +41,11 @@ export function ModalDialog({
     if (!el) return;
     unmounting.current = false;
     if (!el.open) el.showModal();
+    const unregister = pushModalDialog(el);
     setOpen(true);
     return () => {
       unmounting.current = true;
+      unregister();
       if (el.open) el.close();
     };
   }, []);

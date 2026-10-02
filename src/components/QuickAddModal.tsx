@@ -20,10 +20,24 @@ import {
   useSheetDrag,
 } from '@/components/quick-add/useSheetBehaviour';
 import { DesktopQuickAdd, MobileQuickAdd } from '@/components/quick-add/QuickAddViews';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 
 /* ─── the modal ───────────────────────────────────────────────────────────── */
 
+/**
+ * A native modal dialog, so it stacks above any other open dialog (Outbox,
+ * Display sheet…) instead of sitting inert underneath. The body mounts only once
+ * the dialog is open, so its focus-on-mount and touch listeners find their nodes.
+ */
 export function QuickAddModal({ onClose }: { onClose: () => void }) {
+  return (
+    <ModalDialog label="Add task" onClose={onClose}>
+      <QuickAddBody onClose={onClose} />
+    </ModalDialog>
+  );
+}
+
+function QuickAddBody({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState(0);

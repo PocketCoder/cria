@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Undo2 } from 'lucide-react';
 import { usePendingDeletes, UNDO_WINDOW_MS } from '@/stores/pendingDeletes';
+import { useTopModalDialog } from '@/lib/modalStack';
 
 function ProgressBar({ enqueuedAt }: { enqueuedAt: number }) {
   const barRef = useRef<HTMLDivElement>(null);
@@ -35,10 +37,13 @@ export function UndoToasts() {
   const pending = usePendingDeletes((s) => s.pending);
   const undo = usePendingDeletes((s) => s.undo);
   const entries = Object.values(pending);
+  // While a modal dialog is open the rest of the page is inert, so the toast
+  // (and its Undo button) has to live inside the topmost dialog to be clickable.
+  const dialog = useTopModalDialog();
 
   if (entries.length === 0) return null;
 
-  return (
+  const toasts = (
     <div className="fixed bottom-10 right-4 z-50 flex flex-col gap-2">
       {entries.map(({ task, enqueuedAt }) => (
         <div
@@ -63,4 +68,5 @@ export function UndoToasts() {
       ))}
     </div>
   );
+  return dialog ? createPortal(toasts, dialog) : toasts;
 }

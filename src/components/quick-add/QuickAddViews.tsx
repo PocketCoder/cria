@@ -58,12 +58,7 @@ export function MobileQuickAdd({
   onOpenRamble,
 }: MobileProps) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col justify-end"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Add task"
-    >
+    <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
       <div
         ref={panelRef}
