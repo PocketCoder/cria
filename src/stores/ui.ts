@@ -37,6 +37,9 @@ interface UiState {
   setRambleDraft: (text: string) => void;
 }
 
+/** Bumped by every `setSelectedTask`; lets a deferred view commit spot a newer selection. */
+let selectionEpoch = 0;
+
 function viewKey(v: ActiveView | null): string {
   return JSON.stringify(v);
 }
@@ -109,17 +112,28 @@ export const useUi = create<UiState>()(
       rambleOpen: false,
       rambleDraft: '',
       setActiveView: (view) => {
-        const commit = () => set({ activeView: view, selectedTaskLocalId: null });
+        // The view commit can land a frame late (View Transition). Clear the
+        // selection only if nothing selected a task in between, else
+        // "switch project, then open task" loses the task.
+        const epoch = selectionEpoch;
+        const commit = () =>
+          set(
+            epoch === selectionEpoch
+              ? { activeView: view, selectedTaskLocalId: null }
+              : { activeView: view },
+          );
         const kind = navKind(get().activeView, view);
         if (kind) withViewTransition(kind, commit);
         else commit();
       },
       setSelectedProject: (id) =>
         get().setActiveView(id ? { kind: 'project', localId: id } : null),
-      setSelectedTask: (id) =>
+      setSelectedTask: (id) => {
+        selectionEpoch++;
         transitionTask(get().selectedTaskLocalId, id, () =>
           set({ selectedTaskLocalId: id }),
-        ),
+        );
+      },
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
