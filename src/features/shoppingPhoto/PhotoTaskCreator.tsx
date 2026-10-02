@@ -261,9 +261,10 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
           <button
             type="button"
-            onClick={() =>
-              setItems((prev) => [...prev, { id: nextId.current++, text: '', include: true }])
-            }
+            onClick={() => {
+              const id = nextId.current++;
+              setItems((prev) => [...prev, { id, text: '', include: true }]);
+            }}
             className="flex items-center gap-1 text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
           >
             <Plus className="h-3.5 w-3.5" /> Add item

@@ -29,15 +29,14 @@ export function useProjectExpand(storageKey = 'cria:project-tree-open') {
     }
   });
   const isOpen = (id: string) => open[id] ?? true;
-  const toggle = (id: string) =>
-    setOpen((prev) => {
-      const next = { ...prev, [id]: !(prev[id] ?? true) };
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
-      } catch {
-        /* ignore quota / private-mode failures */
-      }
-      return next;
-    });
+  const toggle = (id: string) => {
+    const next = { ...open, [id]: !(open[id] ?? true) };
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch {
+      /* ignore quota / private-mode failures */
+    }
+    setOpen(next);
+  };
   return { isOpen, toggle };
 }

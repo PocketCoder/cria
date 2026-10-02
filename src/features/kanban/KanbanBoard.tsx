@@ -96,13 +96,11 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
   );
 
   const handleCollapse = (bucketLocalId: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(bucketLocalId)) next.delete(bucketLocalId);
-      else next.add(bucketLocalId);
-      localStorage.setItem(`${COLLAPSED_KEY}:${view.localId}`, JSON.stringify([...next]));
-      return next;
-    });
+    const next = new Set(collapsed);
+    if (next.has(bucketLocalId)) next.delete(bucketLocalId);
+    else next.add(bucketLocalId);
+    localStorage.setItem(`${COLLAPSED_KEY}:${view.localId}`, JSON.stringify([...next]));
+    setCollapsed(next);
   };
 
   const handleDragStart = useCallback((event: DragStartEvent) => {

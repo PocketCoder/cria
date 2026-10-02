@@ -269,30 +269,30 @@ export function useTableConfig(): TableConfig {
   const [visible, setVisible] = useState<VisibleState>(loadVisible);
   const [sortBy, setSortBy] = useState<SortState>(loadSort);
 
-  const toggleColumn = useCallback((key: ColumnKey) => {
-    setVisible((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
+  const toggleColumn = useCallback(
+    (key: ColumnKey) => {
+      const next = { ...visible, [key]: !visible[key] };
       persist(COLUMNS_KEY, next);
-      return next;
-    });
-  }, []);
+      setVisible(next);
+    },
+    [visible],
+  );
 
-  const onSort = useCallback((key: ColumnKey, additive: boolean) => {
-    if (!SORTABLE.has(key)) return;
-    setSortBy((prev) => {
-      const next = cycleSort(prev, key, additive);
+  const onSort = useCallback(
+    (key: ColumnKey, additive: boolean) => {
+      if (!SORTABLE.has(key)) return;
+      const next = cycleSort(sortBy, key, additive);
       persist(SORT_KEY, next);
-      return next;
-    });
-  }, []);
+      setSortBy(next);
+    },
+    [sortBy],
+  );
 
   const clearSort = useCallback(() => {
-    setSortBy((prev) => {
-      if (Object.keys(prev).length === 0) return prev;
-      persist(SORT_KEY, {});
-      return {};
-    });
-  }, []);
+    if (Object.keys(sortBy).length === 0) return;
+    persist(SORT_KEY, {});
+    setSortBy({});
+  }, [sortBy]);
 
   return { columns: COLUMNS, visible, sortBy, toggleColumn, onSort, clearSort };
 }
