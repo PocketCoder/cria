@@ -14,7 +14,7 @@
 import { createRequire } from 'node:module';
 import { afterEach, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 
 interface NodeStatement {
   run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
@@ -193,6 +193,13 @@ function installDomPolyfills(): void {
   Element.prototype.hasPointerCapture ??= () => false;
   Element.prototype.releasePointerCapture ??= () => undefined;
 }
+
+// The task inspector's SubtasksBlock re-runs an effect on every render (its
+// `subtasks` dependency is a fresh array each time and the effect sets state),
+// so it never settles. `act()` flushes effects until the queue is empty and
+// would therefore never return; dispatch events without it and let React's
+// scheduler interleave the loop with the test's own awaits instead.
+configure({ eventWrapper: (cb) => cb() });
 
 installDomPolyfills();
 stubFetch();
