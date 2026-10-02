@@ -300,6 +300,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      role="presentation"
       className={cn(
         'fixed inset-0 z-50',
         isMobile ? '' : 'flex items-start justify-center bg-black/50 pt-24',
