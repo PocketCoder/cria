@@ -8,16 +8,16 @@ import type { AddReminderInput } from '@/db/reminders';
 import {
   buildQuickAddInput,
   canSubmitQuickAdd,
+  mergeLabelTitles,
   persistQuickAdd,
 } from '@/lib/quickAddSubmit';
-import { pickFallbackProjectId } from '@/lib/quickAddProject';
+import { findProjectByTitle, pickFallbackProjectId } from '@/lib/quickAddProject';
 import {
   useBodyScrollLock,
   useEscapeKey,
   useKeyboardInset,
   useSheetDrag,
 } from '@/components/quick-add/useSheetBehaviour';
-import { useQuickAddMirror } from '@/components/quick-add/useQuickAddMirror';
 import { DesktopQuickAdd, MobileQuickAdd } from '@/components/quick-add/QuickAddViews';
 
 /* ─── the modal ───────────────────────────────────────────────────────────── */
@@ -70,16 +70,46 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
   // Resolve #project token — match case-insensitive against project titles
   const parsed = useMemo(() => parseQuickAdd(text), [text]);
 
-  useQuickAddMirror({
-    parsed,
-    projects,
-    setPriority,
-    setDueDate,
-    setLabelTitles,
-    setRepeatAfter,
-    setRepeatMode,
-    setProjectId,
+  // Mirror a typed `!N` priority token into the button group, so NL and the
+  // picker stay in sync. Only fires when the parsed token value changes, so a
+  // manual button choice afterwards isn't clobbered on the next keystroke.
+  useEffect(() => {
+    if (parsed.priority !== null) setPriority(parsed.priority);
+  }, [parsed.priority]);
+
+  // Same NL-mirroring for a typed date ("tomorrow", "next fri") → date picker.
+  useEffect(() => {
+    if (parsed.dueDate) setDueDate(parsed.dueDate);
+  }, [parsed.dueDate]);
+
+  // Merge typed `*label` tokens into the label picker (union, so manual picks
+  // aren't lost). Keyed on the joined titles so it only fires when they change;
+  // the latest titles are read through a ref.
+  const parsedLabelsKey = parsed.labelTitles.join(' ');
+  const latestLabels = useRef(parsed.labelTitles);
+  useEffect(() => {
+    latestLabels.current = parsed.labelTitles;
   });
+  useEffect(() => {
+    const incoming = latestLabels.current;
+    if (incoming.length === 0) return;
+    setLabelTitles((prev) => mergeLabelTitles(prev, incoming));
+  }, [parsedLabelsKey]);
+
+  // Mirror a typed recurrence ("every 2 weeks", "monthly") into the picker.
+  useEffect(() => {
+    if (parsed.repeatAfter !== null || parsed.repeatMode !== null) {
+      setRepeatAfter(parsed.repeatAfter);
+      setRepeatMode(parsed.repeatMode);
+    }
+  }, [parsed.repeatAfter, parsed.repeatMode]);
+
+  useEffect(() => {
+    if (parsed.projectTitle && projects.length > 0) {
+      const match = findProjectByTitle(projects, parsed.projectTitle);
+      if (match) setProjectId(match.localId);
+    }
+  }, [parsed.projectTitle, projects]);
 
   useEscapeKey(onClose);
 
