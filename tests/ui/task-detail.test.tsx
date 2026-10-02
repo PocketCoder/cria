@@ -1,7 +1,7 @@
 import './mocks';
 import { Profiler } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEvent, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
 import { createTask, getTaskByLocalId } from '@/db/tasks';
@@ -136,6 +136,29 @@ describe('TaskDetail smoke', () => {
 });
 
 describe('TaskDetail subtasks block', () => {
+  it('drops the add-subtask draft when switching to another cached task', async () => {
+    const user = userEvent.setup();
+    const other = await createTask({
+      title: 'Water the plants',
+      projectLocalId: (await getTaskByLocalId(taskId))!.projectLocalId,
+    });
+    renderWithProviders(<TaskDetail />);
+    // Visit the other task first so it is cached when we switch back (no loading state).
+    act(() => useUi.setState({ selectedTaskLocalId: other.localId }));
+    await screen.findByRole('heading', { name: 'Water the plants' });
+    act(() => useUi.setState({ selectedTaskLocalId: taskId }));
+    await screen.findByRole('heading', { name: 'Fix the shelf' });
+
+    await user.click(await screen.findByRole('button', { name: /add subtask/i }));
+    await user.type(await screen.findByRole('textbox', { name: 'Search tasks' }), 'Stray draft');
+
+    act(() => useUi.setState({ selectedTaskLocalId: other.localId }));
+    await screen.findByRole('heading', { name: 'Water the plants' });
+
+    expect(screen.queryByRole('textbox', { name: 'Search tasks' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add subtask/i })).toBeInTheDocument();
+  });
+
   it('settles after mount without a render loop', async () => {
     const errors: string[] = [];
     const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {

@@ -253,7 +253,11 @@ export function TaskDetail() {
           />
         </section>
 
+        {/* Keyed so the add-subtask draft and Break down suggestions never
+            carry over to the next task when it is already cached (no loading
+            early-return remounts the tree). */}
         <SubtasksBlock
+          key={task.localId}
           taskLocalId={task.localId}
           projectLocalId={task.projectLocalId}
           title={task.title}
