@@ -14,19 +14,32 @@ export interface Box {
 export function useSegmentIndicator(
   ref: RefObject<HTMLElement | null>,
   index: number,
-  /** Changes when the segments' size or count changes, to force a re-measure. */
+  /** Changes when the segments' size, count or labels change, to force a re-measure. */
   layoutKey = '',
 ): Box | null {
   const [box, setBox] = useState<Box | null>(null);
   useLayoutEffect(() => {
     const root = ref.current;
-    const el = root?.querySelectorAll<HTMLElement>('[data-seg]')[index];
-    if (!root || !el) {
+    if (!root) {
       setBox(null);
       return;
     }
-    const measure = () =>
-      setBox({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    // Re-resolve the segment on every measure: options can be swapped for new
+    // buttons at the same index, and a cached element would be detached by
+    // then (offsetWidth 0), collapsing the indicator on the next resize.
+    const measure = () => {
+      const el = root.querySelectorAll<HTMLElement>('[data-seg]')[index];
+      if (!el) {
+        setBox(null);
+        return;
+      }
+      const next = { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+      setBox((prev) =>
+        prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
+          ? prev
+          : next,
+      );
+    };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);

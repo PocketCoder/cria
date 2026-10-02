@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '@/lib/cn';
 import { indicatorStyle, useSegmentIndicator } from './segmentIndicator';
 
@@ -26,8 +26,38 @@ export function SegmentedControl<T extends string>({
   const primary = variant === 'primary';
   const ref = useRef<HTMLDivElement>(null);
   const index = options.findIndex((o) => o.value === value);
-  const box = useSegmentIndicator(ref, index, `${options.length}:${fill}:${variant}`);
+  // Labels are part of the key: swapping options with the same count and
+  // selected index still changes segment widths.
+  const box = useSegmentIndicator(
+    ref,
+    index,
+    `${options.map((o) => o.label).join('\u0000')}:${fill}:${variant}`,
+  );
   const [moved, setMoved] = useState(false);
+  // Roving tabindex: only the selected tab (or the first, if none) is tabbable.
+  const tabStop = index >= 0 ? index : 0;
+
+  const select = (i: number) => {
+    const o = options[i];
+    if (!o) return;
+    ref.current?.querySelectorAll<HTMLElement>('[data-seg]')[i]?.focus();
+    setMoved(true);
+    onChange(o.value);
+  };
+
+  // WAI-ARIA tabs pattern with automatic activation, matching click.
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const last = options.length - 1;
+    const next =
+      e.key === 'ArrowRight' ? (i === last ? 0 : i + 1)
+      : e.key === 'ArrowLeft' ? (i === 0 ? last : i - 1)
+      : e.key === 'Home' ? 0
+      : e.key === 'End' ? last
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    select(next);
+  };
 
   return (
     <div
@@ -55,7 +85,7 @@ export function SegmentedControl<T extends string>({
           style={indicatorStyle(box, moved)}
         />
       ) : null}
-      {options.map((o) => {
+      {options.map((o, i) => {
         const on = o.value === value;
         return (
           <button
@@ -64,10 +94,9 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="tab"
             aria-selected={on}
-            onClick={() => {
-              setMoved(true);
-              onChange(o.value);
-            }}
+            tabIndex={i === tabStop ? 0 : -1}
+            onClick={() => select(i)}
+            onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(
               'relative z-[1] font-medium leading-tight transition-colors duration-200',
               primary ? 'rounded-[7px] px-3 py-2 text-sm' : 'rounded-md px-2.5 py-1 text-xs',
