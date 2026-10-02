@@ -25,7 +25,7 @@ import {
   useGlobalQuickAddShortcut,
   useInitialProjectView,
   useTrayQuickAdd,
-  useTrayVisibleSync,
+  useTraySettingsSync,
 } from './useShellEffects';
 import { useHeaderDrag, useShellModals, useShellSearch } from './useShellState';
 import { MainView } from './MainView';
@@ -76,7 +76,7 @@ export function Shell() {
 
   useConflictNotification(conflictCount);
   useTrayQuickAdd(setShowQuickAdd);
-  useTrayVisibleSync();
+  useTraySettingsSync();
   useDeepLinks(setSelectedProject, setSelectedTask);
 
   /* ── mobile layout ────────────────────────────────────── */
