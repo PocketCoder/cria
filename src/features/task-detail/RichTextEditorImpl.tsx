@@ -343,6 +343,8 @@ function ReadView({
     <button
       type="button"
       onClick={onEdit}
+      aria-label="Edit description"
+      title="Edit description"
       className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-muted-foreground)] shadow-sm transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
     >
       <Pencil className="h-3.5 w-3.5" />
