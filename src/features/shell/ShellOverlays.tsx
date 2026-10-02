@@ -7,6 +7,7 @@ import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
 import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
 import { SelectionBar } from '@/features/tasks/SelectionBar';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import { SearchView } from '@/features/search/SearchView';
 import type { ShellModals, ShellSearch } from './useShellState';
 
@@ -107,6 +108,7 @@ export function MobileSearchOverlay({ search }: { search: ShellSearch }) {
     handleSearchClear,
     setMobileSearchOpen,
   } = search;
+  const focusSearch = useFocusOnMount<HTMLInputElement>(searchInputRef);
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-background)] safe-top">
       <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2">
@@ -114,13 +116,12 @@ export function MobileSearchOverlay({ search }: { search: ShellSearch }) {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
           <input
             aria-label="Search tasks"
-            ref={searchInputRef}
+            ref={focusSearch}
             type="text"
             value={searchQuery}
             onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search tasks…"
-            autoFocus
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-input)] py-2 pl-9 pr-4 text-base focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
           />
         </div>

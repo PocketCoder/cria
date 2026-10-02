@@ -7,6 +7,7 @@ import { setTaskBucket, deleteBucket, updateBucket } from '@/db/buckets';
 import { updateView } from '@/db/views';
 import { applyLabelsByTitle } from '@/db/labels';
 import { cn } from '@/lib/cn';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import {
   Plus,
   Trash2,
@@ -81,7 +82,7 @@ export function KanbanColumn({
 
 /* ─── Header: collapse toggle, title / rename, role icons, count, menu ─── */
 
-function BucketHeader({
+export function BucketHeader({
   bucket,
   view,
   taskCount,
@@ -101,8 +102,10 @@ function BucketHeader({
   onToggleCollapse: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
-  const [renameDraft, setRenameDraft] = useState(bucket.title);
-  const renameInputRef = useRef<HTMLInputElement>(null);
+  // Seeded from the bucket title when a rename starts (not at mount), so it
+  // never shows a stale title or an abandoned edit.
+  const [renameDraft, setRenameDraft] = useState('');
+  const focusRenameInput = useFocusOnMount<HTMLInputElement>();
 
   const handleRenameSave = async () => {
     const trimmed = renameDraft.trim();
@@ -121,9 +124,10 @@ function BucketHeader({
     else if (e.key === 'Escape') setRenaming(false);
   };
 
-  useEffect(() => {
-    if (renaming) renameInputRef.current?.focus();
-  }, [renaming]);
+  const startRename = () => {
+    setRenameDraft(bucket.title);
+    setRenaming(true);
+  };
 
   return (
     <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
@@ -139,7 +143,7 @@ function BucketHeader({
           <div className="flex items-center gap-1">
             <input
               aria-label="Bucket name"
-              ref={renameInputRef}
+              ref={focusRenameInput}
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
               onBlur={() => void handleRenameSave()}
@@ -172,7 +176,7 @@ function BucketHeader({
         view={view}
         isDoneBucket={isDoneBucket}
         isDefaultBucket={isDefaultBucket}
-        onRename={() => setRenaming(true)}
+        onRename={startRename}
       />
     </div>
   );
@@ -338,6 +342,7 @@ function LimitRow({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const focusLimitInput = useFocusOnMount<HTMLInputElement>();
   if (!showInput) {
     return (
       <button
@@ -355,7 +360,7 @@ function LimitRow({
         aria-label="Task limit"
         type="number"
         min={0}
-        autoFocus
+        ref={focusLimitInput}
         value={draft}
         onChange={(e) => onDraftChange(e.target.value)}
         onKeyDown={(e) => {

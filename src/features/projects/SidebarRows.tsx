@@ -1,3 +1,4 @@
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import { useState, type ComponentType, type ReactNode } from 'react';
 import {
   MoreHorizontal,
@@ -90,12 +91,13 @@ function RenameInput({
   onSave: () => void;
   onCancel: () => void;
 }) {
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   return (
     <li>
       <input
         aria-label={label}
         type="text"
-        autoFocus
+        ref={focusOnMount}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onSave}
