@@ -27,8 +27,9 @@ import type { Project } from '@/domain/project';
 import type { Label } from '@/domain/label';
 import { PROJECT_COLORS } from './sidebarLogic';
 
+/** Primary tint + primary text so the active row stays distinct from the neutral muted hover fill. */
 const SELECTED_ROW =
-  'bg-[var(--color-muted)] font-medium text-[color:var(--color-foreground)]';
+  'bg-[var(--color-primary)]/10 font-medium text-[color:var(--color-primary)] hover:bg-[var(--color-primary)]/15 hover:text-[color:var(--color-primary)]';
 
 /* ────────────────────────── shared nav item ─────────────────────────── */
 
@@ -49,6 +50,7 @@ export function NavItem({
     <button
       type="button"
       onClick={onClick}
+      aria-current={isSelected ? 'page' : undefined}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px]',
         'hover:bg-[var(--color-muted)]',
@@ -429,6 +431,7 @@ function ProjectSelectButton({
     <button
       type="button"
       onClick={onSelect}
+      aria-current={isSelected ? 'page' : undefined}
       className={cn(
         'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
         'hover:bg-[var(--color-muted)] hover:text-[color:var(--color-foreground)]',
@@ -544,6 +547,7 @@ export function LabelRow({
           <button
             type="button"
             onClick={onSelect}
+            aria-current={isSelected ? 'page' : undefined}
             className={cn(
               'flex w-full items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
               'hover:bg-[var(--color-muted)]',
