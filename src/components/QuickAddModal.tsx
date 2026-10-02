@@ -282,10 +282,8 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     activeView?.kind === 'project' ? activeView.localId : null;
   const { data: projects = [] } = useSelectableProjects();
   const { data: user } = useCurrentUser();
-  // Seeded lazily by the effect below, which validates selectedProjectId
-  // against the selectable project list — the open view can be a saved
-  // filter's pseudo-project, which isn't a real create destination.
-  const [projectId, setProjectId] = useState<string | null>(null);
+  // Explicit project choice; falls back to `fallbackProjectId` below.
+  const [chosenProjectId, setProjectId] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
   // Focus the title without letting iOS scroll the page to it (that's what
@@ -390,24 +388,24 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Pick the target project once: the open project wins, else the user's
-  // configured default project (#61, server `default_project_id`), else the
-  // first project. One effect so the fallbacks can't race each other.
-  useEffect(() => {
-    if (projectId || projects.length === 0) return;
-    // selectedProjectId can point at a pseudo-project (Favorites, or a
-    // saved filter) that useSelectableProjects deliberately excludes —
-    // those aren't real create destinations, so fall through to the
-    // user's default / first project instead of using them.
+  // Target project: an explicit choice (dropdown / +project token) wins, else
+  // the open project, else the user's configured default project (#61, server
+  // `default_project_id`), else the first project. Derived, not synced via an
+  // effect, so there is no effect chain. selectedProjectId can point at a
+  // pseudo-project (Favorites, or a saved filter) that useSelectableProjects
+  // deliberately excludes — those aren't real create destinations, so fall
+  // through to the default / first project instead of using them.
+  const fallbackProjectId = useMemo(() => {
+    if (projects.length === 0) return null;
     if (selectedProjectId && projects.some((p) => p.localId === selectedProjectId)) {
-      setProjectId(selectedProjectId);
-      return;
+      return selectedProjectId;
     }
     const def = user?.defaultProjectId
       ? projects.find((p) => p.serverId === user.defaultProjectId)
       : undefined;
-    setProjectId((def ?? projects[0]!).localId);
-  }, [projectId, projects, selectedProjectId, user?.defaultProjectId]);
+    return (def ?? projects[0]!).localId;
+  }, [projects, selectedProjectId, user?.defaultProjectId]);
+  const projectId = chosenProjectId ?? fallbackProjectId;
 
   // Resolve #project token — match case-insensitive against project titles
   const parsed = useMemo(() => parseQuickAdd(text), [text]);
