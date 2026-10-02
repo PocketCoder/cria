@@ -1,4 +1,5 @@
 import { useEffect, useState, forwardRef, type ButtonHTMLAttributes } from 'react';
+import { COLOR_PRESETS } from '@/lib/colorPresets';
 import { useQuery } from '@tanstack/react-query';
 import {
   Percent,
@@ -224,11 +225,6 @@ export function InlineProgress({
 }
 
 /* ─── Color inline ─── */
-
-export const COLOR_PRESETS = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#78716c', '#000000',
-];
 
 export function InlineColor({
   task,

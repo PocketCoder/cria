@@ -38,7 +38,8 @@ import { listRemindersForTask, type TaskReminder, type ReminderRelation } from '
 import { formatRelativeReminder } from '@/lib/period';
 import { useDateFormatter, toCalendarDate, hasTimeOfDay, type DateFormatters } from '@/lib/dateFormat';
 import { RichTextEditor } from './RichTextEditor';
-import { TaskActions, InlineRepeat, COLOR_PRESETS } from './TaskActions';
+import { TaskActions, InlineRepeat } from './TaskActions';
+import { COLOR_PRESETS } from '@/lib/colorPresets';
 import { AttachmentList } from './AttachmentList';
 import { ReminderList } from './ReminderList';
 import { CommentSection } from './CommentSection';
