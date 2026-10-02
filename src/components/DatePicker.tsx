@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  pickerChipClass,
+  type PickerOpenProps,
+} from '@/components/ui/popover';
 import { Calendar as CalendarGrid } from '@/components/ui/calendar';
 import { cn } from '@/lib/cn';
 import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 
-interface DatePickerProps {
+interface DatePickerProps extends PickerOpenProps {
   value: string | null;
   onChange: (iso: string | null) => void;
   placeholder?: string;
@@ -22,7 +28,8 @@ interface DatePickerProps {
    * Todoist-style chip: when a date is set, show a relative label
    * (Today / Tomorrow / weekday / date) and tint the chip — green for today,
    * red for overdue, accent for future. Off by default so other call sites
-   * keep their plain formatted date.
+   * keep their plain formatted date. Also switches the trigger to the
+   * quick-add chip style.
    */
   smart?: boolean;
 }
@@ -83,8 +90,11 @@ export function DatePicker({
   className,
   enableTime = false,
   smart = false,
+  ...ctl
 }: DatePickerProps) {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = ctl.open ?? innerOpen;
+  const setOpen = ctl.onOpenChange ?? setInnerOpen;
   const { formatDate } = useDateFormatter();
 
   const parsed = parseValue(value);
@@ -144,7 +154,10 @@ export function DatePicker({
           disabled={disabled}
           style={chipColor ? { color: chipColor, borderColor: chipColor } : undefined}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] disabled:opacity-50',
+            smart
+              ? pickerChipClass
+              : 'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
+            'disabled:opacity-50',
             className,
           )}
         >

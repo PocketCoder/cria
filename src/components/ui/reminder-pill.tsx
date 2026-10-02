@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  pickerChipClass,
+  pickerRowClass,
+  type PickerOpenProps,
+} from '@/components/ui/popover';
 import { RELATIVE_REMINDER_PRESETS, formatRelativeReminder } from '@/lib/period';
 import type { AddReminderInput, ReminderRelation } from '@/db/reminders';
 
@@ -37,12 +44,15 @@ export function ReminderPill({
   value,
   onChange,
   className,
-}: {
+  ...ctl
+}: PickerOpenProps & {
   value: AddReminderInput[];
   onChange: (next: AddReminderInput[]) => void;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = ctl.open ?? innerOpen;
+  const setOpen = ctl.onOpenChange ?? setInnerOpen;
   const [absDraft, setAbsDraft] = useState(() =>
     localDatetimeValue(new Date(Date.now() + 60 * 60 * 1000)),
   );
@@ -70,10 +80,8 @@ export function ReminderPill({
           type="button"
           aria-label="Reminders"
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
-            count > 0
-              ? 'bg-[var(--color-muted)] text-[var(--color-foreground)]'
-              : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
+            pickerChipClass,
+            count === 0 && 'text-[var(--color-muted-foreground)]',
             className,
           )}
         >
@@ -81,13 +89,13 @@ export function ReminderPill({
           <span>{count > 0 ? `${count} reminder${count === 1 ? '' : 's'}` : 'Reminder'}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-60 p-2 text-xs">
+      <PopoverContent align="start" sideOffset={6} className="w-64 p-1 text-[13.5px]">
         {value.length > 0 ? (
           <ul className="mb-2 space-y-1">
             {value.map((r, i) => (
               <li
                 key={`${r.at ?? ''}|${r.period ?? ''}|${r.relativeTo ?? ''}`}
-                className="group flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                className="group flex items-center gap-2 rounded-md bg-[var(--color-muted)] px-2 py-1.5"
               >
                 <Bell className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />
                 <span className="flex-1 truncate">{describe(r)}</span>
@@ -104,7 +112,7 @@ export function ReminderPill({
           </ul>
         ) : null}
 
-        <p className="mb-1 px-1 font-medium text-[var(--color-muted-foreground)]">
+        <p className="px-2 pb-1 pt-1.5 text-xs font-medium text-[var(--color-muted-foreground)]">
           Relative to due date
         </p>
         <div className="mb-2 flex flex-col">
@@ -113,22 +121,22 @@ export function ReminderPill({
               key={p.label}
               type="button"
               onClick={() => addPreset(p.seconds)}
-              className="rounded px-2 py-1 text-left hover:bg-[var(--color-muted)]"
+              className={pickerRowClass}
             >
               {p.seconds === 0 ? 'On due date' : `${p.label} before due`}
             </button>
           ))}
         </div>
 
-        <p className="mb-1 px-1 font-medium text-[var(--color-muted-foreground)]">
+        <p className="px-2 pb-1 pt-1.5 text-xs font-medium text-[var(--color-muted-foreground)]">
           At a date &amp; time
         </p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 px-1 pb-1">
           <input
             type="datetime-local"
             value={absDraft}
             onChange={(e) => setAbsDraft(e.target.value)}
-            className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+            className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
           />
           <button
             type="button"

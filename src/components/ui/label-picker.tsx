@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { Tags } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Check, Plus, Tags } from 'lucide-react';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  pickerChipClass,
+  pickerRowClass,
+  type PickerOpenProps,
+} from '@/components/ui/popover';
 import { useLabels } from '@/queries/labels';
 import { LabelChips } from '@/features/tasks/LabelChips';
 import type { Label } from '@/domain/label';
@@ -18,7 +25,9 @@ export function LabelPicker({
   value,
   onChange,
   className,
-}: {
+  open,
+  onOpenChange,
+}: PickerOpenProps & {
   value: string[];
   onChange: (titles: string[]) => void;
   className?: string;
@@ -65,15 +74,12 @@ export function LabelPicker({
   });
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label="Labels"
-          className={cn(
-            'inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
-            className,
-          )}
+          className={cn(pickerChipClass, className)}
         >
           <Tags className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
           {value.length === 0 ? (
@@ -83,7 +89,7 @@ export function LabelPicker({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-52 p-1">
+      <PopoverContent align="start" sideOffset={6} className="w-56 p-1">
         <input
           autoFocus
           type="text"
@@ -96,9 +102,9 @@ export function LabelPicker({
               addTyped();
             }
           }}
-          className="mb-1 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+          className="mb-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-[13.5px] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
         />
-        <div className="max-h-48 overflow-y-auto">
+        <div className="flex max-h-64 flex-col overflow-y-auto">
           {filtered.map((label) => {
             const active = selectedLower.has(label.title.toLowerCase());
             return (
@@ -106,19 +112,14 @@ export function LabelPicker({
                 key={label.localId}
                 type="button"
                 onClick={() => toggle(label.title)}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs',
-                  active ? 'bg-[var(--color-accent)]/10 font-medium' : 'hover:bg-[var(--color-accent)]/5',
-                )}
+                className={cn(pickerRowClass, active && 'bg-[var(--color-muted)]')}
               >
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full border border-[var(--color-border)]"
-                  style={label.hexColor ? { background: label.hexColor } : undefined}
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: label.hexColor || 'var(--color-muted-foreground)' }}
                 />
-                <span className="flex-1 truncate">{label.title}</span>
-                {active ? (
-                  <span className="text-footnote text-[var(--color-muted-foreground)]">✓</span>
-                ) : null}
+                <span className="min-w-0 flex-1 truncate">{label.title}</span>
+                {active ? <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : null}
               </button>
             );
           })}
@@ -131,27 +132,25 @@ export function LabelPicker({
                 key={`new-${title}`}
                 type="button"
                 onClick={() => toggle(title)}
-                className="flex w-full items-center gap-2 rounded bg-[var(--color-accent)]/10 px-2 py-1 text-left text-xs font-medium"
+                className={cn(pickerRowClass, 'bg-[var(--color-muted)]')}
               >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-dashed border-[var(--color-primary)]" />
-                <span className="flex-1 truncate">{title} (new)</span>
-                <span className="text-footnote text-[var(--color-muted-foreground)]">✓</span>
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-dashed border-[var(--color-primary)]" />
+                <span className="min-w-0 flex-1 truncate">{title} (new)</span>
+                <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" />
               </button>
             ))}
           {term && !exists(search.trim()) ? (
             <button
               type="button"
               onClick={addTyped}
-              className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs text-[var(--color-primary)] hover:bg-[var(--color-accent)]/5"
+              className={cn(pickerRowClass, 'text-[var(--color-primary)]')}
             >
-              <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[var(--color-primary)] text-micro leading-none">
-                +
-              </span>
-              <span className="flex-1 truncate">Create &ldquo;{search.trim()}&rdquo;</span>
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Create &ldquo;{search.trim()}&rdquo;</span>
             </button>
           ) : null}
           {filtered.length === 0 && value.length === 0 && !term ? (
-            <p className="px-2 py-1 text-caption text-[var(--color-muted-foreground)]">No labels yet.</p>
+            <p className="px-2 py-1.5 text-xs text-[var(--color-muted-foreground)]">No labels yet.</p>
           ) : null}
         </div>
       </PopoverContent>

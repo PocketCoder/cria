@@ -1,7 +1,14 @@
 import { useRef, useState } from 'react';
-import { Flag } from 'lucide-react';
+import { Check, Flag } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  pickerChipClass,
+  pickerRowClass,
+  type PickerOpenProps,
+} from '@/components/ui/popover';
 import { indicatorStyle, useSegmentIndicator } from '@/components/ui/segmented-control';
 
 /* Vikunja priority scale (0–5): sky, meadow, marigold, orange, coral.
@@ -29,7 +36,7 @@ export function priorityColor(value: number): string {
   return (PRIORITY_META[value] ?? PRIORITY_META[0]!).color;
 }
 
-interface PrioritySelectProps {
+interface PrioritySelectProps extends PickerOpenProps {
   value: number;
   onChange: (value: number) => void;
   className?: string;
@@ -50,8 +57,11 @@ function PriorityPill({
   value,
   onChange,
   className,
-}: Pick<PrioritySelectProps, 'value' | 'onChange' | 'className'>) {
-  const [open, setOpen] = useState(false);
+  ...ctl
+}: Pick<PrioritySelectProps, 'value' | 'onChange' | 'className' | 'open' | 'onOpenChange'>) {
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = ctl.open ?? innerOpen;
+  const setOpen = ctl.onOpenChange ?? setInnerOpen;
   const meta = PRIORITY_META[value] ?? PRIORITY_META[0]!;
   const isSet = value > 0;
   return (
@@ -61,10 +71,8 @@ function PriorityPill({
           type="button"
           aria-label={`Priority: ${meta.label}`}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
-            isSet
-              ? 'border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--color-foreground)]'
-              : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
+            pickerChipClass,
+            !isSet && 'text-[var(--color-muted-foreground)]',
             className,
           )}
         >
@@ -76,7 +84,7 @@ function PriorityPill({
           <span>{isSet ? meta.label : 'Priority'}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-40 p-1">
+      <PopoverContent align="start" sideOffset={6} className="w-44 p-1">
         <div role="radiogroup" aria-label="Priority" className="flex flex-col">
           {PRIORITY_META.map((m) => {
             const selected = m.value === value;
@@ -90,10 +98,7 @@ function PriorityPill({
                   onChange(m.value);
                   setOpen(false);
                 }}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-[var(--color-muted)]',
-                  selected && 'bg-[var(--color-muted)]',
-                )}
+                className={cn(pickerRowClass, selected && 'bg-[var(--color-muted)]')}
               >
                 <Flag
                   className="h-3.5 w-3.5 shrink-0"
@@ -101,9 +106,7 @@ function PriorityPill({
                   fill={m.value > 0 ? 'currentColor' : 'none'}
                 />
                 <span className="flex-1">{m.label}</span>
-                {selected ? (
-                  <span className="text-[var(--color-primary)]">✓</span>
-                ) : null}
+                {selected ? <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : null}
               </button>
             );
           })}
@@ -122,9 +125,19 @@ export function PrioritySelect({
   className,
   compact = false,
   variant = 'segmented',
+  open,
+  onOpenChange,
 }: PrioritySelectProps) {
   if (variant === 'pill') {
-    return <PriorityPill value={value} onChange={onChange} className={className} />;
+    return (
+      <PriorityPill
+        value={value}
+        onChange={onChange}
+        className={className}
+        open={open}
+        onOpenChange={onOpenChange}
+      />
+    );
   }
   return (
     <PrioritySegmented value={value} onChange={onChange} className={className} compact={compact} />
