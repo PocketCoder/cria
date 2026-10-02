@@ -518,9 +518,10 @@ function PickerSheet({
   onClose: () => void;
 }) {
   const isMobile = useIsMobile();
-  const [chosen, setChosen] = useState<string[]>(() =>
-    initialSelected.filter((id) => tasks.some((t) => t.localId === id)),
-  );
+  const [chosen, setChosen] = useState<string[]>(() => {
+    const known = new Set(tasks.map((t) => t.localId));
+    return initialSelected.filter((id) => known.has(id));
+  });
 
   const toggle = (id: string) => {
     setChosen((prev) =>
