@@ -14,6 +14,7 @@ import {
 import { forceSync } from '@/sync/forceSync';
 import { useSyncProgress } from '@/stores/syncProgress';
 import { cn } from '@/lib/cn';
+import { formatFailedAt, rowToText, safeFormatJson } from '@/lib/outboxFormat';
 import { RefreshCw, Copy, Check, Trash2 } from 'lucide-react';
 
 interface OutboxModalProps {
@@ -44,17 +45,6 @@ async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** One row → a plain-text block for the clipboard. */
-function rowToText(row: OutboxRow | DeadLetterRow): string {
-  const when =
-    'failed_at' in row && row.failed_at ? ` failed=${row.failed_at}` : '';
-  return [
-    `#${row.id} ${row.entity_type}·${row.op} attempts=${row.attempts}${when}`,
-    `  error: ${row.last_error ?? '(none)'}`,
-    `  payload: ${row.payload}`,
-  ].join('\n');
 }
 
 export function OutboxModal({ onClose }: OutboxModalProps) {
@@ -288,10 +278,6 @@ function OpCard({
   onRetry?: () => void;
   onDiscard: () => void;
 }) {
-  const failedAt =
-    'failed_at' in row && row.failed_at
-      ? row.failed_at.slice(0, 19).replace('T', ' ')
-      : null;
   return (
     <div
       className={cn(
@@ -300,30 +286,9 @@ function OpCard({
         busy && 'opacity-60',
       )}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-        <span className="font-mono text-xs font-medium text-[var(--color-foreground)]">
-          {row.entity_type} · {row.op}
-        </span>
-        <span className="whitespace-nowrap text-[10px] text-[var(--color-muted-foreground)]">
-          #{row.id} · {row.attempts} attempt{row.attempts === 1 ? '' : 's'}
-          {failedAt ? ` · ${failedAt}` : ''}
-        </span>
-      </div>
+      <OpCardHeader row={row} />
 
-      {row.last_error ? (
-        <p
-          className={cn(
-            'mt-2 break-words text-xs leading-snug',
-            dead || highlight ? 'text-[var(--color-warning)]' : 'text-[var(--color-foreground)]',
-          )}
-        >
-          {row.last_error}
-        </p>
-      ) : (
-        <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
-          No error reported yet.
-        </p>
-      )}
+      <OpCardError error={row.last_error} emphasise={Boolean(dead || highlight)} />
 
       <details className="mt-2">
         <summary className="cursor-pointer text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
@@ -334,45 +299,98 @@ function OpCard({
         </pre>
       </details>
 
-      <div className="mt-2 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCopy}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-        >
-          {copied ? <Check className="h-3.5 w-3.5 text-[var(--color-success)]" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-        {dead && onRetry ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs font-medium hover:bg-[var(--color-muted)] disabled:opacity-50"
-          >
-            <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
-            {busy ? 'Retrying…' : 'Retry'}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onDiscard}
-          disabled={busy}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10 disabled:opacity-50"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Discard
-        </button>
-      </div>
+      <OpCardActions
+        dead={dead}
+        busy={busy}
+        copied={copied}
+        onCopy={onCopy}
+        onRetry={onRetry}
+        onDiscard={onDiscard}
+      />
     </div>
   );
 }
 
-/** Pretty-print JSON if we can; otherwise show the raw payload. Never throws. */
-function safeFormatJson(payload: string): string {
-  try {
-    return JSON.stringify(JSON.parse(payload), null, 2);
-  } catch {
-    return payload;
+function OpCardHeader({ row }: { row: OutboxRow | DeadLetterRow }) {
+  const failedAt = formatFailedAt(row);
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+      <span className="font-mono text-xs font-medium text-[var(--color-foreground)]">
+        {row.entity_type} · {row.op}
+      </span>
+      <span className="whitespace-nowrap text-[10px] text-[var(--color-muted-foreground)]">
+        #{row.id} · {row.attempts} attempt{row.attempts === 1 ? '' : 's'}
+        {failedAt ? ` · ${failedAt}` : ''}
+      </span>
+    </div>
+  );
+}
+
+function OpCardError({ error, emphasise }: { error: string | null; emphasise: boolean }) {
+  if (!error) {
+    return (
+      <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
+        No error reported yet.
+      </p>
+    );
   }
+  return (
+    <p
+      className={cn(
+        'mt-2 break-words text-xs leading-snug',
+        emphasise ? 'text-[var(--color-warning)]' : 'text-[var(--color-foreground)]',
+      )}
+    >
+      {error}
+    </p>
+  );
+}
+
+function OpCardActions({
+  dead,
+  busy,
+  copied,
+  onCopy,
+  onRetry,
+  onDiscard,
+}: {
+  dead?: boolean;
+  busy?: boolean;
+  copied?: boolean;
+  onCopy: () => void;
+  onRetry?: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={onCopy}
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-[var(--color-success)]" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+      {dead && onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs font-medium hover:bg-[var(--color-muted)] disabled:opacity-50"
+        >
+          <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
+          {busy ? 'Retrying…' : 'Retry'}
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={onDiscard}
+        disabled={busy}
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10 disabled:opacity-50"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Discard
+      </button>
+    </div>
+  );
 }
