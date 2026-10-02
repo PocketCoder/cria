@@ -478,7 +478,6 @@ const TaskRow = memo(function TaskRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    paddingLeft: `${28 + depth * 28}px`,
     paddingRight: 0,
     overflow: 'hidden',
     position: 'relative',
@@ -547,6 +546,7 @@ const TaskRow = memo(function TaskRow({
             onToggleSelect={() => toggleSelected(task.localId)}
             onOpen={handleOpen}
             className="py-2.5 pr-6"
+            style={{ paddingLeft: `${28 + depth * 28}px` }}
             titleSlot={
               editing ? (
                 <input

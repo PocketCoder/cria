@@ -151,6 +151,7 @@ export interface TaskRowCoreProps {
   titleSlot?: React.ReactNode;
   /** Padding + density overrides (caller owns px / py). */
   className?: string;
+  style?: React.CSSProperties;
   titleWeight?: 'normal' | 'medium';
 }
 
@@ -176,6 +177,7 @@ export const TaskRowCore = memo(function TaskRowCore({
   actions,
   titleSlot,
   className,
+  style,
   titleWeight = 'normal',
 }: TaskRowCoreProps) {
   const dueLabel = useMemo(
@@ -248,6 +250,7 @@ export const TaskRowCore = memo(function TaskRowCore({
       data-task-row={task.localId}
       data-done={task.done || undefined}
       onClick={onOpen}
+      style={style}
       className={cn(
         'task-row group relative flex cursor-pointer items-center gap-3 hover:bg-[var(--color-accent)]/5',
         glow && 'row-glow',
