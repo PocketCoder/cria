@@ -3,7 +3,8 @@ import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { format, startOfDay, addDays } from 'date-fns';
 import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
-import { todaySectioner, upcomingDayLabel, upcomingSectioner } from './sectioners';
+import { prefersReducedMotion } from '@/lib/viewTransition';
+import { findDayGroupKey, todaySectioner, upcomingDayLabel, upcomingSectioner } from './sectioners';
 import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
@@ -167,7 +168,7 @@ function SmartView({
                 (c) => c.groupKey === g.key,
               );
               return (
-                <div key={g.key} data-day={g.key}>
+                <div key={g.key} data-day={g.key} data-day-from={g.fromDay} data-day-to={g.toDay}>
                   {g.tasks.length === 0 && agendaHeadings ? (
                     <p className="px-7 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)]">
                       {g.label}
@@ -599,9 +600,20 @@ export function UpcomingView() {
   const handlePickDay = useCallback((d: Date) => {
     setSelected(d);
     const key = format(d, 'yyyy-MM-dd');
-    // The agenda renders a [data-day] container per day; scroll it into view.
+    // The agenda renders a [data-day] container per section; runs of empty days
+    // share one, so resolve the day to the section that contains it.
     requestAnimationFrame(() => {
-      document.querySelector(`[data-day="${key}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-day]'), (el) => ({
+        key: el.dataset.day!,
+        fromDay: el.dataset.dayFrom,
+        toDay: el.dataset.dayTo,
+      }));
+      const target = findDayGroupKey(sections, key);
+      if (target === undefined) return;
+      document.querySelector(`[data-day="${target}"]`)?.scrollIntoView({
+        block: 'start',
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
     });
   }, []);
 

@@ -45,6 +45,23 @@ function emptyRunLabel(groups: TaskGroup[], start: number, end: number): string 
   return `${dayA} – ${dayB} · nothing scheduled`;
 }
 
+/**
+ * Which agenda section a day lives in: its own group, the empty run that
+ * contains it, or (for days past the end of the range) the last section.
+ * Undefined for days before the range.
+ */
+export function findDayGroupKey(
+  groups: Pick<TaskGroup, 'key' | 'fromDay' | 'toDay'>[],
+  dayKey: string,
+): string | undefined {
+  for (const g of groups) {
+    if (g.key === dayKey) return g.key;
+    if (g.fromDay && g.toDay && dayKey >= g.fromDay && dayKey <= g.toDay) return g.key;
+  }
+  const last = groups[groups.length - 1];
+  return last && dayKey > (last.toDay ?? last.key) ? last.key : undefined;
+}
+
 export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[] {
   // Bucket by the due date's calendar day (dueDayKey: timezone-correct for both
   // all-day and timed tasks). Day keys are yyyy-MM-dd, so string comparison is
@@ -79,6 +96,8 @@ export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): 
       // Trailing run: no task follows, so say that instead of an arbitrary range.
       label: end === groups.length - 1 ? 'Nothing else scheduled' : emptyRunLabel(groups, runStart, end),
       tasks: [],
+      fromDay: groups[runStart]!.key,
+      toDay: groups[end]!.key,
     });
     runStart = -1;
   };

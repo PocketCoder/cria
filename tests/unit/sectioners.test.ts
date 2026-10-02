@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  findDayGroupKey,
   todaySectioner,
   upcomingDayLabel,
   upcomingSectioner,
@@ -72,5 +73,34 @@ describe('upcomingSectioner', () => {
     );
     const single = groups.find((g) => g.key === 'empty-2030-05-16-2030-05-16');
     expect(single?.label).toMatch(/nothing scheduled$/);
+  });
+
+  it('records the days each empty run covers', () => {
+    const groups = upcomingSectioner([task('a', iso(2030, 4, 17))], ctx);
+    expect(groups[0]).toMatchObject({ fromDay: '2030-05-15', toDay: '2030-05-16' });
+    expect(groups[1]!.fromDay).toBeUndefined();
+    expect(groups[2]).toMatchObject({ fromDay: '2030-05-18', toDay: '2030-05-28' });
+  });
+});
+
+describe('findDayGroupKey', () => {
+  const groups = upcomingSectioner([task('a', iso(2030, 4, 17))], ctx);
+
+  it('finds a task day by its own key', () => {
+    expect(findDayGroupKey(groups, '2030-05-17')).toBe('2030-05-17');
+  });
+  it('resolves a day inside a merged empty run to that run', () => {
+    expect(findDayGroupKey(groups, '2030-05-16')).toBe('empty-2030-05-15-2030-05-16');
+    expect(findDayGroupKey(groups, '2030-05-20')).toBe('empty-2030-05-18-2030-05-28');
+  });
+  it('sends days past the range to the trailing section', () => {
+    expect(findDayGroupKey(groups, '2030-07-01')).toBe('empty-2030-05-18-2030-05-28');
+  });
+  it('sends days past a trailing task day to that day', () => {
+    const far = upcomingSectioner([task('far', iso(2030, 5, 5))], ctx);
+    expect(findDayGroupKey(far, '2030-06-20')).toBe('2030-06-05');
+  });
+  it('ignores days before the range', () => {
+    expect(findDayGroupKey(groups, '2030-05-01')).toBeUndefined();
   });
 });

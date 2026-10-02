@@ -25,6 +25,10 @@ export interface TaskGroup {
   key: string;
   label: string;
   tasks: TaskWithProject[];
+  /** Upcoming empty runs only: first and last yyyy-MM-dd day the group covers,
+   * so a day inside the run can find its section. */
+  fromDay?: string;
+  toDay?: string;
 }
 
 /** Bucket a flat task list into one group per project (using its title

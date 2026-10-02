@@ -18,13 +18,17 @@ interface Options {
 
 const root = () => document.documentElement;
 
+export function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 export function canAnimate(): boolean {
   return (
     typeof document !== 'undefined' &&
     typeof document.startViewTransition === 'function' &&
     // The global reduce-motion rule in globals.css doesn't reach the
     // ::view-transition-* pseudo-elements, so honour it here.
-    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    !prefersReducedMotion()
   );
 }
 
