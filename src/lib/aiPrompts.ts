@@ -7,6 +7,8 @@
  * existing quick-add / filter parsers resolve them.
  */
 
+import { needsQuoting } from '@/lib/quickAddParser';
+
 /** On-device context is 4K tokens on OS 26, 8K on OS 27; ~6K chars is safe. */
 const MAX_INPUT_CHARS = 6000;
 const MAX_NAMES = 50;
@@ -21,7 +23,8 @@ export function clipStart(text: string, max = MAX_INPUT_CHARS): string {
 }
 
 function nameList(names: string[]): string {
-  const shown = names.slice(0, MAX_NAMES).map((n) => (/\s/.test(n) ? `"${n}"` : n));
+  // Quote exactly the names the quick-add parser can't match bare (`+Café`).
+  const shown = names.slice(0, MAX_NAMES).map((n) => (needsQuoting(n) ? `"${n}"` : n));
   return shown.length > 0 ? shown.join(', ') : '(none)';
 }
 
@@ -90,7 +93,7 @@ Output one task per line and nothing else: no numbering, bullets, headings or co
 Each line is a short imperative task title, optionally followed by these tokens:
 - A due date in plain words, as the person said it (tomorrow, tomorrow 5pm, next friday, in 3 days, this weekend). Keep every date the person mentions. Only for "end of the month/week" style deadlines, write the month and day instead (${endOfMonth}).
 - A repeat in plain words (every week, daily, every monday).
-- +Project to file it in a project. Only use these projects: ${nameList(ctx.projects)}. Put quotes around names with spaces, like +"Home Admin". Leave it out if none fits.
+- +Project to file it in a project. Only use these projects: ${nameList(ctx.projects)}. Put quotes around names with spaces or any character other than letters, digits, - and _, like +"Home Admin" or +"Mum's". Leave it out if none fits.
 - *label to tag it. Existing labels: ${nameList(ctx.labels)}. Only add a label if it clearly fits.
 - !3 only if the person says it is important, !4 only if they say it is urgent. Most tasks have no priority.
 Write each title without a full stop at the end.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseQuickAdd } from '@/lib/quickAddParser';
+import { needsQuoting, parseQuickAdd } from '@/lib/quickAddParser';
 
 // Fix "now" so date parsing is deterministic — Wed, 2026-05-27T10:00Z.
 const NOW = new Date('2026-05-27T10:00:00Z');
@@ -241,5 +241,21 @@ describe('parseQuickAdd', () => {
     expect(r.title).toBe('Call mum');
     // Local 17:00 regardless of the runner's timezone.
     expect(new Date(r.dueDate!).getHours()).toBe(17);
+  });
+});
+
+describe('needsQuoting', () => {
+  it('flags names outside the unquoted token class', () => {
+    for (const name of ['Work', 'a_b-c', 'Q4']) expect(needsQuoting(name)).toBe(false);
+    for (const name of ['Café', "Mum's", 'Home Admin', 'Naïve', '']) expect(needsQuoting(name)).toBe(true);
+  });
+
+  it('matches the parser: bare accented names stay in the title, quoted ones parse', () => {
+    expect(parseQuickAdd('Buy bread +Café', NOW).projectTitle).toBeNull();
+    expect(parseQuickAdd('Buy bread +"Café"', NOW).projectTitle).toBe('Café');
+    const r = parseQuickAdd('Call mum +"Mum\'s" *"Mum\'s list"', NOW);
+    expect(r.projectTitle).toBe("Mum's");
+    expect(r.labelTitles).toEqual(["Mum's list"]);
+    expect(r.title).toBe('Call mum');
   });
 });

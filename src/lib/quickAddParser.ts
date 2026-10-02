@@ -65,8 +65,10 @@ export type QuickAddToken =
 // Quote class accepts straight (") and macOS "smart" curly quotes
 // (“ ”), which text inputs substitute by default — otherwise
 // `*"two words"` typed in the app wouldn't match.
-const LABEL_RE = /(?:^|\s)(\*["“”][^"“”]+["“”]|\*[A-Za-z0-9_-]+)(?=\s|$)/g;
-const PROJECT_RE = /(?:^|\s)(\+["“”][^"“”]+["“”]|\+[A-Za-z0-9_-]+)(?=\s|$)/g;
+// The unquoted class is shared with `needsQuoting` below so the two can't drift.
+const BARE_NAME = '[A-Za-z0-9_-]+';
+const LABEL_RE = new RegExp(`(?:^|\\s)(\\*["“”][^"“”]+["“”]|\\*${BARE_NAME})(?=\\s|$)`, 'g');
+const PROJECT_RE = new RegExp(`(?:^|\\s)(\\+["“”][^"“”]+["“”]|\\+${BARE_NAME})(?=\\s|$)`, 'g');
 const ASSIGNEE_RE = /(?:^|\s)(@[A-Za-z0-9_-]+)(?=\s|$)/g;
 const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
 
@@ -116,6 +118,16 @@ interface RawToken {
   payload: string | number | { repeatAfter: number | null; repeatMode: number | null };
   /** For date tokens only: the ISO timestamp the date phrase resolves to. */
   iso?: string;
+}
+
+/**
+ * True when a project/label name can't be written bare after `+` / `*` and
+ * must use the quoted form (`+"Mum's"`): anything outside the unquoted class,
+ * e.g. spaces, accents or apostrophes. Apostrophes are fine inside quotes; only
+ * double quotes can't be expressed at all.
+ */
+export function needsQuoting(name: string): boolean {
+  return !new RegExp(`^${BARE_NAME}$`).test(name);
 }
 
 function parseQuoted(raw: string, prefix: string): string {

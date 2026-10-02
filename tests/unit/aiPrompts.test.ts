@@ -11,7 +11,7 @@ import {
   commentsPrompt,
   aiErrorMessage,
 } from '@/lib/aiPrompts';
-import { parseQuickAdd } from '@/lib/quickAddParser';
+import { needsQuoting, parseQuickAdd } from '@/lib/quickAddParser';
 import { parseFilterQuery } from '@/lib/filterQueryParser';
 
 describe('parseLines', () => {
@@ -77,6 +77,18 @@ describe('prompt builders', () => {
     expect(s).toContain('Work, "Home Admin"');
     expect(s).toContain('Existing labels: (none)');
     expect(filterInstructions({ projects: ['Work'], labels: ['urgent'] })).toContain('Labels: urgent');
+  });
+
+  it('quotes exactly the names the quick-add parser cannot match bare', () => {
+    const projects = ['Work', 'Café', "Mum's", 'Home Admin', 'a_b-c'];
+    const s = rambleInstructions({ projects, labels: ['Naïve', 'urgent'] });
+    expect(s).toContain('Work, "Café", "Mum\'s", "Home Admin", a_b-c');
+    expect(s).toContain('Existing labels: "Naïve", urgent');
+    // Whatever the prompt tells the model to write must round-trip.
+    for (const name of projects) {
+      const token = needsQuoting(name) ? `"${name}"` : name;
+      expect(parseQuickAdd(`Do it +${token}`).projectTitle).toBe(name);
+    }
   });
 
   it('gives the ramble prompt today and a parseable end-of-month date', () => {
