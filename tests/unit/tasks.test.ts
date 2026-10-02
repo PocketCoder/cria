@@ -304,6 +304,16 @@ describe('db/tasks', () => {
       expect(dup!.priority).toBe(original.priority);
       expect(dup!.localId).not.toBe(original.localId);
     });
+
+    it('keeps percentDone (0-100) intact', async () => {
+      const original = await createTask({
+        projectLocalId: projectId,
+        title: 'Half done',
+        percentDone: 50,
+      });
+      const dup = await duplicateTask(original.localId);
+      expect(dup!.percentDone).toBe(50);
+    });
   });
 
   describe('moveTask', () => {

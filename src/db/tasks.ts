@@ -653,7 +653,8 @@ export async function duplicateTask(localId: string): Promise<Task | null> {
     startDate: original.startDate,
     endDate: original.endDate,
     priority: original.priority,
-    percentDone: original.percentDone / 100,
+    // Task.percentDone is already 0-100, which is what createTask expects.
+    percentDone: original.percentDone,
     hexColor: original.hexColor,
   });
 }
