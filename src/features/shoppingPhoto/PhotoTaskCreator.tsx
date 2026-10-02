@@ -145,7 +145,9 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
       // Tasks already created must not come back on retry as duplicates.
       setItems((prev) => withoutSaved(prev, savedIds));
       setError(partialSaveMessage(savedIds.size, chosen.length));
-      setPhase('error');
+      // Stay on the review step (the error shows inline) so the edited items
+      // survive and Add can be pressed again; 'error' is for OCR failures.
+      setPhase('review');
     }
   };
 
