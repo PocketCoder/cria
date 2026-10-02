@@ -9,7 +9,6 @@ import {
   computePlacements,
   normalizeColor,
   nudgeBar,
-  reorderTasksByIds,
   resolveBarDays,
   type DragState,
 } from '@/features/gantt/ganttGeometry';
@@ -181,13 +180,5 @@ describe('computePlacements', () => {
   it('keeps a minimum width of 4px', () => {
     const [p] = computePlacements([node('a', 90, 90)], range, null, 0, '#111');
     expect(p!.width).toBe(4);
-  });
-});
-
-describe('reorderTasksByIds', () => {
-  const t = (id: string) => ({ localId: id }) as unknown as Task;
-  it('puts ordered ids first and keeps the rest in place', () => {
-    const out = reorderTasksByIds([t('a'), t('b'), t('c'), t('d')], ['c', 'a']);
-    expect(out.map((x) => x.localId)).toEqual(['c', 'a', 'b', 'd']);
   });
 });

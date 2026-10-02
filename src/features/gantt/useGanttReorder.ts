@@ -11,9 +11,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
 import { reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
+import { reorderTasksByIds } from '@/lib/taskOrder';
 import type { Task } from '@/domain/task';
 import { reorderRootBlocks, type GanttTaskNode } from './buildGanttTaskTree';
-import { reorderTasksByIds } from './ganttGeometry';
 
 /**
  * Optimistic root order for drag-reorder. Only top-level rows reorder; their

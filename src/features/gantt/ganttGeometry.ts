@@ -1,4 +1,3 @@
-import type { Task } from '@/domain/task';
 import { dayToUtcDate, type GanttTaskNode } from './buildGanttTaskTree';
 import { DAY_WIDTH_PIXELS, DEFAULT_SPAN_DAYS, ROW_HEIGHT } from './constants';
 
@@ -181,18 +180,4 @@ export function computePlacements(
         .slice(0, 10)}`,
     };
   });
-}
-
-/**
- * Reorder a cached task array so the ids in `orderedIds` lead, in that order,
- * with every other task kept in its existing relative order after them — the
- * optimistic-reorder cache update (mirrors the table view's helper).
- */
-export function reorderTasksByIds(tasks: Task[], orderedIds: string[]): Task[] {
-  const rank = new Map(orderedIds.map((id, i) => [id, i]));
-  const ranked: Task[] = [];
-  const rest: Task[] = [];
-  for (const t of tasks) (rank.has(t.localId) ? ranked : rest).push(t);
-  ranked.sort((a, b) => rank.get(a.localId)! - rank.get(b.localId)!);
-  return [...ranked, ...rest];
 }
