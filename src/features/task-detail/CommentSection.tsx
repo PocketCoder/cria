@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -11,23 +10,14 @@ import {
   Check,
   Plus,
 } from 'lucide-react';
-import { useTaskComments, useTaskUnreadCount } from '@/queries/comments';
-import {
-  markCommentsAsRead,
-  createComment,
-  updateComment,
-  deleteComment,
-  toggleCommentReaction,
-  type TaskComment,
-} from '@/db/comments';
-import { getCachedUser } from '@/db/user';
+import { toggleCommentReaction, type TaskComment } from '@/db/comments';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { getAuthSnapshot } from '@/auth/store';
-import { pullCommentsForTask } from '@/sync/pull';
 import { RichTextEditor } from './RichTextEditor';
 import { ThreadSummary } from './ThreadSummary';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
 import type { MentionSearch } from './mentionExtension';
+import { authorInitials, avatarFill, formatTimeAgo } from './commentLogic';
+import { useCommentThread } from './useCommentThread';
 
 export function CommentSection({
   taskLocalId,
@@ -40,173 +30,62 @@ export function CommentSection({
   mentionSearch?: MentionSearch;
   hideHeader?: boolean;
 }) {
-  const { data: comments = [] } = useTaskComments(taskLocalId);
-  const { data: unreadCount = 0 } = useTaskUnreadCount(taskLocalId);
-  const qc = useQueryClient();
+  const t = useCommentThread(taskLocalId, taskServerId, hideHeader);
   const aiAvailable = useAiAvailable();
-  const [expanded, setExpanded] = useState(hideHeader);
-  const [sortAsc, setSortAsc] = useState(true);
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-
-  useEffect(() => {
-    getCachedUser().then((user) => setCurrentUserId(user?.serverId ?? null));
-  }, []);
-
-  // Refresh server comments whenever the detail opens for a task. The bulk
-  // list pulls dropped `expand: 'comments'`, so comments no longer arrive
-  // inline — pull just this task's comments here (lighter than refetching the
-  // whole task, and it won't clobber other relations). Best-effort: it
-  // resolves the server id itself and swallows its own errors.
-  useEffect(() => {
-    void pullCommentsForTask(taskLocalId);
-  }, [taskLocalId]);
-
-  const totalCount = comments.length;
-
-  const sortedComments = useMemo(() => {
-    const sorted = [...comments];
-    sorted.sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return sortAsc ? aTime - bTime : bTime - aTime;
-    });
-    return sorted;
-  }, [comments, sortAsc]);
-
-  const handleToggle = () => {
-    setExpanded(!expanded);
-  };
-
-  useEffect(() => {
-    if (expanded && unreadCount > 0) {
-      void markCommentsAsRead(taskLocalId).then(() => {
-        void qc.invalidateQueries({ queryKey: ['comments', taskLocalId] });
-        void qc.invalidateQueries({ queryKey: ['comments', 'unread', taskLocalId] });
-      });
-    }
-  }, [expanded, unreadCount, taskLocalId, qc]);
-
-  const handleCreateComment = useCallback(
-    async (html: string) => {
-      if (!html.trim()) return;
-      await createComment(taskLocalId, html);
-      void qc.invalidateQueries({ queryKey: ['comments', taskLocalId] });
-      void qc.invalidateQueries({ queryKey: ['comments', 'unread', taskLocalId] });
-    },
-    [taskLocalId, qc],
-  );
-
-  const handleUpdateComment = useCallback(
-    async (commentLocalId: string, html: string) => {
-      if (!html.trim()) return;
-      await updateComment(commentLocalId, html);
-      setEditingCommentId(null);
-      void qc.invalidateQueries({ queryKey: ['comments', taskLocalId] });
-      void qc.invalidateQueries({ queryKey: ['comments', 'unread', taskLocalId] });
-    },
-    [taskLocalId, qc],
-  );
-
-  const handleDeleteComment = useCallback(
-    async (commentLocalId: string) => {
-      await deleteComment(commentLocalId);
-      setDeletingCommentId(null);
-      void qc.invalidateQueries({ queryKey: ['comments', taskLocalId] });
-      void qc.invalidateQueries({ queryKey: ['comments', 'unread', taskLocalId] });
-    },
-    [taskLocalId, qc],
-  );
-
-  const handleCopyPermalink = useCallback(
-    (comment: TaskComment) => {
-      const { serverUrl } = getAuthSnapshot();
-      let text: string;
-      if (serverUrl && taskServerId && comment.serverId) {
-        text = `${serverUrl.replace(/\/+$/, '')}/tasks/${taskServerId}#comment-${comment.serverId}`;
-      } else if (comment.serverId) {
-        text = `#comment-${comment.serverId}`;
-      } else {
-        text = `comment by ${comment.authorName ?? 'Unknown'} at ${comment.createdAt ?? ''}`;
-      }
-      void navigator.clipboard.writeText(text);
-      setCopiedId(comment.localId);
-      setTimeout(() => setCopiedId(null), 1500);
-    },
-    [taskServerId],
-  );
 
   return (
     <section className="mb-4">
       {hideHeader ? null : (
-        <button
-          type="button"
-          onClick={handleToggle}
-          className="flex w-full items-center gap-1 text-left group-label text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-        >
-          {expanded ? (
-            <ChevronDown className="h-3 w-3 shrink-0" />
-          ) : (
-            <ChevronRight className="h-3 w-3 shrink-0" />
-          )}
-          <MessageSquare className="h-3 w-3" />
-          Comments
-          {totalCount > 0 ? (
-            <span className="font-normal">{totalCount}</span>
-          ) : null}
-          {unreadCount > 0 ? (
-            <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-[var(--color-primary-foreground)]">
-              {unreadCount} new
-            </span>
-          ) : null}
-        </button>
+        <CommentsHeader
+          expanded={t.expanded}
+          total={t.comments.length}
+          unread={t.unreadCount}
+          onToggle={() => t.setExpanded(!t.expanded)}
+        />
       )}
 
-      {expanded ? (
+      {t.expanded ? (
         <div className="mt-2 space-y-2">
-          {comments.length > 1 ? (
+          {t.comments.length > 1 ? (
             <button
               type="button"
-              onClick={() => setSortAsc(!sortAsc)}
+              onClick={() => t.setSortAsc(!t.sortAsc)}
               className="flex items-center gap-1 text-footnote text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
             >
               <ArrowUpDown className="h-3 w-3" />
-              {sortAsc ? 'Oldest first' : 'Newest first'}
+              {t.sortAsc ? 'Oldest first' : 'Newest first'}
             </button>
           ) : null}
 
-          {aiAvailable && comments.length >= 3 && <ThreadSummary comments={comments} />}
+          {aiAvailable && t.comments.length >= 3 && <ThreadSummary comments={t.comments} />}
 
-          {sortedComments.length === 0 ? (
+          {t.sortedComments.length === 0 ? (
             <p className="px-1 text-xs text-[var(--color-muted-foreground)]">
               No comments yet.
             </p>
           ) : (
-            sortedComments.map((c) => (
+            t.sortedComments.map((c) => (
               <CommentRow
                 key={c.localId}
                 comment={c}
-                isEditing={editingCommentId === c.localId}
-                isDeleting={deletingCommentId === c.localId}
-                isCopied={copiedId === c.localId}
+                isEditing={t.editingId === c.localId}
+                isDeleting={t.deletingId === c.localId}
+                isCopied={t.copiedId === c.localId}
                 taskServerId={taskServerId}
-                currentUserId={currentUserId}
-                onEdit={() => setEditingCommentId(c.localId)}
-                onCancelEdit={() => setEditingCommentId(null)}
-                onSave={(html) => handleUpdateComment(c.localId, html)}
-                onDelete={() => setDeletingCommentId(c.localId)}
-                onConfirmDelete={() => handleDeleteComment(c.localId)}
-                onCancelDelete={() => setDeletingCommentId(null)}
-                onCopyPermalink={() => handleCopyPermalink(c)}
+                currentUserId={t.currentUserId}
+                onEdit={() => t.setEditingId(c.localId)}
+                onCancelEdit={() => t.setEditingId(null)}
+                onSave={(html) => t.update(c.localId, html)}
+                onDelete={() => t.setDeletingId(c.localId)}
+                onConfirmDelete={() => t.remove(c.localId)}
+                onCancelDelete={() => t.setDeletingId(null)}
+                onCopyPermalink={() => t.copyPermalink(c)}
               />
             ))
           )}
 
           <CommentCreateForm
-            onSave={handleCreateComment}
+            onSave={t.create}
             taskLocalId={taskLocalId}
             taskServerId={taskServerId}
             mentionSearch={mentionSearch}
@@ -214,6 +93,40 @@ export function CommentSection({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function CommentsHeader({
+  expanded,
+  total,
+  unread,
+  onToggle,
+}: {
+  expanded: boolean;
+  total: number;
+  unread: number;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center gap-1 text-left group-label text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+    >
+      {expanded ? (
+        <ChevronDown className="h-3 w-3 shrink-0" />
+      ) : (
+        <ChevronRight className="h-3 w-3 shrink-0" />
+      )}
+      <MessageSquare className="h-3 w-3" />
+      Comments
+      {total > 0 ? <span className="font-normal">{total}</span> : null}
+      {unread > 0 ? (
+        <span className="ml-auto rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-micro font-normal text-[var(--color-primary-foreground)]">
+          {unread} new
+        </span>
+      ) : null}
+    </button>
   );
 }
 
@@ -248,27 +161,8 @@ function CommentRow({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const initials = useMemo(() => {
-    const name = comment.authorName;
-    if (!name) return '?';
-    const parts = name.trim().split(/\s+/);
-    const first = parts[0] ?? '';
-    const last = parts[parts.length - 1] ?? '';
-    if (parts.length >= 2 && first && last) {
-      return (first.charAt(0) + last.charAt(0)).toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  }, [comment.authorName]);
-
-  const avatarFill = useMemo(() => {
-    let hash = 0;
-    const name = comment.authorName ?? '';
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash % 360);
-    return `hsl(${hue}, 55%, 50%)`;
-  }, [comment.authorName]);
+  const initials = useMemo(() => authorInitials(comment.authorName), [comment.authorName]);
+  const avatarColour = useMemo(() => avatarFill(comment.authorName), [comment.authorName]);
 
   const timeAgo = useMemo(() => formatTimeAgo(comment.createdAt), [comment.createdAt]);
   const isEdited = comment.updatedAt && comment.createdAt && comment.updatedAt !== comment.createdAt;
@@ -330,7 +224,7 @@ function CommentRow({
           className="h-5 w-5 shrink-0 rounded-full"
           aria-hidden="true"
         >
-          <circle cx="16" cy="16" r="16" fill={avatarFill} />
+          <circle cx="16" cy="16" r="16" fill={avatarColour} />
           <text
             x="16"
             y="16"
@@ -489,25 +383,4 @@ function CommentCreateForm({
       />
     </div>
   );
-}
-
-function formatTimeAgo(iso: string | null): string {
-  if (!iso) return '';
-  const now = Date.now();
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
-  const diffSec = Math.floor((now - then) / 1000);
-  if (diffSec < 60) return 'just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  const diffWeek = Math.floor(diffDay / 7);
-  if (diffWeek < 4) return `${diffWeek}w ago`;
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
 }
