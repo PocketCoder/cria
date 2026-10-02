@@ -109,7 +109,10 @@ export function useKeyboardInset(): number {
 export function useEscapeKey(onClose: () => void): void {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // An inner picker (Radix popover/select) already took this Escape in
+      // its capture-phase listener and called preventDefault: leave the
+      // sheet open so the first press closes the picker only.
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         e.preventDefault();
         onClose();
       }

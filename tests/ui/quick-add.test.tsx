@@ -60,4 +60,26 @@ describe('QuickAddModal smoke', () => {
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('closes an open picker on the first Escape and the sheet on the second', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(<QuickAddModal onClose={onClose} />);
+    await user.type(await screen.findByPlaceholderText(/buy milk|task name/i), 'Buy milk');
+
+    await user.click(screen.getByText(/\+ Priority, labels/));
+    await user.click(await screen.findByRole('button', { name: /^Priority/ }));
+    expect(await screen.findByRole('radiogroup', { name: 'Priority' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+
+    // The outer chips popover is still open: it takes the next Escape.
+    await user.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

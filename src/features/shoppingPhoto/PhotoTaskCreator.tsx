@@ -65,7 +65,8 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // Skip Escapes an inner picker already handled (defaultPrevented).
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         e.preventDefault();
         onClose();
       }
