@@ -17,6 +17,28 @@ export function looksEmptyHtml(html: string): boolean {
 }
 
 /**
+ * Flip the `index`th task item (document order) in a stored description and
+ * return the new HTML, or null when there is no such item. Works on the stored
+ * string, never on the rendered DOM: ReadView swaps image `src` values at
+ * runtime (to `#`, then an authenticated `blob:` URL), and serialising that
+ * DOM saved the swapped srcs, which the sanitiser then stripped, losing the
+ * image for good. Mirrors TipTap's output: `checked` attribute on the input
+ * plus `data-checked` on the `<li>`.
+ */
+export function setTaskItemChecked(html: string, index: number, checked: boolean): string | null {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const li = doc.body.querySelectorAll('li[data-type="taskItem"]')[index];
+  if (!li) return null;
+  li.setAttribute('data-checked', String(checked));
+  const box = li.querySelector('input[type="checkbox"]');
+  if (box) {
+    if (checked) box.setAttribute('checked', 'checked');
+    else box.removeAttribute('checked');
+  }
+  return doc.body.innerHTML;
+}
+
+/**
  * The slash-command query at the end of the text before the cursor: a slash at
  * the start of the block or after whitespace, followed by optional word
  * characters. Null when there is no slash command.

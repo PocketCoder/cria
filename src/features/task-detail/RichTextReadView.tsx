@@ -5,7 +5,7 @@ import { isAttachmentUrl, parseAttachmentUrl } from '@/sync/attachments';
 import { ImageLightbox } from './ImageLightbox';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { onLinkClickOpenExternal } from '@/lib/openExternal';
-import { isEmptyDescription } from './editorLogic';
+import { isEmptyDescription, setTaskItemChecked } from './editorLogic';
 
 export function ReadView({
   value,
@@ -31,14 +31,10 @@ export function ReadView({
   /**
    * Container click dispatch for rendered descriptions.
    *
-   * 1. **Task-list checkbox** → toggle + serialize + save in place.
+   * 1. **Task-list checkbox** → toggle in the stored HTML + save in place.
    *    There's no TipTap editor in ReadView (the description is just
-   *    sanitised HTML through dangerouslySetInnerHTML), so we have to
-   *    mutate the DOM ourselves and call onSave directly. We
-   *    preventDefault before the browser's own toggle runs so the
-   *    attribute/property pair stays in sync — otherwise innerHTML
-   *    serialisation reads the old attribute and the toggle reverts on
-   *    the next refetch.
+   *    sanitised HTML through dangerouslySetInnerHTML), so we flip the
+   *    Nth task item in the source string and call onSave directly.
    * 2. **Inline image** → open the lightbox (same `<img>` walk as
    *    before).
    * 3. **Anchor** → route through `onLinkClickOpenExternal` to open
@@ -53,18 +49,18 @@ export function ReadView({
       target.closest('li[data-type="taskItem"]')
     ) {
       // By the time React's synthetic onClick fires, the browser has
-      // already toggled `target.checked` (the property). What hasn't
-      // synced is the `checked` *attribute* — and that's what
-      // innerHTML serialisation reads. Mirror property → attribute so
-      // the saved HTML reflects the new state, then update the LI's
-      // data-checked so TipTap parses it back correctly on next pull.
-      const newChecked = target.checked;
-      if (newChecked) target.setAttribute('checked', 'checked');
-      else target.removeAttribute('checked');
-      const li = target.closest('li[data-type="taskItem"]') as HTMLElement;
-      li.setAttribute('data-checked', String(newChecked));
-      const html = containerRef.current?.innerHTML;
-      if (html) void onSave(html);
+      // already toggled `target.checked` (the property). Apply that state
+      // to the *stored* HTML rather than serialising the live DOM: the
+      // effect below rewrites image srcs at runtime and those must never
+      // reach the saved description. Item order is identical in both
+      // because the DOM was rendered from sanitizeHtml(value).
+      const li = target.closest('li[data-type="taskItem"]');
+      const items = containerRef.current?.querySelectorAll('li[data-type="taskItem"]');
+      const index = li && items ? Array.from(items).indexOf(li) : -1;
+      if (value && index >= 0) {
+        const html = setTaskItemChecked(sanitizeHtml(value), index, target.checked);
+        if (html) void onSave(html);
+      }
       return;
     }
 
