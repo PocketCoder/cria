@@ -176,16 +176,18 @@ export async function executeTaskBucketOp(
   };
   const taskLocalId = op.entity_local_id;
 
-  const [taskRow] = await db.select<{ server_id: number | null }[]>(
-    `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
-    [taskLocalId],
-  );
-  const [bucketRow] = await db.select<{ server_id: number | null }[]>(
-    `SELECT server_id FROM buckets WHERE local_id = ? LIMIT 1`,
-    [payload.bucket_local_id],
-  );
-  const { view_server_id: viewServerId, project_server_id: projectServerId } =
-    await resolveViewContext(db, payload.view_local_id);
+  const [[taskRow], [bucketRow], viewContext] = await Promise.all([
+    db.select<{ server_id: number | null }[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+      [taskLocalId],
+    ),
+    db.select<{ server_id: number | null }[]>(
+      `SELECT server_id FROM buckets WHERE local_id = ? LIMIT 1`,
+      [payload.bucket_local_id],
+    ),
+    resolveViewContext(db, payload.view_local_id),
+  ]);
+  const { view_server_id: viewServerId, project_server_id: projectServerId } = viewContext;
 
   const taskServerId = taskRow?.server_id ?? null;
   const bucketServerId = bucketRow?.server_id ?? null;
@@ -228,14 +230,14 @@ export async function executeTaskPositionOp(
   };
   const taskLocalId = op.entity_local_id;
 
-  const [taskRow] = await db.select<{ server_id: number | null }[]>(
-    `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
-    [taskLocalId],
-  );
-  const { view_server_id: viewServerId } = await resolveViewContext(
-    db,
-    payload.view_local_id,
-  );
+  const [[taskRow], viewContext] = await Promise.all([
+    db.select<{ server_id: number | null }[]>(
+      `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,
+      [taskLocalId],
+    ),
+    resolveViewContext(db, payload.view_local_id),
+  ]);
+  const { view_server_id: viewServerId } = viewContext;
 
   const taskServerId = taskRow?.server_id ?? null;
 

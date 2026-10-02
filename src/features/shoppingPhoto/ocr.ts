@@ -35,8 +35,10 @@ async function fileToBase64(file: Blob): Promise<string> {
 
 /** Apple Vision text recognition via the native command. Throws if unavailable. */
 async function recognizeWithVision(file: Blob): Promise<string[]> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  const imageBase64 = await fileToBase64(file);
+  const [{ invoke }, imageBase64] = await Promise.all([
+    import('@tauri-apps/api/core'),
+    fileToBase64(file),
+  ]);
   const lines = await invoke<string[]>('recognize_text', { imageBase64 });
   return lines ?? [];
 }
