@@ -1,3 +1,4 @@
+mod ai;
 mod ocr;
 mod secure;
 mod tx;
@@ -366,6 +367,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
         ocr::recognize_text,
+        ai::ai_generate,
+        ai::ai_availability,
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
@@ -377,6 +380,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
         ocr::recognize_text,
+        ai::ai_generate,
+        ai::ai_availability,
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,

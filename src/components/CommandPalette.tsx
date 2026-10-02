@@ -7,7 +7,8 @@ import { searchTasks, updateTask } from '@/db/tasks';
 import { cn } from '@/lib/cn';
 import { formatDue } from '@/features/tasks/TaskRowCore';
 import { priorityColor } from '@/components/ui/priority-select';
-import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings, Search } from 'lucide-react';
+import { useAiAvailable } from '@/hooks/useAiAvailable';
+import { Calendar, Inbox, Star, FileText, Tag, Plus, Settings, Search, Mic } from 'lucide-react';
 
 interface PaletteAction {
   id: string;
@@ -42,6 +43,7 @@ export function CommandPalette({
   const queryClient = useQueryClient();
   const { data: projects = [] } = useProjects();
   const { data: labels = [] } = useLabels();
+  const aiAvailable = useAiAvailable();
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['palette-tasks', debouncedQuery],
@@ -170,6 +172,20 @@ export function CommandPalette({
         onOpenQuickAdd();
       },
     });
+    if (aiAvailable) {
+      list.push({
+        id: 'action-ramble',
+        label: 'Ramble',
+        subtitle: 'Talk freely, get a list of tasks',
+        group: 'Actions',
+        keywords: 'ramble voice dictate speak brain dump ai many tasks',
+        icon: <Mic className="h-4 w-4" />,
+        onSelect: () => {
+          onClose();
+          useUi.getState().setRambleOpen(true);
+        },
+      });
+    }
     list.push({
       id: 'action-settings',
       label: 'Settings',
@@ -184,7 +200,7 @@ export function CommandPalette({
     });
 
     return list;
-  }, [projects, labels, tasks, setActiveView, setSelectedProject, onClose, onOpenQuickAdd, onOpenSettings]);
+  }, [projects, labels, tasks, setActiveView, setSelectedProject, onClose, onOpenQuickAdd, onOpenSettings, aiAvailable]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();

@@ -51,6 +51,9 @@ const PhotoTaskCreator = lazy(() =>
     default: m.PhotoTaskCreator,
   })),
 );
+const RambleModal = lazy(() =>
+  import('@/features/ramble/RambleModal').then((m) => ({ default: m.RambleModal })),
+);
 const CommandPalette = lazy(() =>
   import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
 );
@@ -86,6 +89,8 @@ export function Shell() {
   const setSelectedTask = useUi((s) => s.setSelectedTask);
   const photoCaptureOpen = useUi((s) => s.photoCaptureOpen);
   const setPhotoCaptureOpen = useUi((s) => s.setPhotoCaptureOpen);
+  const rambleOpen = useUi((s) => s.rambleOpen);
+  const setRambleOpen = useUi((s) => s.setRambleOpen);
   const sidebarCollapsed = useUi((s) => s.sidebarCollapsed);
   const toggleSidebar = useUi((s) => s.toggleSidebar);
   const selectedTaskLocalId = useUi((s) => s.selectedTaskLocalId);
@@ -627,6 +632,11 @@ export function Shell() {
           <PhotoTaskCreator onClose={() => setPhotoCaptureOpen(false)} />
         </Suspense>
       )}
+      {rambleOpen && (
+        <Suspense fallback={null}>
+          <RambleModal onClose={() => setRambleOpen(false)} />
+        </Suspense>
+      )}
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsModal
@@ -704,6 +714,7 @@ export function Shell() {
         !selectedTaskLocalId &&
         !mobileSearchOpen &&
         !photoCaptureOpen &&
+        !rambleOpen &&
         !showQuickAdd && (
           <button
             type="button"
