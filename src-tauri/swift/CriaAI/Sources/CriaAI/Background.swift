@@ -17,7 +17,7 @@ import UserNotifications
 /// (src/tauri/ai.ts) notifies when the window isn't focused.
 func withBackgroundProgress(
     title: String,
-    work: (@escaping @Sendable () -> Void) async -> [String: String]
+    work: @escaping @Sendable (@escaping @Sendable () -> Void) async -> [String: String]
 ) async -> [String: String] {
     #if os(iOS) && canImport(FoundationModels) // canImport = built with the iOS 26 SDK
     if #available(iOS 26, *) {
@@ -33,11 +33,12 @@ private final class ContinuedTask: @unchecked Sendable {
     private let lock = NSLock()
     private var bgTask: BGContinuedProcessingTask?
     private var finished: Bool?
+    private var expired = false
     private var workTask: Task<[String: String], Never>?
 
     static func run(
         title: String,
-        work: (@escaping @Sendable () -> Void) async -> [String: String]
+        work: @escaping @Sendable (@escaping @Sendable () -> Void) async -> [String: String]
     ) async -> [String: String] {
         let state = ContinuedTask()
         // Info.plist permits "$(PRODUCT_BUNDLE_IDENTIFIER).ai.*" (src-tauri/Info.ios.plist).
@@ -52,16 +53,41 @@ private final class ContinuedTask: @unchecked Sendable {
             try? BGTaskScheduler.shared.submit(request)
         }
 
-        let result = await work { state.tick() }
+        // `work` runs in its own Task so the expiration handler has a handle to cancel.
+        let task = Task { await work { state.tick() } }
+        state.setWork(task)
+        var result = await task.value
+        // Cancelled streams can end quietly with partial text; never report that as success.
+        if state.isExpired { result = ["error": "cancelled"] }
         state.finish(success: result["error"] == nil)
-        await notifyIfBackgrounded(title: title, result: result)
+        // The user asked to stop (Live Activity cancel) or the system did; no "Failed" banner.
+        if result["error"] != "cancelled" { await notifyIfBackgrounded(title: title, result: result) }
         return result
+    }
+
+    private func setWork(_ task: Task<[String: String], Never>) {
+        // The system can expire us before the task exists; cancel straight away then.
+        if lock.withLock({ () -> Bool in workTask = task; return expired }) { task.cancel() }
+    }
+
+    private var isExpired: Bool { lock.withLock { expired } }
+
+    /// Cancel the work and close the Live Activity now, so the system doesn't
+    /// kill the app for overrunning an expired task.
+    private func expire() {
+        let task = lock.withLock { () -> Task<[String: String], Never>? in
+            expired = true
+            bgTask?.setTaskCompleted(success: false)
+            bgTask = nil
+            return workTask
+        }
+        task?.cancel()
     }
 
     private func attach(_ task: BGContinuedProcessingTask) {
         lock.lock(); defer { lock.unlock() }
         task.progress.totalUnitCount = 100
-        task.expirationHandler = { [weak self] in self?.lock.withLock { self?.workTask }?.cancel() }
+        task.expirationHandler = { [weak self] in self?.expire() }
         if let finished {
             // Work beat the launch handler; close the Live Activity straight away.
             task.progress.completedUnitCount = 100
