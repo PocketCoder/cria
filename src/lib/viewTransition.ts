@@ -18,6 +18,11 @@ interface Options {
 
 const root = () => document.documentElement;
 
+// Identifies the transition that currently owns `html[data-vt]`. Plain module
+// state is enough (unlike the cross-tick queues in AGENTS.md): it only spans
+// one animation, and an HMR reset mid-flight costs at most one stray marker.
+let currentTransition = 0;
+
 export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -58,7 +63,9 @@ export function withViewTransition(
     return Promise.resolve();
   }
   // A running transition is skipped by the new one; overwriting the marker
-  // here, and the guard in `finally`, keep the newest kind's CSS in charge.
+  // here, and the token check in `finally`, keep the newest transition's CSS
+  // in charge (comparing kinds isn't enough: two of the same kind overlap).
+  const id = ++currentTransition;
   root().dataset.vt = kind;
   const vt = document.startViewTransition(async () => {
     flushSync(update);
@@ -68,6 +75,6 @@ export function withViewTransition(
   return vt.finished
     .catch(() => {}) // only rejects if `update` threw; React already surfaced it
     .finally(() => {
-      if (root().dataset.vt === kind) delete root().dataset.vt;
+      if (currentTransition === id) delete root().dataset.vt;
     });
 }
