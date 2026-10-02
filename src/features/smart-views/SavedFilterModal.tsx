@@ -94,10 +94,11 @@ export function SavedFilterModal({
 
         <div className="space-y-3 p-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+            <label htmlFor="saved-filter-title" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Title
             </label>
             <input
+              id="saved-filter-title"
               aria-label="Title"
               type="text"
               autoFocus
@@ -109,10 +110,11 @@ export function SavedFilterModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+            <label htmlFor="saved-filter-query" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Filter query
             </label>
             <FilterInput
+              id="saved-filter-query"
               value={query}
               onChange={setQuery}
               rows={3}
@@ -129,10 +131,11 @@ export function SavedFilterModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
+            <label htmlFor="saved-filter-description" className="mb-1 block text-xs font-medium text-[var(--color-muted-foreground)]">
               Description <span className="font-normal">(optional)</span>
             </label>
             <input
+              id="saved-filter-description"
               aria-label="Description"
               type="text"
               value={description}

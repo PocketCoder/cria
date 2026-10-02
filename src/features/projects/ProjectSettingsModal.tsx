@@ -182,8 +182,9 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Title */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Title</label>
+              <label htmlFor="project-settings-title" className="text-sm font-semibold">Title</label>
               <input
+                id="project-settings-title"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -194,9 +195,10 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Parent Project */}
             <div className="space-y-1.5" ref={parentRef}>
-              <label className="text-sm font-semibold">Parent Project</label>
+              <label htmlFor="project-settings-parent" className="text-sm font-semibold">Parent Project</label>
               <div className="relative">
                 <button
+                  id="project-settings-parent"
                   type="button"
                   onClick={() => setParentOpen(!parentOpen)}
                   className="flex w-full items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-left text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
@@ -253,8 +255,9 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Project Identifier */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Project Identifier</label>
+              <label htmlFor="project-settings-identifier" className="text-sm font-semibold">Project Identifier</label>
               <input
+                id="project-settings-identifier"
                 aria-label="Project identifier"
                 type="text"
                 value={identifier}
@@ -266,7 +269,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Description Editor */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Description</label>
+              <label id="project-settings-description-label" htmlFor="project-settings-description" className="text-sm font-semibold">Description</label>
               <ProjectDescriptionEditor
                 value={descriptionHtml}
                 onChange={setDescriptionHtml}
@@ -392,6 +395,8 @@ function ProjectDescriptionEditor({
     content: value || '<p></p>',
     editorProps: {
       attributes: {
+        id: 'project-settings-description',
+        'aria-labelledby': 'project-settings-description-label',
         class: 'prose prose-sm max-w-none min-h-[8rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-3 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-center [&_ul[data-type=taskList]_li]:gap-1.5 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md',
       },
       handleKeyDown(view, event) {

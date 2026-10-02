@@ -43,12 +43,15 @@ export function FilterInput({
   rows = 2,
   autoFocus,
   placeholder,
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
   rows?: number;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Lets an external `<label htmlFor>` name the textarea. */
+  id?: string;
 }) {
   const { data: labels = [] } = useLabels();
   const { data: projects = [] } = useProjects();
@@ -138,6 +141,7 @@ export function FilterInput({
       </div>
       <textarea
         ref={taRef}
+        id={id}
         value={value}
         rows={rows}
         autoFocus={autoFocus}
