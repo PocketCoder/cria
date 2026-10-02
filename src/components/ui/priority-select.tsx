@@ -10,7 +10,7 @@ import {
   pickerRowClass,
   type PickerOpenProps,
 } from '@/components/ui/popover';
-import { indicatorStyle, useSegmentIndicator } from '@/components/ui/segmented-control';
+import { indicatorStyle, useSegmentIndicator } from '@/components/ui/segmentIndicator';
 
 interface PrioritySelectProps extends PickerOpenProps {
   value: number;
@@ -128,7 +128,7 @@ function PrioritySegmented({
 }: Pick<PrioritySelectProps, 'value' | 'onChange' | 'className' | 'compact'>) {
   const ref = useRef<HTMLDivElement>(null);
   const index = Math.max(0, PRIORITY_META.findIndex((m) => m.value === value));
-  const box = useSegmentIndicator(ref, index, [compact]);
+  const box = useSegmentIndicator(ref, index, String(compact));
   const [moved, setMoved] = useState(false);
   const current = PRIORITY_META[index]!;
   return (
