@@ -336,12 +336,13 @@ function SubtasksBlock({
 }) {
   const qc = useQueryClient();
   const aiAvailable = useAiAvailable();
-  const { data: relations = [] } = useQuery({
+  const { data: relations } = useQuery({
     queryKey: ['relations', taskLocalId],
     queryFn: () => listRelationsForTask(taskLocalId),
     staleTime: 30_000,
   });
-  const subtasks = relations.filter((r) => r.kind === 'subtask');
+  // Memoised so the search effect below only re-runs when the relations change.
+  const subtasks = useMemo(() => (relations ?? []).filter((r) => r.kind === 'subtask'), [relations]);
   const done = subtasks.filter((r) => r.otherTaskDone).length;
   const pct = subtasks.length > 0 ? Math.round((done / subtasks.length) * 100) : 0;
   const [adding, setAdding] = useState(false);
@@ -349,8 +350,11 @@ function SubtasksBlock({
   const [results, setResults] = useState<Array<{ localId: string; title: string }>>([]);
 
   useEffect(() => {
+    // Functional update keeps the same state when already empty, so a no-op
+    // clear never schedules a re-render.
+    const clear = () => setResults((prev) => (prev.length === 0 ? prev : []));
     if (!adding || query.trim().length < 1) {
-      setResults([]);
+      clear();
       return;
     }
     const t = setTimeout(() => {
@@ -364,7 +368,7 @@ function SubtasksBlock({
               .map((r) => ({ localId: r.localId, title: r.title })),
           );
         })
-        .catch(() => setResults([]));
+        .catch(clear);
     }, 120);
     return () => clearTimeout(t);
   }, [adding, query, subtasks, taskLocalId]);

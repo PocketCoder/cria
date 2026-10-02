@@ -1,5 +1,6 @@
 import './mocks';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { Profiler } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '@/features/task-detail/TaskDetail';
@@ -73,5 +74,32 @@ describe('TaskDetail smoke', () => {
     await screen.findByRole('heading', { name: 'Fix the shelf' });
     await user.keyboard('{Escape}');
     await waitFor(() => expect(useUi.getState().selectedTaskLocalId).toBeNull());
+  });
+});
+
+describe('TaskDetail subtasks block', () => {
+  it('settles after mount without a render loop', async () => {
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {
+      errors.push(a.map(String).join(' '));
+    });
+    let commits = 0;
+    useUi.setState({ selectedTaskLocalId: taskId });
+    renderWithProviders(
+      <Profiler id="detail" onRender={() => (commits += 1)}>
+        <TaskDetail />
+      </Profiler>,
+    );
+    await screen.findByRole('heading', { name: 'Fix the shelf' });
+    await screen.findByText('Subtasks');
+    // Let queries, effects and any timers drain, then confirm nothing keeps rendering.
+    await new Promise((r) => setTimeout(r, 300));
+    const settled = commits;
+    await new Promise((r) => setTimeout(r, 300));
+    spy.mockRestore();
+
+    expect(commits).toBe(settled);
+    expect(commits).toBeLessThan(40);
+    expect(errors.filter((e) => e.includes('Maximum update depth'))).toEqual([]);
   });
 });
