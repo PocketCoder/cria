@@ -131,6 +131,7 @@ export function DataTab({ disabled }: Props) {
             <div className="space-y-2">
               <p className="text-sm text-[var(--color-destructive)]">Enter your password to confirm:</p>
               <input
+                aria-label="Current password"
                 type="password"
                 value={delPassword}
                 onChange={(e) => setDelPassword(e.target.value)}

@@ -334,6 +334,7 @@ export function ShareProjectModal({
               <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2.5">
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Link name"
                     type="text"
                     value={linkName}
                     onChange={(e) => setLinkName(e.target.value)}
@@ -344,6 +345,7 @@ export function ShareProjectModal({
                 </div>
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Link password"
                     type="password"
                     value={linkPassword}
                     onChange={(e) => setLinkPassword(e.target.value)}

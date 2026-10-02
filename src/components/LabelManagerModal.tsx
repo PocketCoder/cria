@@ -189,6 +189,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
               {creating ? (
                 <li className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5">
                   <input
+                    aria-label="New label name"
                     type="text"
                     autoFocus
                     value={newTitle}

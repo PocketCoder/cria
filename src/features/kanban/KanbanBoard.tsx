@@ -539,6 +539,7 @@ function KanbanColumn({ column, collapsed, onToggleCollapse, view, projectLocalI
             {showNewInput ? (
               <div className="flex items-center gap-1">
                 <input
+                  aria-label="New task title"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   onKeyDown={(e) => {
@@ -665,6 +666,7 @@ function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
     return (
       <div className="flex h-fit w-72 shrink-0 flex-col gap-2 rounded-lg border border-dashed border-[var(--color-border)] p-3">
         <input
+          aria-label="New bucket name"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {

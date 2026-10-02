@@ -117,6 +117,7 @@ export function ProjectPickerList({
         <div className="flex items-center gap-2 rounded-[11px] bg-[var(--color-input)] px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
           <input
+            aria-label="Search projects and labels"
             autoFocus={autoFocus}
             value={q}
             onChange={(e) => setQ(e.target.value)}

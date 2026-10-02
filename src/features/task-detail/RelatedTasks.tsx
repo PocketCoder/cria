@@ -330,6 +330,7 @@ function AddRelationRow({
           </SelectContent>
         </Select>
         <input
+          aria-label="Search tasks"
           type="text"
           autoFocus
           placeholder="Search tasks…"

@@ -211,6 +211,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
       <div className="mt-2">
         {creating ? (
           <input
+            aria-label="New team name"
             type="text"
             autoFocus
             value={newName}

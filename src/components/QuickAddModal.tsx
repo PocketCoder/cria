@@ -623,6 +623,7 @@ export function QuickAddModal({ onClose }: { onClose: () => void }) {
                 className="text-[21px] font-medium leading-[1.35] tracking-[-0.015em]"
               />
               <input
+                aria-label="Note"
                 type="text"
                 placeholder="Add a note…"
                 className="mt-2 w-full bg-transparent text-[15px] text-[var(--color-foreground)] placeholder-[var(--color-muted-foreground)] focus:outline-none"

@@ -525,6 +525,7 @@ export function ProjectSidebar({
             ))}
             {creatingLabel ? (
               <input
+                aria-label="New label name"
                 type="text"
                 autoFocus
                 value={newLabelTitle}
@@ -583,6 +584,7 @@ export function ProjectSidebar({
 
           {creating ? (
             <input
+              aria-label="New project name"
               type="text"
               autoFocus
               value={newTitle}

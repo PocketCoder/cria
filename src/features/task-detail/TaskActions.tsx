@@ -287,6 +287,7 @@ export function InlineColor({
             </button>
           </div>
           <input
+            aria-label="Custom colour hex"
             type="text"
             value={customHex}
             onChange={(e) => setCustomHex(e.target.value)}
@@ -365,6 +366,7 @@ export function InlineLabels({
       {expanded && (
         <div className="mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
           <input
+            aria-label="Search or create label"
             type="text"
             placeholder="Search or create…"
             value={search}

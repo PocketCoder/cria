@@ -101,6 +101,7 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <input
+            aria-label="Display name"
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}

@@ -148,6 +148,7 @@ export function TokensTab({ disabled }: Props) {
           ) : (
             <div className="space-y-2">
               <input
+                aria-label="Token description"
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}

@@ -85,6 +85,7 @@ export function LabelPicker({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-52 p-1">
         <input
+          aria-label="Search or create label"
           autoFocus
           type="text"
           placeholder="Search or create…"

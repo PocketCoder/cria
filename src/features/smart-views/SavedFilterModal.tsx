@@ -97,6 +97,7 @@ export function SavedFilterModal({
               Title
             </label>
             <input
+              aria-label="Title"
               type="text"
               autoFocus
               value={title}

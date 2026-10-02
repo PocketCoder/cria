@@ -208,6 +208,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
                 {parentOpen && (
                   <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-lg">
                     <input
+                      aria-label="Search projects"
                       type="text"
                       value={parentSearch}
                       onChange={(e) => setParentSearch(e.target.value)}
@@ -253,6 +254,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Project Identifier</label>
               <input
+                aria-label="Project identifier"
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
