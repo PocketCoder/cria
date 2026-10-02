@@ -78,7 +78,7 @@ type PickerId =
 /* ── value summaries (right-aligned grey text per row) ────────────────── */
 
 const dateLabel = (v: DateFilter | undefined) =>
-  DATE_CHOICES.find((c) => c.value === (v ?? 'all'))!.label;
+  DATE_CHOICES.find((c) => c.value === (v ?? 'all'))?.label ?? '';
 
 function sortLabel(s: DisplaySort): string {
   return SORT_CHOICES.find((c) => c.sort.field === s.field)?.label ?? 'Smart';
@@ -215,7 +215,7 @@ function MainScreen({
             <NavRow
               icon={Layers}
               label="Grouping"
-              value={GROUP_CHOICES.find((c) => c.value === config.groupBy)!.label}
+              value={GROUP_CHOICES.find((c) => c.value === config.groupBy)?.label ?? ''}
               onClick={() => openPicker('grouping')}
             />
           )}
@@ -235,7 +235,7 @@ function MainScreen({
           <NavRow
             icon={User}
             label="Assignee"
-            value={ASSIGNEE_CHOICES.find((c) => c.value === (f.assignee ?? 'all'))!.label}
+            value={ASSIGNEE_CHOICES.find((c) => c.value === (f.assignee ?? 'all'))?.label ?? ''}
             onClick={() => openPicker('assignee')}
           />
         )}
