@@ -60,23 +60,34 @@ jobs:
       - name: Switch config to nightly channel
         run: scripts/nightly-config.sh "$(jq -r .version package.json)-nightly.${{ github.run_number }}"
       # Stable self-signed identity so macOS keychain "Always Allow" survives
-      # updates (generate with scripts/make-signing-cert.sh). Exported only when
-      # set: Tauri treats an empty APPLE_CERTIFICATE as present and fails.
+      # updates (generate with scripts/make-signing-cert.sh). We import it into
+      # a temporary keychain ourselves and pass only APPLE_SIGNING_IDENTITY:
+      # with APPLE_CERTIFICATE set, Tauri resolves the identity through
+      # `security find-identity -v`, which hides untrusted self-signed certs
+      # ("failed to resolve signing identity"). Without it, Tauri calls
+      # `codesign --sign <hash>` directly, which accepts the cert.
       - name: Configure macOS code signing
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_SIGNING_IDENTITY" ]; then
-            {
-              echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
-              echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
-              echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
-            } >> "$GITHUB_ENV"
-          else
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
             echo "No signing cert configured; using ad-hoc signing."
+            exit 0
           fi
+          KC="$RUNNER_TEMP/cria-signing.keychain-db"
+          KC_PASS="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cria.p12"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          security import "$RUNNER_TEMP/cria.p12" -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cria.p12"
+          security find-identity -p codesigning "$KC"
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build signed bundle
         env:
