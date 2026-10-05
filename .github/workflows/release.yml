@@ -53,27 +53,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Check the tagged commit is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Tagged commit $(git rev-parse --short HEAD) is not on main. Merge dev into main and tag the merge commit."
+            exit 1
+          fi
       - name: Check all version sources equal the tag
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           WANT="${TAG#v}"
 
-          pkg=$(jq -r .version package.json)
-          conf=$(jq -r .version src-tauri/tauri.conf.json)
-          cargo=$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
-          lock=$(grep -A1 '^name = "cria"$' src-tauri/Cargo.lock | grep '^version = ' | sed -E 's/.*"(.*)".*/\1/')
-
-          echo "tag=$WANT package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo Cargo.lock=$lock"
-
-          fail=0
-          for pair in "package.json:$pkg" "tauri.conf.json:$conf" "Cargo.toml:$cargo" "Cargo.lock:$lock"; do
-            if [ "${pair#*:}" != "$WANT" ]; then
-              echo "::error::${pair%%:*} is ${pair#*:}, expected $WANT — bump with 'pnpm bump $WANT'"
-              fail=1
-            fi
-          done
-          exit $fail
+          scripts/check-versions.sh "$WANT"
 
   # ------------------------------------------------------------------
   # Build signed bundles per macOS arch.

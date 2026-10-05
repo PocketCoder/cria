@@ -14,6 +14,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  versions:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-versions.sh
+
   quality:
     name: Typecheck & Test
     runs-on: ubuntu-latest
