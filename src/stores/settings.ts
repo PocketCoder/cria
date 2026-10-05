@@ -34,7 +34,20 @@ interface SettingsState {
   setShoppingProjectId: (id: string | null) => void;
   shoppingLabel: string;
   setShoppingLabel: (label: string) => void;
+  // Servers signed in to before, most recent first, for the login screen's
+  // quick-pick chips. Non-secret: the token stays in the keychain. `username`
+  // is only set when the user ticked "Remember me".
+  recentServers: RecentServer[];
+  rememberServer: (url: string, username?: string) => void;
+  forgetServer: (url: string) => void;
 }
+
+export interface RecentServer {
+  url: string;
+  username?: string;
+}
+
+export const MAX_RECENT_SERVERS = 5;
 
 export const useSettings = create<SettingsState>()(
   persist(
@@ -59,6 +72,16 @@ export const useSettings = create<SettingsState>()(
       setShoppingProjectId: (id) => set({ shoppingProjectId: id }),
       shoppingLabel: 'shopping',
       setShoppingLabel: (label) => set({ shoppingLabel: label }),
+      recentServers: [],
+      rememberServer: (url, username) =>
+        set((s) => ({
+          recentServers: [
+            { url, ...(username ? { username } : {}) },
+            ...s.recentServers.filter((r) => r.url !== url),
+          ].slice(0, MAX_RECENT_SERVERS),
+        })),
+      forgetServer: (url) =>
+        set((s) => ({ recentServers: s.recentServers.filter((r) => r.url !== url) })),
     }),
     { name: 'cria:settings/v2' },
   ),

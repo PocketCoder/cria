@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/store';
+import { useSettings } from '@/stores/settings';
 import { createApiClient } from '@/api/client';
 import { fetchCurrentUser } from '@/api/user';
 import { loginWithPassword, isTotpRequired } from '@/api/login';
@@ -18,14 +19,21 @@ import {
   MethodTabs,
   ServerUrlField,
   CredentialFields,
+  RememberOptions,
 } from './LoginFields';
 
 export function LoginScreen() {
   const signIn = useAuth((s) => s.signIn);
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('token');
-  const [serverUrl, setServerUrl] = useState('');
+  const recentServers = useSettings((s) => s.recentServers);
+  const rememberServerUrl = useSettings((s) => s.rememberServer);
+  const forgetServer = useSettings((s) => s.forgetServer);
+  const lastServer = recentServers[0];
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(lastServer?.username ? 'password' : 'token');
+  const [serverUrl, setServerUrl] = useState(lastServer?.url ?? '');
+  const [rememberServer, setRememberServer] = useState(true);
+  const [rememberMe, setRememberMe] = useState(true);
   const [token, setToken] = useState('');
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(lastServer?.username ?? '');
   const [password, setPassword] = useState('');
   const [serverUrlError, setServerUrlError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -44,6 +52,19 @@ export function LoginScreen() {
     setServerUrlError(undefined);
   };
 
+  const pickServer = (r: { url: string; username?: string }) => {
+    setServerUrl(r.url);
+    setServerUrlError(undefined);
+    if (r.username) setUsername(r.username);
+  };
+
+  // Called once the server has accepted the credentials. Username is only kept
+  // for password logins, and only with "Remember me" ticked.
+  const remember = (url: string, user?: string) => {
+    if (!rememberServer) return;
+    rememberServerUrl(url, rememberMe ? user : undefined);
+  };
+
   const doPasswordSignIn = async (
     url: string,
     user: string,
@@ -58,6 +79,7 @@ export function LoginScreen() {
     });
     const client = createApiClient({ baseUrl: url, token: t });
     const me = await fetchCurrentUser(client);
+    remember(url, user);
     await signIn(
       { serverUrl: url, token: t, refreshToken: refreshToken ?? undefined, authMethod: 'password' },
       me,
@@ -87,6 +109,7 @@ export function LoginScreen() {
       try {
         const client = createApiClient({ baseUrl: url, token });
         const user = await fetchCurrentUser(client);
+        remember(url);
         await signIn({ serverUrl: url, token, authMethod: 'token' }, user);
       } catch (err) {
         console.error('[login] token sign-in failed:', err);
@@ -111,6 +134,7 @@ export function LoginScreen() {
           sharePassword || undefined,
         );
         const shareUser = makeShareUser(hash);
+        remember(url);
         await signIn(
           { serverUrl: url, token: shareToken, authMethod: 'linkShare' },
           shareUser,
@@ -176,7 +200,14 @@ export function LoginScreen() {
         <MethodTabs authMethod={authMethod} onSwitch={switchMethod} />
 
         <form onSubmit={onSubmit} className="space-y-4 text-left">
-          <ServerUrlField value={serverUrl} onChange={setServerUrl} error={serverUrlError} />
+          <ServerUrlField
+            value={serverUrl}
+            onChange={setServerUrl}
+            error={serverUrlError}
+            recents={recentServers}
+            onPick={pickServer}
+            onForget={forgetServer}
+          />
 
           <CredentialFields
             authMethod={authMethod}
@@ -194,6 +225,14 @@ export function LoginScreen() {
             totpRequired={totpRequired}
             totpCode={totpCode}
             setTotpCode={setTotpCode}
+          />
+
+          <RememberOptions
+            rememberServer={rememberServer}
+            setRememberServer={setRememberServer}
+            rememberMe={rememberMe}
+            setRememberMe={setRememberMe}
+            showRememberMe={authMethod === 'password'}
           />
 
           {submitError ? (

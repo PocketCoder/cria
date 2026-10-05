@@ -2,6 +2,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import appIcon from '@/assets/app-icon.png';
+import type { RecentServer } from '@/stores/settings';
 import type { AuthMethod } from './loginHelpers';
 
 export function LoginHeader() {
@@ -45,10 +46,16 @@ export function ServerUrlField({
   value,
   onChange,
   error,
+  recents = [],
+  onPick,
+  onForget,
 }: {
   value: string;
   onChange: (v: string) => void;
   error: string | undefined;
+  recents?: RecentServer[];
+  onPick?: (server: RecentServer) => void;
+  onForget?: (url: string) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -65,6 +72,73 @@ export function ServerUrlField({
         onChange={(e) => onChange(e.target.value)}
       />
       <FieldError message={error} />
+      {recents.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" aria-label="Recent servers">
+          {recents.map((r) => (
+            <span
+              key={r.url}
+              className="inline-flex items-center rounded-full border border-[var(--color-border)] text-xs"
+            >
+              <button
+                type="button"
+                onClick={() => onPick?.(r)}
+                title={r.username ? `${r.url} (${r.username})` : r.url}
+                className="max-w-[16rem] truncate rounded-l-full py-1 pl-2.5 pr-1.5 hover:bg-[var(--color-muted)]"
+              >
+                {r.url.replace(/^https?:\/\//, '')}
+              </button>
+              <button
+                type="button"
+                onClick={() => onForget?.(r.url)}
+                aria-label={`Forget ${r.url}`}
+                className="rounded-r-full py-1 pl-1 pr-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function RememberOptions({
+  rememberServer,
+  setRememberServer,
+  rememberMe,
+  setRememberMe,
+  showRememberMe,
+}: {
+  rememberServer: boolean;
+  setRememberServer: (v: boolean) => void;
+  rememberMe: boolean;
+  setRememberMe: (v: boolean) => void;
+  showRememberMe: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          className="accent-[var(--color-primary)]"
+          checked={rememberServer}
+          onChange={(e) => setRememberServer(e.target.checked)}
+        />
+        Remember server
+      </label>
+      {showRememberMe && (
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="accent-[var(--color-primary)]"
+            checked={rememberServer && rememberMe}
+            disabled={!rememberServer}
+            onChange={(e) => setRememberMe(e.target.checked)}
+          />
+          Remember me
+        </label>
+      )}
     </div>
   );
 }
