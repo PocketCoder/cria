@@ -6,7 +6,7 @@ import PackageDescription
 
 let package = Package(
     name: "CriaAI",
-    platforms: [.macOS(.v11), .iOS(.v14)],
+    platforms: [.macOS(.v11), .iOS(.v15)],
     products: [.library(name: "CriaAI", type: .static, targets: ["CriaAI"])],
     targets: [.target(name: "CriaAI")]
 )

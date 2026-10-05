@@ -13,7 +13,7 @@ fn main() {
         std::env::remove_var("SDKROOT");
         // On-device AI bridge (src/ai.rs). Builds the Swift package and links it.
         swift_rs::SwiftLinker::new("11")
-            .with_ios("14")
+            .with_ios("15")
             .with_package("CriaAI", "./swift/CriaAI")
             .link();
         // swift-rs 1.0.7 assumes the old SwiftPM layout (<arch>-apple-macosx/<cfg>);
