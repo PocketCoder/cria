@@ -1,0 +1,66 @@
+name: API schema drift
+
+# Weekly: regenerate src/api/schema.ts from Vikunja's published swagger and
+# open an issue if it differs from what's committed. Detection only; a human
+# decides whether the change needs code updates.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Regenerate schema
+        run: pnpm generate:api
+
+      - name: Open an issue if the schema changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- src/api/schema.ts; then
+            echo "No drift."
+            exit 0
+          fi
+          git diff --stat -- src/api/schema.ts
+          existing=$(gh issue list --label schema-drift --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Issue #$existing already open."
+            exit 0
+          fi
+          {
+            echo "Regenerating \`src/api/schema.ts\` from https://try.vikunja.io differs from \`dev\`."
+            echo
+            echo "Run \`pnpm generate:api\`, review the diff for breaking changes (renamed or removed fields), and commit."
+            echo
+            echo '```'
+            git diff --stat -- src/api/schema.ts
+            echo '```'
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > body.md
+          gh label create schema-drift --color FBCA04 --description "Vikunja API schema changed" 2>/dev/null || true
+          gh issue create --title "Vikunja API schema drift" --label schema-drift --body-file body.md
