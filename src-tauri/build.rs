@@ -5,7 +5,8 @@ fn main() {
     // only: Apple Intelligence needs Apple silicon, and swift-rs builds Swift
     // for the host arch, which breaks the x86_64 release job.
     let target = |k: &str| std::env::var(k).unwrap_or_default();
-    if target("CARGO_CFG_TARGET_VENDOR") == "apple" && target("CARGO_CFG_TARGET_ARCH") == "aarch64" {
+    if target("CARGO_CFG_TARGET_VENDOR") == "apple" && target("CARGO_CFG_TARGET_ARCH") == "aarch64"
+    {
         // Xcode's "Build Rust Code" phase exports SDKROOT=iPhoneOS, which SwiftPM
         // then uses to compile the (macOS-hosted) Package.swift manifest, failing
         // with "unable to load standard library for target arm64-apple-macosx".

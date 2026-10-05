@@ -38,7 +38,9 @@ mod backend {
     }
 
     pub fn set(account: &str, token: String) -> Result<(), String> {
-        entry(account)?.set_password(&token).map_err(|e| e.to_string())
+        entry(account)?
+            .set_password(&token)
+            .map_err(|e| e.to_string())
     }
 
     pub fn delete(account: &str) -> Result<(), String> {

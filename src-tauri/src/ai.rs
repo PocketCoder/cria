@@ -85,8 +85,13 @@ mod native {
         names.sort();
         names.dedup();
         for name in names {
-            let read = |ext: &str| std::fs::read_to_string(dir.join(format!("{name}.{ext}"))).unwrap();
-            println!("=== {name}\n{}\n", generate(&name, &read("instr"), &read("prompt")).unwrap_or_else(|e| format!("ERROR {e}")));
+            let read =
+                |ext: &str| std::fs::read_to_string(dir.join(format!("{name}.{ext}"))).unwrap();
+            println!(
+                "=== {name}\n{}\n",
+                generate(&name, &read("instr"), &read("prompt"))
+                    .unwrap_or_else(|e| format!("ERROR {e}"))
+            );
         }
     }
 }

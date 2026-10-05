@@ -24,7 +24,8 @@ const MIGRATION_4_SQL: &str = include_str!("../../src/db/migrations/004_project_
 const MIGRATION_5_SQL: &str = include_str!("../../src/db/migrations/005_task_attachments.sql");
 const MIGRATION_6_SQL: &str = include_str!("../../src/db/migrations/006_task_reminders.sql");
 const MIGRATION_7_SQL: &str = include_str!("../../src/db/migrations/007_task_relations.sql");
-const MIGRATION_8_SQL: &str = include_str!("../../src/db/migrations/008_task_reminders_relative.sql");
+const MIGRATION_8_SQL: &str =
+    include_str!("../../src/db/migrations/008_task_reminders_relative.sql");
 const MIGRATION_9_SQL: &str = include_str!("../../src/db/migrations/009_task_identifier.sql");
 const MIGRATION_10_SQL: &str = include_str!("../../src/db/migrations/010_views.sql");
 const MIGRATION_11_SQL: &str = include_str!("../../src/db/migrations/011_kanban.sql");
@@ -182,8 +183,7 @@ fn set_hide_dock_on_tray(state: tauri::State<'_, AppState>, enabled: bool) -> Re
 fn restore_dock() {
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
-    let mtm = MainThreadMarker::new()
-        .expect("restore_dock must be called on the main thread");
+    let mtm = MainThreadMarker::new().expect("restore_dock must be called on the main thread");
     NSApplication::sharedApplication(mtm)
         .setActivationPolicy(NSApplicationActivationPolicy::Regular);
 }
@@ -209,34 +209,36 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     TrayIconBuilder::with_id(TrayIconId::new("main"))
-        .icon(app.default_window_icon().cloned().expect("default window icon"))
+        .icon(
+            app.default_window_icon()
+                .cloned()
+                .expect("default window icon"),
+        )
         .menu(&menu)
         .tooltip("Cria")
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "show" => {
-                    #[cfg(target_os = "macos")]
-                    restore_dock();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = window.unminimize();
-                    }
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                #[cfg(target_os = "macos")]
+                restore_dock();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.unminimize();
                 }
-                "quick_add" => {
-                    #[cfg(target_os = "macos")]
-                    restore_dock();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = window.emit("tray-quick-add", ());
-                    }
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
             }
+            "quick_add" => {
+                #[cfg(target_os = "macos")]
+                restore_dock();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.emit("tray-quick-add", ());
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let tauri::tray::TrayIconEvent::Click { .. } = event {
@@ -284,8 +286,7 @@ fn hide_input_accessory_bar() {
             return;
         };
         let imp: Imp = core::mem::transmute(
-            input_accessory_view_nil
-                as unsafe extern "C" fn(*mut AnyObject, Sel) -> *mut AnyObject,
+            input_accessory_view_nil as unsafe extern "C" fn(*mut AnyObject, Sel) -> *mut AnyObject,
         );
         method.set_implementation(imp);
     }

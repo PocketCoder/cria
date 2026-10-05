@@ -89,4 +89,3 @@ fn bind<'q>(
         other => q.bind(other.to_string()),
     }
 }
-

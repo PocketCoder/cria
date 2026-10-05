@@ -26,8 +26,11 @@ pub fn recognize_text(image_base64: String) -> Result<Vec<String>, String> {
 
     let data = NSData::with_bytes(&bytes);
     let options = NSDictionary::new();
-    let handler =
-        VNImageRequestHandler::initWithData_options(VNImageRequestHandler::alloc(), &data, &options);
+    let handler = VNImageRequestHandler::initWithData_options(
+        VNImageRequestHandler::alloc(),
+        &data,
+        &options,
+    );
 
     let request = VNRecognizeTextRequest::new();
     request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
