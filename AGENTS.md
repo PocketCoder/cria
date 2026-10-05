@@ -268,6 +268,18 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
 - AI buttons render only when `useAiAvailable()` is true, so unsupported
   devices never see them.
 
+### Keychain prompts after updates (signing identity)
+
+macOS ties keychain "Always Allow" to the app's code identity. Ad-hoc signed
+builds get a new identity every build, so each update re-prompts. Release and
+nightly workflows sign with a stable self-signed cert when the
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY`
+secrets exist (generate with `scripts/make-signing-cert.sh`; generic subject,
+no personal info); otherwise they fall back to ad-hoc. Separately, `secure.rs`
+uses one keychain account per flavour (`vikunja-token` for stable,
+`vikunja-token.<flavour>` for nightly/dev, derived from the bundle identifier)
+so flavours don't prompt for each other's item.
+
 ### `pnpm dev` indirectly requires `cargo`
 
 `pnpm dev` → `tauri dev` → `cargo metadata`. If a fresh shell can't find

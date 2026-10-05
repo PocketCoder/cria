@@ -59,6 +59,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Switch config to nightly channel
         run: scripts/nightly-config.sh "$(jq -r .version package.json)-nightly.${{ github.run_number }}"
+      # Stable self-signed identity so macOS keychain "Always Allow" survives
+      # updates (generate with scripts/make-signing-cert.sh). Exported only when
+      # set: Tauri treats an empty APPLE_CERTIFICATE as present and fails.
+      - name: Configure macOS code signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_SIGNING_IDENTITY" ]; then
+            {
+              echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+              echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+              echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+            } >> "$GITHUB_ENV"
+          else
+            echo "No signing cert configured; using ad-hoc signing."
+          fi
+
       - name: Build signed bundle
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
