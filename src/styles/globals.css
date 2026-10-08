@@ -126,10 +126,10 @@ body,
 }
 
 /* Bottom padding for scrollable task lists behind the floating tab bar on
-   mobile: the capsule (~58px) sits 8px above the safe area, plus a gap so
+   mobile: the capsule (~58px) sits just above the home indicator, plus a gap so
    content doesn't sit flush against it. */
 .tab-bar-safe-bottom {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 80px);
+  padding-bottom: calc(max(calc(env(safe-area-inset-bottom) - 14px), 6px) + 72px);
 }
 
 /* Reveal-on-hover affordances (row edit/delete buttons, label-chip remove)

@@ -87,7 +87,7 @@ export function Shell() {
 
   /* ── search ───────────────────────────────────────────── */
   const search = useShellSearch(activeView, setActiveView);
-  const { mobileSearchOpen, setMobileSearchOpen, searchQuery, searchInputRef } = search;
+  const { mobileSearchOpen, searchQuery } = search;
 
   useGlobalQuickAddShortcut(setShowQuickAdd);
   useDevShortcuts(setShowQuickAdd, setShowCommandPalette);
@@ -133,10 +133,6 @@ export function Shell() {
           counts={{ isOnline, outboxCount, deadLetterCount, conflictCount }}
           onOpenOutbox={() => setShowOutbox(true)}
           onOpenConflicts={() => setShowConflicts(true)}
-          onOpenSearch={() => {
-            setMobileSearchOpen(true);
-            setTimeout(() => searchInputRef.current?.focus(), 100);
-          }}
           currentViewKey={currentViewKey}
           onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
           onOpenSettings={() => setShowSettings(true)}

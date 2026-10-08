@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Plus, Search, Settings, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
+import { Plus, Settings, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { ActiveView } from '@/stores/ui';
 import type { ProjectView } from '@/domain/view';
@@ -63,7 +63,6 @@ export function MobileHeader({
   counts,
   onOpenOutbox,
   onOpenConflicts,
-  onOpenSearch,
   currentViewKey,
   onOpenDisplay,
   onOpenSettings,
@@ -72,7 +71,6 @@ export function MobileHeader({
   counts: SyncCounts;
   onOpenOutbox: () => void;
   onOpenConflicts: () => void;
-  onOpenSearch: () => void;
   currentViewKey: string | null | undefined;
   onOpenDisplay: () => void;
   onOpenSettings: () => void;
@@ -97,14 +95,6 @@ export function MobileHeader({
           onOpenOutbox={onOpenOutbox}
           onOpenConflicts={onOpenConflicts}
         />
-        <button
-          type="button"
-          aria-label="Search"
-          onClick={onOpenSearch}
-          className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-        >
-          <Search className="h-5 w-5" />
-        </button>
         {currentViewKey && (
           <button
             type="button"

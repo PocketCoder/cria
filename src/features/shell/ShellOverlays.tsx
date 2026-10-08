@@ -165,7 +165,7 @@ export function MobileFab({ onClick }: { onClick: () => void }) {
       aria-label="Add task"
       onClick={onClick}
       className="fab fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.75rem)' }}
+      style={{ bottom: 'calc(max(calc(env(safe-area-inset-bottom) - 14px), 6px) + 4.75rem)' }}
     >
       <Plus className="h-7 w-7" strokeWidth={2.5} />
     </button>
