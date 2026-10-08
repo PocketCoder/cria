@@ -17,6 +17,8 @@ interface ViewProps {
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
   submitDisabled: boolean;
+  /** Why submit is disabled (temporary diagnostic, shown on mobile). */
+  disabledReason?: string;
   chipProps: ChipProps;
 }
 
@@ -47,6 +49,7 @@ export function MobileQuickAdd({
   onSubmit,
   onClose,
   submitDisabled,
+  disabledReason,
   chipProps,
   description,
   setDescription,
@@ -110,6 +113,9 @@ export function MobileQuickAdd({
               <span className="mx-1.5">·</span>
               <code className="font-mono text-[var(--color-primary)]">!2</code>
             </span>
+            {submitDisabled && disabledReason ? (
+              <span className="text-[11px] text-[var(--color-destructive)]">{disabledReason}</span>
+            ) : null}
             <div className="flex shrink-0 items-center gap-1.5">
               {onOpenRamble && (
                 <button
