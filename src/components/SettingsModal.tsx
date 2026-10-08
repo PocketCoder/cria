@@ -15,7 +15,8 @@ import { TeamsTab } from '@/components/settings/TeamsTab';
 import { TokensTab } from '@/components/settings/TokensTab';
 import { DataTab } from '@/components/settings/DataTab';
 import { AdvancedTab } from '@/components/settings/AdvancedTab';
-import { X, Settings } from 'lucide-react';
+import { X, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -51,6 +52,9 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'account');
+  const isMobile = useIsMobile();
+  // Mobile drills in: null = the section list, otherwise that section's page.
+  const [mobileTab, setMobileTab] = useState<TabId | null>(initialTab ?? null);
   const isOnline = useOnline();
   const { data: user } = useCurrentUser();
 
@@ -92,8 +96,8 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
     return pushUserSettings(settingsRef.current);
   };
 
-  const renderTab = () => {
-    switch (activeTab) {
+  const renderTab = (tab: TabId = activeTab) => {
+    switch (tab) {
       case 'account':
         return <AccountTab disabled={!isOnline} onPushSettings={pushSettings} />;
       case 'general':
@@ -118,6 +122,59 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
         return <AdvancedTab />;
     }
   };
+
+  if (isMobile) {
+    const current = mobileTab ? TABS.find((t) => t.id === mobileTab) : null;
+    return (
+      <div
+        className="safe-top safe-bottom safe-x fixed inset-0 z-50 flex flex-col bg-[var(--color-background)]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+      >
+        <header className="grid grid-cols-[4rem_1fr_4rem] items-center border-b border-[var(--color-border)] px-2 py-2">
+          {current ? (
+            <button
+              onClick={() => setMobileTab(null)}
+              className="flex items-center text-[var(--color-primary)]"
+              aria-label="Back to settings"
+            >
+              <ChevronLeft className="h-6 w-6" />
+              <span className="text-[15px]">Back</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          <h2 className="truncate text-center text-base font-semibold">{current?.label ?? 'Settings'}</h2>
+          <button
+            onClick={onClose}
+            className="justify-self-end px-2 text-[15px] font-medium text-[var(--color-primary)]"
+          >
+            Done
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {current ? (
+            <div className="px-4 py-4">{renderTab(current.id)}</div>
+          ) : (
+            <ul className="mx-4 my-4 divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)]">
+              {TABS.map((tab) => (
+                <li key={tab.id}>
+                  <button
+                    onClick={() => setMobileTab(tab.id)}
+                    className="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px]"
+                  >
+                    {tab.label}
+                    <ChevronRight className="h-4 w-4 text-[var(--color-muted-foreground)]" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
