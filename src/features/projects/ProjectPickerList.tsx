@@ -47,6 +47,9 @@ export function ProjectPickerList({
   // Sub-project tree for the unfiltered list (search stays flat).
   const visibleIds = new Set(projects.map((p) => p.localId));
   const { isOpen, toggle } = useProjectExpand();
+  // Only reserve the chevron gutter when some project actually has children,
+  // so a flat list sits flush-left like the header and labels.
+  const hasNested = projects.some((p) => p.parentLocalId && visibleIds.has(p.parentLocalId));
 
   const openProject = (id: string) => {
     setActiveView({ kind: 'project', localId: id });
@@ -101,9 +104,9 @@ export function ProjectPickerList({
               >
                 {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </button>
-            ) : (
+            ) : hasNested ? (
               <span className="h-7 w-7 shrink-0" aria-hidden="true" />
-            )}
+            ) : null}
             {projectButton(p)}
           </div>
         </li>,
