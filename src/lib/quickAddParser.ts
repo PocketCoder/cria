@@ -40,7 +40,9 @@
  *
  * Input wrapped entirely in a pair of straight double or single quotes is a
  * literal title in every mode, as in Vikunja-web: the pair is dropped and
- * nothing inside it is parsed (see `unquoteLiteral`).
+ * nothing inside it is parsed (see `unquoteLiteral`). Cria also accepts the
+ * curly pairs “…” and ‘…’, which is what iOS Smart Punctuation and macOS smart
+ * quotes type, so the escape works from those keyboards.
  */
 
 import * as chrono from 'chrono-node';
@@ -198,14 +200,17 @@ function parseQuoted(raw: string, prefix: string): string {
  * first and last characters are checked, as upstream does, so inner quotes
  * stay as typed. Returns the text inside the pair, or null when the input
  * isn't wrapped. Unlike upstream, surrounding whitespace is ignored, since
- * Cria trims every title's ends anyway.
+ * Cria trims every title's ends anyway, and the curly pairs “…” and ‘…’ also
+ * count (upstream only knows the straight ones; this only adds cases).
  */
+const CURLY_PAIRS: Record<string, string> = { '\u201C': '\u201D', '\u2018': '\u2019' };
+
 function unquoteLiteral(input: string): string | null {
   const text = input.trim();
-  const quote = text[0];
-  if (text.length >= 2 && (quote === '"' || quote === "'") && text.endsWith(quote)) {
-    return text.slice(1, -1);
-  }
+  if (text.length < 2) return null;
+  const quote = text.charAt(0);
+  const close = CURLY_PAIRS[quote] ?? (quote === '"' || quote === "'" ? quote : null);
+  if (close && text.endsWith(close)) return text.slice(1, -1);
   return null;
 }
 

@@ -363,6 +363,22 @@ describe('quoted input is a literal title', () => {
     });
   });
 
+  // Cria-only: iOS Smart Punctuation and macOS smart quotes type curly pairs.
+  it('accepts curly double and single quote pairs', () => {
+    expect(parseQuickAdd('“buy mass tomorrow *label !2”', NOW)).toMatchObject({
+      title: 'buy mass tomorrow *label !2',
+      ...NOTHING_PARSED,
+    });
+    expect(parseQuickAdd('‘buy mass tomorrow’', NOW)).toMatchObject({
+      title: 'buy mass tomorrow',
+      ...NOTHING_PARSED,
+    });
+  });
+
+  it('does not treat a curly opening quote with a straight close as a pair', () => {
+    expect(parseQuickAdd('“delete mails today"', NOW).dueDate).not.toBeNull();
+  });
+
   it('parses as usual for an unmatched quote', () => {
     expect(parseQuickAdd('"delete mails today', NOW).dueDate).not.toBeNull();
   });
@@ -409,10 +425,6 @@ describe('quoted input is a literal title', () => {
 
   it('needs a pair: a lone quote is title text', () => {
     expect(parseQuickAdd('"', NOW).title).toBe('"');
-  });
-
-  it('accepts only straight quotes, so curly ones are parsed as usual', () => {
-    expect(parseQuickAdd('“Buy milk tomorrow”', NOW).dueDate).not.toBeNull();
   });
 
   it('ignores surrounding whitespace, keeps inner spacing and previews the input as one text token', () => {
