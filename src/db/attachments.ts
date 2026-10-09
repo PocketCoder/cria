@@ -473,6 +473,31 @@ export async function listMissingAttachments(localIds: string[]): Promise<string
   return localIds.filter((id) => !present.has(id));
 }
 
+/**
+ * True if anything local may still need the side-store blob under `key`:
+ * an attachment row naming it as `bytes_path`, a pending row whose local id
+ * it is (the key queueAttachmentUpload writes under), or an outbox or
+ * dead-letter op that mentions it anywhere. The payload test is a plain
+ * substring match, so it errs towards keeping the file. One statement reads
+ * one snapshot, so an op moving between the outbox and the dead-letter list
+ * can't slip past it. Feeds the orphan sweep (src/sync/blobSweep.ts).
+ */
+export async function isBlobReferenced(key: string): Promise<boolean> {
+  const db = await getDb();
+  const [row] = await db.select<{ referenced: number }[]>(
+    `SELECT EXISTS (SELECT 1 FROM task_attachments
+                     WHERE bytes_path = ? OR (pending = 1 AND local_id = ?))
+         OR EXISTS (SELECT 1 FROM outbox
+                     WHERE entity_local_id = ? OR instr(payload, ?) > 0)
+         OR EXISTS (SELECT 1 FROM outbox_dead_letter
+                     WHERE entity_local_id = ? OR instr(payload, ?) > 0)
+         AS referenced`,
+    [key, key, key, key, key, key],
+  );
+  // No answer counts as a reference: the sweep keeps what it can't rule out.
+  return !row || Number(row.referenced) !== 0;
+}
+
 /** Remove a single attachment from the local mirror. */
 export async function deleteAttachmentLocal(
   taskLocalId: string,

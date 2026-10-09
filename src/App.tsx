@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
 import { useReminderScheduler } from '@/sync/useReminderScheduler';
 import { startSettingsSync } from '@/sync/settingsSync';
+import { scheduleBlobSweep } from '@/sync/blobSweep';
 import { useDockBadge } from '@/queries/badge';
 
 export function App() {
@@ -22,6 +23,10 @@ export function App() {
   // frontend_settings so they survive an iOS localStorage eviction and sync
   // across devices. Hydration on load happens in useCurrentUser.
   useEffect(() => startSettingsSync(), []);
+
+  // Once per launch, after a delay: delete queued-upload bytes nothing
+  // refers to any more. Local only, so it doesn't wait for sign-in.
+  useEffect(() => scheduleBlobSweep(), []);
 
   usePeriodicSync();
   useReminderScheduler();

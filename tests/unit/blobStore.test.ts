@@ -3,7 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 const invoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
 
-import { deleteBlob, isBlobMissing, readBlob, writeBlob } from '@/tauri/blobStore';
+import { deleteBlob, isBlobMissing, listBlobs, readBlob, writeBlob } from '@/tauri/blobStore';
 
 describe('blobStore', () => {
   afterEach(() => {
@@ -27,6 +27,12 @@ describe('blobStore', () => {
       await writeBlob('a2', bytes);
       bytes[0] = 0;
       expect(Array.from(await readBlob('a2'))).toEqual([9]);
+    });
+
+    it('lists blobs with no modified time, so a sweep keeps them', async () => {
+      await writeBlob('a3', new Uint8Array([1]));
+      expect(await listBlobs()).toContainEqual({ id: 'a3', modifiedMs: null });
+      expect(invoke).not.toHaveBeenCalled();
     });
   });
 
@@ -53,6 +59,14 @@ describe('blobStore', () => {
       tauri();
       await deleteBlob('b1');
       expect(invoke).toHaveBeenCalledWith('blob_delete', { id: 'b1' }, undefined);
+    });
+
+    it('lists through the command', async () => {
+      tauri();
+      const entries = [{ id: 'b1', modifiedMs: 1_700_000_000_000 }];
+      invoke.mockResolvedValueOnce(entries);
+      expect(await listBlobs()).toEqual(entries);
+      expect(invoke).toHaveBeenCalledWith('blob_list', undefined, undefined);
     });
   });
 
