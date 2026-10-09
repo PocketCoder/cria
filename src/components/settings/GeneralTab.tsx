@@ -7,9 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { notify } from '@/db/bus';
-import { frontendSettingsWithCria } from '@/sync/settingsSync';
-import type { UserSettingsInput } from '@/api/userSettings';
+import { saveUserSettings } from '@/sync/settingsSync';
 import { QUICK_ADD_PREFIXES, isQuickAddMagicMode, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
+import { QUICK_ADD_MAGIC_KEY, type SettingsChange } from '@/sync/frontendSettings';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -45,7 +45,6 @@ function quickAddSyntax(mode: QuickAddMagicMode): string {
 
 interface Props {
   disabled?: boolean;
-  onPushSettings: (patch: UserSettingsInput) => Promise<void>;
 }
 
 function groupTimezones(timezones: string[]): { label: string; items: { value: string; label: string }[] }[] {
@@ -73,7 +72,7 @@ interface FeedbackState {
   message: string;
 }
 
-export function GeneralTab({ disabled, onPushSettings }: Props) {
+export function GeneralTab({ disabled }: Props) {
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useSelectableProjects();
   const dateFormat = useSettings((s) => s.dateFormat);
@@ -117,14 +116,10 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
 
   const clearFeedback = () => setFeedback(null);
 
-  const pushWithSettings = (patch: UserSettingsInput) => {
-    return onPushSettings({
-      ...patch,
-      frontend_settings: frontendSettingsWithCria(undefined),
-    });
-  };
+  // Each save re-reads the server's settings and changes only these fields.
+  const pushWithSettings = (patch: SettingsChange['settings']) => saveUserSettings({ settings: patch });
 
-  const pushWithFeedback = (patch: UserSettingsInput) => {
+  const pushWithFeedback = (patch: SettingsChange['settings']) => {
     pushWithSettings(patch)
       .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
       .catch((e: Error) => { setFeedback({ type: 'error', message: e.message }); setTimeout(clearFeedback, 4000); });
@@ -139,13 +134,13 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
   };
 
   // Shared with Vikunja-web (frontend_settings.quick_add_magic_mode). The
-  // store changes first so the full-object push carries the new mode; a failed
-  // push puts the old one back so Cria and the server don't drift apart.
+  // local parser switches at once; a failed save puts the old mode back so
+  // Cria and the server don't drift apart.
   const handleQuickAddModeChange = (v: string) => {
     if (!isQuickAddMagicMode(v)) return;
     const previous = quickAddMagicMode;
     setQuickAddMagicMode(v);
-    pushWithSettings({})
+    saveUserSettings({ frontend: { [QUICK_ADD_MAGIC_KEY]: v } })
       .then(() => notify('user'))
       .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
       .catch((e) => {
