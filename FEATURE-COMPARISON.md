@@ -225,7 +225,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Settings | Notification toggle (desktop) | ✅ | SettingsModal Notifications, with OS permission gate |
 | Settings | Email reminders (server) | ✅ | SettingsModal General toggle, server-synced |
 | Settings | Overdue task email reminders | ✅ | SettingsModal General toggle + time picker, server-synced |
-| Settings | Quick Add Magic mode | ✅ | SettingsModal General select, shared with Vikunja-web via `frontend_settings.quick_add_magic_mode`; drives the quick-add modal and Kanban inline add |
+| Settings | Quick Add Magic mode | ✅ | SettingsModal General select, shared with Vikunja-web via `frontend_settings.quick_add_magic_mode`; drives the quick-add modal, Kanban inline add and Ramble (prompt and parsing) |
 | Settings | CalDAV link | ✅ | SettingsModal Advanced, opens docs URL |
 
 ### Export/Import

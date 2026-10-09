@@ -278,7 +278,10 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
   `cargo test --lib ai -- --ignored --nocapture` (in `src-tauri/`).
 - Prompts live in [src/lib/aiPrompts.ts](src/lib/aiPrompts.ts). The model
   never does date maths: it writes dates in words (or quick-add / filter
-  syntax) and the existing parsers resolve them. To iterate on a prompt, write
+  syntax) and the existing parsers resolve them. Ramble's quick-add syntax
+  follows the user's Quick Add Magic mode, and every ramble parse passes the
+  same mode; with the magic `disabled` it writes plain titles with dates left
+  in words (nothing is parsed, as in Vikunja-web). To iterate on a prompt, write
   `<name>.instr` + `<name>.prompt` files to a folder and run
   `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
 - AI buttons render only when `useAiAvailable()` is true, so unsupported

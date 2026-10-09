@@ -1,5 +1,6 @@
 import type { Project } from '@/domain/project';
 import { parseQuickAdd } from '@/lib/quickAddParser';
+import type { QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import type { ActiveView } from '@/stores/ui';
 
 export type Phase = 'input' | 'thinking' | 'review' | 'saving';
@@ -18,20 +19,20 @@ export function draftsFromLines(lines: readonly string[], firstId: number): Draf
 /**
  * Whether a line still has a title once its quick-add tokens are stripped.
  *
- * Ramble lines are parsed in the default `vikunja` mode whatever the user's
- * Quick Add Magic setting: the model is prompted to write that syntax
- * (`+Project *label !3`, see rambleInstructions), so it is a fixed format here.
+ * Ramble lines are written and parsed in the user's Quick Add Magic `mode`:
+ * the model is prompted with that mode's syntax (see rambleInstructions), and
+ * every ramble parse must pass the same mode.
  */
-export function hasTitle(line: string): boolean {
-  return parseQuickAdd(line.trim()).title !== '';
+export function hasTitle(line: string, mode: QuickAddMagicMode): boolean {
+  return parseQuickAdd(line.trim(), new Date(), mode).title !== '';
 }
 
 /**
  * Drafts that will actually be created: ticked and with a title. A line of
  * only tokens ("+Home tomorrow") has no title, and creation skips it.
  */
-export function chosenDrafts(drafts: readonly Draft[]): Draft[] {
-  return drafts.filter((d) => d.include && hasTitle(d.line));
+export function chosenDrafts(drafts: readonly Draft[], mode: QuickAddMagicMode): Draft[] {
+  return drafts.filter((d) => d.include && hasTitle(d.line, mode));
 }
 
 /** The project a `+Name` token refers to, matched case-insensitively. */

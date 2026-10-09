@@ -30,14 +30,24 @@ describe('rambleLogic', () => {
       { id: 1, line: 'skipped', include: false },
       { id: 2, line: '   ', include: true },
     ];
-    expect(chosenDrafts(drafts).map((d) => d.id)).toEqual([0]);
+    expect(chosenDrafts(drafts, 'vikunja').map((d) => d.id)).toEqual([0]);
   });
 
   it('leaves out token-only lines that have no title to create', () => {
     const drafts = draftsFromLines(['Buy milk +Home', '+Home tomorrow', '!3 *errands', 'Call mum'], 0);
-    expect(chosenDrafts(drafts).map((d) => d.line)).toEqual(['Buy milk +Home', 'Call mum']);
-    expect(hasTitle('+Home tomorrow')).toBe(false);
-    expect(hasTitle('  Plan trip  ')).toBe(true);
+    expect(chosenDrafts(drafts, 'vikunja').map((d) => d.line)).toEqual(['Buy milk +Home', 'Call mum']);
+    expect(hasTitle('+Home tomorrow', 'vikunja')).toBe(false);
+    expect(hasTitle('  Plan trip  ', 'vikunja')).toBe(true);
+  });
+
+  it("judges a line's title with the user's Quick Add Magic mode", () => {
+    // Todoist prefixes: `#Home @errands` are tokens, `+Home` would be an assignee.
+    expect(hasTitle('#Home tomorrow', 'todoist')).toBe(false);
+    expect(hasTitle('!3 @errands', 'todoist')).toBe(false);
+    expect(hasTitle('*errands', 'todoist')).toBe(true);
+    // Magic off: nothing is a token, so any non-blank line is a title.
+    expect(hasTitle('+Home tomorrow', 'disabled')).toBe(true);
+    expect(hasTitle('   ', 'disabled')).toBe(false);
   });
 
   it('previews a known project by name and an unknown one as the fallback', () => {
@@ -108,7 +118,7 @@ describe('saving a batch of drafts', () => {
 
     create.mockClear();
     create.mockResolvedValue(undefined);
-    await createDrafts(chosenDrafts(remaining), create, (d) => savedIds.add(d.id));
+    await createDrafts(chosenDrafts(remaining, 'vikunja'), create, (d) => savedIds.add(d.id));
     expect(create.mock.calls.map(([d]) => d.line)).toEqual(['c', 'd', 'e']);
   });
 });
