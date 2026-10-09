@@ -199,6 +199,10 @@ Don't base64 file bytes into an outbox payload. Inline images pasted before
 upload are `cria://pending/{localId}` (allowed by `sanitizeHtml`); the
 executor rewrites them to the server URL, and the task/comment push swaps any
 it finds that have already uploaded, so the server never keeps one.
+Leftover bytes are cleared once per launch by
+[src/sync/blobSweep.ts](src/sync/blobSweep.ts) (via `blob_list`), which only
+deletes a blob over 24h old that no attachment row and no outbox or
+dead-letter op mentions, keeping anything it can't rule out.
 
 ### Vikunja's verb semantics
 
