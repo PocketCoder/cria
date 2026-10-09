@@ -3,6 +3,7 @@ import { getDb, exec, withTx } from './index';
 import { notify } from './bus';
 import { mergeFromServer } from './syncMerge';
 import type { ProjectView, ViewKind, BucketConfigMode, ViewResponse } from '@/domain/view';
+import { viewDeleteBlocker } from '@/lib/viewManagement';
 
 export interface ViewInput {
   title: string;
@@ -376,7 +377,9 @@ export async function createView(
         input.viewKind,
         nextPosition,
         input.filter ?? null,
-        input.bucketConfigurationMode ?? 'none',
+        // Vikunja turns a kanban view's 'none' into 'manual' (and seeds its
+        // buckets); mirror that so the local row matches before the next pull.
+        input.bucketConfigurationMode ?? (input.viewKind === 'kanban' ? 'manual' : 'none'),
         input.bucketConfiguration ?? null,
         now,
       ],
@@ -463,7 +466,57 @@ export async function updateView(
   return updated;
 }
 
+/**
+ * Rewrite positions for an explicit ordering of views in one transaction,
+ * giving them a clean spread (`baseStep`, `2*baseStep`, …), each with an
+ * outbox update. Used when a drag lands between neighbours a midpoint can't
+ * split (null or colliding positions, e.g. a server that left them all 0);
+ * otherwise a single `updateView(id, { position })` is enough.
+ */
+export async function reindexViews(
+  orderedLocalIds: string[],
+  baseStep = 1024,
+): Promise<void> {
+  if (orderedLocalIds.length === 0) return;
+  const now = new Date().toISOString();
+  await withTx(async (tx) => {
+    for (let i = 0; i < orderedLocalIds.length; i++) {
+      const localId = orderedLocalIds[i];
+      const position = (i + 1) * baseStep;
+      await tx.execute(
+        `UPDATE project_views SET position = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+        [position, now, localId],
+      );
+      await tx.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('view', ?, 'update', ?, ?)`,
+        [localId, JSON.stringify({ position }), now],
+      );
+    }
+  });
+  notify('views');
+  notify('outbox');
+}
+
+/**
+ * Delete a view. Refuses (throws) to delete a project's last view, or a local
+ * placeholder whose server copy would just come back on the next pull; the UI
+ * checks `viewDeleteBlocker` first, this is the backstop.
+ */
 export async function deleteView(localId: string): Promise<void> {
+  const view = await getViewByLocalId(localId);
+  if (!view) return;
+  const blocker = viewDeleteBlocker(
+    await listViewsForProject(view.projectLocalId),
+    localId,
+  );
+  if (blocker === 'last-view') {
+    throw new Error('A project must keep at least one view');
+  }
+  if (blocker === 'placeholder') {
+    throw new Error('This view has not synced yet');
+  }
+
   const now = new Date().toISOString();
 
   await withTx(async (tx) => {
