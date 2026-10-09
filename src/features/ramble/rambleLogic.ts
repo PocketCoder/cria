@@ -15,7 +15,13 @@ export function draftsFromLines(lines: readonly string[], firstId: number): Draf
   return lines.map((line, i) => ({ id: firstId + i, line, include: true }));
 }
 
-/** Whether a line still has a title once its quick-add tokens are stripped. */
+/**
+ * Whether a line still has a title once its quick-add tokens are stripped.
+ *
+ * Ramble lines are parsed in the default `vikunja` mode whatever the user's
+ * Quick Add Magic setting: the model is prompted to write that syntax
+ * (`+Project *label !3`, see rambleInstructions), so it is a fixed format here.
+ */
 export function hasTitle(line: string): boolean {
   return parseQuickAdd(line.trim()).title !== '';
 }

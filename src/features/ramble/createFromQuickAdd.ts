@@ -10,7 +10,8 @@ import { findProjectByTitle } from './rambleLogic';
  * The batch counterpart of QuickAddModal's submit, minus its picker state:
  * an unknown or missing +project falls back to `fallbackProjectId` (the
  * project chosen in the sheet) rather than the Inbox, since a ramble is
- * filed in one go. +assignee tokens are ignored, as in quick-add.
+ * filed in one go. @assignee tokens are ignored, as in quick-add. Parsed in
+ * the default `vikunja` mode, as the model writes that syntax (see hasTitle).
  */
 export async function createFromQuickAdd(
   line: string,

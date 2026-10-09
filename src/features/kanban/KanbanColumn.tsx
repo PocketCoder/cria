@@ -6,6 +6,7 @@ import { createTask } from '@/db/tasks';
 import { setTaskBucket, deleteBucket, updateBucket } from '@/db/buckets';
 import { updateView } from '@/db/views';
 import { applyLabelsByTitle } from '@/db/labels';
+import { useSettings } from '@/stores/settings';
 import { cn } from '@/lib/cn';
 import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import {
@@ -449,6 +450,7 @@ function AddTaskFooter({
 }) {
   const [showNewInput, setShowNewInput] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const magicMode = useSettings((s) => s.quickAddMagicMode);
 
   // Ref, not state: a second Enter lands before the title is cleared (it is
   // only cleared once the async writes finish), so it would add a duplicate.
@@ -458,7 +460,7 @@ function AddTaskFooter({
     // WIP limits are advisory: the column highlights when over the limit
     // (see the count indicator) but never blocks adding — matching drag,
     // where over-limit drops are already allowed.
-    const built = buildKanbanTaskInput(newTitle, projectLocalId);
+    const built = buildKanbanTaskInput(newTitle, projectLocalId, magicMode);
     if (!built || addingRef.current) return;
     addingRef.current = true;
     try {

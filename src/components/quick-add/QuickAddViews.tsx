@@ -3,15 +3,24 @@ import { ArrowUp, Camera, Mic } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import type { QuickAddResult } from '@/lib/quickAddParser';
+import { QUICK_ADD_PREFIXES, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import { TokenInput } from './TokenInput';
 import { SetChips } from './SetChips';
 
 type ChipProps = Parameters<typeof SetChips>[0];
 
+/** Desktop placeholder: a worked example in the active mode's syntax. */
+function examplePlaceholder(mode: QuickAddMagicMode): string {
+  const p = QUICK_ADD_PREFIXES[mode];
+  if (!p) return 'Task name';
+  return `Buy milk tomorrow ${p.label}groceries ${p.priority}2 ${p.assignee}alice ${p.project}Personal`;
+}
+
 interface ViewProps {
   text: string;
   setText: (v: string) => void;
   parsed: QuickAddResult;
+  magicMode: QuickAddMagicMode;
   titleRef: RefObject<HTMLInputElement>;
   onTitleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onSubmit: (e: FormEvent) => void;
@@ -42,6 +51,7 @@ export function MobileQuickAdd({
   text,
   setText,
   parsed,
+  magicMode,
   titleRef,
   onTitleKeyDown,
   onSubmit,
@@ -57,6 +67,7 @@ export function MobileQuickAdd({
   onOpenPhotoCapture,
   onOpenRamble,
 }: MobileProps) {
+  const prefixes = QUICK_ADD_PREFIXES[magicMode];
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
@@ -103,12 +114,17 @@ export function MobileQuickAdd({
             className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-4 py-3"
             style={{ paddingBottom: keyboardInset ? undefined : 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
           >
+            {/* Empty when Quick Add Magic is off, keeping the buttons right-aligned. */}
             <span className="text-[12.5px] text-[var(--color-muted-foreground)]">
-              <code className="font-mono text-[var(--color-primary)]">+project</code>
-              <span className="mx-1.5">·</span>
-              <code className="font-mono text-[var(--color-primary)]">*label</code>
-              <span className="mx-1.5">·</span>
-              <code className="font-mono text-[var(--color-primary)]">!2</code>
+              {prefixes && (
+                <>
+                  <code className="font-mono text-[var(--color-primary)]">{prefixes.project}project</code>
+                  <span className="mx-1.5">·</span>
+                  <code className="font-mono text-[var(--color-primary)]">{prefixes.label}label</code>
+                  <span className="mx-1.5">·</span>
+                  <code className="font-mono text-[var(--color-primary)]">{prefixes.priority}2</code>
+                </>
+              )}
             </span>
             <div className="flex shrink-0 items-center gap-1.5">
               {onOpenRamble && (
@@ -155,6 +171,7 @@ export function DesktopQuickAdd({
   text,
   setText,
   parsed,
+  magicMode,
   titleRef,
   onTitleKeyDown,
   onSubmit,
@@ -175,7 +192,7 @@ export function DesktopQuickAdd({
               onChange={setText}
               onKeyDown={onTitleKeyDown}
               inputRef={titleRef}
-              placeholder="Buy milk tomorrow *groceries !2 @alice +Personal"
+              placeholder={examplePlaceholder(magicMode)}
               className="text-[19px] font-semibold tracking-[-0.015em]"
             />
           </div>
