@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutGrid, Check } from 'lucide-react';
+import { LayoutGrid, Check, Settings2 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/cn';
 import type { ProjectView } from '@/domain/view';
@@ -15,19 +15,22 @@ const VIEW_LABELS: Record<string, string> = {
  * Compact, icon-triggered view switcher for the mobile app header. The desktop
  * segmented ViewSwitcher is too wide to sit inline next to the search/add
  * actions, so on phones we collapse it to a single icon that opens a popover
- * list. Renders nothing when there's only one view (nothing to switch to).
+ * list, which ends with "Manage views" when `onManage` is given. Renders
+ * nothing when there's only one view and nothing to manage.
  */
 export function MobileViewSwitcher({
   views,
   activeViewLocalId,
   onSelect,
+  onManage,
 }: {
   views: ProjectView[];
   activeViewLocalId: string | undefined;
   onSelect: (viewLocalId: string) => void;
+  onManage?: (() => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
-  if (views.length <= 1) return null;
+  if (views.length <= 1 && !onManage) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -63,6 +66,22 @@ export function MobileViewSwitcher({
             </button>
           );
         })}
+        {onManage && (
+          <>
+            <div role="separator" className="my-1 h-px bg-[var(--color-border)]" />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onManage();
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+            >
+              <Settings2 className="h-4 w-4 text-[var(--color-muted-foreground)]" />
+              Manage views
+            </button>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );
