@@ -132,12 +132,12 @@ export function ProjectPickerList({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {!term && (
-          <ul className="mb-2 divide-y divide-[var(--color-border)]">
+          <ul className="surface-card mb-2 divide-y divide-[var(--color-border)] overflow-hidden">
             <li>
               <button
                 type="button"
                 onClick={openInbox}
-                className="flex w-full items-center gap-3 py-[13px] text-left"
+                className="list-row w-full text-left"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                   <Inbox className="h-5 w-5 text-[var(--color-primary)]" />
@@ -154,7 +154,7 @@ export function ProjectPickerList({
               <button
                 type="button"
                 onClick={openFavorites}
-                className="flex w-full items-center gap-3 py-[13px] text-left"
+                className="list-row w-full text-left"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                   <Star className="h-5 w-5 text-[var(--color-primary)]" />
@@ -166,7 +166,7 @@ export function ProjectPickerList({
               <button
                 type="button"
                 onClick={() => openSheet(viewKey(activeView) ?? 'today')}
-                className="flex w-full items-center gap-3 py-[13px] text-left"
+                className="list-row w-full text-left"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                   <SlidersHorizontal className="h-5 w-5 text-[var(--color-primary)]" />

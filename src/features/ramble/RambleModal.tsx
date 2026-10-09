@@ -83,7 +83,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <BackdropDismiss onDismiss={r.close} />
-          <div className="relative bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg">
+          <div className="relative dialog-panel w-11/12 max-w-lg p-4">
             {body}
           </div>
         </>

@@ -152,43 +152,48 @@ export function Shell() {
           />
         )}
 
-        {/* Content pane — a white card floating on the paper canvas. */}
+        {/* Content pane — a white card floating on the paper canvas. The
+            desktop inspector floats inside it, on the right. */}
         <div
           className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-card)]',
-            !isMobile && !sidebarCollapsed && 'rounded-l-xl border-l border-[var(--color-border)]',
+            'flex min-h-0 min-w-0 flex-1 bg-[var(--color-card)]',
+            !isMobile && !sidebarCollapsed &&
+              'rounded-l-2xl border-l border-[var(--color-border)] shadow-[var(--shadow-card)]',
           )}
         >
-          {!isMobile && (
-            <DesktopHeader
-              title={title}
-              sidebarCollapsed={sidebarCollapsed}
-              onToggleSidebar={toggleSidebar}
-              activeView={activeView}
-              projectViews={projectViews}
-              onSelectView={handleSelectView}
-              currentView={currentView}
-              currentViewKey={currentViewKey}
-              onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
-              onQuickAdd={() => setShowQuickAdd(true)}
-            />
-          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {!isMobile && (
+              <DesktopHeader
+                title={title}
+                sidebarCollapsed={sidebarCollapsed}
+                onToggleSidebar={toggleSidebar}
+                activeView={activeView}
+                projectViews={projectViews}
+                onSelectView={handleSelectView}
+                currentView={currentView}
+                currentViewKey={currentViewKey}
+                onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
+                onQuickAdd={() => setShowQuickAdd(true)}
+                onDragMouseDown={handleHeaderMouseDown}
+              />
+            )}
 
-          <main className="vt-pane flex min-h-0 min-w-0 flex-1 flex-col">
-            <MainView
-              activeView={activeView}
-              searchQuery={searchQuery}
-              currentProject={currentProject}
-              currentView={currentView}
-              viewsPending={viewsPending}
-            />
-          </main>
+            <main className="vt-pane flex min-h-0 min-w-0 flex-1 flex-col">
+              <MainView
+                activeView={activeView}
+                searchQuery={searchQuery}
+                currentProject={currentProject}
+                currentView={currentView}
+                viewsPending={viewsPending}
+              />
+            </main>
+          </div>
+
+          {/* Inspector: a floating glass card on desktop. This and the mobile
+              mount below are the only TaskDetail instances: a second one
+              would double-register every task shortcut. */}
+          {!isMobile && <TaskDetail />}
         </div>
-
-        {/* Inspector — permanent right-hand column on desktop. This and the
-            mobile mount below are the only TaskDetail instances: a second
-            one would double-register every task shortcut. */}
-        {!isMobile && <TaskDetail />}
       </div>
 
       {/* Update pill — floats bottom-left instead of living in the removed

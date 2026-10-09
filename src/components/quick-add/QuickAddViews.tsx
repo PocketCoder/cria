@@ -170,9 +170,9 @@ export function DesktopQuickAdd({
   chipProps,
 }: DesktopProps) {
   return (
-    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]">
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--dialog-backdrop)] pt-[70px]">
       <BackdropDismiss onDismiss={onClose} />
-      <div className="relative w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]">
+      <div className="relative dialog-panel w-[560px]">
         <form onSubmit={onSubmit}>
           <div className="px-5 pt-5">
             <TokenInput

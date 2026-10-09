@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Tags,
 } from 'lucide-react';
-import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
+import { updateTask, duplicateTask, moveTask } from '@/db/tasks';
+import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects, getProjectByLocalId } from '@/db/projects';
@@ -63,7 +64,7 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     staleTime: 60_000,
   });
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const enqueueDelete = usePendingDeletes((s) => s.enqueue);
 
   const handleDuplicate = async () => {
     const copy = await duplicateTask(task.localId);
@@ -84,8 +85,9 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     await removeTaskAssignee(task.localId, userServerId);
   };
 
-  const handleDelete = async () => {
-    await deleteTask(task.localId);
+  // Undo over confirm: the delete is deferred and the undo toast offers it back.
+  const handleDelete = () => {
+    enqueueDelete(task);
     onDeleted();
   };
 
@@ -113,30 +115,12 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
         color={task.isSubscribed ? 'var(--color-primary)' : undefined}
         className="pointer-events-none opacity-50"
       />
-      {confirmDelete ? (
-        <div className="flex items-center gap-2 rounded-md border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 px-3 py-2">
-          <span className="text-xs text-[var(--color-destructive)]">Delete forever?</span>
-          <button
-            onClick={handleDelete}
-            className="ml-auto rounded bg-[var(--color-destructive)] px-2 py-0.5 text-caption text-[var(--color-destructive-foreground)] hover:opacity-90"
-          >
-            Confirm
-          </button>
-          <button
-            onClick={() => setConfirmDelete(false)}
-            className="text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <ActionButton
-          icon={<Trash2 className="h-4 w-4" />}
-          label="Delete"
-          color="var(--color-destructive)"
-          onClick={() => setConfirmDelete(true)}
-        />
-      )}
+      <ActionButton
+        icon={<Trash2 className="h-4 w-4" />}
+        label="Delete"
+        color="var(--color-destructive)"
+        onClick={handleDelete}
+      />
     </div>
   );
 }

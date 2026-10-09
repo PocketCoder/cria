@@ -185,7 +185,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
     >
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex h-[min(80vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-lg"
+        className="relative dialog-panel flex h-[min(80vh,640px)] w-full max-w-2xl flex-col overflow-hidden"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <div className="flex items-center gap-2">

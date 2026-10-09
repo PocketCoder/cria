@@ -93,6 +93,7 @@
   --prio-high:               oklch(76% 0.15 75);
   --prio-urgent:             oklch(68% 0.19 45);
   --prio-critical:           oklch(58% 0.22 27);
+  --prio-foreground:         oklch(17% 0.045 300);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,6 +129,7 @@
     --prio-high:               oklch(80% 0.12 85);
     --prio-urgent:             oklch(72% 0.16 45);
     --prio-critical:           oklch(66% 0.19 25);
+    --prio-foreground:         oklch(17% 0.045 300);
   }
 }
 
@@ -153,11 +155,17 @@ body,
   padding-right: env(safe-area-inset-right);
 }
 
+/* iPhone chrome placement (design system UI kit): the tab bar capsule sits
+   26px from the bottom on a 34px home-indicator inset (8px on devices without
+   one), and the FAB 78px above the bar's baseline, 16px from the right. */
+:root {
+  --tabbar-offset: max(calc(env(safe-area-inset-bottom) - 8px), 8px);
+}
+
 /* Bottom padding for scrollable task lists behind the floating tab bar on
-   mobile: the capsule (~58px) sits just above the home indicator, plus a gap so
-   content doesn't sit flush against it. */
+   mobile: the capsule (~58px) plus a gap so content doesn't sit flush. */
 .tab-bar-safe-bottom {
-  padding-bottom: calc(max(calc(env(safe-area-inset-bottom) - 14px), 6px) + 72px);
+  padding-bottom: calc(var(--tabbar-offset) + 72px);
 }
 
 /* Reveal-on-hover affordances (row edit/delete buttons, label-chip remove)
@@ -552,6 +560,7 @@ html[data-vt='theme']::view-transition-new(root) {
   --prio-high:               oklch(76% 0.15 75);
   --prio-urgent:             oklch(68% 0.19 45);
   --prio-critical:           oklch(58% 0.22 27);
+  --prio-foreground:         oklch(17% 0.045 300);
 }
 
 .dark {
@@ -584,6 +593,7 @@ html[data-vt='theme']::view-transition-new(root) {
   --prio-high:               oklch(80% 0.12 85);
   --prio-urgent:             oklch(72% 0.16 45);
   --prio-critical:           oklch(66% 0.19 25);
+  --prio-foreground:         oklch(17% 0.045 300);
 }
 
 /* ── Scrollbars ───────────────────────────────────────────
@@ -646,6 +656,41 @@ ul[data-type="taskList"] li > div > p {
   font-weight: 600;
   letter-spacing: 0.025em;
   text-transform: uppercase;
+}
+
+/* Centred dialog panel: frosted glass, 12px radius, large shadow. */
+@utility dialog-panel {
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-lg);
+}
+
+/* White grouped card on the paper canvas (16px radius, hairline, soft lift). */
+@utility surface-card {
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* Row inside a grouped card: 12px 16px, muted wash on hover, inset hairline
+   between rows (none after the last). */
+@utility list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  transition: background-color 120ms ease;
+  &:hover {
+    background: var(--color-muted);
+  }
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--color-border);
+  }
 }
 
 /* Resolved quick-add / filter chip — 13.5px/500 on --color-background. */

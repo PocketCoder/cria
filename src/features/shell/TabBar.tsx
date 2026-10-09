@@ -49,7 +49,7 @@ export function TabBar() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-4"
-      style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) - 14px), 6px)' }}
+      style={{ paddingBottom: 'var(--tabbar-offset)' }}
       aria-label="Primary"
     >
       <div className="flex w-full max-w-md items-center justify-around gap-1 rounded-[26px] border-[0.5px] border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 shadow-[var(--shadow-tabbar)]">

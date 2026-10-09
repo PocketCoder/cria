@@ -10,12 +10,18 @@ export const SelectValue = SelectPrimitive.Value;
 
 export const SelectTrigger = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
+    /** `ghost`: borderless inline trigger, 8px radius, medium weight. */
+    variant?: 'default' | 'ghost';
+  }
+>(({ className, children, variant = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-8 w-full items-center justify-between gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)]',
+      'flex items-center justify-between gap-1.5 px-2 py-1.5 text-sm text-[var(--color-foreground)]',
+      variant === 'ghost'
+        ? 'h-auto w-auto rounded-lg bg-transparent font-medium hover:bg-[var(--color-muted)]'
+        : 'h-8 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)]',
       'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 ring-offset-background',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'data-[placeholder]:text-[var(--color-muted-foreground)]',

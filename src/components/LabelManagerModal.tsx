@@ -91,7 +91,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[80vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
+        className="relative dialog-panel flex max-h-[80vh] w-11/12 max-w-lg flex-col overflow-hidden"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Manage labels</h2>

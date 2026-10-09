@@ -130,6 +130,7 @@ export function DesktopHeader({
   currentViewKey,
   onOpenDisplay,
   onQuickAdd,
+  onDragMouseDown,
 }: ViewControls & {
   title: string;
   sidebarCollapsed: boolean;
@@ -138,33 +139,38 @@ export function DesktopHeader({
   currentViewKey: string | null | undefined;
   onOpenDisplay: () => void;
   onQuickAdd: () => void;
+  onDragMouseDown?: (e: React.MouseEvent) => void;
 }) {
+  // One-line view header (16px/600 title). With the sidebar hidden it clears
+  // the overlay traffic lights, and it doubles as the window drag strip.
   return (
     <header
+      onMouseDown={onDragMouseDown}
       className={cn(
-        'flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11',
+        'flex min-h-[52px] flex-none select-none flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[var(--color-border)] py-2.5 pl-7 pr-6',
+        sidebarCollapsed && 'pl-[var(--traffic-light-inset)]',
         activeView?.kind === 'upcoming' && 'bg-[var(--color-background)]',
       )}
     >
-      <div className="flex min-w-[200px] flex-1 items-end gap-3">
+      <div className="flex min-w-[200px] flex-1 items-center gap-2">
         {sidebarCollapsed && (
           <button
             type="button"
             onClick={onToggleSidebar}
             aria-label="Show sidebar"
             title="Show sidebar (⌘E)"
-            className="mb-1.5 shrink-0 rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            className="shrink-0 rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
           >
             <PanelLeft className="h-4 w-4" />
           </button>
         )}
-        <div className="min-w-0 flex-1">
-        <h1 className="vt-title truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
-          {title}
-        </h1>
-        <p className="mt-1.5 truncate text-sm text-[var(--color-muted-foreground)]">
-          {format(new Date(), 'EEEE d MMMM')}
-        </p>
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h1 className="vt-title truncate text-base font-semibold tracking-tight text-[var(--color-foreground)]">
+            {title}
+          </h1>
+          <p className="shrink-0 text-xs text-[var(--color-muted-foreground)]">
+            {format(new Date(), 'EEEE d MMMM')}
+          </p>
         </div>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
