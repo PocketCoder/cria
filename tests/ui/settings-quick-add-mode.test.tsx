@@ -26,10 +26,17 @@ const INITIAL_SETTINGS = {
   },
 };
 
-/** A stand-in server: GET /user reads `server`, the settings POST replaces it. */
+/**
+ * A stand-in server: GET /user reads `server`, the settings POST replaces it.
+ * Before Vikunja v2.7.0 there is no settings PATCH (404 here); with
+ * `hasPatch` it merges the PATCH body into `server` (one level is enough for
+ * these tests) and records it in `patched`.
+ */
 let server: Record<string, unknown>;
 let posted: Array<Record<string, unknown>> = [];
+let patched: Array<Record<string, unknown>> = [];
 let postStatus = 200;
+let hasPatch = false;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -43,10 +50,13 @@ beforeEach(async () => {
   signIn();
   server = structuredClone(INITIAL_SETTINGS);
   posted = [];
+  patched = [];
   postStatus = 200;
+  hasPatch = false;
   globalThis.__cria_settingsHydrated__ = undefined;
   globalThis.__cria_serverQuickAddMode__ = undefined;
   globalThis.__cria_settingsSaveChain__ = undefined;
+  globalThis.__cria_settingsPatchUnsupported__ = undefined;
   useSettings.setState({ quickAddMagicMode: 'vikunja' });
   vi.stubGlobal(
     'fetch',
@@ -54,6 +64,18 @@ beforeEach(async () => {
       const req = input instanceof Request ? input : new Request(input, init);
       if (/\/api\/v1\/user$/.test(req.url)) {
         return json({ id: 1, username: 'tester', name: 'Tester', email: 'tester@example.test', settings: server });
+      }
+      if (req.url.includes('/api/v2/')) {
+        if (!hasPatch || req.method !== 'PATCH') return json({ message: 'Not Found' }, 404);
+        const patch = JSON.parse(await req.text()) as Record<string, unknown>;
+        patched.push(patch);
+        const frontend = patch.frontend_settings as Record<string, unknown> | undefined;
+        server = {
+          ...server,
+          ...patch,
+          frontend_settings: { ...(server.frontend_settings as Record<string, unknown>), ...frontend },
+        };
+        return json({ message: 'The settings were updated successfully.' });
       }
       if (req.method === 'POST' && req.url.endsWith('/user/settings/general')) {
         const body = JSON.parse(await req.text()) as Record<string, unknown>;
@@ -110,6 +132,25 @@ describe('Settings → Quick Add Magic', () => {
       color_schema: 'light',
       sidebar_width: 400,
       play_sound_when_done: true,
+    });
+  });
+
+  it('sends only the mode as a merge-patch on a server with the v2 PATCH', async () => {
+    hasPatch = true;
+    const trigger = await openGeneralTab();
+    // Meanwhile, on the web: other settings change.
+    server = { ...server, week_start: 1, frontend_settings: { ...INITIAL_SETTINGS.frontend_settings, sidebar_width: 400 } };
+
+    await chooseMode(trigger, 'Disabled');
+
+    await waitFor(() => expect(patched).toHaveLength(1));
+    expect(patched[0]).toEqual({ frontend_settings: { quick_add_magic_mode: 'disabled' } });
+    expect(posted).toHaveLength(0);
+    expect(server).toMatchObject({ week_start: 1, name: 'Tester', default_project_id: 7 });
+    expect(server.frontend_settings).toEqual({
+      ...INITIAL_SETTINGS.frontend_settings,
+      sidebar_width: 400,
+      quick_add_magic_mode: 'disabled',
     });
   });
 

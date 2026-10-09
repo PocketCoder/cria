@@ -171,7 +171,9 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
 - `globalThis.__cria_serverQuickAddMode__`: last server Quick Add Magic mode
   seen, so a refetch only applies a mode the server changed to.
 - `globalThis.__cria_settingsSaveChain__`: settings-save queue tail, so two
-  saves never interleave their GET and POST.
+  saves never interleave (v1 GET and POST, or two v2 PATCHes).
+- `globalThis.__cria_settingsPatchUnsupported__`: server URLs with no v2
+  settings PATCH, so only the first save there probes it.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
@@ -252,19 +254,38 @@ directory outside the repo and read it; never run its scripts.
 
 **Rule:** never send a partial *or stale* settings object. Every write goes
 through `saveUserSettings(change)` in
-[src/sync/settingsSync.ts](src/sync/settingsSync.ts): it GETs `/user` for the
-server's current settings, applies only the named change
-(`applySettingsChange` in [src/sync/frontendSettings.ts](src/sync/frontendSettings.ts)
-passes every other field and every unknown `frontend_settings` key through
-untouched), then POSTs the whole thing. Saves are queued one at a time, and a
-failed GET sends nothing. Never build the body from the cached user or a
-snapshot taken when a screen opened: another client (Vikunja-web, another
-Cria) may have changed it since, and the POST would silently revert that.
-`UserSettingsInput` carries even the non-UI fields (`default_project_id`,
-discoverability, `frontend_settings`) purely so they round-trip. Newer servers
-also offer `PATCH /api/v2/user/settings/general` (JSON merge-patch, which
-Vikunja-web now uses); Cria still talks v1. Assume any other "update the whole
-entity" POST behaves the same — read the handler before sending a subset.
+[src/sync/settingsSync.ts](src/sync/settingsSync.ts), which picks one of two
+paths. Saves are queued one at a time on both.
+
+- **v2 (Vikunja v2.7.0+):** `PATCH /api/v2/user/settings/general` with
+  `Content-Type: application/merge-patch+json`, the same call Vikunja-web
+  makes. The body names only the changed fields (`settingsMergePatch` in
+  [src/sync/frontendSettings.ts](src/sync/frontendSettings.ts)); no GET first.
+  Upstream has no hand-written PATCH: Huma's AutoPatch
+  (`EnableAutoPatch` in `pkg/routes/api/v2/huma.go`) synthesises it for any
+  path with a GET and a PUT. Server-side it GETs the stored settings, applies
+  an RFC 7386 merge-patch (objects merge recursively, so `frontend_settings`
+  and `frontend_settings.cria` merge key by key; arrays and scalars replace; a
+  `null` deletes, and a deleted top-level field is then written as its Go zero
+  value), answers an empty **304** if nothing changed, else PUTs the merged
+  object (200 `{message}`). `settingsMergePatch` therefore drops every null.
+  The server's own read-to-write step has no ETag, so the window is narrowed to
+  that, not zero.
+- **v1 fallback:** v2.4.0 to v2.6.0 have the v2 PUT but no GET on that path, so
+  no PATCH (405); earlier releases have no `/api/v2` (404). On 404, 405, 501
+  or a non-JSON 2xx, nothing was written: the save GETs `/user`, applies only
+  the named change (`applySettingsChange` passes every other field and every
+  unknown `frontend_settings` key through untouched), then POSTs the whole
+  thing; a failed GET sends nothing. Detection is that first PATCH, remembered
+  per server URL for the session. Any other PATCH error is thrown, not
+  retried on v1.
+
+Never build a v1 body from the cached user or a snapshot taken when a screen
+opened: another client (Vikunja-web, another Cria) may have changed it since,
+and the POST would silently revert that. `UserSettingsInput` carries even the
+non-UI fields (`default_project_id`, discoverability, `frontend_settings`)
+purely so they round-trip. Assume any other "update the whole entity" POST
+behaves the same — read the handler before sending a subset.
 
 ### pnpm 11 build-script approvals
 
@@ -437,8 +458,9 @@ All client preferences live in one Zustand `persist` store
 Bump that key only alongside a migration — a bare rename silently resets every
 persisted preference to its default. Server-backed prefs (language, timezone,
 week start, name, reminders, the Quick Add Magic mode) are saved through
-`saveUserSettings`, never `pushUserSettings` directly: the POST is
-full-object, see the gotcha above.
+`saveUserSettings`, never `pushUserSettings` or `patchUserSettings`
+directly: the v1 POST is full-object and the v2 PATCH needs the fallback and
+the save queue, see the gotcha above.
 
 **A setting isn't done until something reads it.** A persisted/synced toggle
 with no consumer looks like it works but does nothing — that's a bug, not a

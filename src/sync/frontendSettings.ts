@@ -10,7 +10,7 @@
  * names and passes every other key through untouched, known or not.
  */
 
-import { SETTINGS_DEFAULTS, type UserSettingsInput } from '@/api/userSettings';
+import { SETTINGS_DEFAULTS, type UserSettingsInput, type UserSettingsPatch } from '@/api/userSettings';
 import type { User } from '@/domain/user';
 import { isQuickAddMagicMode, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 
@@ -50,7 +50,11 @@ export function criaPrefsOf(frontendSettings: Blob): Blob | null {
 export interface SettingsChange {
   /** Top-level fields (name, week_start, …). */
   settings?: Omit<UserSettingsInput, 'frontend_settings'>;
-  /** frontend_settings keys to set, e.g. `quick_add_magic_mode`. */
+  /**
+   * frontend_settings keys to set, e.g. `quick_add_magic_mode`. Give plain
+   * values: the v1 POST replaces an object value whole, the v2 merge-patch
+   * merges it into the stored one.
+   */
   frontend?: Blob;
   /** Cria prefs to set inside frontend_settings.cria, merged key by key. */
   cria?: Blob;
@@ -77,4 +81,35 @@ export function applySettingsChange(server: Blob | undefined, change: SettingsCh
     body.frontend_settings = next;
   }
   return body;
+}
+
+/**
+ * The v2 PATCH body for `change`: a JSON merge-patch (RFC 7386) naming only
+ * the changed fields. The server merges it into the settings it holds,
+ * recursing into objects, so every frontend_settings key and `cria` pref the
+ * change doesn't name keeps its stored value, whoever wrote it. In a
+ * merge-patch a null deletes the key, and a deleted top-level field is
+ * written back as its Go zero value, so nulls are left out: a save can set
+ * keys but never remove one.
+ */
+export function settingsMergePatch(change: SettingsChange): UserSettingsPatch {
+  const patch: UserSettingsPatch = withoutNulls(change.settings ?? {});
+  const frontend = withoutNulls(change.frontend ?? {});
+  if (change.cria) {
+    const cria = withoutNulls(change.cria);
+    if (Object.keys(cria).length > 0) frontend[CRIA_KEY] = cria;
+  }
+  if (Object.keys(frontend).length > 0) patch.frontend_settings = frontend;
+  return patch;
+}
+
+/** `value` without null or undefined members, at any depth of nested objects. */
+function withoutNulls(value: object): Blob {
+  const out: Blob = {};
+  for (const [key, member] of Object.entries(value)) {
+    if (member === null || member === undefined) continue;
+    const nested = asObject(member);
+    out[key] = nested ? withoutNulls(nested) : member;
+  }
+  return out;
 }
