@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { DEFAULT_QUICK_ADD_MAGIC_MODE, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 
 export type ColorScheme = 'light' | 'dark' | 'system';
 export type DateFormat = 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY';
@@ -27,6 +28,10 @@ interface SettingsState {
   setHideDockOnTray: (enabled: boolean) => void;
   playSoundWhenDone: boolean;
   setPlaySoundWhenDone: (enabled: boolean) => void;
+  // Quick Add Magic prefix mode. Mirrors the user's Vikunja-web setting
+  // (`frontend_settings.quick_add_magic_mode`), synced in src/sync/settingsSync.
+  quickAddMagicMode: QuickAddMagicMode;
+  setQuickAddMagicMode: (mode: QuickAddMagicMode) => void;
   // Defaults for the photo → tasks importer (overridable per-import in the
   // capture modal). `shoppingProjectId` null means "ask each time"; an empty
   // `shoppingLabel` means don't tag. See src/features/shoppingPhoto.
@@ -68,6 +73,8 @@ export const useSettings = create<SettingsState>()(
       setHideDockOnTray: (enabled) => set({ hideDockOnTray: enabled }),
       playSoundWhenDone: false,
       setPlaySoundWhenDone: (enabled) => set({ playSoundWhenDone: enabled }),
+      quickAddMagicMode: DEFAULT_QUICK_ADD_MAGIC_MODE,
+      setQuickAddMagicMode: (mode) => set({ quickAddMagicMode: mode }),
       shoppingProjectId: null,
       setShoppingProjectId: (id) => set({ shoppingProjectId: id }),
       shoppingLabel: 'shopping',

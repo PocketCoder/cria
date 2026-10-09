@@ -167,6 +167,8 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
 - `globalThis.__cria_refreshInFlight__`: token-refresh single-flight (a
   duplicate refresh would reuse an already-rotated refresh token).
 - `globalThis.__cria_settingsHydrated__`: synced-prefs hydrate-once flag.
+- `globalThis.__cria_serverQuickAddMode__`: last server Quick Add Magic mode
+  seen, so a refetch only applies a mode the server changed to.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
