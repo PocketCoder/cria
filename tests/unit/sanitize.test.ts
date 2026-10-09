@@ -30,4 +30,14 @@ describe('sanitizeHtml XSS guards', () => {
     const html = '<ul data-type="taskList"><li data-type="taskItem" data-checked="true">done</li></ul>';
     expect(sanitizeHtml(html)).toBe(html);
   });
+
+  it('keeps the queued-upload image placeholder', () => {
+    const html = '<p><img src="#" data-src="cria://pending/V1StGXR8_Z5jdHi6B-myT"></p>';
+    expect(sanitizeHtml(html)).toBe(html);
+  });
+
+  it('allows no other cria: URL and no placeholder link', () => {
+    expect(sanitizeHtml('<img data-src="cria://evil/x">')).toBe('<img>');
+    expect(sanitizeHtml('<a href="cria://pending/abc">x</a>')).not.toContain('href');
+  });
 });

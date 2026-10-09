@@ -48,7 +48,10 @@ const CONFIG = {
   // Defence in depth: DOMPurify already blocks `javascript:`/`data:` hrefs by
   // default, but pin the allowed URI schemes explicitly so a version bump
   // can't silently widen them. (http/https/mailto, fragments, relative paths.)
-  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|#|\/|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
+  // `cria://pending/` is the inline-image placeholder for a queued upload
+  // (src/lib/pendingAttachmentRef.ts); it never loads anything by itself,
+  // and the link hook below still strips it from anchors.
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|cria:\/\/pending\/|#|\/|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
 };
 
 // Link hardening as a DOMPurify hook (runs *inside* sanitisation, so unlike a
