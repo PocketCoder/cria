@@ -64,7 +64,7 @@ function uploadOk(): Response {
           file: { id: 70, name: 'photo.png', size: 3, mime: 'image/png' },
         },
       ],
-      errors: [],
+      errors: null, // as upstream sends it when nothing failed
     }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   );
@@ -146,6 +146,13 @@ describe('sync/push/attachment', () => {
     expect(file.name).toBe('photo.png');
     expect(file.type).toBe('image/png');
     expect(file.size).toBe(3);
+    // What reaches the server once serialised (the Tauri HTTP plugin builds a
+    // Request the same way): upstream's v1 handler reads form.File["files"]
+    // and takes the stored name from the part's filename. No Content-Type is
+    // set by hand, so the generated multipart boundary survives.
+    const wire = new Request(url, init);
+    expect(wire.headers.get('content-type')).toMatch(/^multipart\/form-data; boundary=/);
+    expect(await wire.text()).toContain('Content-Disposition: form-data; name="files"; filename="photo.png"');
 
     expect(await listAttachmentsForTask('task1')).toEqual([
       expect.objectContaining({ localId, serverId: 7, fileId: 70, pending: false, uploadFailed: false }),
@@ -204,7 +211,8 @@ describe('sync/push/attachment', () => {
     await seed();
     await queueAttachmentUpload('task1', photo());
     platformFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ success: [], errors: [{ code: 4011, message: 'too big' }] }), { status: 200 }),
+      // Upstream serialises an empty Go slice as null.
+      new Response(JSON.stringify({ success: null, errors: [{ code: 4035, message: 'too big' }] }), { status: 200 }),
     );
     await drainOutbox(mockClient());
     expect((await deadLetters())[0]!.last_error).toMatch(/upload rejected: too big/);
