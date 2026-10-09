@@ -1,5 +1,5 @@
 import { dueCalendarDate } from '@/lib/dateFormat';
-import { parseQuickAdd } from '@/lib/quickAddParser';
+import { parseQuickAddTask } from '@/lib/quickAddParser';
 import { DEFAULT_QUICK_ADD_MAGIC_MODE, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import type { KanbanColumn } from '@/queries/kanban';
 import type { Bucket, TaskBucket } from '@/domain/bucket';
@@ -89,7 +89,8 @@ export function isAtLimit(limit: number, taskCount: number): boolean {
  * Task input for the column's inline "Add a task" box, running the quick-add
  * parser (in the user's Quick Add Magic `mode`) for title / due date /
  * priority. Null for a blank title. Label tokens are returned separately so
- * the caller can apply them after create.
+ * the caller can apply them after create. A title that is only tokens stays
+ * literal text with nothing parsed from it, as in Vikunja-web.
  */
 export function buildKanbanTaskInput(
   rawTitle: string,
@@ -98,10 +99,10 @@ export function buildKanbanTaskInput(
 ): { input: TaskInput; labelTitles: string[] } | null {
   const trimmed = rawTitle.trim();
   if (!trimmed) return null;
-  const parsed = parseQuickAdd(trimmed, new Date(), mode);
+  const parsed = parseQuickAddTask(trimmed, new Date(), mode);
   return {
     input: {
-      title: parsed.title || trimmed,
+      title: parsed.title,
       projectLocalId,
       dueDate: parsed.dueDate ?? undefined,
       priority: parsed.priority ?? undefined,

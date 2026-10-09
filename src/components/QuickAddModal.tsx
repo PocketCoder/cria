@@ -3,7 +3,7 @@ import { useUi } from '@/stores/ui';
 import { useSettings } from '@/stores/settings';
 import { useSelectableProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
-import { parseQuickAdd } from '@/lib/quickAddParser';
+import { parseQuickAddTask } from '@/lib/quickAddParser';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
 import type { AddReminderInput } from '@/db/reminders';
@@ -86,8 +86,9 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
 
   // Parse with the user's Quick Add Magic mode (Vikunja / Todoist prefixes, or
   // off). The project token is matched case-insensitively against titles below.
+  // A line that is only tokens stays a literal title, as in Vikunja-web.
   const magicMode = useSettings((s) => s.quickAddMagicMode);
-  const parsed = useMemo(() => parseQuickAdd(text, new Date(), magicMode), [text, magicMode]);
+  const parsed = useMemo(() => parseQuickAddTask(text, new Date(), magicMode), [text, magicMode]);
 
   // Mirror a typed `!N` priority token into the button group, so NL and the
   // picker stay in sync. Only fires when the parsed token value changes, so a

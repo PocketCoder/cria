@@ -25,6 +25,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 | Tasks | Percent done slider | ✅ | 0–100 slider in TaskActions |
 | Tasks | Natural-language quick-add (date, *label, !priority, @assignee) | ✅ | `quickAddParser` + QuickAddPreview |
 | Tasks | Quick Add Magic modes (Disabled / Vikunja / Todoist prefixes) | ✅ | `quickAddPrefixes`; mode follows the user's Vikunja-web `frontend_settings.quick_add_magic_mode` and is selectable in Settings → General (#62) |
+| Tasks | Quick-add literal titles (input wrapped in quotes, or only magic) | ✅ | As Vikunja-web: `"…"` or `'…'` around the whole input skips all parsing in every mode; a line that is only tokens (`*Urgent`, `+Home`, `tomorrow`) is kept as typed with nothing applied (`parseQuickAddTask`, quick-add modal and Kanban). Ramble still skips token-only lines |
 | Tasks | **+ProjectName in quick-add** | ✅ | Shipped via feat/quick-features merge |
 | Tasks | **NL recurrence in quick-add (every day/week etc.)** | ✅ | Shipped via feat/quick-features merge |
 | Tasks | **Task identifier (PROJ-42) in detail card** | ✅ | Shipped via feat/quick-features merge |

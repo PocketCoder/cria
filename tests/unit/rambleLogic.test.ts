@@ -50,6 +50,13 @@ describe('rambleLogic', () => {
     expect(hasTitle('   ', 'disabled')).toBe(false);
   });
 
+  it('keeps a quoted line as a title in every mode, but not an empty pair', () => {
+    for (const mode of ['vikunja', 'todoist', 'disabled'] as const) {
+      expect(hasTitle(' "+Home tomorrow" ', mode)).toBe(true);
+      expect(hasTitle('""', mode)).toBe(false);
+    }
+  });
+
   it('previews a known project by name and an unknown one as the fallback', () => {
     const projects = [
       { localId: 'a', title: 'Inbox' },

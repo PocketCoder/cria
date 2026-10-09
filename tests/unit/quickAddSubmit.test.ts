@@ -17,6 +17,7 @@ import {
   persistQuickAdd,
 } from '@/lib/quickAddSubmit';
 import { findProjectByTitle, pickFallbackProjectId, resolveProjectChip } from '@/lib/quickAddProject';
+import { parseQuickAddTask } from '@/lib/quickAddParser';
 import { repeatLabel } from '@/lib/repeatLabel';
 
 const fields = {
@@ -54,6 +55,13 @@ describe('buildQuickAddInput', () => {
     expect(
       buildQuickAddInput({ title: 'x', projectTitle: 'hOmE' }, projects, 'p2', fields),
     ).toEqual({ title: 'x', projectLocalId: 'p1' });
+  });
+
+  // Ported from Vikunja-web's useQuickAddTask tests.
+  it('keeps a title that is only a project token in the selected project', () => {
+    const parsed = parseQuickAddTask('+Work');
+    expect(canSubmitQuickAdd(parsed, 'p1')).toBe(true);
+    expect(buildQuickAddInput(parsed, projects, 'p1', fields)).toEqual({ title: '+Work', projectLocalId: 'p1' });
   });
 
   it('omits the project for an unknown token (falls back to Inbox)', () => {

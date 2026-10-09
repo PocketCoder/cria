@@ -213,6 +213,10 @@ function unquoteLiteral(input: string): string | null {
  * Parse a quick-add line. `mode` picks the prefix table; `disabled` mirrors
  * Vikunja-web, which turns the magic off entirely: no symbols, dates or
  * recurrence, so the whole input becomes the title.
+ *
+ * A title left empty by the magic stays empty here, as in Vikunja-web's
+ * `parseTaskText`. Code that creates a task from typed input, and its
+ * preview, uses `parseQuickAddTask`, which keeps such input as a literal title.
  */
 export function parseQuickAdd(
   input: string,
@@ -406,6 +410,23 @@ export function parseQuickAdd(
   }
 
   return { title, dueDate, priority, labelTitles, assigneeUsernames, projectTitle, repeatAfter, repeatMode, tokens };
+}
+
+/**
+ * The parse a typed quick-add line creates its task from, as Vikunja-web's
+ * quick add does (`useQuickAddTask`): when the magic leaves no title, because
+ * the line is only tokens ("*errands", "+Home", "tomorrow", "!3") or an empty
+ * quoted pair, the line is kept as a literal title and nothing parsed from it
+ * (label, project, date, priority, assignee or repeat) applies. Previews use
+ * this too, so they show what will be saved.
+ */
+export function parseQuickAddTask(
+  input: string,
+  now: Date = new Date(),
+  mode: QuickAddMagicMode = DEFAULT_QUICK_ADD_MAGIC_MODE,
+): QuickAddResult {
+  const parsed = parseQuickAdd(input, now, mode);
+  return parsed.title === '' && input.trim() !== '' ? plainTitle(input) : parsed;
 }
 
 /**
