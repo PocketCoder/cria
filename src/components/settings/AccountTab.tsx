@@ -6,7 +6,7 @@ import { getAvatarSettings, setAvatarProvider, uploadAvatar, fetchAvatarBlob } f
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { notify } from '@/db/bus';
-import type { UserSettingsInput } from '@/api/userSettings';
+import { saveUserSettings } from '@/sync/settingsSync';
 
 const AVATAR_PROVIDERS = [
   { value: 'default', label: 'Default' },
@@ -18,10 +18,9 @@ const AVATAR_PROVIDERS = [
 
 interface Props {
   disabled?: boolean;
-  onPushSettings: (patch: UserSettingsInput) => Promise<void>;
 }
 
-export function AccountTab({ disabled, onPushSettings }: Props) {
+export function AccountTab({ disabled }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: user } = useCurrentUser();
   const signOut = useAuth((s) => s.signOut);
@@ -61,7 +60,7 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
   const handleNameSave = () => {
     const trimmed = displayName.trim();
     if (!trimmed || trimmed === user?.name) return;
-    void onPushSettings({ name: trimmed })
+    void saveUserSettings({ settings: { name: trimmed } })
       .then(() => notify('user'))
       .catch((e) => console.error('Failed to sync name', e));
   };

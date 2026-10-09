@@ -1,9 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
-import { useCurrentUser } from '@/queries/user';
 import { useOnline } from '@/hooks/useOnline';
-import { pushUserSettings, type UserSettingsInput, SETTINGS_DEFAULTS } from '@/api/userSettings';
-import { frontendSettingsWithCria } from '@/sync/settingsSync';
 import { AccountTab } from '@/components/settings/AccountTab';
 import { GeneralTab } from '@/components/settings/GeneralTab';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
@@ -56,26 +53,6 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
   // Mobile drills in: null = the section list, otherwise that section's page.
   const [mobileTab, setMobileTab] = useState<TabId | null>(initialTab ?? null);
   const isOnline = useOnline();
-  const { data: user } = useCurrentUser();
-
-
-  const settingsRef = useRef<UserSettingsInput>({});
-
-  useEffect(() => {
-    if (!user) return;
-    const raw = user.raw as Record<string, unknown> | undefined;
-    const settings = (raw?.settings as UserSettingsInput | undefined) ?? {};
-    // Server values as the base; anything already changed in this session
-    // (held in settingsRef) wins so a background user refetch can't clobber
-    // an unsaved edit — the server overwrites every column from whatever we
-    // POST next, so a stale refetch landing on top would silently revert it.
-    settingsRef.current = {
-      ...SETTINGS_DEFAULTS,
-      ...settings,
-      name: settings.name ?? user.name ?? undefined,
-      ...settingsRef.current,
-    };
-  }, [user]);
 
   // Escape closes the modal, unless something inside already handled it
   // (Radix selects/popovers and inline edits call preventDefault).
@@ -87,21 +64,12 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const pushSettings = (patch: UserSettingsInput) => {
-    settingsRef.current = {
-      ...settingsRef.current,
-      ...patch,
-      frontend_settings: frontendSettingsWithCria(settingsRef.current.frontend_settings),
-    };
-    return pushUserSettings(settingsRef.current);
-  };
-
   const renderTab = (tab: TabId = activeTab) => {
     switch (tab) {
       case 'account':
-        return <AccountTab disabled={!isOnline} onPushSettings={pushSettings} />;
+        return <AccountTab disabled={!isOnline} />;
       case 'general':
-        return <GeneralTab disabled={!isOnline} onPushSettings={pushSettings} />;
+        return <GeneralTab disabled={!isOnline} />;
       case 'appearance':
         return <AppearanceTab />;
       case 'photo-capture':

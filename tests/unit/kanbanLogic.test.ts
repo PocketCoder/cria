@@ -102,4 +102,16 @@ describe('buildKanbanTaskInput', () => {
     const r = buildKanbanTaskInput('!2', 'p1')!;
     expect(r.input.title).toBe('!2');
   });
+
+  it('parses with the given Quick Add Magic mode', () => {
+    const todoist = buildKanbanTaskInput('Write report !3 @work *draft', 'p1', 'todoist')!;
+    expect(todoist.input.title).toBe('Write report *draft');
+    expect(todoist.input.priority).toBe(3);
+    expect(todoist.labelTitles).toEqual(['work']);
+
+    const off = buildKanbanTaskInput('Write report !3 *work', 'p1', 'disabled')!;
+    expect(off.input.title).toBe('Write report !3 *work');
+    expect(off.input.priority).toBeUndefined();
+    expect(off.labelTitles).toEqual([]);
+  });
 });

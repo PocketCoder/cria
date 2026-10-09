@@ -4,6 +4,7 @@ import { aiErrorMessage, parseLines, rambleInstructions, clip } from '@/lib/aiPr
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { useUi } from '@/stores/ui';
+import { useSettings } from '@/stores/settings';
 import { partialSaveMessage } from '@/lib/partialSave';
 import { createFromQuickAdd } from './createFromQuickAdd';
 import {
@@ -28,6 +29,8 @@ export function useRamble(onClose: () => void) {
   const setText = useUi((s) => s.setRambleDraft);
   const pendingLines = useUi((s) => s.rambleLines);
   const setPendingLines = useUi((s) => s.setRambleLines);
+  // The model writes, and every parse reads, the user's Quick Add Magic syntax.
+  const mode = useSettings((s) => s.quickAddMagicMode);
 
   const [phase, setPhase] = useState<Phase>('input');
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +82,7 @@ export function useRamble(onClose: () => void) {
         instructions: rambleInstructions({
           projects: projects.map((p) => p.title),
           labels: labels.map((l) => l.title),
+          mode,
         }),
         prompt: clip(text.trim()),
       });
@@ -103,7 +107,7 @@ export function useRamble(onClose: () => void) {
     }
   };
 
-  const chosen = chosenDrafts(drafts);
+  const chosen = chosenDrafts(drafts, mode);
 
   // Closing is inert while saving: the save loop can't be cancelled and its
   // completion would close (or clear) a sheet the user has since reopened.
@@ -120,7 +124,7 @@ export function useRamble(onClose: () => void) {
     try {
       await createDrafts(
         chosen,
-        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId }),
+        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode }),
         (d) => savedIds.add(d.id),
       );
       if (!alive.current) {

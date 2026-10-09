@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUi } from '@/stores/ui';
+import { useSettings } from '@/stores/settings';
 import { useSelectableProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
 import { parseQuickAdd } from '@/lib/quickAddParser';
@@ -83,8 +84,10 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
   );
   const projectId = chosenProjectId ?? fallbackProjectId;
 
-  // Resolve #project token — match case-insensitive against project titles
-  const parsed = useMemo(() => parseQuickAdd(text), [text]);
+  // Parse with the user's Quick Add Magic mode (Vikunja / Todoist prefixes, or
+  // off). The project token is matched case-insensitively against titles below.
+  const magicMode = useSettings((s) => s.quickAddMagicMode);
+  const parsed = useMemo(() => parseQuickAdd(text, new Date(), magicMode), [text, magicMode]);
 
   // Mirror a typed `!N` priority token into the button group, so NL and the
   // picker stay in sync. Only fires when the parsed token value changes, so a
@@ -211,6 +214,7 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
     text,
     setText,
     parsed,
+    magicMode,
     titleRef,
     onTitleKeyDown: handleTitleKeyDown,
     onSubmit: handleSubmit,

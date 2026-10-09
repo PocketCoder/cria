@@ -168,6 +168,10 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
 - `globalThis.__cria_refreshInFlight__`: token-refresh single-flight (a
   duplicate refresh would reuse an already-rotated refresh token).
 - `globalThis.__cria_settingsHydrated__`: synced-prefs hydrate-once flag.
+- `globalThis.__cria_serverQuickAddMode__`: last server Quick Add Magic mode
+  seen, so a refetch only applies a mode the server changed to.
+- `globalThis.__cria_settingsSaveChain__`: settings-save queue tail, so two
+  saves never interleave their GET and POST.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
@@ -219,20 +223,32 @@ field of the request body onto the user record and saves with
 value (`""`, `0`, `false`, `nil`) — silently wiping the server's stored `name`,
 `default_project_id`, `week_start`, language/timezone, and reminder flags. The
 generated `schema.ts` only shows the body *shape* (a complete `v1.UserSettings`);
-the Go handler is the ground truth (`pkg/routes/api/v1/user_settings.go`,
-`UpdateGeneralUserSettings`). When upstream runtime behaviour is in doubt, read
-the handler — a local clone of the Vikunja source (`real-vikunja-git/`,
-gitignored) makes this checkable in
-seconds and beats inferring from the schema.
+the Go code is the ground truth (`pkg/routes/api/v1/user_settings.go`,
+`UpdateGeneralUserSettings`, which calls `models.UpdateUserGeneralSettings` in
+`pkg/models/user_settings.go`). `frontend_settings` is stored and returned
+verbatim as any JSON value; Vikunja-web keeps its own snake_case keys there
+(`quick_add_magic_mode`, `color_schema`, …). When upstream runtime behaviour is
+in doubt, read the source rather than inferring from the schema. A local clone
+(`real-vikunja-git/`, gitignored) makes this quick, but it is local-only: a
+fresh container or worktree won't have it. There, shallow-clone
+`https://github.com/go-vikunja/vikunja` (`--depth 1`) into a new, empty scratch
+directory outside the repo and read it; never run its scripts.
 
-**Rule:** never send a partial settings object. Seed the complete current
-settings (`user.raw.settings`), merge your one change on top, then POST the
-whole thing. [`SettingsModal`](src/components/SettingsModal.tsx)'s `settingsRef`
-+ `pushSettings()` wrapper is the reference pattern; `UserSettingsInput` carries
-even the non-UI fields (`default_project_id`, discoverability,
-`frontend_settings`) purely so they round-trip untouched. Assume any other
-"update the whole entity" POST behaves the same — read the handler before
-sending a subset.
+**Rule:** never send a partial *or stale* settings object. Every write goes
+through `saveUserSettings(change)` in
+[src/sync/settingsSync.ts](src/sync/settingsSync.ts): it GETs `/user` for the
+server's current settings, applies only the named change
+(`applySettingsChange` in [src/sync/frontendSettings.ts](src/sync/frontendSettings.ts)
+passes every other field and every unknown `frontend_settings` key through
+untouched), then POSTs the whole thing. Saves are queued one at a time, and a
+failed GET sends nothing. Never build the body from the cached user or a
+snapshot taken when a screen opened: another client (Vikunja-web, another
+Cria) may have changed it since, and the POST would silently revert that.
+`UserSettingsInput` carries even the non-UI fields (`default_project_id`,
+discoverability, `frontend_settings`) purely so they round-trip. Newer servers
+also offer `PATCH /api/v2/user/settings/general` (JSON merge-patch, which
+Vikunja-web now uses); Cria still talks v1. Assume any other "update the whole
+entity" POST behaves the same — read the handler before sending a subset.
 
 ### pnpm 11 build-script approvals
 
@@ -263,7 +279,10 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
   `cargo test --lib ai -- --ignored --nocapture` (in `src-tauri/`).
 - Prompts live in [src/lib/aiPrompts.ts](src/lib/aiPrompts.ts). The model
   never does date maths: it writes dates in words (or quick-add / filter
-  syntax) and the existing parsers resolve them. To iterate on a prompt, write
+  syntax) and the existing parsers resolve them. Ramble's quick-add syntax
+  follows the user's Quick Add Magic mode, and every ramble parse passes the
+  same mode; with the magic `disabled` it writes plain titles with dates left
+  in words (nothing is parsed, as in Vikunja-web). To iterate on a prompt, write
   `<name>.instr` + `<name>.prompt` files to a folder and run
   `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
 - AI buttons render only when `useAiAvailable()` is true, so unsupported
@@ -401,7 +420,8 @@ All client preferences live in one Zustand `persist` store
 ([src/stores/settings.ts](src/stores/settings.ts), key `cria:settings/v2`).
 Bump that key only alongside a migration — a bare rename silently resets every
 persisted preference to its default. Server-backed prefs (language, timezone,
-week start, name, reminders) also sync through `pushUserSettings` — which is
+week start, name, reminders, the Quick Add Magic mode) are saved through
+`saveUserSettings`, never `pushUserSettings` directly: the POST is
 full-object, see the gotcha above.
 
 **A setting isn't done until something reads it.** A persisted/synced toggle

@@ -99,6 +99,50 @@ describe('prompt builders', () => {
     expect(parseQuickAdd('Renew car insurance feb 28 !3', now).dueDate).toMatch(/^2026-02-2[78]/);
   });
 
+  it('defaults the ramble prompt to the vikunja syntax', () => {
+    const ctx = { projects: ['Home Admin'], labels: ['car'], now: new Date('2026-02-10T09:00:00') };
+    const s = rambleInstructions({ ...ctx, mode: 'vikunja' });
+    expect(rambleInstructions(ctx)).toBe(s);
+    expect(s).toContain('+Project to file it');
+    expect(s).toContain('like +"Home Admin"');
+    expect(s).toContain('*label to tag it');
+    expect(s).toContain('!3 only if');
+  });
+
+  it('asks for todoist syntax in todoist mode, and the todoist parser reads it back', () => {
+    const now = new Date('2026-02-10T09:00:00');
+    const projects = ['Work', 'Home Admin', "Mum's"];
+    const s = rambleInstructions({ projects, labels: ['car'], now, mode: 'todoist' });
+    expect(s).toContain('#Project to file it');
+    expect(s).toContain('like #"Home Admin" or #"Mum\'s"');
+    expect(s).toContain('@label to tag it');
+    expect(s).toContain('Renew car insurance feb 28 !3');
+    expect(s).not.toMatch(/\+Project|\*label/);
+    for (const name of projects) {
+      const token = needsQuoting(name) ? `"${name}"` : name;
+      expect(parseQuickAdd(`Do it #${token}`, now, 'todoist').projectTitle).toBe(name);
+    }
+    const [line] = parseLines('- Renew car insurance friday !3 #"Home Admin" @car');
+    const parsed = parseQuickAdd(line!, now, 'todoist');
+    expect(parsed).toMatchObject({ title: 'Renew car insurance', priority: 3, projectTitle: 'Home Admin', labelTitles: ['car'] });
+    expect(parsed.dueDate).not.toBeNull();
+  });
+
+  it('asks for plain titles with dates kept in words when the magic is off', () => {
+    const now = new Date('2026-02-10T09:00:00');
+    const s = rambleInstructions({ projects: ['Work'], labels: ['car'], now, mode: 'disabled' });
+    expect(s).toMatch(/Today is Tuesday,? 10 February 2026/);
+    expect(s).toContain('no symbols or tags');
+    expect(s).toContain('Keep every date and repeat the person mentions in the title, in plain words');
+    expect(s).toContain('Renew car insurance before the end of the month');
+    // Nothing the model can't use: no project or label lists, no prefix tokens.
+    expect(s).not.toContain('Work');
+    expect(s).not.toMatch(/[+*#@!]\w/);
+    // Upstream-compatible: with the magic off the whole line is the title.
+    const parsed = parseQuickAdd('Email the landlord tomorrow', now, 'disabled');
+    expect(parsed).toMatchObject({ title: 'Email the landlord tomorrow', dueDate: null });
+  });
+
   it('builds subtask and comment prompts from HTML', () => {
     expect(subtaskPrompt('Plan trip', '<p>Rome</p>')).toBe('Task: Plan trip\nNotes: Rome');
     expect(subtaskPrompt('Plan trip', null)).toBe('Task: Plan trip');

@@ -14,6 +14,7 @@ import {
   Folder,
 } from 'lucide-react';
 import { parseQuickAdd } from '@/lib/quickAddParser';
+import { useSettings } from '@/stores/settings';
 import { hasTimeOfDay, useDateFormatter } from '@/lib/dateFormat';
 import { cn } from '@/lib/cn';
 import {
@@ -168,11 +169,12 @@ export function RambleReview({
   onAddAll: () => void;
 }) {
   const saving = phase === 'saving';
+  const magicOff = useSettings((s) => s.quickAddMagicMode === 'disabled');
   return (
     <div className="space-y-3">
       <p className="text-caption text-[var(--color-muted-foreground)]">
-        {chosenCount} task{chosenCount === 1 ? '' : 's'} selected. Edit any line; quick-add syntax
-        works.
+        {chosenCount} task{chosenCount === 1 ? '' : 's'} selected. Edit any line
+        {magicOff ? '.' : '; quick-add syntax works.'}
       </p>
 
       <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
@@ -305,10 +307,12 @@ function DraftChips({
   fallbackProjectId: string;
 }) {
   const { formatDate, formatDateTime } = useDateFormatter();
-  const p = useMemo(() => parseQuickAdd(line), [line]);
+  // The same Quick Add Magic mode the prompt and the save use (see useRamble).
+  const mode = useSettings((s) => s.quickAddMagicMode);
+  const p = useMemo(() => parseQuickAdd(line, new Date(), mode), [line, mode]);
   const chips: Array<{ key: string; icon: ReactNode; text: string; warn?: boolean }> = [];
   // Token-only lines ("+Home tomorrow") have no title and are skipped on save.
-  if (included && line.trim() && !hasTitle(line))
+  if (included && line.trim() && !hasTitle(line, mode))
     chips.push({ key: 'skip', icon: <X className="h-3 w-3" />, text: 'No title, will be skipped', warn: true });
   if (p.dueDate)
     chips.push({
