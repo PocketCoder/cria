@@ -4,10 +4,16 @@ import { drainOutbox } from './push';
 import { notify } from '@/db/bus';
 
 let lastFinishedAt = 0;
+let running = 0;
 
 /** When the last sync cycle finished (ms since epoch), or 0 if none has. */
 export function lastSyncCycleAt(): number {
   return lastFinishedAt;
+}
+
+/** True while any cycle is in flight (the timer's, a focus pull, or live sync's). */
+export function isSyncCycleRunning(): boolean {
+  return running > 0;
 }
 
 /**
@@ -20,6 +26,16 @@ export function lastSyncCycleAt(): number {
  * pulls are singleFlight-deduped, so overlapping callers don't double-fetch.
  */
 export async function runSyncCycle(): Promise<void> {
+  running++;
+  try {
+    await cycle();
+  } finally {
+    running--;
+    lastFinishedAt = Date.now();
+  }
+}
+
+async function cycle(): Promise<void> {
   // Drain the outbox before pulling so the circuit breaker is clean,
   // and so a row that failed its push (e.g. server was down) gets a
   // retry even without a new user mutation to trigger notify('outbox').
@@ -64,5 +80,4 @@ export async function runSyncCycle(): Promise<void> {
   } catch (err) {
     throttledWarn('periodic-sync/views', '[periodic-sync] views/buckets pull failed:', err);
   }
-  lastFinishedAt = Date.now();
 }
