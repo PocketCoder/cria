@@ -1,14 +1,14 @@
 {
-  "version": "0.14.1-nightly.38",
-  "notes": "dev @ 5848d0a",
-  "pub_date": "2026-10-09T14:23:37Z",
+  "version": "0.14.1-nightly.39",
+  "notes": "dev @ 339f9ba",
+  "pub_date": "2026-10-09T19:44:52Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHNXRUpzbGE5RzVRYUJQNGlqWUZRaHh5amFZRlN6NlZWa28wVHRxVXhvRmp3SXU5K3BlbnZzTC9KOEJEQWUyK3hrUVcrWkh3Uzk2a2oxSzV4VU4zK0FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTU1NzY3CWZpbGU6Q3JpYSAoTmlnaHRseSkuYXBwLnRhci5negpkV2VzbWpQUUJzNi90Ri9DRU9DYURUb2F6VzhDb0tuakk0czd6N1Q0SCtIV1lJZksrNGdlUStOTjEvS2ZhNG12d0poSHBVd2VkM0JrZXkya1ZKSy9DZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHIxODRwczVBSHNPVGphUVdQNkZ4WDhzL3l3Zk5ERFRjZ0lGaGpqNCtuZENqOU5SZzJQekFyYW9QVDZiOHl3OUI0NDI1MmZIM2xSQUN6cGpoWFVORlFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc0OTU3CWZpbGU6Q3JpYSAoTmlnaHRseSkuYXBwLnRhci5negpIOUNrbW8xb1R3SStRRzJRbFRCT1plUzVLOVNLanR5ZE5PTEpZenhoRFNHc1dnQnhiTHROQ3B4SG1oR01nM25UeWlXalp2emhZb2JqWUl2R1BSamZCQT09Cg==",
       "url": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHFVNjlRbW5oWmRKVmxEbHpZMnI3aTZEb2szRDh6VUhBMDRpNi95YUk2RXhrQXE3UXVjbVNhZG9TU25ycEV2YWNpSHRpcFpvQUlrL2NPdTFXSDJJaGd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTU1NjkzCWZpbGU6Q3JpYSAoTmlnaHRseSkuYXBwLnRhci5nego1dmdkdlB5cTZ2bkJHMk1FcXpnekVobGNFVHlXL1BnQTkzblQ1blNPQkNlRW5vSG0zN0gyQXBoWHhMb2NBNzlMN0MwNTBBWDNqZkVzZkYwVkdkNkhBZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNmRmTGx3NDE5MHFkai81enJSd3Rsb2hOVnpqYlF4STV0amoyK3VuZUlOSVBnZE9WNlNITlhJeHlGbm4reGwxVXRXTWQ1RVFEU2N1aGZJU2RmN1djRGIvK1h5ZENaWEFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTc0OTcyCWZpbGU6Q3JpYSAoTmlnaHRseSkuYXBwLnRhci5negpRWGFQa1BKUk5KUHYyVFJaZlRQbUpVQVNDN0NKZnRWSXpaNGpPL0hQUmpMYlhUeWRRclNFbTN5T3orYjFKdnhYZ29HK09LcFFyaUpVemdIajBQUUlCQT09Cg==",
       "url": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly_x86_64.app.tar.gz"
     }
   }
