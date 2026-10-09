@@ -29,7 +29,10 @@ export function hasTitle(line: string, mode: QuickAddMagicMode): boolean {
 
 /**
  * Drafts that will actually be created: ticked and with a title. A line of
- * only tokens ("+Home tomorrow") has no title, and creation skips it.
+ * only tokens ("+Home tomorrow") has no title, and creation skips it. Typed
+ * quick-add keeps such a line as a literal title instead, as Vikunja-web does
+ * (parseQuickAddTask); a ramble shows it as skipped. A line wrapped in quotes
+ * is a literal title in both.
  */
 export function chosenDrafts(drafts: readonly Draft[], mode: QuickAddMagicMode): Draft[] {
   return drafts.filter((d) => d.include && hasTitle(d.line, mode));

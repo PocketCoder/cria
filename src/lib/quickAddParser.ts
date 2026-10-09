@@ -37,6 +37,10 @@
  *   <recurrence> — "every 2 weeks", "daily", "every monday"…
  *   <date>      — *anywhere*, parsed by chrono-node. We take the first
  *                 non-empty result.
+ *
+ * Input wrapped entirely in a pair of straight double or single quotes is a
+ * literal title in every mode, as in Vikunja-web: the pair is dropped and
+ * nothing inside it is parsed (see `unquoteLiteral`).
  */
 
 import * as chrono from 'chrono-node';
@@ -189,9 +193,30 @@ function parseQuoted(raw: string, prefix: string): string {
 }
 
 /**
+ * Vikunja-web's escape from the magic (`parseTaskText`): input that starts and
+ * ends with the same straight quote, `"` or `'`, is a literal title. Only the
+ * first and last characters are checked, as upstream does, so inner quotes
+ * stay as typed. Returns the text inside the pair, or null when the input
+ * isn't wrapped. Unlike upstream, surrounding whitespace is ignored, since
+ * Cria trims every title's ends anyway.
+ */
+function unquoteLiteral(input: string): string | null {
+  const text = input.trim();
+  const quote = text[0];
+  if (text.length >= 2 && (quote === '"' || quote === "'") && text.endsWith(quote)) {
+    return text.slice(1, -1);
+  }
+  return null;
+}
+
+/**
  * Parse a quick-add line. `mode` picks the prefix table; `disabled` mirrors
  * Vikunja-web, which turns the magic off entirely: no symbols, dates or
  * recurrence, so the whole input becomes the title.
+ *
+ * A title left empty by the magic stays empty here, as in Vikunja-web's
+ * `parseTaskText`. Code that creates a task from typed input, and its
+ * preview, uses `parseQuickAddTask`, which keeps such input as a literal title.
  */
 export function parseQuickAdd(
   input: string,
@@ -199,6 +224,9 @@ export function parseQuickAdd(
   mode: QuickAddMagicMode = DEFAULT_QUICK_ADD_MAGIC_MODE,
 ): QuickAddResult {
   const raw = input;
+  // Checked before the mode, as upstream does, so it applies with the magic off too.
+  const literal = unquoteLiteral(raw);
+  if (literal !== null) return plainTitle(raw, literal);
   const re = regexesFor(mode);
   if (!re) return plainTitle(raw);
   const { prefixes } = re;
@@ -385,13 +413,32 @@ export function parseQuickAdd(
 }
 
 /**
- * `disabled` mode: nothing is parsed, matching Vikunja-web's `parseTaskText`,
- * which returns the text verbatim. Only the ends are trimmed, so a blank line
- * still reads as "no title"; inner spacing is kept as typed.
+ * The parse a typed quick-add line creates its task from, as Vikunja-web's
+ * quick add does (`useQuickAddTask`): when the magic leaves no title, because
+ * the line is only tokens ("*errands", "+Home", "tomorrow", "!3") or an empty
+ * quoted pair, the line is kept as a literal title and nothing parsed from it
+ * (label, project, date, priority, assignee or repeat) applies. Previews use
+ * this too, so they show what will be saved.
  */
-function plainTitle(raw: string): QuickAddResult {
+export function parseQuickAddTask(
+  input: string,
+  now: Date = new Date(),
+  mode: QuickAddMagicMode = DEFAULT_QUICK_ADD_MAGIC_MODE,
+): QuickAddResult {
+  const parsed = parseQuickAdd(input, now, mode);
+  return parsed.title === '' && input.trim() !== '' ? plainTitle(input) : parsed;
+}
+
+/**
+ * A literal title: nothing is parsed, matching Vikunja-web's `parseTaskText`,
+ * which returns the text verbatim (`disabled` mode) or without its quotes
+ * (quoted input). Only the ends are trimmed, so a blank line still reads as
+ * "no title"; inner spacing is kept as typed. The preview shows the whole
+ * input, quotes included, as plain text.
+ */
+function plainTitle(raw: string, title: string = raw): QuickAddResult {
   return {
-    title: raw.trim(),
+    title: title.trim(),
     dueDate: null,
     priority: null,
     labelTitles: [],

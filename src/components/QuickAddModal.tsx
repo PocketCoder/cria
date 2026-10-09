@@ -3,14 +3,15 @@ import { useUi } from '@/stores/ui';
 import { useSettings } from '@/stores/settings';
 import { useSelectableProjects } from '@/queries/projects';
 import { useCurrentUser } from '@/queries/user';
-import { parseQuickAdd } from '@/lib/quickAddParser';
+import { parseQuickAddTask } from '@/lib/quickAddParser';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
 import type { AddReminderInput } from '@/db/reminders';
 import {
   buildQuickAddInput,
   canSubmitQuickAdd,
-  mergeLabelTitles,
+  followParsed,
+  followParsedLabels,
   persistQuickAdd,
 } from '@/lib/quickAddSubmit';
 import { findProjectByTitle, pickFallbackProjectId } from '@/lib/quickAddProject';
@@ -22,6 +23,16 @@ import {
 } from '@/components/quick-add/useSheetBehaviour';
 import { DesktopQuickAdd, MobileQuickAdd } from '@/components/quick-add/QuickAddViews';
 import { ModalDialog } from '@/components/ui/modal-dialog';
+
+/** The repeat picker's value: `repeat_after` seconds and `repeat_mode`. */
+interface Repeat {
+  after: number | null;
+  mode: number | null;
+}
+
+const NO_REPEAT: Repeat = { after: null, mode: null };
+
+const sameRepeat = (a: Repeat, b: Repeat) => a.after === b.after && a.mode === b.mode;
 
 /* ─── the modal ───────────────────────────────────────────────────────────── */
 
@@ -44,8 +55,7 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
   const [priority, setPriority] = useState(0);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [labelTitles, setLabelTitles] = useState<string[]>([]);
-  const [repeatAfter, setRepeatAfter] = useState<number | null>(null);
-  const [repeatMode, setRepeatMode] = useState<number | null>(null);
+  const [repeat, setRepeat] = useState<Repeat>(NO_REPEAT);
   const [reminders, setReminders] = useState<AddReminderInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const activeView = useUi((s) => s.activeView);
@@ -86,48 +96,73 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
 
   // Parse with the user's Quick Add Magic mode (Vikunja / Todoist prefixes, or
   // off). The project token is matched case-insensitively against titles below.
+  // A line that is only tokens stays a literal title, as in Vikunja-web.
   const magicMode = useSettings((s) => s.quickAddMagicMode);
-  const parsed = useMemo(() => parseQuickAdd(text, new Date(), magicMode), [text, magicMode]);
+  const parsed = useMemo(() => parseQuickAddTask(text, new Date(), magicMode), [text, magicMode]);
 
-  // Mirror a typed `!N` priority token into the button group, so NL and the
-  // picker stay in sync. Only fires when the parsed token value changes, so a
-  // manual button choice afterwards isn't clobbered on the next keystroke.
+  // Mirror typed tokens into the pickers, so NL and the pickers stay in sync.
+  // Each effect fires only when its parsed value changes, so a manual picker
+  // choice afterwards isn't clobbered on the next keystroke. Each ref holds
+  // what the parse last put in, so a value whose token goes away (deleted, or
+  // the line became a literal title) leaves its picker too, unless the user
+  // has changed that picker since (see followParsed).
+
+  // A typed `!N` priority token → the button group.
+  const parsedPriority = useRef<number | null>(null);
   useEffect(() => {
-    if (parsed.priority !== null) setPriority(parsed.priority);
+    const before = parsedPriority.current;
+    const after = parsed.priority;
+    parsedPriority.current = after;
+    setPriority((p) => followParsed(p, before, after, 0));
   }, [parsed.priority]);
 
-  // Same NL-mirroring for a typed date ("tomorrow", "next fri") → date picker.
+  // A typed date ("tomorrow", "next fri") → the date picker.
+  const parsedDue = useRef<string | null>(null);
   useEffect(() => {
-    if (parsed.dueDate) setDueDate(parsed.dueDate);
+    const before = parsedDue.current;
+    const after = parsed.dueDate;
+    parsedDue.current = after;
+    setDueDate((d) => followParsed(d, before, after, null));
   }, [parsed.dueDate]);
 
-  // Merge typed `*label` tokens into the label picker (union, so manual picks
-  // aren't lost). Keyed on the joined titles so it only fires when they change;
-  // the latest titles are read through a ref.
+  // Typed `*label` tokens → the label picker, unioned with manual picks. Keyed
+  // on the joined titles so it only fires when they change; the latest titles
+  // are read through a ref.
   const parsedLabelsKey = parsed.labelTitles.join(' ');
   const latestLabels = useRef(parsed.labelTitles);
   useEffect(() => {
     latestLabels.current = parsed.labelTitles;
   });
+  const parsedLabels = useRef<string[]>([]);
   useEffect(() => {
-    const incoming = latestLabels.current;
-    if (incoming.length === 0) return;
-    setLabelTitles((prev) => mergeLabelTitles(prev, incoming));
+    const before = parsedLabels.current;
+    const after = latestLabels.current;
+    parsedLabels.current = after;
+    if (before.length === 0 && after.length === 0) return;
+    setLabelTitles((prev) => followParsedLabels(prev, before, after));
   }, [parsedLabelsKey]);
 
-  // Mirror a typed recurrence ("every 2 weeks", "monthly") into the picker.
+  // A typed recurrence ("every 2 weeks", "monthly") → the repeat picker.
+  const parsedRepeat = useRef<Repeat | null>(null);
   useEffect(() => {
-    if (parsed.repeatAfter !== null || parsed.repeatMode !== null) {
-      setRepeatAfter(parsed.repeatAfter);
-      setRepeatMode(parsed.repeatMode);
-    }
+    const before = parsedRepeat.current;
+    const after =
+      parsed.repeatAfter !== null || parsed.repeatMode !== null
+        ? { after: parsed.repeatAfter, mode: parsed.repeatMode }
+        : null;
+    parsedRepeat.current = after;
+    setRepeat((r) => followParsed(r, before, after, NO_REPEAT, sameRepeat));
   }, [parsed.repeatAfter, parsed.repeatMode]);
 
+  // A typed project token → the project dropdown, once projects have loaded.
+  const parsedProject = useRef<string | null>(null);
   useEffect(() => {
-    if (parsed.projectTitle && projects.length > 0) {
-      const match = findProjectByTitle(projects, parsed.projectTitle);
-      if (match) setProjectId(match.localId);
-    }
+    if (projects.length === 0) return;
+    const before = parsedProject.current;
+    const match = parsed.projectTitle ? findProjectByTitle(projects, parsed.projectTitle) : undefined;
+    const after = match?.localId ?? null;
+    parsedProject.current = after;
+    setProjectId((id) => followParsed(id, before, after, null));
   }, [parsed.projectTitle, projects]);
 
   useEscapeKey(onClose);
@@ -142,8 +177,8 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
         description,
         dueDate,
         priority,
-        repeatAfter,
-        repeatMode,
+        repeatAfter: repeat.after,
+        repeatMode: repeat.mode,
       });
       await persistQuickAdd(input, labelTitles, reminders, parsed.assigneeUsernames);
       return true;
@@ -161,8 +196,7 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
     setPriority(0);
     setDueDate(null);
     setLabelTitles([]);
-    setRepeatAfter(null);
-    setRepeatMode(null);
+    setRepeat(NO_REPEAT);
     setReminders([]);
   };
 
@@ -202,12 +236,9 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
     setLabelTitles,
     reminders,
     setReminders,
-    repeatAfter,
-    repeatMode,
-    onChangeRepeat: (after: number | null, mode: number | null) => {
-      setRepeatAfter(after);
-      setRepeatMode(mode);
-    },
+    repeatAfter: repeat.after,
+    repeatMode: repeat.mode,
+    onChangeRepeat: (after: number | null, mode: number | null) => setRepeat({ after, mode }),
   };
 
   const viewProps = {

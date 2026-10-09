@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { needsQuoting, parseQuickAdd } from '@/lib/quickAddParser';
+import { needsQuoting, parseQuickAdd, parseQuickAddTask } from '@/lib/quickAddParser';
 
 // Fix "now" so date parsing is deterministic — Wed, 2026-05-27T10:00Z.
 const NOW = new Date('2026-05-27T10:00:00Z');
@@ -334,5 +334,163 @@ describe('parseQuickAdd modes', () => {
       });
       expect(parseQuickAdd('', NOW, 'disabled').tokens).toEqual([]);
     });
+  });
+});
+
+// Ported from Vikunja-web's quickAddMagic.test.ts ("Quote-escaped text").
+describe('quoted input is a literal title', () => {
+  const NOTHING_PARSED = {
+    dueDate: null,
+    priority: null,
+    labelTitles: [],
+    assigneeUsernames: [],
+    projectTitle: null,
+    repeatAfter: null,
+    repeatMode: null,
+  };
+
+  it('skips all parsing when the input is wrapped in double quotes', () => {
+    expect(parseQuickAdd('"delete mails up to january 30th"', NOW)).toMatchObject({
+      title: 'delete mails up to january 30th',
+      ...NOTHING_PARSED,
+    });
+  });
+
+  it('skips all parsing when the input is wrapped in single quotes', () => {
+    expect(parseQuickAdd("'buy mass tomorrow *label !2 @user'", NOW)).toMatchObject({
+      title: 'buy mass tomorrow *label !2 @user',
+      ...NOTHING_PARSED,
+    });
+  });
+
+  it('parses as usual for an unmatched quote', () => {
+    expect(parseQuickAdd('"delete mails today', NOW).dueDate).not.toBeNull();
+  });
+
+  it('parses as usual for mismatched quote types', () => {
+    expect(parseQuickAdd('"delete mails today\'', NOW).dueDate).not.toBeNull();
+  });
+
+  it('parses as usual when the quotes are in the middle', () => {
+    expect(parseQuickAdd('delete "mails" today', NOW).dueDate).not.toBeNull();
+  });
+
+  it('handles an empty quoted string', () => {
+    expect(parseQuickAdd('""', NOW)).toMatchObject({ title: '', dueDate: null });
+  });
+
+  it('skips parsing in todoist mode too', () => {
+    expect(parseQuickAdd('"task today @label #project"', NOW, 'todoist')).toMatchObject({
+      title: 'task today @label #project',
+      ...NOTHING_PARSED,
+    });
+  });
+
+  // Upstream checks the quotes before the mode, so they are dropped with the magic off too.
+  it.each(['vikunja', 'todoist', 'disabled'] as const)('drops the pair and parses nothing in %s mode', (mode) => {
+    const inner = 'Buy milk tomorrow *shop @alice +Home #Work !2 every day';
+    expect(parseQuickAdd(`"${inner}"`, NOW, mode)).toMatchObject({ title: inner, ...NOTHING_PARSED });
+    expect(parseQuickAdd(`'${inner}'`, NOW, mode)).toMatchObject({ title: inner, ...NOTHING_PARSED });
+    expect(parseQuickAdd("''", NOW, mode).title).toBe('');
+  });
+
+  it('keeps the quotes as text with the magic off when they do not wrap the input', () => {
+    expect(parseQuickAdd('"Lorem ipsum', NOW, 'disabled').title).toBe('"Lorem ipsum');
+    expect(parseQuickAdd('"Lorem ipsum\'', NOW, 'disabled').title).toBe('"Lorem ipsum\'');
+  });
+
+  it('checks only the first and last characters, so inner quotes stay', () => {
+    expect(parseQuickAdd('"Read "Dune" tomorrow"', NOW)).toMatchObject({
+      title: 'Read "Dune" tomorrow',
+      dueDate: null,
+    });
+    expect(parseQuickAdd('"Plan" *trip "now"', NOW)).toMatchObject({ title: 'Plan" *trip "now', labelTitles: [] });
+  });
+
+  it('needs a pair: a lone quote is title text', () => {
+    expect(parseQuickAdd('"', NOW).title).toBe('"');
+  });
+
+  it('accepts only straight quotes, so curly ones are parsed as usual', () => {
+    expect(parseQuickAdd('“Buy milk tomorrow”', NOW).dueDate).not.toBeNull();
+  });
+
+  it('ignores surrounding whitespace, keeps inner spacing and previews the input as one text token', () => {
+    const raw = '  " Call  mum tomorrow " ';
+    expect(parseQuickAdd(raw, NOW)).toMatchObject({
+      title: 'Call  mum tomorrow',
+      dueDate: null,
+      tokens: [{ kind: 'text', start: 0, end: raw.length, text: raw }],
+    });
+  });
+});
+
+// Ported from Vikunja-web's useQuickAddTask and helpers/task tests: a title
+// that is only magic stays a literal title, and nothing parsed from it applies.
+describe('parseQuickAddTask', () => {
+  const NOTHING_PARSED = {
+    dueDate: null,
+    priority: null,
+    labelTitles: [],
+    assigneeUsernames: [],
+    projectTitle: null,
+    repeatAfter: null,
+    repeatMode: null,
+  };
+
+  it('creates no label when the whole title is magic', () => {
+    expect(parseQuickAddTask('*Urgent', NOW)).toMatchObject({ title: '*Urgent', ...NOTHING_PARSED });
+  });
+
+  it('keeps a title that is only a project prefix, without moving the task', () => {
+    expect(parseQuickAddTask('+Other', NOW)).toMatchObject({ title: '+Other', ...NOTHING_PARSED });
+  });
+
+  it('keeps the raw input title, trimmed, when the magic parses no text', () => {
+    const raw = ' *label ';
+    expect(parseQuickAddTask(raw, NOW)).toMatchObject({
+      title: '*label',
+      ...NOTHING_PARSED,
+      tokens: [{ kind: 'text', start: 0, end: raw.length, text: raw }],
+    });
+  });
+
+  it('keeps a lone date, repeat or priority as text', () => {
+    expect(parseQuickAddTask('tomorrow', NOW)).toMatchObject({ title: 'tomorrow', ...NOTHING_PARSED });
+    expect(parseQuickAddTask('every day', NOW)).toMatchObject({ title: 'every day', ...NOTHING_PARSED });
+    expect(parseQuickAddTask('!3', NOW)).toMatchObject({ title: '!3', ...NOTHING_PARSED });
+  });
+
+  it.each([
+    ['vikunja', '*errands +Home @alice !3 tomorrow every day'],
+    ['todoist', '@errands #Home +alice !3 tomorrow every day'],
+    ['disabled', '*errands +Home @alice !3 tomorrow every day'],
+  ] as const)('keeps a line of only tokens as typed in %s mode', (mode, line) => {
+    expect(parseQuickAddTask(line, NOW, mode)).toMatchObject({ title: line, ...NOTHING_PARSED });
+  });
+
+  it.each(['vikunja', 'todoist', 'disabled'] as const)('keeps an empty quoted pair as typed in %s mode', (mode) => {
+    expect(parseQuickAddTask('""', NOW, mode)).toMatchObject({ title: '""', ...NOTHING_PARSED });
+    expect(parseQuickAddTask("''", NOW, mode).title).toBe("''");
+  });
+
+  // Upstream sends the blank inside as the title, which the server rejects;
+  // Cria treats it like an empty pair instead.
+  it('keeps a quoted pair around only whitespace as typed', () => {
+    expect(parseQuickAddTask('"  "', NOW).title).toBe('"  "');
+  });
+
+  it('matches parseQuickAdd when the line has a title', () => {
+    for (const line of ['Buy milk *shop +Home tomorrow !2', '"*shop"', 'Buy milk']) {
+      expect(parseQuickAddTask(line, NOW)).toEqual(parseQuickAdd(line, NOW));
+    }
+    expect(parseQuickAddTask('Buy milk @shop #Home', NOW, 'todoist')).toEqual(
+      parseQuickAdd('Buy milk @shop #Home', NOW, 'todoist'),
+    );
+  });
+
+  it('leaves blank input without a title', () => {
+    expect(parseQuickAddTask('', NOW)).toMatchObject({ title: '', tokens: [] });
+    expect(parseQuickAddTask('   ', NOW).title).toBe('');
   });
 });
