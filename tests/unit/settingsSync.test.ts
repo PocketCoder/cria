@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { getCachedUser, pushUserSettings, fetchCurrentUser } = vi.hoisted(() => ({
+const { getCachedUser, pushUserSettings, patchUserSettings, fetchCurrentUser } = vi.hoisted(() => ({
   getCachedUser: vi.fn(),
   pushUserSettings: vi.fn(),
+  patchUserSettings: vi.fn(),
   fetchCurrentUser: vi.fn(),
 }));
 vi.mock('@/db/user', () => ({ getCachedUser }));
@@ -11,6 +12,7 @@ vi.mock('@/api/user', () => ({ fetchCurrentUser }));
 vi.mock('@/api/userSettings', async (orig) => ({
   ...(await orig<typeof import('@/api/userSettings')>()),
   pushUserSettings,
+  patchUserSettings,
 }));
 
 import {
@@ -24,8 +26,10 @@ import { useSettings } from '@/stores/settings';
 const user = (settings: Record<string, unknown>) => ({ raw: { settings } }) as never;
 
 /**
- * A stand-in Vikunja server: GET /user returns a copy of `server`, and the
- * settings POST replaces it wholesale, as the real handler does.
+ * A stand-in Vikunja server from before v2.7.0, so every save takes the v1
+ * path: no settings PATCH, GET /user returns a copy of `server`, and the
+ * settings POST replaces it wholesale, as the real handler does. The v2 path
+ * is covered against a fuller fake server in settingsPatch.test.ts.
  */
 let server: Record<string, unknown>;
 const serverFrontend = () => server.frontend_settings as Record<string, unknown>;
@@ -35,6 +39,8 @@ beforeEach(() => {
   globalThis.__cria_settingsHydrated__ = undefined;
   globalThis.__cria_serverQuickAddMode__ = undefined;
   globalThis.__cria_settingsSaveChain__ = undefined;
+  globalThis.__cria_settingsPatchUnsupported__ = undefined;
+  patchUserSettings.mockResolvedValue('unsupported');
   useSettings.setState({ quickAddMagicMode: 'vikunja', colorScheme: 'system', dateFormat: 'YYYY-MM-DD' });
   server = {
     name: 'Jake',
@@ -168,7 +174,8 @@ describe('saveUserSettings', () => {
 
     const a = saveUserSettings({ settings: { name: 'A' } });
     const b = saveUserSettings({ settings: { week_start: 3 } });
-    await Promise.resolve();
+    await vi.waitFor(() => expect(fetchCurrentUser).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1); // b waits for a
     releaseFirstGet();
     await Promise.all([a, b]);

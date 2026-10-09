@@ -17,14 +17,15 @@
  * Magic mode lives at web's own key, `frontend_settings.quick_add_magic_mode`,
  * so a mode picked on the web applies in Cria and vice versa.
  *
- * Every settings write goes through `saveUserSettings`: the POST replaces the
- * whole settings object, so it re-reads the server's current settings first
- * and changes only what the user changed (see AGENTS.md).
+ * Every settings write goes through `saveUserSettings`, which sends only what
+ * the user changed: a v2 merge-patch where the server has one, else a v1 POST
+ * of the whole object rebuilt from a fresh read (see AGENTS.md).
  */
 
 import { useSettings, type ColorScheme, type DateFormat, type TimeFormat } from '@/stores/settings';
-import { pushUserSettings } from '@/api/userSettings';
+import { patchUserSettings, pushUserSettings } from '@/api/userSettings';
 import { fetchCurrentUser } from '@/api/user';
+import { getAuthSnapshot } from '@/auth/store';
 import { getCachedUser } from '@/db/user';
 import type { User } from '@/domain/user';
 import type { QuickAddMagicMode } from '@/lib/quickAddPrefixes';
@@ -34,6 +35,7 @@ import {
   criaPrefsOf,
   frontendSettingsOf,
   quickAddMagicModeOf,
+  settingsMergePatch,
   settingsOf,
   type SettingsChange,
 } from '@/sync/frontendSettings';
@@ -69,8 +71,11 @@ declare global {
   var __cria_settingsHydrated__: boolean | undefined;
   /** Last Quick Add Magic mode seen on the server this session. */
   var __cria_serverQuickAddMode__: QuickAddMagicMode | undefined;
-  /** Tail of the settings-save queue: one GET-then-POST at a time. */
+  /** Tail of the settings-save queue: one save at a time. */
   var __cria_settingsSaveChain__: Promise<void> | undefined;
+  /** Server URLs that answered the v2 settings PATCH with "no such endpoint"
+   *  this session; saves there go straight to the v1 POST. */
+  var __cria_settingsPatchUnsupported__: Set<string> | undefined;
 }
 
 /**
@@ -122,30 +127,60 @@ export function maybeHydrateSyncedPrefs(user: User | null): void {
 }
 
 /**
- * Save one settings change without writing back anything stale: GET /user for
- * the server's current settings, apply only `change` on top, POST the whole
- * object. Saves run one at a time, so a second save re-reads after the first
- * has landed and neither undoes the other. Never falls back to cached
- * settings: if the GET fails, nothing is sent.
+ * Save one settings change without overwriting anything another client wrote.
+ *
+ * Vikunja v2.7.0+ takes a merge-patch at `PATCH /api/v2/user/settings/general`:
+ * only the changed fields go over the wire and the server merges them into
+ * what it holds at that moment, so Cria never sends back a copy that may have
+ * gone stale. Older servers answer 404 or 405; there (remembered per server
+ * URL for the session) the save falls back to v1: GET /user for the server's
+ * current settings, apply only `change` on top, POST the whole object. Never
+ * falls back to cached settings: if that GET fails, nothing is sent.
+ *
+ * Saves run one at a time either way: the server applies a PATCH as read,
+ * merge, write, so two in flight at once could still revert each other.
  */
 export function saveUserSettings(change: SettingsChange): Promise<void> {
   const run = async () => {
-    const server = settingsOf(await fetchCurrentUser());
-    // A mode changed on the web since we last looked is picked up here, so
-    // the body below (which keeps it) and the local parser agree. Skipped when
-    // this save *is* a mode change: the user's choice wins.
-    if (!change.frontend || !(QUICK_ADD_MAGIC_KEY in change.frontend)) {
-      followServerQuickAddMode(frontendSettingsOf(server));
-    }
-    const body = applySettingsChange(server, change);
-    await pushUserSettings(body);
-    // The server now holds this mode; a refetch showing it is not a web change.
-    const saved = quickAddMagicModeOf(frontendSettingsOf(body as Record<string, unknown>));
-    if (saved) globalThis.__cria_serverQuickAddMode__ = saved;
+    if (await savedByPatch(change)) return;
+    await saveByFullPost(change);
   };
   const queued = (globalThis.__cria_settingsSaveChain__ ?? Promise.resolve()).then(run);
   globalThis.__cria_settingsSaveChain__ = queued.catch(() => undefined);
   return queued;
+}
+
+/** The v2 path. False when the server has no settings PATCH (nothing was written). */
+async function savedByPatch(change: SettingsChange): Promise<boolean> {
+  const unsupported = (globalThis.__cria_settingsPatchUnsupported__ ??= new Set());
+  const server = (getAuthSnapshot().serverUrl ?? '').replace(/\/+$/, '');
+  if (unsupported.has(server)) return false;
+  if ((await patchUserSettings(settingsMergePatch(change))) === 'unsupported') {
+    unsupported.add(server);
+    return false;
+  }
+  // The server now holds this mode; a refetch showing it is not a web change.
+  // A mode changed on the web reaches the app on the next user refetch: the
+  // patch doesn't carry the mode, so the server keeps the web's either way.
+  const saved = quickAddMagicModeOf(change.frontend ?? {});
+  if (saved) globalThis.__cria_serverQuickAddMode__ = saved;
+  return true;
+}
+
+/** The v1 path: re-read, apply only `change`, POST the whole object. */
+async function saveByFullPost(change: SettingsChange): Promise<void> {
+  const server = settingsOf(await fetchCurrentUser());
+  // A mode changed on the web since we last looked is picked up here, so
+  // the body below (which keeps it) and the local parser agree. Skipped when
+  // this save *is* a mode change: the user's choice wins.
+  if (!change.frontend || !(QUICK_ADD_MAGIC_KEY in change.frontend)) {
+    followServerQuickAddMode(frontendSettingsOf(server));
+  }
+  const body = applySettingsChange(server, change);
+  await pushUserSettings(body);
+  // The server now holds this mode; a refetch showing it is not a web change.
+  const saved = quickAddMagicModeOf(frontendSettingsOf(body as Record<string, unknown>));
+  if (saved) globalThis.__cria_serverQuickAddMode__ = saved;
 }
 
 /** Push the given Cria prefs (all by default) into frontend_settings.cria. */
