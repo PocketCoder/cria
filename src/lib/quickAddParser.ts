@@ -384,10 +384,14 @@ export function parseQuickAdd(
   return { title, dueDate, priority, labelTitles, assigneeUsernames, projectTitle, repeatAfter, repeatMode, tokens };
 }
 
-/** `disabled` mode: nothing is parsed; whitespace is tidied as in the other modes. */
+/**
+ * `disabled` mode: nothing is parsed, matching Vikunja-web's `parseTaskText`,
+ * which returns the text verbatim. Only the ends are trimmed, so a blank line
+ * still reads as "no title"; inner spacing is kept as typed.
+ */
 function plainTitle(raw: string): QuickAddResult {
   return {
-    title: raw.replace(/\s+/g, ' ').trim(),
+    title: raw.trim(),
     dueDate: null,
     priority: null,
     labelTitles: [],

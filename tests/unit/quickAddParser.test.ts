@@ -326,9 +326,10 @@ describe('parseQuickAdd modes', () => {
       expect(r.repeatMode).toBeNull();
     });
 
-    it('returns one text token covering the input, none for empty input', () => {
+    it('keeps inner spacing verbatim and returns one text token, none for empty input', () => {
+      // Vikunja-web returns the text untouched in this mode; Cria trims the ends only.
       expect(parseQuickAdd('  Call  mum ', NOW, 'disabled')).toMatchObject({
-        title: 'Call mum',
+        title: 'Call  mum',
         tokens: [{ kind: 'text', start: 0, end: 12, text: '  Call  mum ' }],
       });
       expect(parseQuickAdd('', NOW, 'disabled').tokens).toEqual([]);
