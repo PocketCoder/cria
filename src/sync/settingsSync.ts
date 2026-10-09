@@ -22,11 +22,16 @@ import { useSettings, type ColorScheme, type DateFormat, type TimeFormat } from 
 import { pushUserSettings, SETTINGS_DEFAULTS, type UserSettingsInput } from '@/api/userSettings';
 import { getCachedUser } from '@/db/user';
 import type { User } from '@/domain/user';
-import { isQuickAddMagicMode, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
+import type { QuickAddMagicMode } from '@/lib/quickAddPrefixes';
+import {
+  CRIA_KEY,
+  QUICK_ADD_MAGIC_KEY,
+  criaPrefsOf,
+  frontendSettingsOf,
+  quickAddMagicModeOf,
+  settingsOf,
+} from '@/sync/frontendSettings';
 
-const CRIA_KEY = 'cria';
-/** Vikunja-web's own key (snake_case on the wire), shared on purpose. */
-const QUICK_ADD_MAGIC_KEY = 'quick_add_magic_mode';
 const PUSH_DEBOUNCE_MS = 800;
 
 export interface SyncedPrefs {
@@ -57,19 +62,6 @@ declare global {
   var __cria_serverQuickAddMode__: QuickAddMagicMode | undefined;
 }
 
-function frontendSettingsOf(user: User | null): Record<string, unknown> {
-  const settings = (user?.raw as Record<string, unknown> | undefined)?.settings as
-    | Record<string, unknown>
-    | undefined;
-  const fs = settings?.frontend_settings;
-  return fs && typeof fs === 'object' ? (fs as Record<string, unknown>) : {};
-}
-
-function criaPrefsOf(frontendSettings: Record<string, unknown>): Partial<SyncedPrefs> | null {
-  const cria = frontendSettings[CRIA_KEY];
-  return cria && typeof cria === 'object' ? (cria as Partial<SyncedPrefs>) : null;
-}
-
 /**
  * Build the `frontend_settings` object to send to the server: the user's
  * existing blob with Cria's prefs and the live Quick Add Magic mode merged in.
@@ -93,8 +85,8 @@ export function frontendSettingsWithCria(existing: unknown): Record<string, unkn
  * local change has finished pushing can't revert it.
  */
 function followServerQuickAddMode(frontendSettings: Record<string, unknown>): void {
-  const mode = frontendSettings[QUICK_ADD_MAGIC_KEY];
-  if (!isQuickAddMagicMode(mode) || mode === globalThis.__cria_serverQuickAddMode__) return;
+  const mode = quickAddMagicModeOf(frontendSettings);
+  if (!mode || mode === globalThis.__cria_serverQuickAddMode__) return;
   globalThis.__cria_serverQuickAddMode__ = mode;
   const s = useSettings.getState();
   if (mode === s.quickAddMagicMode) return;
@@ -113,10 +105,10 @@ function followServerQuickAddMode(frontendSettings: Record<string, unknown>): vo
  */
 export function maybeHydrateSyncedPrefs(user: User | null): void {
   if (!user) return;
-  const frontendSettings = frontendSettingsOf(user);
+  const frontendSettings = frontendSettingsOf(settingsOf(user));
   followServerQuickAddMode(frontendSettings);
   if (globalThis.__cria_settingsHydrated__) return;
-  const prefs = criaPrefsOf(frontendSettings);
+  const prefs = criaPrefsOf(frontendSettings) as Partial<SyncedPrefs> | null;
   globalThis.__cria_settingsHydrated__ = true; // mark even if absent, so we don't re-check every refetch
   if (!prefs) return;
   applyingRemote = true;
