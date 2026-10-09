@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/features/task-detail/tiptapImageExtension', () => ({
-  getAttachmentObjectUrl: vi.fn(async () => 'blob:http://localhost/runtime'),
+vi.mock('@/features/task-detail/inlineImageUrls', () => ({
+  inlineImageObjectUrl: vi.fn(async () => 'blob:http://localhost/runtime'),
 }));
 vi.mock('@/sync/attachments', () => ({
-  isAttachmentUrl: (s: string | null | undefined) => !!s && s.includes('/attachments/'),
-  parseAttachmentUrl: () => ({ taskServerId: 1, attachmentServerId: 2 }),
+  inlineImageSource: (src: string | null, dataSrc: string | null) =>
+    (dataSrc ?? src)?.includes('/attachments/')
+      ? { kind: 'attachment', taskServerId: 1, attachmentServerId: 2 }
+      : null,
 }));
 
 import { ReadView } from '@/features/task-detail/RichTextReadView';

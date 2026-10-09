@@ -11,8 +11,8 @@ import {
   Plus,
 } from 'lucide-react';
 import { toggleCommentReaction, type TaskComment } from '@/db/comments';
-import { sanitizeHtml } from '@/lib/sanitize';
 import { RichTextEditor } from './RichTextEditor';
+import { RichTextView } from './RichTextReadView';
 import { ThreadSummary } from './ThreadSummary';
 import { useAiAvailable } from '@/hooks/useAiAvailable';
 import type { MentionSearch } from './mentionExtension';
@@ -278,9 +278,12 @@ function CommentRow({
           </button>
         </div>
       </div>
-      <div
-        className="prose prose-sm max-w-none break-words text-xs leading-relaxed text-[var(--color-foreground)] [&_a]:underline [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-2 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-footnote [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
-        dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.comment) }}
+      {/* Same read-only renderer as the description, so inline images
+          (Cria's, Vikunja-web's, queued uploads) load with auth. */}
+      <RichTextView
+        html={comment.comment}
+        taskServerId={taskServerId}
+        className="prose prose-sm max-w-none break-words text-xs leading-relaxed text-[var(--color-foreground)] [&_a]:cursor-pointer [&_a]:underline [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-2 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-footnote [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
       />
 
       {comment.deleted ? null : (

@@ -3,7 +3,7 @@ import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { X, Download, Loader2 } from 'lucide-react';
 import { downloadAttachment } from '@/sync/attachments';
-import { getAttachmentObjectUrl } from './tiptapImageExtension';
+import { getAttachmentObjectUrl } from './inlineImageUrls';
 
 /**
  * Full-size image viewer for an attachment. Auth-fetches the blob
