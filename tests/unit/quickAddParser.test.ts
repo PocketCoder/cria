@@ -259,3 +259,79 @@ describe('needsQuoting', () => {
     expect(r.title).toBe('Call mum');
   });
 });
+
+describe('parseQuickAdd modes', () => {
+  it('defaults to the vikunja prefixes', () => {
+    const line = 'Buy milk *shopping !2 @alice +Personal';
+    expect(parseQuickAdd(line, NOW, 'vikunja')).toEqual(parseQuickAdd(line, NOW));
+  });
+
+  describe('todoist', () => {
+    it('reads @label, #project, +assignee and !priority', () => {
+      const r = parseQuickAdd('Buy milk tomorrow @shopping !2 +alice #Personal', NOW, 'todoist');
+      expect(r.title).toBe('Buy milk');
+      expect(r.labelTitles).toEqual(['shopping']);
+      expect(r.projectTitle).toBe('Personal');
+      expect(r.assigneeUsernames).toEqual(['alice']);
+      expect(r.priority).toBe(2);
+      expect(r.dueDate).not.toBeNull();
+    });
+
+    it('supports quoted labels and projects, straight or curly', () => {
+      const r = parseQuickAdd('Plan trip @"south africa" #“Work Projects”', NOW, 'todoist');
+      expect(r.title).toBe('Plan trip');
+      expect(r.labelTitles).toEqual(['south africa']);
+      expect(r.projectTitle).toBe('Work Projects');
+    });
+
+    it('previews unterminated quoted labels and projects', () => {
+      expect(parseQuickAdd('Plan trip @"two wo', NOW, 'todoist').labelTitles).toEqual(['two wo']);
+      expect(parseQuickAdd('Plan trip #"Work St', NOW, 'todoist').projectTitle).toBe('Work St');
+    });
+
+    it('leaves the vikunja-only symbol as title text', () => {
+      const r = parseQuickAdd('Fix *bug', NOW, 'todoist');
+      expect(r.title).toBe('Fix *bug');
+      expect(r.labelTitles).toEqual([]);
+    });
+
+    it('does not chip symbols inside words', () => {
+      const r = parseQuickAdd('Learn C# and email me@home.com', NOW, 'todoist');
+      expect(r.title).toBe('Learn C# and email me@home.com');
+      expect(r.projectTitle).toBeNull();
+      expect(r.labelTitles).toEqual([]);
+    });
+
+    it('labels each preview token by its todoist meaning', () => {
+      const r = parseQuickAdd('Ship @v2 +bob #Dev', NOW, 'todoist');
+      expect(r.tokens.filter((t) => t.kind !== 'text').map((t) => [t.kind, t.text])).toEqual([
+        ['label', '@v2'],
+        ['assignee', '+bob'],
+        ['project', '#Dev'],
+      ]);
+    });
+  });
+
+  describe('disabled', () => {
+    it('keeps the whole input as the title', () => {
+      const line = 'Buy milk tomorrow *shopping !2 @alice +Personal every day';
+      const r = parseQuickAdd(line, NOW, 'disabled');
+      expect(r.title).toBe(line);
+      expect(r.dueDate).toBeNull();
+      expect(r.priority).toBeNull();
+      expect(r.labelTitles).toEqual([]);
+      expect(r.assigneeUsernames).toEqual([]);
+      expect(r.projectTitle).toBeNull();
+      expect(r.repeatAfter).toBeNull();
+      expect(r.repeatMode).toBeNull();
+    });
+
+    it('returns one text token covering the input, none for empty input', () => {
+      expect(parseQuickAdd('  Call  mum ', NOW, 'disabled')).toMatchObject({
+        title: 'Call mum',
+        tokens: [{ kind: 'text', start: 0, end: 12, text: '  Call  mum ' }],
+      });
+      expect(parseQuickAdd('', NOW, 'disabled').tokens).toEqual([]);
+    });
+  });
+});
