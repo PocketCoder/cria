@@ -4,6 +4,7 @@ import { LoginScreen } from '@/features/login/LoginScreen';
 import { Shell } from '@/features/shell/Shell';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
+import { useLiveSync } from '@/sync/useLiveSync';
 import { useReminderScheduler } from '@/sync/useReminderScheduler';
 import { startSettingsSync } from '@/sync/settingsSync';
 import { useDockBadge } from '@/queries/badge';
@@ -24,6 +25,7 @@ export function App() {
   useEffect(() => startSettingsSync(), []);
 
   usePeriodicSync();
+  useLiveSync();
   useReminderScheduler();
   useDockBadge();
 
