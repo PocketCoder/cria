@@ -55,6 +55,22 @@ export async function deleteBlob(id: string): Promise<void> {
   await invoke('blob_delete', { id });
 }
 
+/** A stored blob: its id and when it was last written. */
+export interface BlobEntry {
+  id: string;
+  /** Milliseconds since the epoch, or null when unknown. */
+  modifiedMs: number | null;
+}
+
+/** Every blob in the store. The in-memory fallback reports no modified
+ * times, so the orphan sweep (src/sync/blobSweep.ts) never removes them. */
+export async function listBlobs(): Promise<BlobEntry[]> {
+  if (!isTauri()) {
+    return [...memory.keys()].map((id) => ({ id, modifiedMs: null }));
+  }
+  return invoke<BlobEntry[]>('blob_list');
+}
+
 /** True when a readBlob rejection means the bytes are gone for good (as
  * opposed to a transient I/O or IPC failure worth retrying). */
 export function isBlobMissing(err: unknown): boolean {
