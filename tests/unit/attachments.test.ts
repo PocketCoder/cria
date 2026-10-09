@@ -10,6 +10,7 @@ import {
   isAttachmentUrl,
   parseAttachmentUrl,
   buildAttachmentUrl,
+  inlineImageSource,
 } from '@/sync/attachments';
 
 describe('buildAttachmentUrl', () => {
@@ -160,5 +161,64 @@ describe('parseAttachmentUrl', () => {
       taskServerId: 42,
       attachmentServerId: 7,
     });
+  });
+});
+
+// What each client stores for an inline image in a description or comment:
+// Vikunja-web <= v2.6.0 writes `<img data-src="{API_URL}/tasks/…" src="#"
+// id="tiptap-image-{t}-{a}">` with API_URL ending in /api/v1, v2.7.0 the same
+// with `{root}/api/v2/…`; older text has the URL in `src`; Cria writes the
+// v1 shape, or `cria://pending/{id}` while the upload is queued.
+describe('inlineImageSource', () => {
+  const attachment = { kind: 'attachment', taskServerId: 5, attachmentServerId: 9 };
+
+  it('reads the v2 URL Vikunja-web v2.7.0 stores in data-src', () => {
+    expect(
+      inlineImageSource('#', 'https://tasks.example.com/api/v2/tasks/5/attachments/9'),
+    ).toEqual(attachment);
+  });
+
+  it('reads the v1 URL earlier Vikunja-web and Cria store in data-src', () => {
+    expect(
+      inlineImageSource('#', 'https://tasks.example.com/api/v1/tasks/5/attachments/9'),
+    ).toEqual(attachment);
+  });
+
+  it('reads a legacy URL kept in src alone', () => {
+    expect(
+      inlineImageSource('https://tasks.example.com/api/v1/tasks/5/attachments/9', null),
+    ).toEqual(attachment);
+  });
+
+  it('prefers data-src over src, as upstream does', () => {
+    expect(
+      inlineImageSource(
+        'https://tasks.example.com/api/v1/tasks/1/attachments/2',
+        'https://tasks.example.com/api/v2/tasks/5/attachments/9',
+      ),
+    ).toEqual(attachment);
+    expect(
+      inlineImageSource(
+        'https://tasks.example.com/api/v1/tasks/5/attachments/9',
+        'https://elsewhere.example/x.png',
+      ),
+    ).toBeNull();
+  });
+
+  it('reads a queued upload placeholder from data-src or src', () => {
+    const pending = { kind: 'pending', attachmentLocalId: 'V1StGXR8_Z5jdHi6B-myT' };
+    expect(inlineImageSource('#', 'cria://pending/V1StGXR8_Z5jdHi6B-myT')).toEqual(pending);
+    expect(inlineImageSource('cria://pending/V1StGXR8_Z5jdHi6B-myT', null)).toEqual(pending);
+  });
+
+  it('leaves images the browser can load alone', () => {
+    expect(inlineImageSource('https://elsewhere.example/x.png', null)).toBeNull();
+    expect(
+      inlineImageSource('#', 'https://attacker.example/api/v2/tasks/5/attachments/9'),
+    ).toBeNull();
+    expect(inlineImageSource('data:image/png;base64,AAAA', null)).toBeNull();
+    expect(inlineImageSource('#', null)).toBeNull();
+    expect(inlineImageSource(null, null)).toBeNull();
+    expect(inlineImageSource(undefined, undefined)).toBeNull();
   });
 });

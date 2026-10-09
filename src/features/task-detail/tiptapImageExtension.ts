@@ -14,7 +14,8 @@
  * so the browser does NOT try to load the unauthenticated URL, then in
  * `nextTick` we fetch the blob via Tauri-HTTP-with-auth, wrap it in an
  * object URL, and swap it into `img.src`. Results cache per
- * `<task>-<att>` pair so re-renders / scroll-back are free.
+ * `<task>-<att>` pair (./inlineImageUrls.ts, shared with the read view)
+ * so re-renders / scroll-back are free.
  *
  * Cross-client interop falls out for free: the HTML stored on the
  * server is the same shape Vikunja-web produces, so both clients see
@@ -30,135 +31,8 @@ import Image from '@tiptap/extension-image';
 // core surface (`export * from '@tiptap/core'`), so importing through
 // react avoids adding @tiptap/core as a direct dep.
 import { mergeAttributes } from '@tiptap/react';
-import {
-  fetchAttachmentBlob,
-  isAttachmentUrl,
-  parseAttachmentUrl,
-} from '@/sync/attachments';
-import { getAttachmentByLocalId } from '@/db/attachments';
-import { parsePendingAttachmentRef } from '@/lib/pendingAttachmentRef';
-import { readBlob } from '@/tauri/blobStore';
-
-/**
- * LRU cache for blob URLs. Evicts the least-recently-accessed entry
- * when at capacity, revoking its object URL to free the underlying
- * blob memory. Entries are re-ordered on every `get` / `set`.
- *
- * Capacity chosen so the most-recently-viewed ~50 inline images stay
- * hot (typical session: ~10–20 across open tasks), while memory is
- * bounded. An evicted image re-fetches transparently on next view
- * (same `resolveBlobUrl` path, inflight-deduped).
- */
-export class LRUMap<K, V extends string> {
-  private capacity: number;
-  private map: Map<K, V>;
-
-  constructor(capacity: number) {
-    this.capacity = capacity;
-    this.map = new Map();
-  }
-
-  get(key: K): V | undefined {
-    const val = this.map.get(key);
-    if (val !== undefined) {
-      this.map.delete(key);
-      this.map.set(key, val);
-    }
-    return val;
-  }
-
-  set(key: K, value: V): void {
-    if (this.map.has(key)) {
-      this.map.delete(key);
-    } else if (this.map.size >= this.capacity) {
-      const oldestKey = this.map.keys().next().value;
-      if (oldestKey !== undefined) {
-        const oldestVal = this.map.get(oldestKey)!;
-        URL.revokeObjectURL(oldestVal);
-        this.map.delete(oldestKey);
-      }
-    }
-    this.map.set(key, value);
-  }
-
-  clear(): void {
-    for (const val of this.map.values()) {
-      URL.revokeObjectURL(val);
-    }
-    this.map.clear();
-  }
-
-  get size(): number {
-    return this.map.size;
-  }
-}
-
-const blobCache = new LRUMap<string, string>(50);
-/** Pending fetches keyed the same way, so two concurrent renders of
- * the same image don't both go to the network. */
-const inflight = new Map<string, Promise<string>>();
-
-function cacheKey(taskServerId: number, attServerId: number): string {
-  return `${taskServerId}-${attServerId}`;
-}
-
-/** Cached, in-flight-deduped object URL for whatever `load` returns. */
-function cachedObjectUrl(key: string, load: () => Promise<Blob>): Promise<string> {
-  const cached = blobCache.get(key);
-  if (cached) return Promise.resolve(cached);
-  const pending = inflight.get(key);
-  if (pending) return pending;
-
-  const p = (async () => {
-    try {
-      const url = URL.createObjectURL(await load());
-      blobCache.set(key, url);
-      return url;
-    } finally {
-      inflight.delete(key);
-    }
-  })();
-  inflight.set(key, p);
-  return p;
-}
-
-async function resolveBlobUrl(
-  taskServerId: number,
-  attServerId: number,
-): Promise<string> {
-  return cachedObjectUrl(cacheKey(taskServerId, attServerId), () =>
-    fetchAttachmentBlob(taskServerId, attServerId),
-  );
-}
-
-/**
- * Bridge for non-extension callers (the lightbox in particular) that
- * want to display the same image without re-fetching. Returns the
- * cached object URL if already loaded, else fetches.
- */
-export async function getAttachmentObjectUrl(
-  taskServerId: number,
-  attServerId: number,
-): Promise<string> {
-  return resolveBlobUrl(taskServerId, attServerId);
-}
-
-/**
- * Object URL for a `cria://pending/{localId}` image (an upload still in the
- * outbox). Before the upload lands the bytes come from the local side-store;
- * after it, from the server like any attachment, because the queued bytes
- * are deleted once uploaded.
- */
-export async function getPendingAttachmentObjectUrl(localId: string): Promise<string> {
-  const att = await getAttachmentByLocalId(localId);
-  if (att?.serverId != null && att.taskServerId != null) {
-    return resolveBlobUrl(att.taskServerId, att.serverId);
-  }
-  return cachedObjectUrl(`pending-${localId}`, async () => {
-    const bytes = await readBlob(att?.bytesPath ?? localId);
-    return new Blob([bytes], { type: att?.mime ?? '' });
-  });
-}
+import { inlineImageSource } from '@/sync/attachments';
+import { inlineImageObjectUrl } from './inlineImageUrls';
 
 /**
  * Placeholder `<img>` whose real source is loaded after render: `src='#'`
@@ -220,40 +94,25 @@ export const VikunjaImage = Image.extend({
     };
   },
   renderHTML({ HTMLAttributes }) {
-    const incoming = HTMLAttributes.src;
-    const dataSrc = HTMLAttributes['data-src'];
-    const realSrc = (dataSrc as string | undefined) ?? (incoming as string | undefined);
+    const src = HTMLAttributes.src as string | undefined;
+    const dataSrc = HTMLAttributes['data-src'] as string | undefined;
+    const source = inlineImageSource(src, dataSrc);
 
-    // An image pasted while its upload is queued: render the local bytes.
-    const pendingId = parsePendingAttachmentRef(realSrc);
-    if (pendingId) {
-      return deferredImg(
-        this.options.HTMLAttributes,
-        HTMLAttributes,
-        realSrc!,
-        `cria-img-pending-${pendingId}`,
-        () => getPendingAttachmentObjectUrl(pendingId),
-      );
-    }
-
-    // Only swap for *our* server's attachment URLs. External `<img>`
-    // (e.g. pasted from elsewhere) go straight through.
-    if (!isAttachmentUrl(realSrc)) {
+    // Only swap for *our* server's attachment URLs and queued uploads.
+    // External `<img>` (e.g. pasted from elsewhere) go straight through.
+    if (!source) {
       return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
     }
 
-    const parsed = parseAttachmentUrl(realSrc!);
-    if (!parsed) {
-      return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
-    }
-
-    // Kick off (or hit cache for) the auth fetch.
+    // Kick off (or hit cache for) the auth fetch or the local-bytes read.
     return deferredImg(
       this.options.HTMLAttributes,
       HTMLAttributes,
-      realSrc!,
-      `cria-img-${parsed.taskServerId}-${parsed.attachmentServerId}`,
-      () => resolveBlobUrl(parsed.taskServerId, parsed.attachmentServerId),
+      (dataSrc ?? src)!,
+      source.kind === 'pending'
+        ? `cria-img-pending-${source.attachmentLocalId}`
+        : `cria-img-${source.taskServerId}-${source.attachmentServerId}`,
+      () => inlineImageObjectUrl(source),
     );
   },
 });

@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Pencil } from 'lucide-react';
-import { getAttachmentObjectUrl, getPendingAttachmentObjectUrl } from './tiptapImageExtension';
-import { isAttachmentUrl, parseAttachmentUrl } from '@/sync/attachments';
-import { parsePendingAttachmentRef } from '@/lib/pendingAttachmentRef';
+import { inlineImageObjectUrl } from './inlineImageUrls';
+import { inlineImageSource } from '@/sync/attachments';
 import { ImageLightbox } from './ImageLightbox';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { onLinkClickOpenExternal } from '@/lib/openExternal';
@@ -66,23 +65,16 @@ export function ReadView({
     }
 
     const img = target.closest('img');
-    if (img) {
-      const dataSrc = img.getAttribute('data-src');
-      const rawSrc = img.getAttribute('src');
-      const realSrc = dataSrc ?? rawSrc ?? '';
-      if (isAttachmentUrl(realSrc)) {
-        const parsed = parseAttachmentUrl(realSrc);
-        if (parsed) {
-          e.preventDefault();
-          e.stopPropagation();
-          setPreview({
-            taskServerId: parsed.taskServerId,
-            attachmentServerId: parsed.attachmentServerId,
-            fileName: img.getAttribute('alt') || 'image',
-          });
-          return;
-        }
-      }
+    const source = img && inlineImageSource(img.getAttribute('src'), img.getAttribute('data-src'));
+    if (source?.kind === 'attachment') {
+      e.preventDefault();
+      e.stopPropagation();
+      setPreview({
+        taskServerId: source.taskServerId,
+        attachmentServerId: source.attachmentServerId,
+        fileName: img!.getAttribute('alt') || 'image',
+      });
+      return;
     }
     onLinkClickOpenExternal(e);
   };
@@ -102,20 +94,14 @@ export function ReadView({
     const imgs = Array.from(root.querySelectorAll('img'));
     let cancelled = false;
     for (const img of imgs) {
-      const dataSrc = img.getAttribute('data-src');
       const rawSrc = img.getAttribute('src');
-      const realSrc = dataSrc ?? rawSrc;
       // An image whose upload is still queued renders from local bytes.
-      const pendingId = parsePendingAttachmentRef(realSrc);
-      const parsed = !pendingId && realSrc && isAttachmentUrl(realSrc) ? parseAttachmentUrl(realSrc) : null;
-      if (!pendingId && !parsed) continue;
+      const source = inlineImageSource(rawSrc, img.getAttribute('data-src'));
+      if (!source) continue;
       // Suppress the browser's pending no-auth fetch immediately —
       // this also clears the broken-image icon while we resolve.
       if (rawSrc !== '#') img.src = '#';
-      const load = pendingId
-        ? getPendingAttachmentObjectUrl(pendingId)
-        : getAttachmentObjectUrl(parsed!.taskServerId, parsed!.attachmentServerId);
-      void load.then(
+      void inlineImageObjectUrl(source).then(
         (url) => {
           if (!cancelled) img.src = url;
         },

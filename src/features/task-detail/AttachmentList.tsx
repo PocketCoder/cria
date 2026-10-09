@@ -15,7 +15,7 @@ import {
   deleteAttachment,
   downloadAttachment,
 } from '@/sync/attachments';
-import { getAttachmentObjectUrl } from './tiptapImageExtension';
+import { getAttachmentObjectUrl } from './inlineImageUrls';
 import { ImageLightbox } from './ImageLightbox';
 import { InlineWarning } from '@/components/InlineWarning';
 import { isOfflineError } from '@/lib/errors';

@@ -25,6 +25,7 @@ import { ApiError, NetworkError, buildApiError } from '@/api/errors';
 import { saveBlob } from '@/lib/download';
 import {
   findPendingAttachmentRefs,
+  parsePendingAttachmentRef,
   replacePendingAttachmentRef,
   stripPendingAttachmentImages,
 } from '@/lib/pendingAttachmentRef';
@@ -96,6 +97,34 @@ export function parseAttachmentUrl(
     taskServerId: Number(m[1]),
     attachmentServerId: Number(m[2]),
   };
+}
+
+/** Where an inline image's bytes come from when the browser can't load its
+ * URL itself. */
+export type InlineImageSource =
+  | { kind: 'attachment'; taskServerId: number; attachmentServerId: number }
+  | { kind: 'pending'; attachmentLocalId: string };
+
+/**
+ * What an inline `<img>` in a description or comment shows, or null when the
+ * browser can load it as it stands (an image on another host, say).
+ *
+ * Vikunja-web stores `<img src="#" data-src="{url}">` (plus an `id` it never
+ * reads back), so the browser doesn't fetch the URL without the token; older
+ * text has the URL in `src` alone. `data-src` wins when both are set, as
+ * upstream. An attachment on this server (v1 or v2 shape) is fetched with
+ * auth; a queued upload (`cria://pending/{id}`) loads from the local bytes.
+ */
+export function inlineImageSource(
+  src: string | null | undefined,
+  dataSrc: string | null | undefined,
+): InlineImageSource | null {
+  const real = dataSrc ?? src;
+  const attachmentLocalId = parsePendingAttachmentRef(real);
+  if (attachmentLocalId) return { kind: 'pending', attachmentLocalId };
+  if (!isAttachmentUrl(real)) return null;
+  const ids = parseAttachmentUrl(real!);
+  return ids ? { kind: 'attachment', ...ids } : null;
 }
 
 /**
