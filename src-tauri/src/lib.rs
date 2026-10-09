@@ -394,6 +394,7 @@ pub fn run() {
         blobs::blob_write,
         blobs::blob_read,
         blobs::blob_delete,
+        blobs::blob_list,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
@@ -413,6 +414,7 @@ pub fn run() {
         blobs::blob_write,
         blobs::blob_read,
         blobs::blob_delete,
+        blobs::blob_list,
     ]);
 
     builder
