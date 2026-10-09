@@ -67,6 +67,7 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
 | Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased |
 | Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ on `dev`, unreleased; tokens + motion in `src/styles/globals.css` |
+| Native glass: macOS sidebar material, iOS 26 Liquid Glass tab bar | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
 **Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
@@ -267,6 +268,25 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
   `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
 - AI buttons render only when `useAiAvailable()` is true, so unsupported
   devices never see them.
+
+### Native glass (macOS window material, iOS 26 tab bar)
+
+[src-tauri/src/glass.rs](src-tauri/src/glass.rs) + [src/tauri/glass.ts](src/tauri/glass.ts).
+`native_glass` reports `window`, `tabbar` or `none`, mirrored on
+`<html data-native-glass>` before first render.
+- **macOS:** the window is `transparent` (tauri.macos/dev conf) and
+  `window-vibrancy` puts `NSGlassEffectView` (26+) or the sidebar
+  `NSVisualEffectView` behind the webview. globals.css keeps every screen
+  opaque except `.sidebar-surface` in the desktop shell (`.app-root-desktop`).
+  A new full-window screen with no background of its own shows the desktop
+  through it, so give it one. The material follows the NSWindow appearance,
+  so ThemeProvider calls `native_glass_theme`.
+- **iOS 26+:** `Glass.swift` (in the CriaAI Swift package) lays a
+  `UIGlassEffect` tab bar over the WKWebView. The web TabBar stays mounted at
+  opacity 0 and streams frame/tabs/visibility (`useNativeTabBar`); the native
+  bar hides whenever a hit-test of the capsule centre lands on anything else
+  (sheets, dialogs). Taps return as a `cria:native-tab` DOM event. Older iOS
+  keeps the web capsule.
 
 ### Keychain prompts after updates (signing identity)
 

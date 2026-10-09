@@ -1,4 +1,5 @@
 mod ai;
+mod glass;
 mod ocr;
 mod secure;
 mod tx;
@@ -359,6 +360,12 @@ pub fn run() {
             // chevrons + Done) so the quick-add sheet sits flush on the keyboard.
             #[cfg(target_os = "ios")]
             hide_input_accessory_bar();
+            // macOS: native glass behind the (transparent) window; the CSS
+            // lets it through only on the sidebar. See glass.rs.
+            #[cfg(target_os = "macos")]
+            if let Some(window) = tauri::Manager::get_webview_window(_app, "main") {
+                glass::apply_window_glass(&window);
+            }
             Ok(())
         });
 
@@ -373,6 +380,9 @@ pub fn run() {
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        glass::native_glass,
+        glass::native_glass_theme,
+        glass::glass_tabbar_update,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
@@ -386,6 +396,9 @@ pub fn run() {
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        glass::native_glass,
+        glass::native_glass_theme,
+        glass::glass_tabbar_update,
     ]);
 
     builder

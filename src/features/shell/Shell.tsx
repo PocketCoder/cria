@@ -121,7 +121,7 @@ export function Shell() {
     <div
       className={cn(
         'app-root flex h-full w-full flex-col overflow-x-hidden',
-        isMobile && 'safe-top safe-bottom safe-x',
+        isMobile ? 'safe-top safe-bottom safe-x' : 'app-root-desktop',
       )}
     >
       {isMobile && (

@@ -1,5 +1,8 @@
+import { useRef } from 'react';
 import { Calendar, CalendarDays, LayoutGrid, Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { nativeGlass } from '@/tauri/glass';
+import { useNativeTabBar } from './useNativeTabBar';
 import { useUi, type ActiveView } from '@/stores/ui';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useDisplay } from '@/stores/display';
@@ -11,24 +14,25 @@ export function TabBar() {
   const setActiveView = useUi((s) => s.setActiveView);
   const selecting = useDisplay((s) => s.selecting);
   const { data: inboxGroups = [] } = useInboxTasks();
+  const navRef = useRef<HTMLElement>(null);
+  const capsuleRef = useRef<HTMLDivElement>(null);
   const inboxCount = inboxGroups.reduce(
     (n, g) => n + g.tasks.filter((t) => !t.done).length,
     0,
   );
 
-  // While multi-selecting, the SelectionBar replaces the tab bar.
-  if (!isMobile || selecting) return null;
-
   const tabs: {
     key: string;
     icon: typeof Calendar;
+    /** SF Symbol for the native iOS glass tab bar. */
+    symbol: string;
     label: string;
     view: ActiveView | null;
   }[] = [
-    { key: 'today', icon: Calendar, label: 'Today', view: { kind: 'today' } },
-    { key: 'upcoming', icon: CalendarDays, label: 'Upcoming', view: { kind: 'upcoming' } },
-    { key: 'browse', icon: LayoutGrid, label: 'Browse', view: { kind: 'browse' } },
-    { key: 'search', icon: Search, label: 'Search', view: { kind: 'search' } },
+    { key: 'today', icon: Calendar, symbol: 'calendar', label: 'Today', view: { kind: 'today' } },
+    { key: 'upcoming', icon: CalendarDays, symbol: 'calendar.badge.clock', label: 'Upcoming', view: { kind: 'upcoming' } },
+    { key: 'browse', icon: LayoutGrid, symbol: 'square.grid.2x2', label: 'Browse', view: { kind: 'browse' } },
+    { key: 'search', icon: Search, symbol: 'magnifyingglass', label: 'Search', view: { kind: 'search' } },
   ];
 
   // Browse reads as active whenever a project / label / favourites / the Browse
@@ -46,13 +50,42 @@ export function TabBar() {
     return tab.view !== null && activeView.kind === tab.view.kind;
   };
 
+  // iOS 26: a native Liquid Glass bar draws the tabs. This one stays mounted
+  // but invisible, as the layout, state and hit-test source it mirrors.
+  const native = nativeGlass() === 'tabbar';
+  const badge = inboxCount > 0 ? (inboxCount > 99 ? '99+' : String(inboxCount)) : undefined;
+  useNativeTabBar(
+    native && isMobile && !selecting,
+    navRef,
+    capsuleRef,
+    tabs.map((t) => ({
+      key: t.key,
+      label: t.label,
+      symbol: t.symbol,
+      active: isActive(t),
+      ...(t.key === 'browse' && badge ? { badge } : {}),
+    })),
+    (key) => {
+      const view = tabs.find((t) => t.key === key)?.view;
+      if (view) setActiveView(view);
+    },
+  );
+
+  // While multi-selecting, the SelectionBar replaces the tab bar.
+  if (!isMobile || selecting) return null;
+
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-4"
+      ref={navRef}
+      className={cn('fixed inset-x-0 bottom-0 z-30 flex justify-center px-4', native && 'opacity-0')}
       style={{ paddingBottom: 'var(--tabbar-offset)' }}
       aria-label="Primary"
+      aria-hidden={native || undefined}
     >
-      <div className="flex w-full max-w-md items-center justify-around gap-1 rounded-[26px] border-[0.5px] border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 shadow-[var(--shadow-tabbar)]">
+      <div
+        ref={capsuleRef}
+        className="flex w-full max-w-md items-center justify-around gap-1 rounded-[26px] border-[0.5px] border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 shadow-[var(--shadow-tabbar)]"
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab);
@@ -79,7 +112,7 @@ export function TabBar() {
               </span>
               {tab.key === 'browse' && inboxCount > 0 ? (
                 <span className="absolute right-[calc(50%-22px)] top-0.5 min-w-[16px] rounded-full bg-[var(--color-inverse)] px-1 py-px text-center text-[9px] font-semibold leading-[14px] text-[var(--color-inverse-foreground)]">
-                  {inboxCount > 99 ? '99+' : inboxCount}
+                  {badge}
                 </span>
               ) : null}
             </button>

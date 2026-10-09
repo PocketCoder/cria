@@ -208,6 +208,23 @@ body {
   letter-spacing: var(--tracking-body);
 }
 
+/* Native macOS glass (src-tauri/src/glass.rs): the window is transparent with
+   a native material behind the webview. Every screen stays opaque except the
+   desktop shell, where only the sidebar lets the material through, under the
+   --glass-nav-native tint. Content always stays opaque. */
+html[data-native-glass='window'] body {
+  background: transparent;
+}
+html[data-native-glass='window'] #root {
+  background: var(--color-background);
+}
+html[data-native-glass='window'] #root:has(.app-root-desktop) {
+  background: transparent;
+}
+html[data-native-glass='window'] .sidebar-surface {
+  background: var(--glass-nav-native);
+}
+
 /* Links: purple, underline on hover. In the base layer so text-* utilities
    on an <a> still win. */
 @layer base {
@@ -321,6 +338,8 @@ body {
   --glass-bg: oklch(99.3% 0.004 95 / 0.72);
   --glass-blur: 14px;
   --glass-border: oklch(93% 0.004 95 / 0.5);
+  /* Tint over the native macOS material on the sidebar. */
+  --glass-nav-native: oklch(98% 0.004 70 / 0.62);
 
   /* Sheets dim the page at 30% + 4px blur; centred dialogs at 50%. */
   --overlay-backdrop: rgb(0 0 0 / 0.3);
@@ -336,6 +355,7 @@ body {
   --shadow-tabbar: 0 8px 28px -8px oklch(0% 0 0 / 0.6), 0 2px 8px -2px oklch(0% 0 0 / 0.4);
   --glass-bg: oklch(19% 0.012 285 / 0.78);
   --glass-border: oklch(40% 0.012 285 / 0.4);
+  --glass-nav-native: oklch(22% 0.012 285 / 0.62);
   --overlay-backdrop: rgb(0 0 0 / 0.6);
   --dialog-backdrop: rgb(0 0 0 / 0.6);
   --sheet-bg: oklch(22% 0.014 285);
