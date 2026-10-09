@@ -3,6 +3,7 @@ import {
   applySettingsChange,
   frontendSettingsOf,
   quickAddMagicModeOf,
+  settingsMergePatch,
   settingsOf,
 } from '@/sync/frontendSettings';
 import { SETTINGS_DEFAULTS } from '@/api/userSettings';
@@ -88,5 +89,33 @@ describe('applySettingsChange', () => {
 
   it('leaves a null blob as null when the change does not touch it', () => {
     expect(applySettingsChange({ frontend_settings: null }, { settings: { name: 'x' } }).frontend_settings).toBeNull();
+  });
+});
+
+describe('settingsMergePatch', () => {
+  it('names only the changed top-level fields, with no frontend_settings', () => {
+    expect(settingsMergePatch({ settings: { name: 'Jacob', week_start: 3 } })).toEqual({ name: 'Jacob', week_start: 3 });
+  });
+
+  it('nests frontend keys and Cria prefs under frontend_settings, naming nothing else', () => {
+    expect(settingsMergePatch({ frontend: { quick_add_magic_mode: 'disabled' }, cria: { timeFormat: '12h' } })).toEqual({
+      frontend_settings: { quick_add_magic_mode: 'disabled', cria: { timeFormat: '12h' } },
+    });
+  });
+
+  // A null in a merge-patch deletes the key (the whole blob, for frontend_settings).
+  it('leaves out every null and undefined, at any depth', () => {
+    expect(
+      settingsMergePatch({
+        settings: { name: undefined, language: null as never },
+        frontend: { color_schema: null, keep: { a: null, b: 1 } },
+        cria: { colorScheme: null },
+      }),
+    ).toEqual({ frontend_settings: { keep: { b: 1 } } });
+  });
+
+  it('is empty for an empty change', () => {
+    expect(settingsMergePatch({})).toEqual({});
+    expect(settingsMergePatch({ cria: {} })).toEqual({});
   });
 });
