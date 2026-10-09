@@ -80,6 +80,19 @@ describe('comment push round-trip', () => {
     expect(await db.select(`SELECT * FROM outbox`)).toEqual([]);
   });
 
+  it('update → POST, then clears dirty so the next pull can refresh the row', async () => {
+    await seedTask(10);
+    await replaceTaskCommentsFromServer('t1', [srv(1, 'a')] as never);
+    const [c] = await listCommentsForTask('t1');
+    await updateComment(c!.localId, 'edited');
+    const POST = ok({ updated: '2026-02-01T00:00:00Z' });
+    await drainOutbox({ POST } as never);
+    expect(POST).toHaveBeenCalledWith('/tasks/{taskID}/comments/{commentID}', expect.objectContaining({
+      params: { path: { taskID: 10, commentID: 1 } }, body: { comment: 'edited' },
+    }));
+    expect((await rows())[0]).toMatchObject({ comment: 'edited', dirty: 0 });
+  });
+
   it('create then delete before sync never reaches the server', async () => {
     await seedTask(10);
     await createComment('t1', 'oops');

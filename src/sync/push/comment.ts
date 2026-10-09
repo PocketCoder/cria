@@ -21,7 +21,7 @@ export async function executeTaskCommentOp(
   const localId = op.entity_local_id;
 
   const [row] = await db.select<TaskCommentRow[]>(
-    `SELECT local_id, server_id, task_local_id, comment, deleted
+    `SELECT local_id, server_id, task_local_id, comment, updated_at, deleted
        FROM task_comments WHERE local_id = ? LIMIT 1`,
     [localId],
   );
