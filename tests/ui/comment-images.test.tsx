@@ -81,7 +81,8 @@ describe('comment inline images', () => {
     ]);
   });
 
-  it('loads an older src-only image', async () => {
+  it('loads an older src-only image and opens it in the lightbox', async () => {
+    const user = userEvent.setup();
     await createComment(
       taskId,
       '<p><img src="https://vikunja.test/api/v1/tasks/7/attachments/10" alt="Old shelf"></p>',
@@ -90,6 +91,9 @@ describe('comment inline images', () => {
 
     const img = await screen.findByAltText('Old shelf');
     await waitFor(() => expect(img.getAttribute('src')).toMatch(/^blob:test\//));
+
+    await user.click(img);
+    expect(await screen.findByRole('button', { name: 'Download' })).toBeInTheDocument();
   });
 
   it('loads a queued upload from the local bytes', async () => {

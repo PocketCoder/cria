@@ -106,9 +106,14 @@ export function RichTextView({
     let cancelled = false;
     for (const img of imgs) {
       const rawSrc = img.getAttribute('src');
+      const dataSrc = img.getAttribute('data-src');
       // An image whose upload is still queued renders from local bytes.
-      const source = inlineImageSource(rawSrc, img.getAttribute('data-src'));
+      const source = inlineImageSource(rawSrc, dataSrc);
       if (!source) continue;
+      // Older text keeps the URL in `src` alone: copy it to `data-src`
+      // before the swap, so a click still opens the lightbox and a re-run
+      // still resolves it. DOM only; never saved (see the checkbox path).
+      if (dataSrc === null && rawSrc !== null) img.setAttribute('data-src', rawSrc);
       // Suppress the browser's pending no-auth fetch immediately —
       // this also clears the broken-image icon while we resolve.
       if (rawSrc !== '#') img.src = '#';
