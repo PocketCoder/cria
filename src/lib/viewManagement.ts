@@ -12,9 +12,29 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
 /** The kinds offered when adding a view, in Vikunja's default order. */
 export const VIEW_KINDS: readonly ViewKind[] = ['list', 'gantt', 'table', 'kanban'];
 
+/**
+ * Whether a project's views can be managed. Negative server ids are Vikunja
+ * pseudo-projects (Favorites, saved filters) whose views aren't the user's to
+ * restructure; local-only (null) and real projects are.
+ */
+export function canManageViews(project: { serverId: number | null }): boolean {
+  return project.serverId == null || project.serverId > 0;
+}
+
 /** A view's display name: its title, else the label for its kind. */
 export function viewLabel(view: Pick<ProjectView, 'title' | 'viewKind'>): string {
   return view.title || VIEW_KIND_LABELS[view.viewKind] || view.viewKind;
+}
+
+/**
+ * The kind label to show beside a view's title, or null when the title
+ * already says it (Vikunja's defaults are titled "List", "Kanban", …).
+ */
+export function viewKindHint(view: Pick<ProjectView, 'title' | 'viewKind'>): string | null {
+  const kindLabel = VIEW_KIND_LABELS[view.viewKind];
+  const title = view.title.trim().toLowerCase();
+  if (!title || title === view.viewKind || title === kindLabel.toLowerCase()) return null;
+  return kindLabel;
 }
 
 /** Title for a new view: the typed text, else the kind's label. */

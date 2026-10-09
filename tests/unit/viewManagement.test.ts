@@ -4,11 +4,13 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  canManageViews,
   canReorderViews,
   newViewTitle,
   planViewReorder,
   viewAfterDelete,
   viewDeleteBlocker,
+  viewKindHint,
   viewLabel,
 } from '@/lib/viewManagement';
 
@@ -20,10 +22,27 @@ const v = (localId: string, position: number | null, placeholder = false): V => 
   placeholder,
 });
 
-describe('viewLabel / newViewTitle', () => {
+describe('canManageViews', () => {
+  it('allows real and local-only projects, not pseudo-projects', () => {
+    expect(canManageViews({ serverId: 7 })).toBe(true);
+    expect(canManageViews({ serverId: null })).toBe(true);
+    expect(canManageViews({ serverId: -1 })).toBe(false); // Favorites
+    expect(canManageViews({ serverId: -3 })).toBe(false); // a saved filter
+  });
+});
+
+describe('viewLabel / viewKindHint / newViewTitle', () => {
   it('prefers the title and falls back to the kind label', () => {
     expect(viewLabel({ title: 'Sprint', viewKind: 'kanban' })).toBe('Sprint');
     expect(viewLabel({ title: '', viewKind: 'kanban' })).toBe('Board');
+  });
+
+  it('hints the kind only when the title does not already say it', () => {
+    expect(viewKindHint({ title: 'Kanban', viewKind: 'kanban' })).toBeNull();
+    expect(viewKindHint({ title: 'board', viewKind: 'kanban' })).toBeNull();
+    expect(viewKindHint({ title: '', viewKind: 'list' })).toBeNull();
+    expect(viewKindHint({ title: 'Sprint', viewKind: 'kanban' })).toBe('Board');
+    expect(viewKindHint({ title: 'Roadmap', viewKind: 'gantt' })).toBe('Gantt');
   });
 
   it('trims a typed title and defaults a blank one to the kind label', () => {
