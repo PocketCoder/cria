@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: 24 September 2026 (v0.13.0 + `dev`)
+Last updated: 9 October 2026 (v0.14.1 + `dev`)
 
 ## Legend
 | Icon | Meaning |
@@ -55,6 +55,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Projects | Sub-project hierarchy in sidebar | ✅ | Nested tree in `ProjectSidebar` from `parent_project_id` |
 | Projects | Project background images | ❌ | Not started (Unsplash integration) |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
+| Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. View filter editing and bucket-config mode not in it yet |
 
 ### Labels
 
