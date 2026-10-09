@@ -38,7 +38,18 @@ interface ViewRow {
   default_bucket_server_id: number | null;
   done_bucket_server_id: number | null;
   updated_at: string;
+  placeholder: number;
 }
+
+/**
+ * Selected as `placeholder`: no server id and no pending create, i.e. a local
+ * default seeded by `createDefaultViews` (see `ProjectView.placeholder`).
+ */
+const PLACEHOLDER_SQL = `(server_id IS NULL AND NOT EXISTS (
+     SELECT 1 FROM outbox o
+      WHERE o.entity_type = 'view' AND o.op = 'create'
+        AND o.entity_local_id = project_views.local_id
+   )) AS placeholder`;
 
 function rowToView(row: ViewRow): ProjectView {
   return {
@@ -54,6 +65,7 @@ function rowToView(row: ViewRow): ProjectView {
     defaultBucketServerId: row.default_bucket_server_id,
     doneBucketServerId: row.done_bucket_server_id,
     updatedAt: row.updated_at,
+    placeholder: row.placeholder === 1,
   };
 }
 
@@ -66,7 +78,7 @@ export async function listViewsForProject(
             title, view_kind, position, filter,
             bucket_configuration_mode, bucket_configuration,
             default_bucket_server_id, done_bucket_server_id,
-            updated_at
+            updated_at, ${PLACEHOLDER_SQL}
        FROM project_views
       WHERE project_local_id = ?
         AND deleted = 0
@@ -85,7 +97,7 @@ export async function getViewByLocalId(
             title, view_kind, position, filter,
             bucket_configuration_mode, bucket_configuration,
             default_bucket_server_id, done_bucket_server_id,
-            updated_at
+            updated_at, ${PLACEHOLDER_SQL}
        FROM project_views
       WHERE local_id = ?
         AND deleted = 0
