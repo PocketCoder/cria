@@ -37,6 +37,7 @@ const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_in
 const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project_identifier.sql");
 const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
 const MIGRATION_18_SQL: &str = include_str!("../../src/db/migrations/018_saved_filters.sql");
+const MIGRATION_19_SQL: &str = include_str!("../../src/db/migrations/019_attachment_uploads.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -146,6 +147,12 @@ fn migrations() -> Vec<Migration> {
             version: 18,
             description: "saved filters",
             sql: MIGRATION_18_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 19,
+            description: "local-first attachment uploads (pending rows)",
+            sql: MIGRATION_19_SQL,
             kind: MigrationKind::Up,
         },
     ]

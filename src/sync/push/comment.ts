@@ -2,6 +2,7 @@ import { callApi, type ApiClient } from '@/api/client';
 import { withTx, type Database } from '@/db';
 import { notify } from '@/db/bus';
 import { ApiError } from '@/api/errors';
+import { resolveUploadedPendingRefs } from '@/sync/attachments';
 import { type OutboxRow, callApiIgnore404, cachedCreateResponse, cacheCreateResponse } from './shared';
 
 export interface TaskCommentRow {
@@ -26,6 +27,8 @@ export async function executeTaskCommentOp(
     [localId],
   );
   if (!row) return;
+  // Never send an inline-image placeholder whose upload has already landed.
+  row.comment = (await resolveUploadedPendingRefs(row.comment)) ?? row.comment;
 
   const [taskRow] = await db.select<{ server_id: number | null }[]>(
     `SELECT server_id FROM tasks WHERE local_id = ? LIMIT 1`,

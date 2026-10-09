@@ -1,7 +1,7 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import { type MentionSearch } from './mentionExtension';
-import { uploadAttachment } from '@/sync/attachments';
-import { buildAttachmentUrl } from '@/sync/attachments';
+import { queueAttachmentUpload } from '@/sync/attachments';
+import { pendingAttachmentRef } from '@/lib/pendingAttachmentRef';
 import { useEffect, useState, useRef } from 'react';
 import { useLatestRef } from '@/lib/useLatestRef';
 import { sanitizeHtml } from '@/lib/sanitize';
@@ -25,13 +25,12 @@ import { useSlashMenu } from './useSlashMenu';
 export interface RichTextEditorProps {
   value: string | null;
   onSave: (next: string) => Promise<void>;
-  /** Local row id — required for the upload path to mirror new
-   * attachments into the local DB so the AttachmentList refreshes
-   * without waiting for the next pull. */
+  /** Local row id: pasted/picked images are queued as attachments of this
+   * task (through the outbox, so it works offline and before the task has
+   * synced). */
   taskLocalId: string;
-  /** Server id — null for tasks that haven't yet synced. Inline image
-   * uploads are disabled in that state (we have nothing to attach to);
-   * a visual hint covers it. */
+  /** Server id, null for tasks that haven't yet synced. The read view uses
+   * it to re-resolve inline images when the task syncs. */
   taskServerId: number | null;
   /** If true, start in edit mode immediately instead of read mode.
    * Intended for create forms where there is no content to preview. */
@@ -93,7 +92,6 @@ export function RichTextEditorImpl({
         setEditing(false);
       }}
       taskLocalId={taskLocalId}
-      taskServerId={taskServerId}
       mentionSearch={mentionSearch}
     />
   );
@@ -103,14 +101,12 @@ function EditView({
   onCancel,
   onSave,
   taskLocalId,
-  taskServerId,
   mentionSearch,
 }: {
   initial: string;
   onCancel: () => void;
   onSave: (html: string) => Promise<void>;
   taskLocalId: string;
-  taskServerId: number | null;
   mentionSearch?: MentionSearch;
 }) {
   const [saving, setSaving] = useState(false);
@@ -126,35 +122,31 @@ function EditView({
   };
 
   const [uploadingImage, setUploadingImage] = useState(false);
-  // Last image-upload error surfaced inline above the editor. Same
-  // motivation as AttachmentList's opError: offline uploads fail hard
-  // because attachments don't yet ride the outbox; silent failure
-  // looks like the image was lost.
+  // Last error queueing an image (reading the file or storing its bytes
+  // failed), surfaced inline above the editor so a failure doesn't look
+  // like the image was silently dropped.
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
   /**
-   * Upload one or more image files to the task as attachments, then
-   * insert each as an `<img src="<attachment-url>">` into the editor.
-   * The url is the *server* attachment URL — `<api>/tasks/{id}/attachments/{id}` —
-   * which our VikunjaImage extension swaps for an auth-fetched blob at
-   * render time. Stored exactly the same way Vikunja-web stores it,
-   * so the description round-trips between clients without translation.
-   *
-   * Disabled while the task hasn't yet got a server id; we have nothing
-   * to attach to in that state. (Surface this in the toolbar.)
+   * Queue image files as attachments of the task and insert each as
+   * `<img src="cria://pending/{localId}">`. The outbox drain uploads them
+   * (at once when online, after reconnecting otherwise) and then rewrites
+   * the reference to the server attachment URL,
+   * `<api>/tasks/{id}/attachments/{id}`, the shape Vikunja-web stores, so
+   * the description still round-trips between clients. Until then our
+   * VikunjaImage extension renders the local bytes.
    */
-  const uploadAndInsertImages = async (files: File[]) => {
-    if (!editor || taskServerId == null || files.length === 0) return;
+  const queueAndInsertImages = async (files: File[]) => {
+    if (!editor || files.length === 0) return;
     setUploadingImage(true);
     setImageUploadError(null);
     try {
-      const created = await uploadAttachment(taskServerId, taskLocalId, files);
-      for (const att of created) {
-        const url = buildAttachmentUrl(taskServerId, att.id);
-        editor.chain().focus().setImage({ src: url }).run();
+      for (const file of files) {
+        const localId = await queueAttachmentUpload(taskLocalId, file);
+        editor.chain().focus().setImage({ src: pendingAttachmentRef(localId) }).run();
       }
     } catch (err) {
-      console.error('[RichTextEditor] image upload failed:', err);
+      console.error('[RichTextEditor] queueing image failed:', err);
       setImageUploadError(imageUploadMessage(err, isOfflineError(err)));
     } finally {
       setUploadingImage(false);
@@ -164,7 +156,7 @@ function EditView({
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    await uploadAndInsertImages(files);
+    await queueAndInsertImages(files);
   };
 
   const editor = useEditor({
@@ -175,7 +167,7 @@ function EditView({
       attributes: {
         class: EDITOR_CLASS,
       },
-      // Clipboard paste of image files → upload + insert. Returning
+      // Clipboard paste of image files → queue + insert. Returning
       // true tells ProseMirror we handled the event so its default
       // (which would either ignore the binary or paste a tag-less mess)
       // doesn't run. Non-image pastes fall through.
@@ -184,14 +176,8 @@ function EditView({
         if (!items || items.length === 0) return false;
         const files = imageFilesFromClipboard(items);
         if (files.length === 0) return false;
-        if (taskServerId == null) {
-          // Better to silently no-op + log than to lose the user's
-          // clipboard contents to a half-handled paste.
-          console.warn('[RichTextEditor] paste-image ignored: task not synced yet');
-          return true;
-        }
         event.preventDefault();
-        void uploadAndInsertImages(files);
+        void queueAndInsertImages(files);
         return true;
       },
       // Drag-and-drop of image files. Same logic as paste; the only
@@ -201,12 +187,8 @@ function EditView({
         if (!dt?.files?.length) return false;
         const files = imageFilesFromDrop(dt.files);
         if (files.length === 0) return false;
-        if (taskServerId == null) {
-          console.warn('[RichTextEditor] drop-image ignored: task not synced yet');
-          return true;
-        }
         event.preventDefault();
-        void uploadAndInsertImages(files);
+        void queueAndInsertImages(files);
         return true;
       },
       handleKeyDown(view, event) {
@@ -323,7 +305,6 @@ function EditView({
       <Toolbar
         editor={editor}
         onImagePick={handleImagePick}
-        imagePickEnabled={taskServerId != null}
         imageUploading={uploadingImage}
       />
       <input
