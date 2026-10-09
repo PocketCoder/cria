@@ -1,4 +1,5 @@
 mod ai;
+mod blobs;
 mod ocr;
 mod secure;
 mod tx;
@@ -362,8 +363,8 @@ pub fn run() {
             Ok(())
         });
 
-    // The tray/dock commands only exist on desktop; mobile gets just the
-    // shared transaction command.
+    // The tray/dock commands only exist on desktop; mobile gets the shared
+    // commands (transactions, OCR, AI, keychain, attachment side-store).
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
@@ -373,6 +374,9 @@ pub fn run() {
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
@@ -386,6 +390,9 @@ pub fn run() {
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
     ]);
 
     builder
