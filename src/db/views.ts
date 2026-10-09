@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { getDb, exec, withTx } from './index';
+import { getDb, exec, withTx, type Database } from './index';
 import { notify } from './bus';
 import { mergeFromServer } from './syncMerge';
 import type { ProjectView, ViewKind, BucketConfigMode, ViewResponse } from '@/domain/view';
@@ -43,14 +43,49 @@ interface ViewRow {
 }
 
 /**
- * Selected as `placeholder`: no server id and no pending create, i.e. a local
- * default seeded by `createDefaultViews` (see `ProjectView.placeholder`).
+ * No server id and no pending create, i.e. a local default seeded by
+ * `createDefaultViews` (see `ProjectView.placeholder`).
  */
-const PLACEHOLDER_SQL = `(server_id IS NULL AND NOT EXISTS (
+const PLACEHOLDER_COND = `(server_id IS NULL AND NOT EXISTS (
      SELECT 1 FROM outbox o
       WHERE o.entity_type = 'view' AND o.op = 'create'
         AND o.entity_local_id = project_views.local_id
-   )) AS placeholder`;
+   ))`;
+const PLACEHOLDER_SQL = `${PLACEHOLDER_COND} AS placeholder`;
+
+/**
+ * A user edit aimed at a placeholder view. Its op could never be pushed:
+ * there is no server id, and no create will ever supply one, so the op would
+ * sit at the head of the FIFO outbox for good and stall everything behind
+ * it. The dirty row would also stop the next pull from claiming the
+ * placeholder, so the server's view would arrive as a duplicate.
+ */
+export class PlaceholderViewError extends Error {
+  constructor() {
+    super('This view has not synced yet');
+    this.name = 'PlaceholderViewError';
+  }
+}
+
+/**
+ * The guard every view edit goes through: throws `PlaceholderViewError` if
+ * any of `localIds` is a placeholder. Called inside the edit's transaction,
+ * so a pull claiming the view can't change the answer before the write.
+ */
+async function assertNoPlaceholders(
+  db: Pick<Database, 'select'>,
+  localIds: readonly string[],
+): Promise<void> {
+  if (localIds.length === 0) return;
+  const rows = await db.select<{ local_id: string }[]>(
+    `SELECT local_id FROM project_views
+      WHERE local_id IN (${localIds.map(() => '?').join(', ')})
+        AND ${PLACEHOLDER_COND}
+      LIMIT 1`,
+    [...localIds],
+  );
+  if (rows.length > 0) throw new PlaceholderViewError();
+}
 
 function rowToView(row: ViewRow): ProjectView {
   return {
@@ -399,6 +434,8 @@ export async function createView(
   return created;
 }
 
+/** Edit a view and queue its update. Throws `PlaceholderViewError` for a
+ * placeholder, whose edits must wait for the server's views. */
 export async function updateView(
   localId: string,
   input: ViewUpdate,
@@ -446,6 +483,7 @@ export async function updateView(
     params.push(localId);
 
     await withTx(async (tx) => {
+      await assertNoPlaceholders(tx, [localId]);
       await tx.execute(
         `UPDATE project_views SET ${sets.join(', ')} WHERE local_id = ?`,
         params,
@@ -471,7 +509,8 @@ export async function updateView(
  * giving them a clean spread (`baseStep`, `2*baseStep`, …), each with an
  * outbox update. Used when a drag lands between neighbours a midpoint can't
  * split (null or colliding positions, e.g. a server that left them all 0);
- * otherwise a single `updateView(id, { position })` is enough.
+ * otherwise a single `updateView(id, { position })` is enough. Throws
+ * `PlaceholderViewError`, writing nothing, if any of them is a placeholder.
  */
 export async function reindexViews(
   orderedLocalIds: string[],
@@ -480,6 +519,7 @@ export async function reindexViews(
   if (orderedLocalIds.length === 0) return;
   const now = new Date().toISOString();
   await withTx(async (tx) => {
+    await assertNoPlaceholders(tx, orderedLocalIds);
     for (let i = 0; i < orderedLocalIds.length; i++) {
       const localId = orderedLocalIds[i];
       const position = (i + 1) * baseStep;
@@ -513,13 +553,12 @@ export async function deleteView(localId: string): Promise<void> {
   if (blocker === 'last-view') {
     throw new Error('A project must keep at least one view');
   }
-  if (blocker === 'placeholder') {
-    throw new Error('This view has not synced yet');
-  }
 
   const now = new Date().toISOString();
 
   await withTx(async (tx) => {
+    // The 'placeholder' blocker, checked where the write happens.
+    await assertNoPlaceholders(tx, [localId]);
     await tx.execute(
       `UPDATE project_views SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ?`,
       [now, localId],

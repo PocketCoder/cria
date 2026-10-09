@@ -5,6 +5,7 @@ import type { TaskAttachmentResponse } from '@/domain/task';
 import {
   pendingAttachmentRef,
   replacePendingAttachmentRef,
+  stripPendingAttachmentImages,
 } from '@/lib/pendingAttachmentRef';
 
 /** Outbox `entity_type` / `op` of a queued upload (see sync/push/attachment.ts). */
@@ -368,16 +369,49 @@ export async function finaliseAttachmentUpload(args: {
  * found its task gone). Deletes the row and any queued or dead-lettered
  * upload op. Returns the side-store key so the caller can delete the bytes.
  *
+ * Every inline `cria://pending/{id}` image of it is stripped from task
+ * descriptions and comments in the same transaction, as there will never
+ * be a URL to swap in. Each changed row is saved the way a user edit is
+ * (dirty, plus an update op) so the server copy loses it too. A comment
+ * that hasn't synced gets no op: its queued create reads the row, and an
+ * update can't run before the comment exists on the server.
+ *
  * If the drain is mid-upload for this row, the server may still get the
  * file; the next pull then mirrors it like any other attachment.
  */
 export async function discardPendingAttachment(localId: string): Promise<string | null> {
-  const db = await getDb();
-  const [row] = await db.select<{ bytes_path: string | null }[]>(
-    `SELECT bytes_path FROM task_attachments WHERE local_id = ? AND pending = 1`,
-    [localId],
-  );
+  const ref = pendingAttachmentRef(localId);
+  const now = new Date().toISOString();
+  let bytesPath: string | null = null;
+  let commentsChanged = false;
+
   await withTx(async (tx) => {
+    // Reads first: a SELECT inside withTx sees pre-batch state.
+    const [row] = await tx.select<{ bytes_path: string | null; pending: number }[]>(
+      `SELECT bytes_path, pending FROM task_attachments WHERE local_id = ?`,
+      [localId],
+    );
+    // An uploaded attachment keeps its row, and its references resolve.
+    const strip = !row || row.pending === 1;
+    bytesPath = row?.pending === 1 ? row.bytes_path : null;
+    const tasks = strip
+      ? await tx.select<{ local_id: string; description: string }[]>(
+          `SELECT local_id, description FROM tasks
+            WHERE deleted = 0 AND instr(description, ?) > 0`,
+          [ref],
+        )
+      : [];
+    // Comments of a task that's gone or being deleted are left alone: an
+    // update op for them could never find the task on the server.
+    const comments = strip
+      ? await tx.select<{ local_id: string; comment: string; server_id: number }[]>(
+          `SELECT c.local_id, c.comment, c.server_id FROM task_comments c
+             JOIN tasks t ON t.local_id = c.task_local_id AND t.deleted = 0
+            WHERE c.deleted = 0 AND instr(c.comment, ?) > 0`,
+          [ref],
+        )
+      : [];
+
     await tx.execute(`DELETE FROM task_attachments WHERE local_id = ? AND pending = 1`, [localId]);
     await tx.execute(`DELETE FROM outbox WHERE entity_type = ? AND entity_local_id = ?`, [
       ATTACHMENT_ENTITY,
@@ -387,10 +421,56 @@ export async function discardPendingAttachment(localId: string): Promise<string 
       `DELETE FROM outbox_dead_letter WHERE entity_type = ? AND entity_local_id = ?`,
       [ATTACHMENT_ENTITY, localId],
     );
+
+    // instr() also matches `…/att10` for `…/att1`; the strip compares ids.
+    for (const t of tasks) {
+      const description = stripPendingAttachmentImages(t.description, localId);
+      if (description === t.description) continue;
+      await tx.execute(
+        `UPDATE tasks SET description = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+        [description, now, t.local_id],
+      );
+      await tx.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('task', ?, 'update', ?, ?)`,
+        [t.local_id, JSON.stringify({ description }), now],
+      );
+    }
+
+    for (const c of comments) {
+      const comment = stripPendingAttachmentImages(c.comment, localId);
+      if (comment === c.comment) continue;
+      commentsChanged = true;
+      await tx.execute(
+        `UPDATE task_comments SET comment = ?, updated_at = ?, dirty = 1 WHERE local_id = ?`,
+        [comment, now, c.local_id],
+      );
+      if (c.server_id === 0) continue;
+      await tx.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, attempts, created_at)
+         VALUES ('task_comment', ?, 'update', '{}', 0, ?)`,
+        [c.local_id, now],
+      );
+    }
   });
   notify('tasks');
+  if (commentsChanged) notify('comments');
   notify('outbox');
-  return row?.bytes_path ?? null;
+  return bytesPath;
+}
+
+/** Of `localIds`, those with no attachment row at all: the upload was
+ * cancelled (or its task removed), so nothing will ever resolve them. */
+export async function listMissingAttachments(localIds: string[]): Promise<string[]> {
+  if (localIds.length === 0) return [];
+  const db = await getDb();
+  const rows = await db.select<{ local_id: string }[]>(
+    `SELECT local_id FROM task_attachments
+      WHERE local_id IN (${localIds.map(() => '?').join(', ')})`,
+    localIds,
+  );
+  const present = new Set(rows.map((r) => r.local_id));
+  return localIds.filter((id) => !present.has(id));
 }
 
 /** Remove a single attachment from the local mirror. */

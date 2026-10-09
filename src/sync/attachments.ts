@@ -13,7 +13,10 @@
  * URL shape — `<serverUrl>/api/v1/tasks/{taskId}/attachments/{attId}` —
  * is critical: it's what we insert as the `<img src>` in descriptions
  * so Vikunja-web's CustomImage extension (and our own) recognise it as
- * an auth-required attachment and swap the src for a blob URL.
+ * an auth-required attachment and swap the src for a blob URL. We write
+ * v1 because that's the API Cria talks to and every Vikunja-web release
+ * recognises it (up to v2.6.0 it is the only shape they match). We *read*
+ * the v2 shape too: v2.7.0 writes `<root>/api/v2/tasks/…`.
  */
 import { nanoid } from 'nanoid';
 import { getAuthSnapshot } from '@/auth/store';
@@ -23,11 +26,13 @@ import { saveBlob } from '@/lib/download';
 import {
   findPendingAttachmentRefs,
   replacePendingAttachmentRef,
+  stripPendingAttachmentImages,
 } from '@/lib/pendingAttachmentRef';
 import {
   deleteAttachmentLocal,
   discardPendingAttachment,
   insertPendingAttachment,
+  listMissingAttachments,
   listUploadedAttachments,
 } from '@/db/attachments';
 import { deleteBlob, writeBlob } from '@/tauri/blobStore';
@@ -59,13 +64,24 @@ export function buildAttachmentUrl(
   return `${apiBase()}/api/v1/tasks/${taskServerId}/attachments/${attachmentServerId}`;
 }
 
+/**
+ * An inline attachment image's path below the server root. Vikunja-web
+ * writes `/api/v1/…` in every release up to v2.6.0 and `/api/v2/…` from
+ * v2.7.0, whose matcher also accepts the bare `/tasks/…` form. Same set
+ * here, so an image either web version stored loads in Cria. A trailing
+ * slash, query or fragment doesn't change which file it is.
+ */
+const ATTACHMENT_PATH =
+  /^(?:\/api\/v[12])?\/tasks\/\d+\/attachments\/\d+\/?(?:[?#].*)?$/;
+
 /** True if `src` points at an attachment on the currently-signed-in
- * server (i.e. it should be auth-fetched, not loaded directly). */
+ * server (i.e. it should be auth-fetched, not loaded directly). Any API
+ * version is fine: the fetch rebuilds the URL from the ids. */
 export function isAttachmentUrl(src: string | null | undefined): boolean {
   if (!src) return false;
   const base = apiBase();
-  if (!base) return false;
-  return src.startsWith(`${base}/api/v1/tasks/`) && src.includes('/attachments/');
+  if (!base || !src.startsWith(base)) return false;
+  return ATTACHMENT_PATH.test(src.slice(base.length));
 }
 
 /** Parse a `(taskId, attId)` pair from an attachment URL, or null if it
@@ -177,7 +193,9 @@ export async function putAttachmentFile(
  * Swap `cria://pending/{id}` references whose upload has finished for the
  * real attachment URL. The task and comment push run text through this, so
  * a placeholder saved after its upload landed (the editor was still open,
- * say) never reaches the server. References still pending are left alone.
+ * say) never reaches the server. An image whose upload was cancelled is
+ * dropped the same way (the editor still held it when the upload was
+ * removed). References still pending are left alone.
  */
 export async function resolveUploadedPendingRefs(
   html: string | null,
@@ -191,6 +209,9 @@ export async function resolveUploadedPendingRefs(
       a.localId,
       buildAttachmentUrl(a.taskServerId, a.serverId),
     );
+  }
+  for (const id of await listMissingAttachments(ids)) {
+    out = stripPendingAttachmentImages(out, id);
   }
   return out;
 }

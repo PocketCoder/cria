@@ -402,4 +402,40 @@ describe('sync/push/attachment', () => {
     expect(await outboxRows()).toEqual([]);
     expect(blobs.has(localId)).toBe(false);
   });
+
+  it('cancelling an inline image pushes the description without it', async () => {
+    await seed();
+    const localId = await queueAttachmentUpload('task1', photo());
+    await updateTask('task1', {
+      description: `<p>Note</p><p><img src="#" data-src="${pendingAttachmentRef(localId)}"></p>`,
+    });
+
+    await cancelAttachmentUpload(localId);
+    expect((await getTaskByLocalId('task1'))!.description).toBe('<p>Note</p><p></p>');
+
+    const client = mockClient();
+    await drainOutbox(client);
+
+    expect(platformFetch).not.toHaveBeenCalled();
+    expect(client.POST).toHaveBeenCalled();
+    for (const call of client.POST.mock.calls) {
+      expect(JSON.stringify(call[1].body)).not.toContain('cria://pending/');
+    }
+    expect(await outboxRows()).toEqual([]);
+  });
+
+  it('never pushes a placeholder saved after its upload was cancelled', async () => {
+    await seed();
+    const localId = await queueAttachmentUpload('task1', photo());
+    await cancelAttachmentUpload(localId);
+
+    // The editor still held the image and saved it after the cancel.
+    await updateTask('task1', {
+      description: `<p>Note</p><img src="#" data-src="${pendingAttachmentRef(localId)}">`,
+    });
+    const client = mockClient();
+    await drainOutbox(client);
+
+    expect(client.POST.mock.calls[0]![1].body.description).toBe('<p>Note</p>');
+  });
 });

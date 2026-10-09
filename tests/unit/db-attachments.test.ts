@@ -13,6 +13,7 @@ import {
   discardPendingAttachment,
   getAttachmentByLocalId,
   listUploadedAttachments,
+  listMissingAttachments,
   type AttachmentUploadPayload,
 } from '@/db/attachments';
 
@@ -273,6 +274,122 @@ describe('db/attachments', () => {
       await insertMirror('m1', 'task1', 3, 'kept.txt');
       expect(await discardPendingAttachment('m1')).toBeNull();
       expect(await listAttachmentsForTask('task1')).toHaveLength(1);
+    });
+
+    it('strips the placeholder image from the description as a user edit', async () => {
+      const html = '<p>Look:</p><p><img src="#" data-src="cria://pending/att1"></p>';
+      await seedProjectAndTask({ taskServerId: 42, description: html, dirty: 0 });
+      await insertPendingAttachment(payload());
+
+      await discardPendingAttachment('att1');
+
+      const db = await getDb();
+      const [task] = await db.select<{ description: string; dirty: number }[]>(
+        `SELECT description, dirty FROM tasks WHERE local_id = 'task1'`,
+      );
+      expect(task).toEqual({ description: '<p>Look:</p><p></p>', dirty: 1 });
+      const ops = await outbox();
+      expect(ops.map((o) => [o.entity_type, o.entity_local_id, o.op])).toEqual([
+        ['task', 'task1', 'update'],
+      ]);
+      expect(JSON.parse(ops[0]!.payload)).toEqual({ description: '<p>Look:</p><p></p>' });
+    });
+
+    it('strips the placeholder from other tasks that copied it, but not deleted ones', async () => {
+      const html = '<img src="#" data-src="cria://pending/att1">';
+      await seedProjectAndTask({ taskServerId: 42, description: '<p>none</p>' });
+      const db = await getDb();
+      await db.execute(`UPDATE tasks SET description = ? WHERE local_id = 'task2'`, [html]);
+      await db.execute(
+        `INSERT INTO tasks (local_id, project_local_id, title, description, updated_at, dirty, deleted)
+         VALUES ('task3', 'proj1', 'Gone', ?, ?, 1, 1)`,
+        [html, now()],
+      );
+      await insertPendingAttachment(payload());
+
+      await discardPendingAttachment('att1');
+
+      const rows = await db.select<{ local_id: string; description: string }[]>(
+        `SELECT local_id, description FROM tasks ORDER BY local_id`,
+      );
+      expect(rows).toEqual([
+        { local_id: 'task1', description: '<p>none</p>' },
+        { local_id: 'task2', description: '<p></p>' },
+        { local_id: 'task3', description: html },
+      ]);
+      expect((await outbox()).map((o) => [o.entity_local_id, o.op])).toEqual([['task2', 'update']]);
+    });
+
+    it('strips the placeholder from comments, queueing an update only for synced ones', async () => {
+      await seedProjectAndTask({ taskServerId: 42 });
+      const db = await getDb();
+      await db.execute(
+        `INSERT INTO task_comments (local_id, server_id, task_local_id, comment, updated_at, dirty, deleted)
+         VALUES ('c-new', 0, 'task1', '<p>hi</p><img data-src="cria://pending/att1">', ?, 1, 0),
+                ('c-old', 5, 'task1', '<img data-src="cria://pending/att1">', ?, 0, 0),
+                ('c-other', 6, 'task1', '<img data-src="cria://pending/att10">', ?, 0, 0),
+                ('c-gone', 7, 'task1', '<img data-src="cria://pending/att1">', ?, 1, 1)`,
+        [now(), now(), now(), now()],
+      );
+      await insertPendingAttachment(payload());
+
+      await discardPendingAttachment('att1');
+
+      const rows = await db.select<{ local_id: string; comment: string; dirty: number }[]>(
+        `SELECT local_id, comment, dirty FROM task_comments ORDER BY local_id`,
+      );
+      expect(rows).toEqual([
+        { local_id: 'c-gone', comment: '<img data-src="cria://pending/att1">', dirty: 1 },
+        { local_id: 'c-new', comment: '<p>hi</p>', dirty: 1 },
+        // Only the image was there: an empty paragraph, never an empty
+        // comment (Vikunja requires the field).
+        { local_id: 'c-old', comment: '<p></p>', dirty: 1 },
+        { local_id: 'c-other', comment: '<img data-src="cria://pending/att10">', dirty: 0 },
+      ]);
+      // c-new hasn't synced: its queued create carries the stripped text.
+      const commentOps = (await outbox()).filter((o) => o.entity_type === 'task_comment');
+      expect(commentOps.map((o) => [o.entity_local_id, o.op])).toEqual([['c-old', 'update']]);
+    });
+
+    it('leaves comments of a task being deleted alone', async () => {
+      await seedProjectAndTask({ taskServerId: 42 });
+      const db = await getDb();
+      await db.execute(`UPDATE tasks SET deleted = 1, dirty = 1 WHERE local_id = 'task1'`);
+      await db.execute(
+        `INSERT INTO task_comments (local_id, server_id, task_local_id, comment, updated_at, dirty, deleted)
+         VALUES ('c1', 5, 'task1', '<img data-src="cria://pending/att1">', ?, 0, 0)`,
+        [now()],
+      );
+      await insertPendingAttachment(payload());
+
+      await discardPendingAttachment('att1');
+
+      expect(await outbox()).toEqual([]);
+    });
+
+    it('does not strip references to an attachment that has uploaded', async () => {
+      const html = '<img data-src="cria://pending/m1">';
+      await seedProjectAndTask({ taskServerId: 42, description: html });
+      await insertMirror('m1', 'task1', 3, 'kept.png');
+
+      await discardPendingAttachment('m1');
+
+      const db = await getDb();
+      const [task] = await db.select<{ description: string }[]>(
+        `SELECT description FROM tasks WHERE local_id = 'task1'`,
+      );
+      expect(task!.description).toBe(html);
+      expect(await outbox()).toEqual([]);
+    });
+  });
+
+  describe('listMissingAttachments', () => {
+    it('returns the ids that have no row at all', async () => {
+      await seedProjectAndTask();
+      await insertPendingAttachment(payload());
+      await insertMirror('m1', 'task1', 3, 'kept.txt');
+      expect(await listMissingAttachments(['att1', 'm1', 'gone'])).toEqual(['gone']);
+      expect(await listMissingAttachments([])).toEqual([]);
     });
   });
 

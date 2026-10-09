@@ -7,7 +7,8 @@
  * the read view render it from the local side-store bytes. Once the upload
  * lands, the push executor swaps every reference for the real
  * `<api>/tasks/{id}/attachments/{id}` URL (and the task/comment push swaps any
- * stragglers), so the server should never keep one.
+ * stragglers), so the server should never keep one. Cancelling the upload
+ * strips the image instead, as there will never be a URL for it.
  *
  * Local ids are nanoids (`[A-Za-z0-9_-]`), so a reference needs no escaping
  * in HTML. Matching stops at the end of the id, so one id that happens to
@@ -46,4 +47,31 @@ export function replacePendingAttachmentRef(
   url: string,
 ): string {
   return html.replace(REF_RE, (whole, id: string) => (id === attachmentLocalId ? url : whole));
+}
+
+/** One `<img>` tag. Quoted attribute values may contain `>`. */
+const IMG_TAG_RE = /<img\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+
+/**
+ * Remove every `<img>` that points at `cria://pending/{attachmentLocalId}`
+ * (in `src` or `data-src`): its upload was cancelled, so the placeholder
+ * would never resolve and must not reach the server. Images of other
+ * uploads, including an id this one merely prefixes, are kept.
+ *
+ * If the image was all there was, returns `<p></p>` (what TipTap writes for
+ * an empty document) rather than an empty string, as Vikunja rejects an
+ * empty comment. Returns `html` itself when nothing matched.
+ */
+export function stripPendingAttachmentImages(html: string, attachmentLocalId: string): string {
+  if (!html.includes(PENDING_REF_PREFIX)) return html;
+  const refersToIt = (tag: string) =>
+    [...tag.matchAll(REF_RE)].some((m) => m[1] === attachmentLocalId);
+  let removed = false;
+  const out = html.replace(IMG_TAG_RE, (tag) => {
+    if (!refersToIt(tag)) return tag;
+    removed = true;
+    return '';
+  });
+  if (!removed) return html;
+  return out.trim() === '' ? '<p></p>' : out;
 }
