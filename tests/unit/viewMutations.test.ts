@@ -12,6 +12,7 @@ import {
   createView,
   deleteView,
   listViewsForProject,
+  PlaceholderViewError,
   reindexViews,
   replaceViewsForProjectFromServer,
   updateView,
@@ -256,6 +257,129 @@ describe('view mutations (view manager data layer)', () => {
     it('is a no-op for an unknown view', async () => {
       await deleteView('does-not-exist');
       expect(await outboxRows()).toHaveLength(0);
+    });
+  });
+
+  describe('placeholder guard', () => {
+    // Every UI path that edits a view: the view manager (rename, reorder),
+    // the view filter button and the board's done/default bucket toggles.
+    it.each([
+      ['rename', { title: 'Backlog' }],
+      ['reorder', { position: 5 }],
+      ['filter', { filter: JSON.stringify({ filter: 'done = false', filter_include_nulls: false }) }],
+      ['done bucket', { doneBucketServerId: 808 }],
+      ['default bucket', { defaultBucketServerId: 808 }],
+    ] as const)('refuses a %s edit to a placeholder, writing nothing', async (_name, input) => {
+      const projectLocalId = await seedProject(4);
+      const seeded = await createDefaultViews(projectLocalId);
+      const target = seeded.find((v) => v.viewKind === 'kanban')!;
+      notified = [];
+
+      await expect(updateView(target.localId, input)).rejects.toBeInstanceOf(PlaceholderViewError);
+
+      const after = (await listViewsForProject(projectLocalId)).find((v) => v.localId === target.localId)!;
+      expect(after).toEqual(target);
+      expect(await outboxRows()).toHaveLength(0);
+      expect(notified).toEqual([]);
+    });
+
+    it('refuses a re-index that touches a placeholder', async () => {
+      const projectLocalId = await seedProject(4);
+      const seeded = await createDefaultViews(projectLocalId);
+
+      await expect(reindexViews(seeded.map((v) => v.localId).reverse())).rejects.toBeInstanceOf(
+        PlaceholderViewError,
+      );
+      const after = await listViewsForProject(projectLocalId);
+      expect(after.map((v) => v.position)).toEqual([0, 1, 2, 3]);
+      expect(await outboxRows()).toHaveLength(0);
+    });
+
+    it('refuses deleting a placeholder with the same error', async () => {
+      const projectLocalId = await seedProject(4);
+      const [first] = await createDefaultViews(projectLocalId);
+      await expect(deleteView(first!.localId)).rejects.toBeInstanceOf(PlaceholderViewError);
+    });
+
+    it('still allows editing a pending local create, which pushes after it', async () => {
+      const projectLocalId = await seedSyncedViews();
+      const created = await createView(projectLocalId, { title: 'Mine', viewKind: 'list' });
+
+      await updateView(created.localId, { title: 'Renamed' });
+
+      const client = mockClient();
+      await drainOutbox(client);
+      expect(client.PUT).toHaveBeenCalledWith(
+        '/projects/{project}/views',
+        expect.objectContaining({ body: expect.objectContaining({ title: 'Renamed' }) }),
+      );
+      expect(client.POST).toHaveBeenCalledWith(
+        '/projects/{project}/views/{id}',
+        expect.objectContaining({ params: { path: { project: 1, id: 777 } } }),
+      );
+      expect(await outboxRows()).toHaveLength(0);
+    });
+
+    it('lets the next pull claim the placeholders in place, with no duplicates', async () => {
+      const projectLocalId = await seedProject(9);
+      const seeded = await createDefaultViews(projectLocalId);
+      await expect(
+        updateView(seeded[0]!.localId, { filter: 'done = false' }),
+      ).rejects.toBeInstanceOf(PlaceholderViewError);
+
+      await replaceViewsForProjectFromServer(projectLocalId, [
+        { id: 91, title: 'List', project_id: 9, view_kind: 'list', position: 100 },
+        { id: 92, title: 'Gantt', project_id: 9, view_kind: 'gantt', position: 200 },
+        { id: 93, title: 'Table', project_id: 9, view_kind: 'table', position: 300 },
+        { id: 94, title: 'Kanban', project_id: 9, view_kind: 'kanban', position: 400 },
+      ] as any);
+
+      const views = await listViewsForProject(projectLocalId);
+      expect(views.map((v) => v.localId)).toEqual(seeded.map((v) => v.localId));
+      expect(views.map((v) => v.serverId)).toEqual([91, 92, 93, 94]);
+      expect(views.every((v) => !v.placeholder)).toBe(true);
+
+      // Now synced, the same edit goes through.
+      await updateView(views[0]!.localId, { title: 'Backlog' });
+      expect(await outboxRows()).toHaveLength(1);
+    });
+
+    it('dead-letters an update queued for a placeholder instead of stalling the outbox', async () => {
+      // An op queued before updateView refused placeholders.
+      const projectLocalId = await seedSyncedViews();
+      const other = await seedProject(3);
+      const [placeholder] = await createDefaultViews(other);
+      const db = await getDb();
+      const now = new Date().toISOString();
+      await db.execute(`UPDATE project_views SET filter = 'x', dirty = 1 WHERE local_id = ?`, [
+        placeholder!.localId,
+      ]);
+      await db.execute(
+        `INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+         VALUES ('view', ?, 'update', '{"filter":"x"}', ?)`,
+        [placeholder!.localId, now],
+      );
+      const [list] = await listViewsForProject(projectLocalId);
+      await updateView(list!.localId, { title: 'Behind it' });
+
+      const client = mockClient();
+      // A dead-letter ends that drain; the next one (the outbox notify or the
+      // periodic tick) carries on with the op behind it.
+      await drainOutbox(client);
+      await drainOutbox(client);
+
+      expect(client.POST).toHaveBeenCalledTimes(1);
+      expect(client.POST).toHaveBeenCalledWith(
+        '/projects/{project}/views/{id}',
+        expect.objectContaining({ params: { path: { project: 1, id: 11 } } }),
+      );
+      expect(await outboxRows()).toHaveLength(0);
+      const dead = await db.select<{ entity_local_id: string; last_error: string }[]>(
+        `SELECT entity_local_id, last_error FROM outbox_dead_letter`,
+      );
+      expect(dead).toEqual([
+        { entity_local_id: placeholder!.localId, last_error: expect.stringMatching(/never synced/) },
+      ]);
     });
   });
 });

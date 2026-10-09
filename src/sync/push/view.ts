@@ -134,6 +134,20 @@ export async function executeViewOp(
 
   if (op.op === 'update') {
     if (row.deleted === 1) return;
+    if (row.server_id === null) {
+      // A create for this view would sit ahead of this op (FIFO). With none
+      // queued the view is a placeholder (or its create was dead-lettered),
+      // so no server id is coming: waiting would stall the whole outbox.
+      // updateView refuses such edits; this clears one queued before it did.
+      const [create] = await db.select<{ id: number }[]>(
+        `SELECT id FROM outbox
+          WHERE entity_type = 'view' AND entity_local_id = ? AND op = 'create' LIMIT 1`,
+        [localId],
+      );
+      if (!create) {
+        throw new ApiError(0, null, 'view: never synced, so this edit has nothing to update', false);
+      }
+    }
     if (row.server_id === null || !projectServerId) {
       throw new ApiError(408, null, 'view: not synced yet', true, true);
     }
