@@ -23,7 +23,8 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Tasks | Delete with undo | ✅ | 20s undo toast via UndoToast |
 | Tasks | Inline field editing (dates, priority, color) | ✅ | Popover pickers in TaskActions |
 | Tasks | Percent done slider | ✅ | 0–100 slider in TaskActions |
-| Tasks | Natural-language quick-add (date, #label, !priority, @assignee) | ✅ | `quickAddParser` + QuickAddPreview |
+| Tasks | Natural-language quick-add (date, *label, !priority, @assignee) | ✅ | `quickAddParser` + QuickAddPreview |
+| Tasks | Quick Add Magic modes (Disabled / Vikunja / Todoist prefixes) | ✅ | `quickAddPrefixes`; mode follows the user's Vikunja-web `frontend_settings.quick_add_magic_mode` and is selectable in Settings → General (#62) |
 | Tasks | **+ProjectName in quick-add** | ✅ | Shipped via feat/quick-features merge |
 | Tasks | **NL recurrence in quick-add (every day/week etc.)** | ✅ | Shipped via feat/quick-features merge |
 | Tasks | **Task identifier (PROJ-42) in detail card** | ✅ | Shipped via feat/quick-features merge |
@@ -224,6 +225,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Settings | Notification toggle (desktop) | ✅ | SettingsModal Notifications, with OS permission gate |
 | Settings | Email reminders (server) | ✅ | SettingsModal General toggle, server-synced |
 | Settings | Overdue task email reminders | ✅ | SettingsModal General toggle + time picker, server-synced |
+| Settings | Quick Add Magic mode | ✅ | SettingsModal General select, shared with Vikunja-web via `frontend_settings.quick_add_magic_mode`; drives the quick-add modal and Kanban inline add |
 | Settings | CalDAV link | ✅ | SettingsModal Advanced, opens docs URL |
 
 ### Export/Import

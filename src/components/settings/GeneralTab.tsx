@@ -9,6 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGr
 import { notify } from '@/db/bus';
 import { frontendSettingsWithCria } from '@/sync/settingsSync';
 import type { UserSettingsInput } from '@/api/userSettings';
+import { QUICK_ADD_PREFIXES, isQuickAddMagicMode, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -28,6 +29,19 @@ const LANGUAGES = [
   { code: 'uk', label: 'Українська' },
   { code: 'ca', label: 'Català' },
 ];
+
+const QUICK_ADD_MODES: { value: QuickAddMagicMode; label: string }[] = [
+  { value: 'disabled', label: 'Disabled' },
+  { value: 'vikunja', label: 'Vikunja' },
+  { value: 'todoist', label: 'Todoist' },
+];
+
+/** "*label · +project · @assignee · !priority" for the active mode. */
+function quickAddSyntax(mode: QuickAddMagicMode): string {
+  const p = QUICK_ADD_PREFIXES[mode];
+  if (!p) return 'Off: the whole text becomes the task title.';
+  return `${p.label}label · ${p.project}project · ${p.assignee}assignee · ${p.priority}priority`;
+}
 
 interface Props {
   disabled?: boolean;
@@ -66,6 +80,8 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
   const setDateFormat = useSettings((s) => s.setDateFormat);
   const timeFormat = useSettings((s) => s.timeFormat);
   const setTimeFormat = useSettings((s) => s.setTimeFormat);
+  const quickAddMagicMode = useSettings((s) => s.quickAddMagicMode);
+  const setQuickAddMagicMode = useSettings((s) => s.setQuickAddMagicMode);
 
   const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(true);
   const [overdueRemindersEnabled, setOverdueRemindersEnabled] = useState(true);
@@ -120,6 +136,23 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
 
   const handleTimeFormatChange = (fmt: string) => {
     setTimeFormat(fmt as TimeFormat);
+  };
+
+  // Shared with Vikunja-web (frontend_settings.quick_add_magic_mode). The
+  // store changes first so the full-object push carries the new mode; a failed
+  // push puts the old one back so Cria and the server don't drift apart.
+  const handleQuickAddModeChange = (v: string) => {
+    if (!isQuickAddMagicMode(v)) return;
+    const previous = quickAddMagicMode;
+    setQuickAddMagicMode(v);
+    pushWithSettings({})
+      .then(() => notify('user'))
+      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
+      .catch((e) => {
+        setQuickAddMagicMode(previous);
+        setFeedback({ type: 'error', message: (e as Error).message });
+        setTimeout(clearFeedback, 4000);
+      });
   };
 
   const handleWeekStartChange = (v: string) => {
@@ -193,6 +226,24 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
               <SelectItem value="12h">12-hour</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <Label>Quick Add Magic</Label>
+            <Select value={quickAddMagicMode} onValueChange={handleQuickAddModeChange} disabled={disabled}>
+              <SelectTrigger className="w-44" aria-label="Quick Add Magic">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {QUICK_ADD_MODES.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+            {quickAddSyntax(quickAddMagicMode)}
+          </p>
         </div>
         <div className="flex items-center justify-between">
           <Label>Start week on</Label>

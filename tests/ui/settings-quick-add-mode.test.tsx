@@ -1,0 +1,97 @@
+import './mocks';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { SettingsModal } from '@/components/SettingsModal';
+import { useSettings } from '@/stores/settings';
+import { renderWithProviders, resetDb, signIn } from './render';
+
+// What the server holds before the change. Every field must survive the
+// full-object settings POST (AGENTS.md: omitted fields become Go zero values).
+const SERVER_SETTINGS = {
+  name: 'Tester',
+  language: 'de',
+  timezone: 'Europe/London',
+  week_start: 0,
+  default_project_id: 7,
+  email_reminders_enabled: true,
+  overdue_tasks_reminders_enabled: true,
+  overdue_tasks_reminders_time: '08:30',
+  discoverable_by_email: true,
+  discoverable_by_name: true,
+  frontend_settings: {
+    quick_add_magic_mode: 'todoist',
+    color_schema: 'dark',
+    play_sound_when_done: true,
+  },
+};
+
+let posted: Array<Record<string, unknown>> = [];
+let postStatus = 200;
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', 'x-pagination-total-pages': '1' },
+  });
+}
+
+beforeEach(async () => {
+  await resetDb();
+  signIn();
+  posted = [];
+  postStatus = 200;
+  globalThis.__cria_settingsHydrated__ = undefined;
+  globalThis.__cria_serverQuickAddMode__ = undefined;
+  useSettings.setState({ quickAddMagicMode: 'vikunja' });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      if (/\/api\/v1\/user$/.test(req.url)) {
+        return json({ id: 1, username: 'tester', name: 'Tester', email: 'tester@example.test', settings: SERVER_SETTINGS });
+      }
+      if (req.method === 'POST' && req.url.endsWith('/user/settings/general')) {
+        posted.push(JSON.parse(await req.text()) as Record<string, unknown>);
+        return postStatus === 200 ? json({ message: 'ok' }) : json({ message: 'Rejected' }, postStatus);
+      }
+      return json([]);
+    }),
+  );
+});
+
+async function chooseMode(label: string) {
+  const user = userEvent.setup();
+  const trigger = await screen.findByRole('combobox', { name: 'Quick Add Magic' });
+  await waitFor(() => expect(trigger).toHaveTextContent('Todoist'));
+  await user.click(trigger);
+  await user.click(await screen.findByRole('option', { name: label }));
+}
+
+describe('Settings → Quick Add Magic', () => {
+  it('shows the web mode and writes a change back without wiping other settings', async () => {
+    renderWithProviders(<SettingsModal onClose={() => undefined} initialTab="general" />);
+    await chooseMode('Disabled');
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    const { frontend_settings: frontend, ...rest } = posted[0]!;
+    const { frontend_settings: _serverFrontend, ...serverRest } = SERVER_SETTINGS;
+    expect(rest).toMatchObject(serverRest);
+    expect(frontend).toMatchObject({
+      quick_add_magic_mode: 'disabled',
+      color_schema: 'dark',
+      play_sound_when_done: true,
+    });
+    expect(useSettings.getState().quickAddMagicMode).toBe('disabled');
+  });
+
+  it('puts the previous mode back when the server rejects the change', async () => {
+    postStatus = 400;
+    renderWithProviders(<SettingsModal onClose={() => undefined} initialTab="general" />);
+    await chooseMode('Vikunja');
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.frontend_settings).toMatchObject({ quick_add_magic_mode: 'vikunja' });
+    await waitFor(() => expect(useSettings.getState().quickAddMagicMode).toBe('todoist'));
+  });
+});
