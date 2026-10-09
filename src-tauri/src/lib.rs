@@ -1,5 +1,6 @@
 mod ai;
 mod glass;
+mod blobs;
 mod ocr;
 mod secure;
 mod tx;
@@ -37,6 +38,7 @@ const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_in
 const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project_identifier.sql");
 const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
 const MIGRATION_18_SQL: &str = include_str!("../../src/db/migrations/018_saved_filters.sql");
+const MIGRATION_19_SQL: &str = include_str!("../../src/db/migrations/019_attachment_uploads.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -146,6 +148,12 @@ fn migrations() -> Vec<Migration> {
             version: 18,
             description: "saved filters",
             sql: MIGRATION_18_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 19,
+            description: "local-first attachment uploads (pending rows)",
+            sql: MIGRATION_19_SQL,
             kind: MigrationKind::Up,
         },
     ]
@@ -369,8 +377,8 @@ pub fn run() {
             Ok(())
         });
 
-    // The tray/dock commands only exist on desktop; mobile gets just the
-    // shared transaction command.
+    // The tray/dock commands only exist on desktop; mobile gets the shared
+    // commands (transactions, OCR, AI, keychain, attachment side-store).
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
@@ -383,6 +391,9 @@ pub fn run() {
         glass::native_glass,
         glass::native_glass_theme,
         glass::glass_tabbar_update,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
@@ -399,6 +410,9 @@ pub fn run() {
         glass::native_glass,
         glass::native_glass_theme,
         glass::glass_tabbar_update,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
     ]);
 
     builder

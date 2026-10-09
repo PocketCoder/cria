@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { Pencil } from 'lucide-react';
-import { getAttachmentObjectUrl } from './tiptapImageExtension';
+import { getAttachmentObjectUrl, getPendingAttachmentObjectUrl } from './tiptapImageExtension';
 import { isAttachmentUrl, parseAttachmentUrl } from '@/sync/attachments';
+import { parsePendingAttachmentRef } from '@/lib/pendingAttachmentRef';
 import { ImageLightbox } from './ImageLightbox';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { onLinkClickOpenExternal } from '@/lib/openExternal';
@@ -104,13 +105,17 @@ export function ReadView({
       const dataSrc = img.getAttribute('data-src');
       const rawSrc = img.getAttribute('src');
       const realSrc = dataSrc ?? rawSrc;
-      if (!realSrc || !isAttachmentUrl(realSrc)) continue;
-      const parsed = parseAttachmentUrl(realSrc);
-      if (!parsed) continue;
+      // An image whose upload is still queued renders from local bytes.
+      const pendingId = parsePendingAttachmentRef(realSrc);
+      const parsed = !pendingId && realSrc && isAttachmentUrl(realSrc) ? parseAttachmentUrl(realSrc) : null;
+      if (!pendingId && !parsed) continue;
       // Suppress the browser's pending no-auth fetch immediately —
       // this also clears the broken-image icon while we resolve.
       if (rawSrc !== '#') img.src = '#';
-      void getAttachmentObjectUrl(parsed.taskServerId, parsed.attachmentServerId).then(
+      const load = pendingId
+        ? getPendingAttachmentObjectUrl(pendingId)
+        : getAttachmentObjectUrl(parsed!.taskServerId, parsed!.attachmentServerId);
+      void load.then(
         (url) => {
           if (!cancelled) img.src = url;
         },

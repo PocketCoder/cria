@@ -6,10 +6,12 @@ import {
   Plus,
   X,
   Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { useTaskAttachments } from '@/queries/attachments';
 import {
-  uploadAttachment,
+  queueAttachmentUpload,
+  cancelAttachmentUpload,
   deleteAttachment,
   downloadAttachment,
 } from '@/sync/attachments';
@@ -22,6 +24,10 @@ import type { TaskAttachment } from '@/db/attachments';
 /**
  * Attachments panel: list + upload (button + drop zone) + per-row
  * delete + per-row download + click-image-to-preview.
+ *
+ * Uploads are offline-first: picking a file queues it through the outbox
+ * (bytes in the side-store), so the row appears at once with an
+ * "Uploading…" state and finalises when the drain gets it to the server.
  *
  * Render strategy — the section is now always present (not hidden when
  * empty) so the upload button is reachable on a task with zero
@@ -39,37 +45,29 @@ export function AttachmentList({
   hideHeader?: boolean;
 }) {
   const { data: attachments = [] } = useTaskAttachments(taskLocalId);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
   // Last upload/delete error surfaced as an inline strip. Cleared on
-  // the next successful op or when the user dismisses. Without this,
-  // failures (very common when offline — attachments aren't yet
-  // queued through the outbox) look like the upload silently worked.
+  // the next successful op or when the user dismisses. Uploads only fail
+  // here if the file can't be read or stored locally; network failures
+  // are retried by the outbox and show on the row instead.
   const [opError, setOpError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const disabled = taskServerId == null;
-
   const onPick = () => fileInputRef.current?.click();
 
   const handleFiles = async (files: File[] | FileList) => {
-    if (disabled) return;
     const list = Array.from(files);
     if (list.length === 0) return;
     setUploading(true);
     setOpError(null);
     try {
-      await uploadAttachment(taskServerId!, taskLocalId, list);
+      for (const file of list) await queueAttachmentUpload(taskLocalId, file);
     } catch (err) {
-      console.error('[attachments] upload failed:', err);
-      // Attachments don't yet ride the outbox (they hit /attachments
-      // directly, not the task-update payload like reminders do), so
-      // an offline upload fails hard. Surface the reason instead of
-      // pretending it worked. TODO(M10): queue uploads through an
-      // outbox that stores the file bytes alongside the row.
+      console.error('[attachments] queueing upload failed:', err);
       setOpError(formatOpError(err, 'upload'));
     } finally {
       setUploading(false);
@@ -90,7 +88,6 @@ export function AttachmentList({
   // both dragover and drop, otherwise the browser navigates to the
   // dropped file's URL. The `dragOver` flag is cosmetic only.
   const onDragOver = (e: React.DragEvent) => {
-    if (disabled) return;
     e.preventDefault();
     setDragOver(true);
   };
@@ -98,15 +95,14 @@ export function AttachmentList({
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    if (disabled) return;
     if (e.dataTransfer.files.length > 0) {
       await handleFiles(e.dataTransfer.files);
     }
   };
 
   const download = async (att: TaskAttachment) => {
-    if (taskServerId == null || busyId != null) return;
-    setBusyId(att.serverId);
+    if (taskServerId == null || att.serverId == null || busyId != null) return;
+    setBusyId(att.localId);
     try {
       await downloadAttachment(taskServerId, att.serverId, att.fileName);
     } catch (err) {
@@ -116,12 +112,18 @@ export function AttachmentList({
     }
   };
 
+  // A queued upload is removed locally (row, op and bytes); an uploaded
+  // attachment is deleted on the server.
   const remove = async (att: TaskAttachment) => {
-    if (taskServerId == null || busyId != null) return;
-    setBusyId(att.serverId);
+    if (busyId != null) return;
+    setBusyId(att.localId);
     setOpError(null);
     try {
-      await deleteAttachment(taskServerId, taskLocalId, att.serverId);
+      if (att.pending) {
+        await cancelAttachmentUpload(att.localId);
+      } else if (taskServerId != null && att.serverId != null) {
+        await deleteAttachment(taskServerId, taskLocalId, att.serverId);
+      }
     } catch (err) {
       console.error('[attachments] delete failed:', err);
       setOpError(formatOpError(err, 'delete'));
@@ -150,12 +152,8 @@ export function AttachmentList({
         <button
           type="button"
           onClick={onPick}
-          disabled={disabled || uploading}
-          title={
-            disabled
-              ? 'Complete creating the task first (sync to server) — then you can add attachments'
-              : 'Add attachment'
-          }
+          disabled={uploading}
+          title="Add attachment"
           className="ml-auto flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-40 cursor-pointer"
         >
           {uploading ? (
@@ -186,7 +184,7 @@ export function AttachmentList({
         <button
           type="button"
           onClick={onPick}
-          disabled={disabled || uploading}
+          disabled={uploading}
           className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--color-border)] px-2 py-3 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] disabled:opacity-40 cursor-pointer"
         >
           <Paperclip className="h-3.5 w-3.5" />
@@ -196,10 +194,10 @@ export function AttachmentList({
         <ul className="space-y-1">
           {attachments.map((att) => (
             <AttachmentRow
-              key={att.serverId}
+              key={att.localId}
               att={att}
               taskServerId={taskServerId}
-              busy={busyId === att.serverId}
+              busy={busyId === att.localId}
               onDownload={() => void download(att)}
               onDelete={() => void remove(att)}
               onPreview={() => setPreview(att)}
@@ -208,7 +206,7 @@ export function AttachmentList({
         </ul>
       )}
 
-      {preview && taskServerId != null ? (
+      {preview && taskServerId != null && preview.serverId != null ? (
         <ImageLightbox
           taskServerId={taskServerId}
           attachmentServerId={preview.serverId}
@@ -242,15 +240,16 @@ function AttachmentRow({
   onPreview: () => void;
 }) {
   const isImage = att.mime?.startsWith('image/') ?? false;
+  const serverId = att.serverId;
   const [thumbUrl, setThumbUrl] = useState<string | null>(null);
 
   // Lazy auth-fetched thumbnail for image rows. Effect (not render-time
   // side-effect) so React doesn't kick off the promise on every paint.
   // The cache in getAttachmentObjectUrl makes re-mounts free.
   useEffect(() => {
-    if (!isImage || taskServerId == null) return;
+    if (!isImage || taskServerId == null || serverId == null) return;
     let cancelled = false;
-    void getAttachmentObjectUrl(taskServerId, att.serverId).then(
+    void getAttachmentObjectUrl(taskServerId, serverId).then(
       (url) => {
         if (!cancelled) setThumbUrl(url);
       },
@@ -259,7 +258,11 @@ function AttachmentRow({
     return () => {
       cancelled = true;
     };
-  }, [isImage, taskServerId, att.serverId]);
+  }, [isImage, taskServerId, serverId]);
+
+  if (att.pending) {
+    return <PendingAttachmentRow att={att} busy={busy} onRemove={onDelete} />;
+  }
 
   return (
     <li
@@ -325,19 +328,66 @@ function AttachmentRow({
 }
 
 /**
+ * A file still in the outbox. "Uploading…" covers both an upload in flight
+ * and one waiting for the connection; "Upload failed" means its op left the
+ * outbox without succeeding (retry it from the sync panel, or remove it).
+ * The remove button is always visible: it cancels the queued upload.
+ */
+function PendingAttachmentRow({
+  att,
+  busy,
+  onRemove,
+}: {
+  att: TaskAttachment;
+  busy: boolean;
+  onRemove: () => void;
+}) {
+  const failed = att.uploadFailed;
+  return (
+    <li
+      aria-busy={!failed}
+      className="flex items-center gap-2 rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+    >
+      {failed ? (
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[var(--color-warning-text)]" />
+      ) : (
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-muted-foreground)]" />
+      )}
+      <span className="min-w-0 flex-1 truncate" title={att.fileName}>
+        {att.fileName}
+      </span>
+      <span
+        className={`shrink-0 ${failed ? 'text-[var(--color-warning-text)]' : 'text-[var(--color-muted-foreground)]'}`}
+      >
+        {failed ? 'Upload failed' : 'Uploading…'}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={busy}
+        aria-label={failed ? `Remove ${att.fileName}` : `Cancel upload of ${att.fileName}`}
+        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning-text)] disabled:opacity-40 cursor-pointer"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </li>
+  );
+}
+
+/**
  * Render an upload/delete error in a way that's actionable to the
- * user. The most common case in practice is offline ("error sending
- * request for url …") — recognise it and say so plainly instead of
- * leaking the raw URL.
+ * user. A delete that fails offline ("error sending request for url …")
+ * says so plainly instead of leaking the raw URL. Queueing an upload
+ * never touches the network, so an upload error means the file couldn't
+ * be read or stored locally.
  */
 function formatOpError(err: unknown, verb: 'upload' | 'delete'): string {
-  if (isOfflineError(err)) {
-    return verb === 'upload'
-      ? "Couldn't upload — check your connection and try again. Attachments aren't yet queued offline."
-      : "Couldn't delete — check your connection and try again.";
-  }
   const msg = String(err instanceof Error ? err.message : err);
-  return `${verb === 'upload' ? 'Upload' : 'Delete'} failed: ${msg}`;
+  if (verb === 'upload') return `Couldn't add the file: ${msg}`;
+  if (isOfflineError(err)) {
+    return "Couldn't delete — check your connection and try again.";
+  }
+  return `Delete failed: ${msg}`;
 }
 
 function formatBytes(n: number): string {

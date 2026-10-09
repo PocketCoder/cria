@@ -23,15 +23,12 @@ import { cn } from '@/lib/cn';
 export function Toolbar({
   editor,
   onImagePick,
-  imagePickEnabled = true,
   imageUploading = false,
 }: {
   editor: Editor;
   onImagePick?: () => void;
-  /** False while the task hasn't yet got a server id — the image button
-   * is dimmed and inert because there's nothing to upload against. */
-  imagePickEnabled?: boolean;
-  /** True while an upload is in flight — image button shows a spinner. */
+  /** True while picked images are being queued; the image button shows a
+   * spinner. */
   imageUploading?: boolean;
 }) {
   const btn = (
@@ -162,13 +159,9 @@ export function Toolbar({
       <button
         type="button"
         key="Image"
-        title={
-          imagePickEnabled
-            ? 'Image'
-            : 'Save the task first — images upload as attachments and need a server id'
-        }
+        title="Image"
         aria-label="Image"
-        disabled={!imagePickEnabled || imageUploading}
+        disabled={imageUploading}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onImagePick?.()}
         className={cn(

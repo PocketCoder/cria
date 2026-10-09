@@ -92,10 +92,11 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Attachments | Upload (button + drag-drop) | ✅ | AttachmentList + uploadAttachment |
-| Attachments | Delete | ✅ | Per-row delete |
+| Attachments | Upload (button + drag-drop) | ✅ | AttachmentList + queueAttachmentUpload |
+| Attachments | Offline uploads (queued, survive restart) | ✅ | Pending row + outbox `task_attachment`·`upload`; bytes in the Rust side-store (`blobs.rs`) |
+| Attachments | Delete | ✅ | Per-row delete (online only; a queued upload can be cancelled offline) |
 | Attachments | Download | ✅ | Via Tauri save dialog |
-| Attachments | Inline images in descriptions | ✅ | VikunjaImage extension + auth-fetch |
+| Attachments | Inline images in descriptions | ✅ | VikunjaImage extension + auth-fetch; offline pastes use a `cria://pending/{id}` placeholder rewritten on upload |
 | Attachments | Image lightbox | ✅ | ImageLightbox component |
 | Attachments | Paperclip indicator on task rows | ✅ | Shows count in TaskList |
 

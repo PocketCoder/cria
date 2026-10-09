@@ -2,6 +2,8 @@ import { createApiClient, callApi, type ApiClient } from '@/api/client';
 import { getDb, withTx, exec, type Database } from '@/db';
 import { notify, subscribe } from '@/db/bus';
 import { ApiError, NetworkError } from '@/api/errors';
+import { ATTACHMENT_ENTITY } from '@/db/attachments';
+import { executeAttachmentOp } from './push/attachment';
 import { executeTaskCommentOp } from './push/comment';
 import { executeBucketOp, executeTaskBucketOp, executeTaskPositionOp } from './push/kanban';
 import { executeLabelOp } from './push/label';
@@ -209,6 +211,11 @@ async function executeOp(
 
   if (op.entity_type === 'task_comment') {
     await executeTaskCommentOp(client, db, op);
+    return;
+  }
+
+  if (op.entity_type === ATTACHMENT_ENTITY) {
+    await executeAttachmentOp(client, db, op);
     return;
   }
 

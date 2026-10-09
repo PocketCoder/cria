@@ -83,8 +83,8 @@ in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 18 migrations in
-  `src/db/migrations/` (`001_initial.sql` → `018_saved_filters.sql`).
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 19 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `019_attachment_uploads.sql`).
   Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
   Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),
@@ -187,6 +187,18 @@ sticks forever and the UI starves.
 **Rule:** sync upserts are silent. User-driven mutations live in *different*
 functions that *do* call `notify()`. See the inline comments in
 [src/db/projects.ts](src/db/projects.ts) and [src/db/tasks.ts](src/db/tasks.ts).
+
+### Attachment uploads ride the outbox; their bytes don't
+
+Picking or pasting a file never hits the network. `queueAttachmentUpload`
+writes the bytes to a Rust side-store ([src-tauri/src/blobs.rs](src-tauri/src/blobs.rs),
+one file per attachment in the app data dir, raw-bytes IPC) and inserts a
+`pending` `task_attachments` row plus a `task_attachment`·`upload` outbox op;
+[src/sync/push/attachment.ts](src/sync/push/attachment.ts) uploads on drain.
+Don't base64 file bytes into an outbox payload. Inline images pasted before
+upload are `cria://pending/{localId}` (allowed by `sanitizeHtml`); the
+executor rewrites them to the server URL, and the task/comment push swaps any
+it finds that have already uploaded, so the server never keeps one.
 
 ### Vikunja's verb semantics
 

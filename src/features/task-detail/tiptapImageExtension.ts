@@ -20,6 +20,10 @@
  * server is the same shape Vikunja-web produces, so both clients see
  * the same description and both render the same image. The wire is the
  * source of truth.
+ *
+ * Queued uploads: an image pasted while its upload waits in the outbox is
+ * stored as `cria://pending/{localId}` and rendered the same deferred way,
+ * from the side-store bytes (see src/lib/pendingAttachmentRef.ts).
  */
 import Image from '@tiptap/extension-image';
 // `mergeAttributes` lives in @tiptap/core; @tiptap/react re-exports the
@@ -31,6 +35,9 @@ import {
   isAttachmentUrl,
   parseAttachmentUrl,
 } from '@/sync/attachments';
+import { getAttachmentByLocalId } from '@/db/attachments';
+import { parsePendingAttachmentRef } from '@/lib/pendingAttachmentRef';
+import { readBlob } from '@/tauri/blobStore';
 
 /**
  * LRU cache for blob URLs. Evicts the least-recently-accessed entry
@@ -95,20 +102,16 @@ function cacheKey(taskServerId: number, attServerId: number): string {
   return `${taskServerId}-${attServerId}`;
 }
 
-async function resolveBlobUrl(
-  taskServerId: number,
-  attServerId: number,
-): Promise<string> {
-  const key = cacheKey(taskServerId, attServerId);
+/** Cached, in-flight-deduped object URL for whatever `load` returns. */
+function cachedObjectUrl(key: string, load: () => Promise<Blob>): Promise<string> {
   const cached = blobCache.get(key);
-  if (cached) return cached;
+  if (cached) return Promise.resolve(cached);
   const pending = inflight.get(key);
   if (pending) return pending;
 
   const p = (async () => {
     try {
-      const blob = await fetchAttachmentBlob(taskServerId, attServerId);
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(await load());
       blobCache.set(key, url);
       return url;
     } finally {
@@ -117,6 +120,15 @@ async function resolveBlobUrl(
   })();
   inflight.set(key, p);
   return p;
+}
+
+async function resolveBlobUrl(
+  taskServerId: number,
+  attServerId: number,
+): Promise<string> {
+  return cachedObjectUrl(cacheKey(taskServerId, attServerId), () =>
+    fetchAttachmentBlob(taskServerId, attServerId),
+  );
 }
 
 /**
@@ -129,6 +141,63 @@ export async function getAttachmentObjectUrl(
   attServerId: number,
 ): Promise<string> {
   return resolveBlobUrl(taskServerId, attServerId);
+}
+
+/**
+ * Object URL for a `cria://pending/{localId}` image (an upload still in the
+ * outbox). Before the upload lands the bytes come from the local side-store;
+ * after it, from the server like any attachment, because the queued bytes
+ * are deleted once uploaded.
+ */
+export async function getPendingAttachmentObjectUrl(localId: string): Promise<string> {
+  const att = await getAttachmentByLocalId(localId);
+  if (att?.serverId != null && att.taskServerId != null) {
+    return resolveBlobUrl(att.taskServerId, att.serverId);
+  }
+  return cachedObjectUrl(`pending-${localId}`, async () => {
+    const bytes = await readBlob(att?.bytesPath ?? localId);
+    return new Blob([bytes], { type: att?.mime ?? '' });
+  });
+}
+
+/**
+ * Placeholder `<img>` whose real source is loaded after render: `src='#'`
+ * stops the browser fetching `data-src` itself (no auth, or a scheme it
+ * can't load), and once `resolve` settles the object URL is swapped in.
+ * `queueMicrotask` because the `<img>` won't exist in the DOM until after
+ * renderHTML returns.
+ */
+function deferredImg(
+  baseAttrs: Record<string, unknown>,
+  HTMLAttributes: Record<string, unknown>,
+  realSrc: string,
+  id: string,
+  resolve: () => Promise<string>,
+): ['img', Record<string, unknown>] {
+  queueMicrotask(() => {
+    void resolve().then(
+      (url) => {
+        const img = document.getElementById(id);
+        if (img instanceof HTMLImageElement) img.src = url;
+      },
+      (err) => {
+        console.warn('[VikunjaImage] image load failed:', err);
+      },
+    );
+  });
+
+  return [
+    'img',
+    mergeAttributes(baseAttrs, {
+      // src='#' is the do-nothing placeholder; the browser will not
+      // attempt a network fetch on the # fragment.
+      src: '#',
+      'data-src': realSrc,
+      alt: HTMLAttributes.alt,
+      title: HTMLAttributes.title,
+      id,
+    }),
+  ];
 }
 
 export const VikunjaImage = Image.extend({
@@ -155,6 +224,18 @@ export const VikunjaImage = Image.extend({
     const dataSrc = HTMLAttributes['data-src'];
     const realSrc = (dataSrc as string | undefined) ?? (incoming as string | undefined);
 
+    // An image pasted while its upload is queued: render the local bytes.
+    const pendingId = parsePendingAttachmentRef(realSrc);
+    if (pendingId) {
+      return deferredImg(
+        this.options.HTMLAttributes,
+        HTMLAttributes,
+        realSrc!,
+        `cria-img-pending-${pendingId}`,
+        () => getPendingAttachmentObjectUrl(pendingId),
+      );
+    }
+
     // Only swap for *our* server's attachment URLs. External `<img>`
     // (e.g. pasted from elsewhere) go straight through.
     if (!isAttachmentUrl(realSrc)) {
@@ -166,34 +247,13 @@ export const VikunjaImage = Image.extend({
       return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
     }
 
-    const id = `cria-img-${parsed.taskServerId}-${parsed.attachmentServerId}`;
-
-    // Kick off (or hit cache for) the auth fetch. `queueMicrotask`
-    // because the `<img>` won't exist in the DOM until after this
-    // function returns.
-    queueMicrotask(() => {
-      void resolveBlobUrl(parsed.taskServerId, parsed.attachmentServerId).then(
-        (url) => {
-          const img = document.getElementById(id);
-          if (img instanceof HTMLImageElement) img.src = url;
-        },
-        (err) => {
-          console.warn('[VikunjaImage] auth-fetch failed:', err);
-        },
-      );
-    });
-
-    return [
-      'img',
-      mergeAttributes(this.options.HTMLAttributes, {
-        // src='#' is the do-nothing placeholder; the browser will not
-        // attempt a network fetch on the # fragment.
-        src: '#',
-        'data-src': realSrc,
-        alt: HTMLAttributes.alt,
-        title: HTMLAttributes.title,
-        id,
-      }),
-    ];
+    // Kick off (or hit cache for) the auth fetch.
+    return deferredImg(
+      this.options.HTMLAttributes,
+      HTMLAttributes,
+      realSrc!,
+      `cria-img-${parsed.taskServerId}-${parsed.attachmentServerId}`,
+      () => resolveBlobUrl(parsed.taskServerId, parsed.attachmentServerId),
+    );
   },
 });

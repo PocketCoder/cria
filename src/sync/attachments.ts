@@ -1,5 +1,6 @@
 /**
- * Server-side attachment ops — upload, delete, auth-fetch blob.
+ * Attachment ops: queued upload (outbox + side-store), delete, auth-fetch
+ * blob.
  *
  * Why not the OpenAPI client (`src/api/client.ts`): the upload endpoint
  * is multipart/form-data and the download is an arbitrary blob; neither
@@ -14,13 +15,22 @@
  * so Vikunja-web's CustomImage extension (and our own) recognise it as
  * an auth-required attachment and swap the src for a blob URL.
  */
+import { nanoid } from 'nanoid';
 import { getAuthSnapshot } from '@/auth/store';
 import { platformFetch } from '@/api/client';
+import { ApiError, NetworkError, buildApiError } from '@/api/errors';
 import { saveBlob } from '@/lib/download';
 import {
-  upsertAttachmentLocal,
+  findPendingAttachmentRefs,
+  replacePendingAttachmentRef,
+} from '@/lib/pendingAttachmentRef';
+import {
   deleteAttachmentLocal,
+  discardPendingAttachment,
+  insertPendingAttachment,
+  listUploadedAttachments,
 } from '@/db/attachments';
+import { deleteBlob, writeBlob } from '@/tauri/blobStore';
 import {
   taskAttachmentSchema,
   type TaskAttachmentResponse,
@@ -73,64 +83,116 @@ export function parseAttachmentUrl(
 }
 
 /**
- * Upload one or more files to a task as attachments. Mirrors each
- * returned attachment into the local task_attachments table so the
- * detail card updates without waiting for the next pull.
+ * Attach a file to a task, offline-first. The bytes go to the side-store and
+ * a pending row plus an outbox upload op go to the DB, so the list shows the
+ * file at once and the outbox drain uploads it: straight away when online,
+ * after reconnecting otherwise (the bytes survive an app restart). Works for
+ * a task that hasn't synced yet, as the op waits for the task's create.
  *
- * Returns the list of successfully-created attachments (already parsed
- * through `taskAttachmentSchema`). The server's `errors` array is
- * logged but not thrown — partial-success is the upstream behaviour
- * (one bad file in a batch shouldn't fail the rest).
- *
- * Note the verb: Vikunja's v1 routes attachment upload as **PUT**
- * (not POST). v2 may differ when it lands, but we're on v1.
+ * Returns the attachment's local id (the key of `cria://pending/{id}`).
  */
-export async function uploadAttachment(
-  taskServerId: number,
+export async function queueAttachmentUpload(
   taskLocalId: string,
-  files: File[] | FileList,
-): Promise<TaskAttachmentResponse[]> {
-  if (!taskServerId) throw new Error('uploadAttachment: task has no server id');
-  const list = Array.from(files);
-  if (list.length === 0) return [];
-
-  const form = new FormData();
-  for (const f of list) {
-    // Vikunja's handler reads form.File["files"] — must be 'files' plural.
-    form.append('files', f, f.name);
+  file: File,
+): Promise<string> {
+  const localId = nanoid();
+  await writeBlob(localId, new Uint8Array(await file.arrayBuffer()));
+  try {
+    await insertPendingAttachment({
+      taskLocalId,
+      attachmentLocalId: localId,
+      fileName: file.name || 'attachment',
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      bytesPath: localId,
+    });
+  } catch (err) {
+    await deleteBlob(localId).catch(() => undefined);
+    throw err;
   }
+  return localId;
+}
 
-  const res = await platformFetch(
-    `${apiBase()}/api/v1/tasks/${taskServerId}/attachments`,
-    {
-      method: 'PUT',
-      headers: authHeaders(), // do NOT set Content-Type — the Request boundary header is generated
-      body: form,
-    },
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(
-      `uploadAttachment: HTTP ${res.status} ${text.slice(0, 200)}`,
+/** Remove a queued (or failed) upload: the row, its op and its bytes. */
+export async function cancelAttachmentUpload(attachmentLocalId: string): Promise<void> {
+  const bytesPath = await discardPendingAttachment(attachmentLocalId);
+  if (bytesPath) {
+    await deleteBlob(bytesPath).catch((err) =>
+      console.warn('[attachments] could not delete queued bytes:', err),
     );
+  }
+}
+
+/**
+ * PUT one file to `/tasks/{id}/attachments` and return the created
+ * attachment. Called by the outbox executor (sync/push/attachment.ts).
+ *
+ * Errors are classified the way `callApi` classifies them, so the drain
+ * backs off on a network failure or 5xx and dead-letters a 4xx. Vikunja
+ * reports a rejected file (too large, say) as a 200 with an `errors` entry;
+ * that is a permanent failure too.
+ *
+ * Note the verb: Vikunja's v1 routes attachment upload as **PUT**.
+ */
+export async function putAttachmentFile(
+  taskServerId: number,
+  bytes: Uint8Array<ArrayBuffer>,
+  fileName: string,
+  mime: string,
+): Promise<TaskAttachmentResponse> {
+  const form = new FormData();
+  // Vikunja's handler reads form.File["files"], so 'files' plural.
+  form.append('files', new Blob([bytes], { type: mime }), fileName);
+
+  let res: Response;
+  try {
+    res = await platformFetch(
+      `${apiBase()}/api/v1/tasks/${taskServerId}/attachments`,
+      // No Content-Type: the multipart boundary header is generated.
+      { method: 'PUT', headers: authHeaders(), body: form },
+    );
+  } catch (err) {
+    if (err instanceof NetworkError) throw err;
+    throw new NetworkError(err instanceof Error ? err.message : String(err), err);
+  }
+  if (!res.ok) {
+    throw buildApiError(res.status, await res.text().catch(() => ''));
   }
 
   const payload = (await res.json()) as UploadResult;
-  if (payload.errors?.length) {
-    console.warn('[attachments] upload partial errors:', payload.errors);
+  const parsed = taskAttachmentSchema.safeParse(payload.success?.[0]);
+  if (!parsed.success) {
+    const first = payload.errors?.[0];
+    throw new ApiError(
+      res.status,
+      first?.code ?? null,
+      `upload rejected: ${first?.message ?? 'no attachment in the response'}`,
+      false,
+    );
   }
+  return parsed.data;
+}
 
-  const parsed: TaskAttachmentResponse[] = [];
-  for (const raw of payload.success ?? []) {
-    const r = taskAttachmentSchema.safeParse(raw);
-    if (r.success) parsed.push(r.data);
-    else console.warn('[attachments] skipping malformed upload result:', r.error);
+/**
+ * Swap `cria://pending/{id}` references whose upload has finished for the
+ * real attachment URL. The task and comment push run text through this, so
+ * a placeholder saved after its upload landed (the editor was still open,
+ * say) never reaches the server. References still pending are left alone.
+ */
+export async function resolveUploadedPendingRefs(
+  html: string | null,
+): Promise<string | null> {
+  const ids = findPendingAttachmentRefs(html);
+  if (!html || ids.length === 0) return html;
+  let out = html;
+  for (const a of await listUploadedAttachments(ids)) {
+    out = replacePendingAttachmentRef(
+      out,
+      a.localId,
+      buildAttachmentUrl(a.taskServerId, a.serverId),
+    );
   }
-
-  for (const a of parsed) {
-    await upsertAttachmentLocal(taskLocalId, a);
-  }
-  return parsed;
+  return out;
 }
 
 /** Delete a server-side attachment + drop it from the local mirror. */
