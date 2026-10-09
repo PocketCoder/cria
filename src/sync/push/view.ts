@@ -13,6 +13,8 @@ export interface ViewRow {
   position: number | null;
   filter: string | null;
   bucket_configuration_mode: string;
+  /** JSON array of the server's bucket configurations (filter-mode boards). */
+  bucket_configuration: string | null;
   done_bucket_server_id: number | null;
   default_bucket_server_id: number | null;
   deleted: number;
@@ -34,14 +36,30 @@ export function viewFilterForBody(raw: string | null): unknown {
   return { filter: raw };
 }
 
+/** The stored bucket configuration as the array the server expects, or
+ *  undefined when there is none (or it doesn't parse). */
+export function bucketConfigurationForBody(raw: string | null | undefined): unknown[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function viewBody(row: ViewRow): Record<string, unknown> {
   const filter = viewFilterForBody(row.filter);
+  // Vikunja's view update writes bucket_configuration unconditionally, so
+  // omitting it wipes a filter-mode board's buckets on a mere rename/reorder.
+  const bucketConfiguration = bucketConfigurationForBody(row.bucket_configuration);
   return {
     title: row.title,
     view_kind: row.view_kind as ViewKindLiteral,
     ...(row.position != null ? { position: row.position } : {}),
     ...(filter !== undefined ? { filter } : {}),
     bucket_configuration_mode: row.bucket_configuration_mode as BucketModeLiteral,
+    ...(bucketConfiguration !== undefined ? { bucket_configuration: bucketConfiguration } : {}),
     // Vikunja uses 0 for "no done/default bucket".
     done_bucket_id: row.done_bucket_server_id ?? 0,
     default_bucket_id: row.default_bucket_server_id ?? 0,
@@ -56,7 +74,7 @@ export async function executeViewOp(
   const localId = op.entity_local_id;
   const [row] = await db.select<ViewRow[]>(
     `SELECT local_id, server_id, project_local_id, title, view_kind,
-            position, filter, bucket_configuration_mode,
+            position, filter, bucket_configuration_mode, bucket_configuration,
             done_bucket_server_id, default_bucket_server_id, deleted
        FROM project_views WHERE local_id = ? LIMIT 1`,
     [localId],

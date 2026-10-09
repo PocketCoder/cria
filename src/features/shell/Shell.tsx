@@ -18,6 +18,7 @@ import { TabBar } from './TabBar';
 import { useDisplay } from '@/stores/display';
 import { viewKey } from '@/lib/displayConfig';
 import { resolveCurrentProjectView, showMobileFab, viewTitle } from './shellLogic';
+import { canManageViews } from '@/lib/viewManagement';
 import {
   useConflictNotification,
   useDeepLinks,
@@ -117,6 +118,17 @@ export function Shell() {
     projectViews,
   );
 
+  // View management (add / rename / delete / reorder) for real projects only.
+  const viewManager =
+    activeView?.kind === 'project' && currentProject && canManageViews(currentProject)
+      ? {
+          projectLocalId: activeView.localId,
+          activeViewLocalId: activeView.viewLocalId ?? projectViews[0]?.localId,
+          onSelectView: handleSelectView,
+        }
+      : null;
+  const openViewManager = viewManager ? () => modals.setShowViewManager(true) : undefined;
+
   return (
     <div
       className={cn(
@@ -130,6 +142,7 @@ export function Shell() {
           activeView={activeView}
           projectViews={projectViews}
           onSelectView={handleSelectView}
+          onManageViews={openViewManager}
           counts={{ isOnline, outboxCount, deadLetterCount, conflictCount }}
           onOpenOutbox={() => setShowOutbox(true)}
           onOpenConflicts={() => setShowConflicts(true)}
@@ -170,6 +183,7 @@ export function Shell() {
                 activeView={activeView}
                 projectViews={projectViews}
                 onSelectView={handleSelectView}
+                onManageViews={openViewManager}
                 currentView={currentView}
                 currentViewKey={currentViewKey}
                 onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
@@ -213,6 +227,7 @@ export function Shell() {
         setPhotoCaptureOpen={setPhotoCaptureOpen}
         rambleOpen={rambleOpen}
         setRambleOpen={setRambleOpen}
+        viewManager={viewManager}
       />
 
       {/* Mobile search overlay */}

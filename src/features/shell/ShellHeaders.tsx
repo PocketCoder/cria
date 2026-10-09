@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Plus, Settings, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
+import { Plus, Settings, Settings2, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { ActiveView } from '@/stores/ui';
 import type { ProjectView } from '@/domain/view';
@@ -13,6 +13,8 @@ interface ViewControls {
   activeView: ActiveView | null;
   projectViews: ProjectView[];
   onSelectView: (viewLocalId: string) => void;
+  /** Opens the view manager; undefined when the project's views can't be managed. */
+  onManageViews: (() => void) | undefined;
 }
 
 /**
@@ -60,6 +62,7 @@ export function MobileHeader({
   activeView,
   projectViews,
   onSelectView,
+  onManageViews,
   counts,
   onOpenOutbox,
   onOpenConflicts,
@@ -88,6 +91,7 @@ export function MobileHeader({
             views={projectViews}
             activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
             onSelect={onSelectView}
+            onManage={onManageViews}
           />
         )}
         <SyncStatusButton
@@ -126,6 +130,7 @@ export function DesktopHeader({
   activeView,
   projectViews,
   onSelectView,
+  onManageViews,
   currentView,
   currentViewKey,
   onOpenDisplay,
@@ -180,6 +185,17 @@ export function DesktopHeader({
             activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
             onSelect={onSelectView}
           />
+        )}
+        {activeView?.kind === 'project' && onManageViews && (
+          <button
+            type="button"
+            onClick={onManageViews}
+            aria-label="Manage views"
+            title="Manage views"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </button>
         )}
         {activeView?.kind === 'project' && currentView && (
           <ViewFilterButton view={currentView} />

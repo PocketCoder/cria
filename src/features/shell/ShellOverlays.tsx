@@ -4,6 +4,7 @@ import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
+import { ViewManagerModal } from '@/features/projects/ViewManagerModal';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
 import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
 import { SelectionBar } from '@/features/tasks/SelectionBar';
@@ -38,12 +39,19 @@ export function ShellOverlays({
   setPhotoCaptureOpen,
   rambleOpen,
   setRambleOpen,
+  viewManager,
 }: {
   modals: ShellModals;
   photoCaptureOpen: boolean;
   setPhotoCaptureOpen: (open: boolean) => void;
   rambleOpen: boolean;
   setRambleOpen: (open: boolean) => void;
+  /** The open project's views, when they can be managed (else null). */
+  viewManager: {
+    projectLocalId: string;
+    activeViewLocalId: string | undefined;
+    onSelectView: (viewLocalId: string) => void;
+  } | null;
 }) {
   const m = modals;
   return (
@@ -92,6 +100,14 @@ export function ShellOverlays({
       )}
       {m.showLabelManager && (
         <LabelManagerModal onClose={() => m.setShowLabelManager(false)} />
+      )}
+      {m.showViewManager && viewManager && (
+        <ViewManagerModal
+          projectLocalId={viewManager.projectLocalId}
+          activeViewLocalId={viewManager.activeViewLocalId}
+          onSelectView={viewManager.onSelectView}
+          onClose={() => m.setShowViewManager(false)}
+        />
       )}
       <UndoToasts />
     </>
