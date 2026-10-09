@@ -73,7 +73,12 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
-- **Live sync (WebSockets)** not started; sync is a 60s poll.
+- **Live sync is notification-only.** Vikunja's socket (`/api/v1/ws`, 2.3.0+)
+  pushes just `notification.created` and pro-licence `timer.*`; there is no
+  push for task, project, label or comment changes, and nobody is notified of
+  their own edits. Cria connects for notifications (see "Live sync" below);
+  edits from your own other devices still arrive on the 60s poll. Not yet
+  verified against a real server (unit-tested with a fake transport only).
 - **UI has no unit tests.** Coverage thresholds cover only the logic layers
   (`src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}`).
 
@@ -172,6 +177,9 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
   seen, so a refetch only applies a mode the server changed to.
 - `globalThis.__cria_settingsSaveChain__`: settings-save queue tail, so two
   saves never interleave their GET and POST.
+- `globalThis.__cria_liveSync__`: the single live-sync client handle
+  (`startLiveSync` stops any previous one), so HMR can't leave a second
+  authenticated socket firing events into a dead closure.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
@@ -261,6 +269,40 @@ discoverability, `frontend_settings`) purely so they round-trip. Newer servers
 also offer `PATCH /api/v2/user/settings/general` (JSON merge-patch, which
 Vikunja-web now uses); Cria still talks v1. Assume any other "update the whole
 entity" POST behaves the same — read the handler before sending a subset.
+
+### Live sync: what upstream offers, and how Cria uses it
+
+Source of truth is the Go code (`pkg/websocket/*`, `pkg/routes/routes.go`),
+not the swagger. Shallow-clone `go-vikunja/vikunja` into a scratch directory
+to re-check; don't assume more than this.
+- **Endpoint:** `GET /api/v1/ws` (also `/api/v2/ws` from 2.4.0). The upgrade
+  takes no credentials; the first client frame is
+  `{"action":"auth","token":"<user JWT>"}` (30s limit), the server answers
+  `{"action":"auth.success","success":true}`, then the client sends
+  `{"action":"subscribe","event":"..."}` per event (no ack). Events:
+  `notification.created` (2.3.0+) and `timer.created|updated|deleted`
+  (2.4.0+, pro licence). That is all: no task/project/label/comment push.
+- **Auth:** user JWTs only. API tokens (`tk_...`) and link-share tokens get
+  `invalid_token`, which is terminal. 2.7.0+ closes the socket at JWT expiry
+  ("token expired") unless a fresh `auth` frame arrives; older servers answer
+  a second `auth` with `already_authenticated` and never expire the socket.
+- **Origin:** the upgrade checks `Origin` against `cors.origins` (default
+  localhost and the public URL). A webview socket sends `tauri://localhost`
+  and is refused with 403, and the release CSP blocks arbitrary hosts anyway,
+  so the socket is opened from Rust with `tauri-plugin-websocket` (no Origin,
+  IPC, no CSP change). `websocket:default` is in the shared capability.
+- **Detection:** `/info` has no flag. `src/sync/useLiveSync.ts` skips servers
+  whose `version` is below 2.3.0 and otherwise just tries; a 404/405 on the
+  upgrade switches it off for the session (`unsupported`).
+- **Cria's rules** ([src/sync/liveSync.ts](src/sync/liveSync.ts)): optional
+  and best-effort, the poll keeps running underneath; an event only queues a
+  pull through the existing functions (`refetchTaskByServerId`,
+  `runSyncCycle`, `reconcileDeletions`) and the client never touches the DB or
+  calls `notify()` (a test pins both); jittered exponential backoff; closes
+  while hidden on mobile; one instance on `globalThis.__cria_liveSync__`.
+- **Not covered:** timer events (Cria has no time tracking), and anything the
+  server doesn't push. Don't add a custom protocol or a faster poll "to fake"
+  live sync without discussing it.
 
 ### pnpm 11 build-script approvals
 
@@ -363,7 +405,7 @@ checks — **don't conflate them**:
 
 Other rules:
 - **Capabilities are split by platform.** Shared perms (sql, http,
-  notification, deep-link, os) live in
+  websocket, notification, deep-link, os) live in
   [`capabilities/default.json`](src-tauri/capabilities/default.json) (no
   `platforms` key → all platforms). Desktop-only perms (global-shortcut,
   autostart, updater, process) live in

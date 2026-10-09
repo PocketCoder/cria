@@ -140,7 +140,8 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 | Sync | Conflict resolution UI (keep mine / use theirs) | ✅ | ConflictModal component |
 | Sync | Delete reconciliation (tombstone sweep) | ✅ | reconcile.ts |
 | Sync | Last-synced snapshot for 3-way merge | ✅ | `_lastSynced` JSON column |
-| Sync | Live sync via WebSockets | ❌ | Not started; 60s polling pull today |
+| Sync | Live notifications via Vikunja's WebSocket (`/ws`, 2.3.0+) | 🟡 | `useLiveSync` + `liveSync.ts`. Upstream pushes only `notification.created` (and pro `timer.*`), so this makes the bell and others' comments, mentions, assignments and created/deleted tasks arrive within about a second. Unit-tested with a fake transport; not yet verified against a real server or on iOS. JWT password sessions only |
+| Sync | Live task/project/label changes | ❌ | Not offered by Vikunja (no such events); edits from your own other devices arrive on the 60s poll |
 
 ### Auth
 
