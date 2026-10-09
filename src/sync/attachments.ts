@@ -13,7 +13,10 @@
  * URL shape — `<serverUrl>/api/v1/tasks/{taskId}/attachments/{attId}` —
  * is critical: it's what we insert as the `<img src>` in descriptions
  * so Vikunja-web's CustomImage extension (and our own) recognise it as
- * an auth-required attachment and swap the src for a blob URL.
+ * an auth-required attachment and swap the src for a blob URL. We write
+ * v1 because that's the API Cria talks to and every Vikunja-web release
+ * recognises it (up to v2.6.0 it is the only shape they match). We *read*
+ * the v2 shape too: v2.7.0 writes `<root>/api/v2/tasks/…`.
  */
 import { nanoid } from 'nanoid';
 import { getAuthSnapshot } from '@/auth/store';
@@ -59,13 +62,24 @@ export function buildAttachmentUrl(
   return `${apiBase()}/api/v1/tasks/${taskServerId}/attachments/${attachmentServerId}`;
 }
 
+/**
+ * An inline attachment image's path below the server root. Vikunja-web
+ * writes `/api/v1/…` in every release up to v2.6.0 and `/api/v2/…` from
+ * v2.7.0, whose matcher also accepts the bare `/tasks/…` form. Same set
+ * here, so an image either web version stored loads in Cria. A trailing
+ * slash, query or fragment doesn't change which file it is.
+ */
+const ATTACHMENT_PATH =
+  /^(?:\/api\/v[12])?\/tasks\/\d+\/attachments\/\d+\/?(?:[?#].*)?$/;
+
 /** True if `src` points at an attachment on the currently-signed-in
- * server (i.e. it should be auth-fetched, not loaded directly). */
+ * server (i.e. it should be auth-fetched, not loaded directly). Any API
+ * version is fine: the fetch rebuilds the URL from the ids. */
 export function isAttachmentUrl(src: string | null | undefined): boolean {
   if (!src) return false;
   const base = apiBase();
-  if (!base) return false;
-  return src.startsWith(`${base}/api/v1/tasks/`) && src.includes('/attachments/');
+  if (!base || !src.startsWith(base)) return false;
+  return ATTACHMENT_PATH.test(src.slice(base.length));
 }
 
 /** Parse a `(taskId, attId)` pair from an attachment URL, or null if it

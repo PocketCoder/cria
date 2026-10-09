@@ -96,7 +96,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 | Attachments | Offline uploads (queued, survive restart) | ✅ | Pending row + outbox `task_attachment`·`upload`; bytes in the Rust side-store (`blobs.rs`) |
 | Attachments | Delete | ✅ | Per-row delete (online only; a queued upload can be cancelled offline) |
 | Attachments | Download | ✅ | Via Tauri save dialog |
-| Attachments | Inline images in descriptions | ✅ | VikunjaImage extension + auth-fetch; offline pastes use a `cria://pending/{id}` placeholder rewritten on upload |
+| Attachments | Inline images in descriptions | ✅ | VikunjaImage extension + auth-fetch; loads the `/api/v1/` URLs Cria and Vikunja-web up to 2.6 write and the `/api/v2/` ones 2.7+ writes; offline pastes use a `cria://pending/{id}` placeholder rewritten on upload |
 | Attachments | Image lightbox | ✅ | ImageLightbox component |
 | Attachments | Paperclip indicator on task rows | ✅ | Shows count in TaskList |
 
