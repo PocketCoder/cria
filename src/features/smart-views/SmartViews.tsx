@@ -9,6 +9,8 @@ import { findDayGroupKey, todaySectioner, upcomingDayLabel, upcomingSectioner } 
 import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
+import { EmptyState } from '@/components/EmptyState';
+import appIcon from '@/assets/app-icon.png';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useToday } from '@/hooks/useToday';
 import { useQueryClient } from '@tanstack/react-query';
@@ -158,11 +160,7 @@ function SmartView({
               Loading…
             </p>
           ) : total === 0 && !keepEmptyGroups ? (
-            emptyMessage ? (
-              <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
-                {emptyMessage}
-              </p>
-            ) : null
+            emptyMessage ? <EmptyState message={emptyMessage} /> : null
           ) : (
             filtered.map((g) => {
               const activeCount = g.tasks.filter((t) => !t.done).length;
@@ -341,7 +339,7 @@ export const SmartTaskRow = memo(function SmartTaskRow({
           onToggle={onToggle}
           onToggleSelect={handleToggleSelect}
           onOpen={handleClick}
-          className="px-7 py-3"
+          className="py-3 pl-7 pr-6 max-md:px-5 max-md:py-3.5"
           actions={
             <div className="flex items-center gap-1">
               <button
@@ -479,7 +477,8 @@ function PickerSheet({
       <ModalDialog label={title} onClose={onClose}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
+          <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--sheet-bg)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
+            <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
           </div>
@@ -489,7 +488,7 @@ function PickerSheet({
   }
   return (
     <ModalDialog label={title} onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--dialog-backdrop)] p-4 pt-20">
         <BackdropDismiss onDismiss={onClose} />
         <div className="relative flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
           {header}
@@ -533,7 +532,8 @@ function NothingDue({ doneCount }: { doneCount: number }) {
   }, []);
 
   return (
-    <div className="mb-6 rounded-[14px] bg-[var(--color-background)] px-5 py-6 text-center">
+    <div className="mb-6 flex flex-col items-center rounded-2xl bg-[var(--color-background)] px-5 py-6 text-center">
+      <img src={appIcon} alt="" className="mb-3.5 h-[72px] w-[72px] rounded-[18px] opacity-90" />
       <p className="text-base font-medium">Nothing left today.</p>
       <p className="mt-1 text-[13.5px] text-[var(--color-muted-foreground)]">{nextLine}</p>
       {upcoming.length > 0 ? (

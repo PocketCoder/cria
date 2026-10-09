@@ -145,7 +145,7 @@ export function ShareProjectModal({
 
   return (
     <ModalDialog label={`Share “${project.title}”`} onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
@@ -226,7 +226,7 @@ export function ShareProjectModal({
 function UnsyncedNotice({ onClose }: { onClose: () => void }) {
   return (
     <ModalDialog label="Share project" onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"

@@ -66,7 +66,7 @@ export function MobileQuickAdd({
       <div
         ref={panelRef}
         className={cn(
-          'relative z-10 w-full rounded-t-[22px] bg-[var(--color-card)] pt-2.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] dark:border dark:border-[var(--sheet-border)]',
+          'relative z-10 w-full rounded-t-2xl bg-[var(--sheet-bg)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)]',
           dragY === 0 && !drag.current.active && 'animate-[sheet-up_300ms_var(--spring-snappy)]',
         )}
         style={{
@@ -75,7 +75,7 @@ export function MobileQuickAdd({
           transition: drag.current.active ? 'none' : 'transform 240ms var(--spring-snappy)',
         }}
       >
-        <div className="mx-auto mb-1 h-[5px] w-[38px] rounded-full bg-[var(--color-muted-foreground)]/30" />
+        <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-[var(--color-muted-foreground)]/30" />
         <form onSubmit={onSubmit}>
           <div className="px-5 pt-3">
             <TokenInput
@@ -85,7 +85,7 @@ export function MobileQuickAdd({
               onKeyDown={onTitleKeyDown}
               inputRef={titleRef}
               placeholder="Task name"
-              className="text-[21px] font-medium leading-[1.35] tracking-[-0.015em]"
+              className="text-title font-semibold leading-[1.35] tracking-tight"
             />
             <input
               aria-label="Note"

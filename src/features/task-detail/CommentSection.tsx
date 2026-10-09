@@ -177,7 +177,7 @@ function CommentRow({
           <button
             type="button"
             onClick={() => void onConfirmDelete()}
-            className="cursor-pointer rounded bg-[var(--color-destructive)] px-2 py-0.5 text-footnote font-medium text-white hover:opacity-90"
+            className="cursor-pointer rounded bg-[var(--color-destructive)] px-2 py-0.5 text-footnote font-medium text-[var(--color-destructive-foreground)] hover:opacity-90"
           >
             Delete
           </button>

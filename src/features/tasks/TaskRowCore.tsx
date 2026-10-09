@@ -31,23 +31,23 @@ function SuppressedSignals({ task, signals }: { task: Task; signals: RowSignals 
       ) : null}
       {hasAttachments ? (
         <span className="flex items-center gap-1.5">
-          <Paperclip className="h-3.5 w-3.5 shrink-0" />
+          <Paperclip className="h-3 w-3 shrink-0" />
           Attachments
         </span>
       ) : null}
       {checklist.total > 0 ? (
         <span className="flex items-center gap-1.5">
           {checklist.checked === checklist.total ? (
-            <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]" />
+            <CheckSquare className="h-3 w-3 shrink-0 text-[var(--color-primary)]" />
           ) : (
-            <Square className="h-3.5 w-3.5 shrink-0" />
+            <Square className="h-3 w-3 shrink-0" />
           )}
           Checklist {checklist.checked}/{checklist.total}
         </span>
       ) : null}
       {isRepeating(task.repeatAfter, task.repeatMode) ? (
         <span className="flex items-center gap-1.5">
-          <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+          <RefreshCw className="h-3 w-3 shrink-0" />
           Repeats
         </span>
       ) : null}
@@ -108,7 +108,7 @@ function RowMeta({ task, labels, hasAttachments, checklist, projectTitle }: RowM
   );
 
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+    <span className="flex min-w-0 items-center gap-1.5 text-caption text-[var(--color-muted-foreground)]">
       {dueLabel ? (
         <span className={cn('whitespace-nowrap tabular-nums', overdue && 'text-[var(--color-destructive)]')}>
           {dueLabel}
@@ -280,7 +280,7 @@ export const TaskRowCore = memo(function TaskRowCore({
               <button
                 type="button"
                 className={cn(
-                  'block w-full cursor-pointer truncate text-left text-sm leading-snug',
+                  'block w-full cursor-pointer truncate text-left text-sm leading-snug max-md:text-md',
                   titleWeight === 'medium' && 'font-medium',
                   task.done && 'text-[var(--color-muted-foreground)]',
                 )}
@@ -293,7 +293,7 @@ export const TaskRowCore = memo(function TaskRowCore({
             ) : (
               <p
                 className={cn(
-                  'truncate text-sm leading-snug',
+                  'truncate text-sm leading-snug max-md:text-md',
                   titleWeight === 'medium' && 'font-medium',
                   task.done && 'text-[var(--color-muted-foreground)]',
                 )}

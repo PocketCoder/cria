@@ -8,8 +8,8 @@ import type { AuthMethod } from './loginHelpers';
 export function LoginHeader() {
   return (
     <div className="flex flex-col items-center space-y-2">
-      <img src={appIcon} alt="" className="mb-2 h-14 w-14 rounded-[14px]" />
-      <h1 className="text-2xl font-semibold tracking-[-0.03em]">Point Cria at your Vikunja</h1>
+      <img src={appIcon} alt="" className="mb-2 h-[52px] w-[52px] rounded-xl" />
+      <h1 className="text-title font-semibold tracking-tight">Point Cria at your Vikunja</h1>
       <p className="mx-auto max-w-[42ch] text-[14.5px] leading-relaxed text-[var(--color-muted-foreground)]">
         Everything is stored on your machine and synced in the background. Works offline from the first launch.
       </p>

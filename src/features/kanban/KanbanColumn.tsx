@@ -280,7 +280,7 @@ function BucketMenu({
             }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--color-accent)]/10 cursor-pointer"
           >
-            <Pencil className="h-3 w-3" /> Rename
+            <Pencil className="h-3.5 w-3.5" /> Rename
           </button>
 
           <LimitRow
@@ -317,7 +317,7 @@ function BucketMenu({
             onClick={handleDeleteBucket}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--color-warning-text)] hover:bg-[var(--color-accent)]/10 cursor-pointer"
           >
-            <Trash2 className="h-3 w-3" /> Delete
+            <Trash2 className="h-3.5 w-3.5" /> Delete
           </button>
         </div>
       )}
@@ -349,7 +349,7 @@ function LimitRow({
         onClick={onOpen}
         className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--color-accent)]/10 cursor-pointer"
       >
-        <Gauge className="h-3 w-3" /> {limit > 0 ? `Limit: ${limit}` : 'Set limit'}
+        <Gauge className="h-3.5 w-3.5" /> {limit > 0 ? `Limit: ${limit}` : 'Set limit'}
       </button>
     );
   }

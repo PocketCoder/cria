@@ -31,7 +31,7 @@ import { LabelRow, NavItem, ProjectRow } from './SidebarRows';
 import { computeDropPosition, computeSyncLine, visibleProjectList } from './sidebarLogic';
 
 const SECTION_HEADING =
-  'px-2.5 pb-1.5 pt-4 group-label text-[var(--color-muted-foreground)]';
+  'px-2 pb-1 pt-3 group-label text-[var(--color-muted-foreground)]';
 
 /* ────────────────────────── saved filters ─────────────────────────── */
 
@@ -505,7 +505,7 @@ export function SidebarFooter({
           syncLine.onClick && 'hover:bg-[var(--color-muted)]',
         )}
       >
-        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', syncLine.dot)} />
+        <span className={cn('h-2 w-2 shrink-0 rounded-full', syncLine.dot)} />
         <span className="truncate">{syncLine.text}</span>
         {syncLine.action && (
           <span className="ml-auto font-medium text-[var(--color-primary)]">
@@ -514,7 +514,7 @@ export function SidebarFooter({
         )}
       </button>
       <div className="mt-0.5 flex items-center justify-between pr-0.5">
-        <span className="text-[10.5px] text-[var(--color-muted-foreground)]">
+        <span className="text-[10.5px] font-bold tracking-[-0.03em] text-[var(--color-muted-foreground)]">
           Cria
         </span>
         <div className="flex items-center gap-0.5">
@@ -526,7 +526,7 @@ export function SidebarFooter({
               onClick={onOpenSettings}
               className="rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

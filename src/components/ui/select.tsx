@@ -15,8 +15,8 @@ export const SelectTrigger = forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-8 w-full items-center justify-between gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)]',
-      'focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
+      'flex h-8 w-full items-center justify-between gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)]',
+      'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 ring-offset-background',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'data-[placeholder]:text-[var(--color-muted-foreground)]',
       className,

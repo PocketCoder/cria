@@ -110,7 +110,7 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
       <ActionButton
         icon={<Bell className={`h-4 w-4 ${task.isSubscribed ? 'fill-current' : ''}`} />}
         label={task.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
-        color={task.isSubscribed ? '#3b82f6' : undefined}
+        color={task.isSubscribed ? 'var(--color-primary)' : undefined}
         className="pointer-events-none opacity-50"
       />
       {confirmDelete ? (
@@ -133,7 +133,7 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
         <ActionButton
           icon={<Trash2 className="h-4 w-4" />}
           label="Delete"
-          color="#ef4444"
+          color="var(--color-destructive)"
           onClick={() => setConfirmDelete(true)}
         />
       )}

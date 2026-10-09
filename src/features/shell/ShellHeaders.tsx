@@ -155,7 +155,7 @@ export function DesktopHeader({
             title="Show sidebar (⌘E)"
             className="mb-1.5 shrink-0 rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
           >
-            <PanelLeft className="h-[18px] w-[18px]" />
+            <PanelLeft className="h-4 w-4" />
           </button>
         )}
         <div className="min-w-0 flex-1">

@@ -178,7 +178,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
 
   return (
     <div
-      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Settings"

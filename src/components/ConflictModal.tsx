@@ -59,7 +59,7 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
 
   return (
     <ModalDialog label={conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'} onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--color-border)]"

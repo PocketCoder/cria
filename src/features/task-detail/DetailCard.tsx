@@ -105,7 +105,7 @@ export function DetailCard({
         className={cn(
           'vt-inspector flex flex-col overflow-hidden',
           isMobile
-            ? 'fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-2xl bg-[var(--color-card)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)] animate-[sheet-up_350ms_var(--spring-snappy)]'
+            ? 'fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-2xl bg-[var(--sheet-bg)] shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]'
             : 'relative w-[372px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-background)]',
         )}
         style={isMobile && sheetOffset > 0 ? { transform: `translateY(${sheetOffset}px)`, transition: 'none' } : undefined}

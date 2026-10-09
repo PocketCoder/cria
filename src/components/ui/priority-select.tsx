@@ -78,7 +78,7 @@ function PriorityPill({
           <span>{isSet ? meta.label : 'Priority'}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-44 p-1">
+      <PopoverContent align="start" sideOffset={6} className="w-40 p-1">
         <div role="radiogroup" aria-label="Priority" className="flex flex-col">
           {PRIORITY_META.map((m, i) => {
             const selected = m.value === value;

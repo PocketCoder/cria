@@ -63,7 +63,7 @@ export function AddBucketColumn({ viewLocalId }: { viewLocalId: string }) {
       onClick={() => setShowInput(true)}
       className="flex h-fit w-72 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] p-3 text-xs text-[var(--color-muted-foreground)] hover:border-solid hover:text-[var(--color-foreground)]"
     >
-      <Plus className="h-4 w-4" />
+      <Plus className="h-3.5 w-3.5" />
       Add Column
     </button>
   );

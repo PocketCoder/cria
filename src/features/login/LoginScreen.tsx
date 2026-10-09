@@ -194,7 +194,7 @@ export function LoginScreen() {
 
   return (
     <main className="flex min-h-full items-center justify-center bg-[var(--color-background)] p-6">
-      <div className="w-full max-w-md space-y-6 rounded-xl bg-[var(--color-card)] p-8 text-center dark:border dark:border-[var(--color-border)]">
+      <div className="w-full max-w-md space-y-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-8 text-center shadow-sm">
         <LoginHeader />
 
         <MethodTabs authMethod={authMethod} onSwitch={switchMethod} />

@@ -28,6 +28,28 @@
   --text-caption: 11px;  /* metadata, timestamps, chip labels */
   --text-footnote: 10px; /* badges, secondary indicators */
   --text-micro: 9px;     /* dense badges, avatar initials, tiny glyphs */
+  /* Title tiers above body (design system type scale). */
+  --text-md: 15px;          /* iOS row titles */
+  --text-headline: 17px;    /* collapsed iOS nav title */
+  --text-title: 20px;       /* sheet task-name field, login heading */
+  --text-large-title: 34px; /* iOS large title */
+
+  /* Tracking. Titles are 600 with slight negative tracking; eyebrows are
+     10px/600 uppercase at +0.025em. tracking-tight is the 16px view title. */
+  --tracking-tight: -0.015em;
+  --tracking-body: -0.006em;
+  --tracking-large-title: -0.025em;
+  --tracking-eyebrow: 0.025em;
+
+  /* Radii beyond Tailwind's scale (rounded-md 6 controls, rounded-lg 8 picker
+     rows and segmented tracks, rounded-xl 12 dialogs, rounded-2xl 16 cards). */
+  --radius-tab: 20px;
+  --radius-tabbar: 26px;
+
+  /* Elevation: cards barely lift. Floating layers use the --shadow-* vars
+     in :root below. */
+  --shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.05);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.12);
 
   /* ── Light theme: warm paper canvas, Llama purple accent ──────────
      Neutrals sit at hue 95 (warm paper); ink and greys tint toward violet
@@ -45,17 +67,20 @@
   --color-primary-foreground:oklch(99% 0 0);
   --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
+  --color-primary-soft:      oklch(97.6% 0.014 300);
   /* Used as both fill and text, so it is held at >= 4.5:1 on muted (and on a
      10% self-tint over muted) and under destructive-foreground. */
   --color-destructive:       oklch(55% 0.22 27);
   --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
+  --color-info:              oklch(62% 0.12 240);
   /* *-text: success/warning as text or icon colour. The base tokens are
      fills (light amber is 2.2:1 on paper); these clear 4.5:1 on
      background/card/muted. Dark equals the base, which already passes. */
   --color-success-text:      oklch(50% 0.14 150);
   --color-warning-text:      oklch(50% 0.11 70);
+  --color-warning-foreground:oklch(24% 0.015 285);
   --color-ring:              oklch(55% 0.16 300);
   /* Formerly ink-filled (FAB, Add task, Mark done, selected palette row);
      now purple. Dark mode swaps to the lighter purple + dark ink. */
@@ -86,12 +111,15 @@
     --color-primary-foreground:oklch(17% 0.045 300);
     --color-accent:            oklch(67% 0.14 300);
     --color-accent-foreground: oklch(17% 0.045 300);
+    --color-primary-soft:      oklch(30% 0.07 300);
     --color-destructive:       oklch(70% 0.16 25);
     --color-destructive-foreground:oklch(17% 0.045 300);
     --color-success:           oklch(72% 0.13 150);
     --color-warning:           oklch(80% 0.12 85);
+    --color-info:              oklch(62% 0.12 240);
     --color-success-text:      oklch(72% 0.13 150);
     --color-warning-text:      oklch(80% 0.12 85);
+    --color-warning-foreground:oklch(17% 0.045 300);
     --color-ring:             oklch(67% 0.14 300);
     --color-inverse:           oklch(67% 0.14 300);
     --color-inverse-foreground:oklch(17% 0.045 300);
@@ -169,13 +197,24 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.006em;
+  letter-spacing: var(--tracking-body);
 }
 
-/* Native Liquid Glass transparency is handled in the confined navigation-layer
-   block lower in this file (search "Native macOS Liquid Glass"). The body stays
-   opaque on every other platform / unsupported macOS, so a transparent window
-   never reveals the desktop. */
+/* Links: purple, underline on hover. In the base layer so text-* utilities
+   on an <a> still win. */
+@layer base {
+  a {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--llama-700);
+    text-decoration: underline;
+  }
+  .dark a:hover {
+    color: var(--llama-200);
+  }
+}
 
 /* Task-detail card entrance (right-docked inspector). Used via the
    arbitrary utility animate-[card-slide-in_…] on TaskDetail. The
@@ -193,6 +232,59 @@ body {
 
 /* ── Motion: iOS springs + joy layer ──────────────────── */
 :root {
+  /* Palette scales (design system tokens/colors.css). Semantic tokens above
+     hold literal values so Tailwind can resolve them; these are for the rare
+     one-off that needs a specific step, e.g. bg-(--llama-100). */
+  --llama-50: oklch(97.6% 0.014 300);
+  --llama-100: oklch(94.6% 0.03 300);
+  --llama-200: oklch(88.5% 0.06 300);
+  --llama-300: oklch(79% 0.1 300);
+  --llama-400: oklch(67% 0.14 300);
+  --llama-500: oklch(55% 0.16 300);
+  --llama-600: #643b9f; /* icon purple, brand anchor */
+  --llama-700: oklch(38.5% 0.13 300);
+  --llama-800: oklch(31% 0.1 300);
+  --llama-900: oklch(23% 0.07 300);
+  --llama-950: oklch(17% 0.045 300);
+  --fleece-0: oklch(100% 0 0);
+  --fleece-50: oklch(99.3% 0.004 95);
+  --fleece-100: oklch(97% 0.005 95);
+  --fleece-200: oklch(93% 0.004 95);
+  --fleece-300: oklch(87% 0.006 95);
+  --fleece-400: oklch(70% 0.012 285);
+  --fleece-500: oklch(50% 0.015 285);
+  --fleece-600: oklch(40% 0.015 285);
+  --fleece-700: oklch(28% 0.012 285);
+  --fleece-800: oklch(23% 0.012 285);
+  --fleece-850: oklch(19% 0.012 285);
+  --fleece-900: oklch(15% 0.012 285);
+  --ink: oklch(24% 0.015 285);
+  /* Supporting accents carry meaning only (priority, feedback, dots). */
+  --heather-100: oklch(95% 0.03 320);
+  --heather-400: oklch(72% 0.11 320);
+  --heather-600: oklch(55% 0.15 320);
+  --plum-100: oklch(95% 0.03 345);
+  --plum-500: oklch(58% 0.19 345);
+  --plum-700: oklch(44% 0.16 345);
+  --sky-100: oklch(95% 0.03 240);
+  --sky-500: oklch(62% 0.12 240);
+  --sky-700: oklch(47% 0.12 240);
+  --meadow-100: oklch(95% 0.04 150);
+  --meadow-500: oklch(62% 0.16 150);
+  --meadow-700: oklch(46% 0.13 150);
+  --marigold-100: oklch(96% 0.05 80);
+  --marigold-500: oklch(75% 0.16 80);
+  --marigold-700: oklch(55% 0.13 70);
+  --coral-100: oklch(95% 0.03 27);
+  --coral-500: oklch(58% 0.22 27);
+  --coral-700: oklch(47% 0.18 27);
+
+  /* Layout */
+  --row-indent: 28px; /* desktop task-row left padding and per-depth indent */
+  --sidebar-width: 208px;
+  --inspector-width: 420px;
+  --traffic-light-inset: 76px;
+
   --spring-snappy: cubic-bezier(0.32, 0.72, 0, 1); /* sheets, title collapse */
   --spring-smooth: cubic-bezier(0.22, 1, 0.36, 1);
   --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1); /* small things: press, toggles */
@@ -200,6 +292,12 @@ body {
   --duration-slide: 260ms;
   --duration-pop: 360ms;
   --duration-celebrate: 560ms;
+  --duration-hover: 120ms;
+  --duration-fast: 150ms;
+  --duration-press: 140ms;
+  --duration-inspector: 180ms;
+  --duration-sheet: 300ms;
+  --duration-sheet-tall: 350ms;
   --press-scale: 0.94;
   --press-scale-subtle: 0.97;
 
@@ -216,10 +314,14 @@ body {
   --glass-blur: 14px;
   --glass-border: oklch(93% 0.004 95 / 0.5);
 
-  /* Sheets */
+  /* Sheets dim the page at 30% + 4px blur; centred dialogs at 50%. */
   --overlay-backdrop: rgb(0 0 0 / 0.3);
+  --dialog-backdrop: rgb(0 0 0 / 0.5);
+  --sheet-bg: var(--color-card);
   --sheet-bg-grouped: var(--color-background);
   --sheet-border: transparent;
+  /* Rows inside a grouped sheet (lifted a step in dark). */
+  --surface-inset: var(--color-card);
 }
 .dark {
   --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.2), 0 4px 16px oklch(0% 0 0 / 0.25);
@@ -227,8 +329,11 @@ body {
   --glass-bg: oklch(19% 0.012 285 / 0.78);
   --glass-border: oklch(40% 0.012 285 / 0.4);
   --overlay-backdrop: rgb(0 0 0 / 0.6);
+  --dialog-backdrop: rgb(0 0 0 / 0.6);
+  --sheet-bg: oklch(22% 0.014 285);
   --sheet-bg-grouped: oklch(19% 0.012 285);
   --sheet-border: oklch(34% 0.014 285);
+  --surface-inset: oklch(25% 0.014 285);
 }
 
 @keyframes cria-pop-in { from { opacity: 0; transform: scale(0.92) translateY(-4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
@@ -307,9 +412,9 @@ body {
 .inset-list {
   border-radius: 10px;
   overflow: hidden;
-  background: var(--color-card);
+  background: var(--surface-inset);
 }
-.inset-list > li:not(:last-child) {
+.inset-list > :not(:last-child) {
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -392,13 +497,21 @@ html[data-vt='theme']::view-transition-new(root) {
   animation: vt-reveal 480ms var(--spring-smooth);
 }
 
-/* Honour reduce-motion. */
+/* Honour reduce-motion: every animation becomes an instant change, and the
+   purely decorative completion burst (ring + sparks) doesn't render at all. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .task-check-ring,
+  .task-check-spark {
+    display: none;
   }
 }
 
@@ -418,12 +531,15 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-primary-foreground:oklch(99% 0 0);
   --color-accent:            #643B9F;
   --color-accent-foreground: oklch(99% 0 0);
+  --color-primary-soft:      oklch(97.6% 0.014 300);
   --color-destructive:       oklch(55% 0.22 27);
   --color-destructive-foreground:oklch(99% 0 0);
   --color-success:           oklch(62% 0.16 150);
   --color-warning:           oklch(75% 0.16 80);
+  --color-info:              oklch(62% 0.12 240);
   --color-success-text:      oklch(50% 0.14 150);
   --color-warning-text:      oklch(50% 0.11 70);
+  --color-warning-foreground:oklch(24% 0.015 285);
   --color-ring:              oklch(55% 0.16 300);
   /* Formerly ink-filled (FAB, Add task, Mark done, selected palette row);
      now purple. Dark mode swaps to the lighter purple + dark ink. */
@@ -451,12 +567,15 @@ html[data-vt='theme']::view-transition-new(root) {
   --color-primary-foreground:oklch(17% 0.045 300);
   --color-accent:            oklch(67% 0.14 300);
   --color-accent-foreground: oklch(17% 0.045 300);
+  --color-primary-soft:      oklch(30% 0.07 300);
   --color-destructive:       oklch(70% 0.16 25);
   --color-destructive-foreground:oklch(17% 0.045 300);
   --color-success:           oklch(72% 0.13 150);
   --color-warning:           oklch(80% 0.12 85);
+  --color-info:              oklch(62% 0.12 240);
   --color-success-text:      oklch(72% 0.13 150);
   --color-warning-text:      oklch(80% 0.12 85);
+  --color-warning-foreground:oklch(17% 0.045 300);
   --color-ring:              oklch(67% 0.14 300);
   --color-inverse:           oklch(67% 0.14 300);
   --color-inverse-foreground:oklch(17% 0.045 300);
@@ -659,7 +778,7 @@ ul[data-type="taskList"] li > div > p {
   background-position: 0 55%;
   background-repeat: no-repeat;
   background-size: 0% 1px;
-  transition: background-size 320ms var(--spring-smooth) 60ms, color 200ms ease;
+  transition: background-size 320ms var(--spring-smooth) 60ms, color 300ms ease;
 }
 .task-strike[data-done] {
   background-size: 100% 1px;
@@ -671,7 +790,7 @@ ul[data-type="taskList"] li > div > p {
   opacity: 0.6;
 }
 .task-row.row-glow {
-  animation: cria-row-glow 700ms var(--spring-smooth);
+  animation: cria-row-glow 700ms ease-out;
 }
 
 /* ── Joy layer: press, FAB, tab hop, overlays ─────────────── */
