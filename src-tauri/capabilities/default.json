@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Shared capabilities for all platforms (desktop + iOS/Android): local DB, networking, notifications, deep links, external links, OS info.",
+  "description": "Shared capabilities for all platforms (desktop + iOS/Android): local DB, networking (HTTP, and the WebSocket plugin for live sync), notifications, deep links, external links, OS info.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -38,6 +38,7 @@
         { "url": "mailto:**" }
       ]
     },
+    "websocket:default",
     "os:default",
     "haptics:default"
   ]

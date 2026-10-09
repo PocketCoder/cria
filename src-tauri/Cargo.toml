@@ -31,6 +31,13 @@ tauri-plugin-notification = "2"
 # security downgrade: we're setting it ourselves to talk to a trusted,
 # user-configured server, not letting page JS forge it.
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
+# Live sync (src/sync/liveSync.ts): Vikunja's /ws endpoint. Opened from Rust
+# rather than the webview: the webview's own WebSocket would send an
+# `Origin: tauri://localhost` header that a default server's CORS origin list
+# rejects, and the release CSP's connect-src would block the user's server.
+# The plugin sends no Origin and talks over IPC. TLS is rustls + ring, already
+# in the tree through reqwest.
+tauri-plugin-websocket = "2"
 tauri-plugin-opener = "2"
 # Platform detection (used by the frontend via @tauri-apps/plugin-os).
 tauri-plugin-os = "2"
