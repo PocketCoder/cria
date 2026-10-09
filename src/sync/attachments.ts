@@ -26,11 +26,13 @@ import { saveBlob } from '@/lib/download';
 import {
   findPendingAttachmentRefs,
   replacePendingAttachmentRef,
+  stripPendingAttachmentImages,
 } from '@/lib/pendingAttachmentRef';
 import {
   deleteAttachmentLocal,
   discardPendingAttachment,
   insertPendingAttachment,
+  listMissingAttachments,
   listUploadedAttachments,
 } from '@/db/attachments';
 import { deleteBlob, writeBlob } from '@/tauri/blobStore';
@@ -191,7 +193,9 @@ export async function putAttachmentFile(
  * Swap `cria://pending/{id}` references whose upload has finished for the
  * real attachment URL. The task and comment push run text through this, so
  * a placeholder saved after its upload landed (the editor was still open,
- * say) never reaches the server. References still pending are left alone.
+ * say) never reaches the server. An image whose upload was cancelled is
+ * dropped the same way (the editor still held it when the upload was
+ * removed). References still pending are left alone.
  */
 export async function resolveUploadedPendingRefs(
   html: string | null,
@@ -205,6 +209,9 @@ export async function resolveUploadedPendingRefs(
       a.localId,
       buildAttachmentUrl(a.taskServerId, a.serverId),
     );
+  }
+  for (const id of await listMissingAttachments(ids)) {
+    out = stripPendingAttachmentImages(out, id);
   }
   return out;
 }
