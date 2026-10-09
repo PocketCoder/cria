@@ -1,19 +1,18 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/auth/store';
 import { throttledWarn } from '@/api/resilience';
-import { pullProjects, pullSavedFilters, pullLabels, pullAllTasks, pullAllViews, pullAllBuckets } from './pull';
 import { reconcileDeletions } from './reconcile';
 import { startOutboxSync, drainOutbox } from './push';
-import { notify } from '@/db/bus';
+import { runSyncCycle } from './syncCycle';
 import { isMobilePlatform } from '@/lib/platform';
 import { isPageVisible, onVisibilityChange } from '@/lib/visibility';
 
 const INTERVAL_MS = 60_000;
 
 /**
- * Periodic sync while authenticated, every 60s: drain the outbox, then pull
- * projects, saved filters, labels, all tasks (delta-filtered), views and
- * buckets. Each pull is followed by one notify() for its topic.
+ * Periodic sync while authenticated, every 60s: one `runSyncCycle()` (drain
+ * the outbox, then pull projects, saved filters, labels, all tasks, views and
+ * buckets, with one notify() per topic).
  *
  * One global timer — mount this hook once in the App.
  */
@@ -32,52 +31,7 @@ export function usePeriodicSync() {
     );
 
     let cancelled = false;
-    const tick = async () => {
-      // Drain the outbox before pulling so the circuit breaker is clean,
-      // and so a row that failed its push (e.g. server was down) gets a
-      // retry even without a new user mutation to trigger notify('outbox').
-      try {
-        await drainOutbox();
-      } catch (err) {
-        console.warn('[periodic-sync] outbox drain failed:', err);
-      }
-      try {
-        await pullProjects();
-        notify('projects');
-      } catch (err) {
-        throttledWarn('periodic-sync/projects', '[periodic-sync] project pull failed:', err);
-      }
-      try {
-        // Saved-filter details for pseudo-projects pulled just above.
-        await pullSavedFilters();
-        notify('saved_filters');
-      } catch (err) {
-        throttledWarn('periodic-sync/saved-filters', '[periodic-sync] saved-filter pull failed:', err);
-      }
-      try {
-        await pullLabels();
-        notify('labels');
-      } catch (err) {
-        throttledWarn('periodic-sync/labels', '[periodic-sync] label pull failed:', err);
-      }
-      try {
-        // Pull every task (not just the open project) so the smart views
-        // have cross-project data and project lists stay warm (#33).
-        await pullAllTasks();
-        notify('tasks');
-      } catch (err) {
-        throttledWarn('periodic-sync/all-tasks', '[periodic-sync] all-tasks pull failed:', err);
-      }
-      try {
-        // Views + kanban buckets. Silent upserts, so notify('views')
-        // afterwards to refresh any open ViewSwitcher / board.
-        await pullAllViews();
-        await pullAllBuckets();
-        notify('views');
-      } catch (err) {
-        throttledWarn('periodic-sync/views', '[periodic-sync] views/buckets pull failed:', err);
-      }
-    };
+    const tick = runSyncCycle;
 
     // On mobile, skip ticks while backgrounded — iOS keeps JS timers running,
     // so an un-gated pull would burn battery/cellular every 60s in the
