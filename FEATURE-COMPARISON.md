@@ -247,8 +247,8 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 |---|---|---|---|
 | Misc | CalDAV docs link in settings | ✅ | Link shown in SettingsModal Advanced section |
 | Misc | Project info page | ✅ | Sidebar menu, desktop header button and iPhone view menu → `ProjectInfoModal` (description, parent, task counts; owner/created when online) |
-| Misc | Defer task | ✅ | Presets (tomorrow, 3 days, 1 week, next Monday) in the due-date popover, iOS action sheet and selection bar (`lib/defer.ts`) |
-| Misc | Sessions list and revoke | ✅ | Settings → Security (`SessionsSection`); current device from the JWT `sid`; hidden on servers without `/user/sessions` |
+| Misc | Defer task | ✅ | Presets (in 1 day, 3 days, 1 week, next Monday; counted from the later of the due date and today) in the due-date popover, iOS action sheet and selection bar (`lib/defer.ts`) |
+| Misc | Sessions list and revoke | ✅ | Settings → Security (`SessionsSection`); current device from the JWT `sid`; confirm before revoke; hidden on servers without `/user/sessions` |
 | Misc | Webhook management UI | ❌ | Server endpoints exist, no UI |
 | Misc | External-link handling (opens in OS browser) | ✅ | openExternal.ts |
 | Misc | Dev-only keyboard shortcuts | ✅ | Cmd+F for search, Cmd+Shift+A dev fallback |

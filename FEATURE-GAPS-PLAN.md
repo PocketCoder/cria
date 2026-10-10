@@ -4,6 +4,12 @@ Compared against Vikunja `main` (e7d7f17, 6 Oct 2026) on 9 Oct 2026. Specs are
 deliberately loose: enough to start, not to finish. Status per feature lives in
 [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md); update it when you ship one.
 
+**Shipped so far (on `dev`, unreleased):** 3 Duplicate project, 4 Project
+backgrounds, sessions from 6, and from 10 the project info page, defer task,
+project drag-reorder (desktop) and view filter and bucket editing. Language and
+timezone, the MCP tab, and the Windows, Linux and notarisation items are not
+started or deliberately skipped.
+
 Ground truth for behaviour is the Go handler in a Vikunja clone, not
 `schema.ts` (see the settings-POST gotcha in `AGENTS.md`). Endpoint names below
 come from `pkg/routes/routes.go` (v1) and `pkg/routes/api/v2/` (v2).
@@ -30,14 +36,14 @@ come from `pkg/routes/routes.go` (v1) and `pkg/routes/api/v2/` (v2).
 |---|---|---|---|
 | 1 | Time tracking | L | Largest user-facing gap, new synced entity |
 | 2 | Live sync (WebSocket) | M | Removes the 60s lag; unlocks push-style notifications |
-| 3 | Duplicate project | S | One endpoint, one menu item |
-| 4 | Project backgrounds | M | Visible polish; two sources |
+| 3 | Duplicate project ✅ | S | One endpoint, one menu item |
+| 4 | Project backgrounds ✅ | M | Visible polish; two sources |
 | 5 | Webhooks (project + user) | M | Online-only CRUD |
-| 6 | Sessions, bots, atom feeds | S each | Online-only settings tabs |
+| 6 | Sessions ✅, bots, atom feeds | S each | Online-only settings tabs; sessions shipped |
 | 7 | Import / migration | M | Mostly server-side; thin UI |
 | 8 | Sign-in: register, reset, OIDC, OAuth | L | Platform-specific auth flows |
 | 9 | Admin area | M | Only useful to instance admins |
-| 10 | Small gaps | S each | Fill in between |
+| 10 | Small gaps (mostly ✅) | S each | Fill in between; see its table |
 
 ---
 
@@ -119,6 +125,10 @@ views and sharing by reading the handler.
 **Implementation.** `src/api/projects.ts` call, menu item in `SidebarRows`,
 disabled when offline. No outbox.
 
+**Shipped.** The server copies tasks, views, labels, comments, attachments,
+relations, backgrounds and sharing. The copy keeps the original's parent; after
+a project pull it opens.
+
 ## 4. Project backgrounds (shipped)
 
 **API.** `GET/DELETE /projects/{id}/background`,
@@ -134,6 +144,14 @@ background in the project header; keep it subtle in the Ledger design.
    blob store (`tauri/blobStore.ts`), key by project id and `updated`.
 2. Upload through the file picker (desktop) or photo picker (iOS).
 3. `ProjectSettingsModal` gets a Background section. Online-only.
+
+**Shipped.** `ProjectBackgroundModal` (upload, Unsplash search, remove), opened
+from the sidebar menu. Unsplash thumbnails load through the server's
+`/backgrounds/unsplash/images/{id}/thumb` proxy because the CSP blocks remote
+images. The image shows faintly in the desktop and iPhone headers and is cached
+in the blob store under `project-bg-<serverId>`; the orphan sweep keeps it while
+the project exists, and sign-out clears it. Not done: the iOS photo picker is
+the system file input, nothing extra.
 
 ## 5. Webhooks (project and user)
 
@@ -153,8 +171,11 @@ blank value clears them (full-object replace risk).
 
 ## 6. Sessions, bots, atom feeds
 
-- **Sessions.** `GET /sessions`, `DELETE /sessions/{id}`. List devices, revoke
-  one, highlight the current. Fits the Security tab.
+- **Sessions (shipped).** `GET /user/sessions`, `DELETE /user/sessions/{id}`
+  (the route is under `/user`, not the bare path first assumed). Lists devices
+  newest first, marks the current one from the JWT `sid`, confirms before
+  revoking, hidden on servers without the route. `SessionsSection` in the
+  Security tab.
 - **Bots.** `GET/PUT /bots`, `GET/POST/DELETE /bots/{id}`. List and create bot
   users; bots then authenticate with API tokens. New settings tab; hide on
   servers without the route.
@@ -205,13 +226,20 @@ v1 servers. Low priority for a personal client.
 
 ## 10. Small gaps
 
-| Gap | Note |
-|---|---|
-| Project info page | Read-only description and metadata |
-| Defer task | Push due date by a preset interval; reuse the date helpers |
-| Drag-reorder projects in sidebar | `position` field on projects; reuse `useOptimisticOrder` |
-| View filter editing and bucket config | Extend `ViewManagerModal` |
-| Language and timezone | Wire i18n (#78) and display timezone (#76), or remove the controls |
-| MCP settings tab | Instance-dependent; read `Mcp.vue` before deciding |
-| Windows and Linux builds | Needs a CI matrix and per-OS capabilities; macOS-only today |
-| macOS notarisation | `1.0.0` gate |
+| Gap | Status | Note |
+|---|---|---|
+| Project info page | ✅ | `ProjectInfoModal`: sidebar menu, desktop header button, iPhone view menu |
+| Defer task | ✅ | `lib/defer.ts`: in 1 day, 3 days, 1 week count from the later of the due date and today; next Monday. In the due-date popover, iOS action sheet and selection bar. Reminders are not shifted |
+| Drag-reorder projects in sidebar | ✅ desktop | Already existed; now scoped to siblings of one parent. No touch drag, so iPad is not covered |
+| View filter editing and bucket config | ✅ / 🟡 | Per-view settings panel in `ViewManagerModal`. Filter-mode boards render read-only columns from local data; dragging cards between them and server-side bucket pulls are not done |
+| Language and timezone | not started | Wire i18n (#78) and display timezone (#76), or remove the controls. Timezone alone is the cheap half |
+| MCP settings tab | skipped | Instance-dependent; read `Mcp.vue` before deciding |
+| Windows and Linux builds | skipped | Needs a CI matrix and per-OS capabilities; macOS-only today |
+| macOS notarisation | skipped | `1.0.0` gate |
+
+### Follow-ups from the shipped work
+
+- Touch drag-reorder for projects (iPad sidebar).
+- Filter-mode boards: refresh bucket data on pull after switching back to
+  manual, and decide whether to support card moves.
+- Bots and Atom feed tabs (rest of item 6).
