@@ -257,7 +257,7 @@ Everything here is client-side and writes ordinary Vikunja tasks.
 
 | Feature | Notes |
 |---|---|
-| On-device AI: Ramble | Free text becomes several tasks (`features/ramble`, `tauri/ai.ts`) |
+| On-device AI: Ramble | Dictation becomes several tasks, organised on-device (`features/ramble`, `tauri/ai.ts`) |
 | On-device AI: Break down | Suggests subtasks for a task |
 | On-device AI: Describe filter | Words become a filter query |
 | Photo capture / OCR | Apple Vision, Tesseract.js fallback (`features/shoppingPhoto`) |
