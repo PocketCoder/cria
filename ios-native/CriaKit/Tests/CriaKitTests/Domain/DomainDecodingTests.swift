@@ -144,7 +144,9 @@ final class DomainDecodingTests: XCTestCase {
         XCTAssertEqual(bare.resolvedWeekStart, 1)
 
         let full = try decode(UserResponse.self, """
-        {"id": 1, "username": "jake", "settings": {"default_project_id": 7, "language": "de", "timezone": "Europe/Berlin", "week_start": 0}}
+        {"id": 1, "username": "jake", "settings": {
+          "default_project_id": 7, "language": "de", "timezone": "Europe/Berlin", "week_start": 0
+        }}
         """)
         XCTAssertEqual(full.settings?.defaultProjectId, 7)
         XCTAssertEqual(full.resolvedLanguage, "de")
