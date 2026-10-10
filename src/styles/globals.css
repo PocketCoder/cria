@@ -599,6 +599,15 @@ html[data-vt='theme']::view-transition-new(root) {
   to { grid-template-rows: 1fr; opacity: 1; }
 }
 
+/* Inline reveals (fields that appear under a row): fade and settle in. */
+.reveal-in {
+  animation: reveal-in 200ms var(--spring-snappy);
+}
+@keyframes reveal-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* Honour reduce-motion: every animation becomes an instant change, and the
    purely decorative completion burst (ring + sparks) doesn't render at all. */
 @media (prefers-reduced-motion: reduce) {

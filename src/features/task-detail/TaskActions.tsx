@@ -185,7 +185,7 @@ export function InlineProgress({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex items-center gap-2">
+        <div className="reveal-in mx-3 mb-1 flex items-center gap-2">
           <input
             aria-label="Percent done"
             type="range"
@@ -243,7 +243,7 @@ export function InlineColor({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1">
+        <div className="reveal-in mx-3 mb-1">
           <div className="mb-1.5 flex flex-wrap gap-1">
             {COLOR_PRESETS.map((hex) => (
               <button
@@ -345,7 +345,7 @@ export function InlineLabels({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+        <div className="reveal-in mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
           <input
             aria-label="Search or create label"
             type="text"
@@ -503,7 +503,7 @@ export function InlineMove({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+        <div className="reveal-in mx-3 mb-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
           {projects.map((p) => (
             <button
               key={p.localId}
@@ -557,7 +557,7 @@ export function InlineAssignees({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex flex-col gap-1">
+        <div className="reveal-in mx-3 mb-1 flex flex-col gap-1">
           {assignees.map((a) => (
             <div
               key={a.userServerId}

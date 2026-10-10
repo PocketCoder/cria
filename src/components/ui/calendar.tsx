@@ -1,6 +1,7 @@
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { addDays, nextMonday, startOfDay } from 'date-fns';
 import { cn } from '@/lib/cn';
 
 interface CalendarProps {
@@ -10,6 +11,8 @@ interface CalendarProps {
   onClear?: () => void;
   /** Minimum selectable date (exclusive of earlier). */
   fromDate?: Date;
+  /** Today / Tomorrow / Next week quick picks above the grid (default on). */
+  shortcuts?: boolean;
 }
 
 /**
@@ -26,9 +29,30 @@ export function Calendar({
   onSelect,
   onClear,
   fromDate,
+  shortcuts = true,
 }: CalendarProps) {
+  const today = startOfDay(new Date());
+  const quick = [
+    { label: 'Today', date: today },
+    { label: 'Tomorrow', date: addDays(today, 1) },
+    { label: 'Next week', date: nextMonday(today) },
+  ];
   return (
     <div className="text-[var(--color-foreground)]">
+      {shortcuts && onSelect ? (
+        <div className="mb-1 flex gap-1.5 px-1 pt-1">
+          {quick.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => onSelect(q.date)}
+              className="flex-1 rounded-full border border-[var(--color-border)] px-2 py-1.5 text-[12.5px] transition-colors hover:bg-[var(--color-muted)] max-md:min-h-11 cursor-pointer"
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <DayPicker
         mode="single"
         selected={selected}

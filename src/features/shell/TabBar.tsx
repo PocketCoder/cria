@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { selectionTick } from '@/utils/haptics';
 import { Calendar, CalendarDays, LayoutGrid, Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { nativeGlass } from '@/tauri/glass';
@@ -94,7 +95,10 @@ export function TabBar() {
               key={tab.key}
               type="button"
               onClick={() => {
-                if (tab.view) setActiveView(tab.view);
+                if (tab.view) {
+                  void selectionTick();
+                  setActiveView(tab.view);
+                }
               }}
               className={cn(
                 'tab-item relative flex flex-1 flex-col items-center gap-0.5 rounded-[20px] py-1.5',

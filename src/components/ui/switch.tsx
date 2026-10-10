@@ -1,11 +1,12 @@
 import { forwardRef } from 'react';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import { cn } from '@/lib/cn';
+import { selectionTick } from '@/utils/haptics';
 
 export const Switch = forwardRef<
   React.ElementRef<typeof SwitchPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>
->(({ className, ...props }, ref) => (
+>(({ className, onCheckedChange, ...props }, ref) => (
   <SwitchPrimitive.Root
     ref={ref}
     className={cn(
@@ -15,6 +16,10 @@ export const Switch = forwardRef<
       'data-[state=checked]:bg-[var(--color-primary)] data-[state=unchecked]:bg-[var(--color-muted-foreground)]',
       className,
     )}
+    onCheckedChange={(checked) => {
+      void selectionTick();
+      onCheckedChange?.(checked);
+    }}
     {...props}
   >
     <SwitchPrimitive.Thumb
