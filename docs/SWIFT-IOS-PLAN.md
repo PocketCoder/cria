@@ -6,12 +6,12 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 
 - One section (`S-nn`) per agent session. Each is sized for roughly 1 to 3 hours.
 - Branch: `feature/swift-ios` off `dev`. Commit per section. Do not touch the Tauri app except where a section says so.
-- Every section ends with its **Done when** check. Do not start the next section until it passes.
+- Every section ends with its **Done when** check. Do not start the next phase until macOS CI is green on the branch head.
 - Port behaviour from the TypeScript source and its tests in `tests/unit/`. The TS code is the spec; port the tests first or alongside.
 - Re-read the relevant AGENTS.md gotcha before each sync or data section. They apply unchanged.
 - Update the status table at the bottom as sections complete.
 - **Models:** every section is built by Haiku 5.5 (native Claude, counts toward the Team limits). No Opus in routines: the user runs Opus reviews manually, weekly when remembered. If Haiku fails a section twice, mark it `blocked` for that review.
-- **Cadence:** nightly, 1 to 2 sections per night.
+- **Cadence:** nightly, one phase per run. Push, let CI run, then fix any errors and start the next phase on the following run.
 
 ## Ground rules (carry across all sections)
 
@@ -401,9 +401,12 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 
 One-time setup (user): attach `pocketcoder/cria` as the routine's repository in the Routines UI, and check the repo is reachable on the first run.
 
+Work unit: one **phase** per run (a `Phase N` heading, all its `S-nn` sections, in order). A run never starts a second phase.
+
 Each night (the routine session is Haiku 5.5 and does the work itself):
-1. Handle resume work first (WIP commit, red CI, `needs-fix`), then the next not-started section(s), in order, whose dependencies are met. Skip `blocked`. Maximum two, one at a time.
-2. Port tests first or alongside. Commit small and atomic, push to `feature/swift-ios`, and read macOS CI once (no polling loops).
-3. Red CI: one fix attempt, then mark `blocked` with the reason and move on. Never weaken or skip tests.
+1. Check macOS CI on the branch head once (no polling loops). Red: fix the errors (one fix attempt), commit, push, then continue in the same run. Still red after a fix made on an earlier run: mark the phase `blocked` with the failing check and reason, push, and end. Do not start a new phase on a red head. Never weaken or skip tests.
+2. Take the next phase in the status table that is not started or `in progress`, not `blocked`, with dependencies met. Build every section in it, following each **Done when** check. Port tests first or alongside. Commit small and atomic per section, and mark each section done in the status table.
+3. Push to `feature/swift-ios` and end the run without waiting for CI. The next run reads the result and fixes any errors before taking the next phase.
+4. If the phase cannot finish in this run, push what is done, mark the phase `in progress` with the next section to do, and end. Mark a single section `blocked` only with the reason, then move on within the phase.
 
 Weekly (user, manual): run an Opus review (Routines UI, "Run now" on the weekly review routine, or ask Claude). It writes a dated `Review` section, fixes small defects, and unblocks `blocked` sections.
