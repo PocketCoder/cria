@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/EmptyState';
 import appIcon from '@/assets/app-icon.png';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useToday } from '@/hooks/useToday';
+import { suggestTasks } from '@/lib/summaries';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -24,6 +25,7 @@ import { impactDeleted } from '@/utils/haptics';
 import {
   useTodayTasks,
   useUpcomingTasks,
+  useUndatedTasks,
   useLabelTasks,
   useInboxTasks,
   useFavoriteTasks,
@@ -506,7 +508,14 @@ function PickerSheet({
  */
 function NothingDue({ doneCount }: { doneCount: number }) {
   const { data: groups = [] } = useUpcomingTasks();
+  const { data: undated = [] } = useUndatedTasks();
   const [picking, setPicking] = useState(false);
+
+  // "You could work on": undated tasks first, then far-off due dates.
+  const suggestions = useMemo(
+    () => suggestTasks(undated, groups.flatMap((g) => g.tasks), new Date()),
+    [undated, groups],
+  );
 
   const todayKey = format(new Date(), 'yyyy-MM-dd');
   const horizonKey = format(addDays(new Date(), 7), 'yyyy-MM-dd');
@@ -554,6 +563,39 @@ function NothingDue({ doneCount }: { doneCount: number }) {
           onConfirm={pullForward}
           onClose={() => setPicking(false)}
         />
+      ) : null}
+      {suggestions.length > 0 ? (
+        <div className="mt-5 w-full text-left">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            You could work on
+          </p>
+          <ul className="space-y-1.5">
+            {suggestions.map((t) => (
+              <li key={t.localId}>
+                <button
+                  type="button"
+                  onClick={() => pullForward([t.localId])}
+                  title="Add to today"
+                  className="flex w-full items-center gap-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-left opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-dashed border-[var(--color-muted-foreground)]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px]">{t.title}</span>
+                    <span className="block truncate text-xs text-[var(--color-muted-foreground)]">
+                      {t.projectTitle}
+                      {t.dueDate
+                        ? ` · due ${format(toCalendarDate(t.dueDate), 'd MMM')}`
+                        : ' · no due date'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">
+                    Add to today
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   );
