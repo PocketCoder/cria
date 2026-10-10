@@ -29,6 +29,8 @@ vi.mock('@/features/ramble/createFromQuickAdd', () => ({ createFromQuickAdd }));
 
 import { useRamble } from '@/features/ramble/useRamble';
 import { useUi } from '@/stores/ui';
+import { startSpeech } from '@/tauri/speech';
+import { StrictMode } from 'react';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -136,6 +138,47 @@ describe('useRamble (voice only)', () => {
     const second = await open();
     expect(second.result.current.drafts.map((d) => d.line)).toEqual(['Call mum']);
     expect(useUi.getState().rambleLines).toBeNull();
+  });
+
+  it('shows kept rows once under StrictMode', async () => {
+    useUi.setState({ rambleLines: ['Call mum || ring after six'] });
+    const { result } = renderHook(() => useRamble(() => {}), { wrapper: StrictMode });
+    await act(async () => {});
+    expect(result.current.drafts.map((d) => [d.line, d.notes])).toEqual([['Call mum', 'ring after six']]);
+  });
+
+  it('stops the mic when paused while it was still starting', async () => {
+    const started = deferred<{ stop: () => void }>();
+    const stop = vi.fn();
+    vi.mocked(startSpeech).mockImplementationOnce(async (h) => {
+      speech.handlers = h;
+      return started.promise;
+    });
+    const { result } = renderHook(() => useRamble(() => {}));
+    await act(async () => {
+      void result.current.toggleMic();
+    });
+    await act(async () => started.resolve({ stop }));
+    expect(stop).toHaveBeenCalled();
+    expect(result.current.listening).toBe(false);
+  });
+
+  it('will not add all while a single add is in flight', async () => {
+    generate.mockResolvedValue('Call mum\nBuy milk');
+    const one = deferred<void>();
+    createFromQuickAdd.mockReturnValueOnce(one.promise).mockResolvedValue(undefined);
+    const { result } = await open();
+    await say('x');
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.addOne(result.current.drafts[0]!.id);
+    });
+    await act(() => result.current.addAll());
+    expect(createFromQuickAdd).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      one.resolve();
+      await pending;
+    });
   });
 
   describe('saving', () => {

@@ -182,7 +182,6 @@ export function RambleReview({
         {(listening || settling) && (
           <li
             className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-card)] px-3 py-3"
-            aria-live="polite"
           >
             <span className="h-5 w-5 shrink-0 rounded-full border-2 border-[var(--color-border)]" />
             {interim ? (
@@ -216,7 +215,7 @@ export function RambleReview({
         <Waveform active={listening && !saving} />
         <button
           type="button"
-          disabled={saving || settling || chosenCount === 0 || !projectId}
+          disabled={saving || settling || busyIds.size > 0 || chosenCount === 0 || !projectId}
           onClick={onAddAll}
           aria-label={`Add all ${chosenCount} tasks`}
           className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"

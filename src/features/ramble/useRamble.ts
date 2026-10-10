@@ -77,11 +77,15 @@ export function useRamble(onClose: () => void) {
   }, [projects, activeView, projectId]);
 
   // Rows organised while the sheet was closed: shown (never auto-added) on reopen.
+  // Read and clear the store synchronously: StrictMode re-runs this effect with
+  // the same `pendingLines`, which would otherwise add the rows twice.
   useEffect(() => {
-    if (!pendingLines) return;
-    setDrafts((prev) => [...prev, ...draftsFromLines(pendingLines, nextId.current, mode)]);
-    nextId.current += pendingLines.length;
+    const lines = useUi.getState().rambleLines;
+    if (!lines) return;
     setPendingLines(null);
+    const first = nextId.current;
+    nextId.current += lines.length;
+    setDrafts((prev) => [...prev, ...draftsFromLines(lines, first, mode)]);
   }, [pendingLines, setPendingLines, mode]);
 
   const appendLines = (lines: string[]) => {
@@ -137,13 +141,20 @@ export function useRamble(onClose: () => void) {
   };
 
   const starting = useRef(false);
+  // Pause tapped while the mic was still starting: stop it as soon as it is up.
+  const stopRequested = useRef(false);
   const toggleMic = async () => {
     if (speech.current) {
       speech.current.stop();
       return;
     }
-    if (starting.current || phase === 'saving') return;
+    if (starting.current) {
+      stopRequested.current = true;
+      return;
+    }
+    if (phase === 'saving') return;
     starting.current = true;
+    stopRequested.current = false;
     setError(null);
     try {
       const session = await startSpeech({
@@ -163,7 +174,7 @@ export function useRamble(onClose: () => void) {
           if (err) setError(speechErrorMessage(err));
         },
       });
-      if (!alive.current) {
+      if (!alive.current || stopRequested.current) {
         session.stop();
         return;
       }
@@ -184,6 +195,7 @@ export function useRamble(onClose: () => void) {
   }, []);
 
   const chosen = chosenDrafts(drafts, mode);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
 
   // Closing is inert while saving: the save loop can't be cancelled and its
   // completion would close (or clear) a sheet the user has since reopened.
@@ -193,7 +205,8 @@ export function useRamble(onClose: () => void) {
 
   const addAll = async () => {
     // Not while speech is still turning into rows: those tasks haven't been seen yet.
-    if (chosen.length === 0 || !projectId || organising || interim) return;
+    // Nor while a row's own add is in flight: it would be created twice.
+    if (chosen.length === 0 || !projectId || organising || interim || busyIds.size > 0) return;
     speech.current?.stop();
     setPhase('saving');
     const savedIds = new Set<number>();
@@ -232,7 +245,6 @@ export function useRamble(onClose: () => void) {
   const acceptAll = () => setDrafts((prev) => acceptAllSuggestions(prev, suggestionCtx));
   const deleteDraft = (id: number) => setDrafts((prev) => removeDraft(prev, id));
 
-  const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
   const addOne = async (id: number) => {
     const d = drafts.find((x) => x.id === id);
     if (!d || !projectId || !hasTitle(d.line, mode) || busyIds.has(id) || phase === 'saving') return;
