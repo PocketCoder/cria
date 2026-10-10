@@ -132,8 +132,8 @@ Buy milk`;
 Each line is a short imperative task title, optionally followed by these tokens:
 - A due date in plain words, as the person said it (tomorrow, tomorrow 5pm, next friday, in 3 days, this weekend). Keep every date the person mentions. Only for "end of the month/week" style deadlines, write the month and day instead (${endOfMonth}).
 - A repeat in plain words (every week, daily, every monday).
-- ${p.project}Project to file it in a project. Only use these projects: ${nameList(ctx.projects)}. Put quotes around names with spaces or any character other than letters, digits, - and _, like ${p.project}"Home Admin" or ${p.project}"Mum's". Leave it out if none fits.
-- ${p.label}label to tag it. Existing labels: ${nameList(ctx.labels)}. Only add a label if it clearly fits.
+- ${p.project}Project to file it in a project. Only use these projects: ${nameList(ctx.projects)}. Put quotes around names with spaces or any character other than letters, digits, - and _, like ${p.project}"Home Admin" or ${p.project}"Mum's". Choose by subject, not just exact words: file a task under the project whose name covers what it is about (a project called Flat or House takes anything about the home, landlord, rent, repairs or cleaning). Leave it out if none fits.
+- ${p.label}label to tag it. Existing labels: ${nameList(ctx.labels)}. Add every label whose name matches the task's subject (a label called house suits chores and repairs at home). Leave labels out if none fits.
 - ${p.priority}3 only if the person says it is important, ${p.priority}4 only if they say it is urgent. Most tasks have no priority.
 ${outro}
 
