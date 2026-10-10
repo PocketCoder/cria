@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import XCTest
 @testable import CriaKit
 
