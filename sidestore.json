@@ -1,0 +1,25 @@
+{
+  "name": "Cria Nightly",
+  "identifier": "io.cria.app.nightly.source",
+  "apps": [
+    {
+      "name": "Cria (Nightly)",
+      "bundleIdentifier": "io.cria.app.nightly",
+      "developerName": "Cria",
+      "subtitle": "Vikunja client (unstable dev builds)",
+      "localizedDescription": "Automated build of the dev branch. Unstable.",
+      "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
+      "versions": [
+        {
+          "version": "0.14.1-nightly.46",
+          "buildVersion": "0.14.1-nightly.46",
+          "date": "2026-10-10T10:27:41Z",
+          "size": 6136172,
+          "downloadURL": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-unsigned.ipa",
+          "localizedDescription": "dev @ 8094f51"
+        }
+      ]
+    }
+  ],
+  "news": []
+}
