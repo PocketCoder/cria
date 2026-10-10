@@ -218,7 +218,7 @@ jobs:
             }' > app.json
           # Merge into the shared source: keep the other channel's app entry.
           git fetch --depth 1 origin gh-pages 2>/dev/null && git show origin/gh-pages:sidestore.json > existing.json 2>/dev/null || echo '{}' > existing.json
-          jq --slurpfile old existing.json --argjson app "$(cat app.json)" '
+          jq -n --slurpfile old existing.json --argjson app "$(cat app.json)" '
             {name: "Cria", identifier: "io.cria.source", news: [],
              apps: ((($old[0].apps // []) | map(select(.bundleIdentifier != $app.bundleIdentifier))) + [$app] | sort_by(.bundleIdentifier))}
           ' > gh-pages-out/sidestore.json
