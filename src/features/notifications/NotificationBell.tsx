@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check } from 'lucide-react';
 import {
@@ -87,10 +87,30 @@ export function NotificationBell() {
     queryKey: ['notifications'],
     queryFn: () => listNotifications(),
     enabled: isAuthed && online && !isLinkShare,
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
+    // TanStack v5 only reacts to visibilitychange, which misses desktop app
+    // switching, so focus and resume are wired by hand just below.
     refetchOnWindowFocus: false,
     retry: false,
   });
+
+  // Catch up the moment the window gains focus or the app comes back to the
+  // foreground, instead of waiting for the next poll.
+  const canFetch = isAuthed && online && !isLinkShare;
+  useEffect(() => {
+    if (!canFetch) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        void qc.invalidateQueries({ queryKey: ['notifications'] });
+      }
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [canFetch, qc]);
 
   const unread = notifications.filter((n) => !n.read).length;
 
