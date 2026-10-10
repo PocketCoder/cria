@@ -1,4 +1,5 @@
 import { flushSync } from 'react-dom';
+import { isMobilePlatform } from '@/lib/platform';
 
 /**
  * Which animation the CSS in globals.css plays (via `html[data-vt=…]`):
@@ -31,6 +32,9 @@ export function canAnimate(): boolean {
   return (
     typeof document !== 'undefined' &&
     typeof document.startViewTransition === 'function' &&
+    // WKWebView drops position:fixed layers (the tab bar) after a view
+    // transition until the next scroll repaints them, so skip on iOS.
+    !isMobilePlatform() &&
     // The global reduce-motion rule in globals.css doesn't reach the
     // ::view-transition-* pseudo-elements, so honour it here.
     !prefersReducedMotion()
