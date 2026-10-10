@@ -1,3 +1,4 @@
+import { useSheetDismiss } from '@/lib/useSheetDismiss';
 import { useState } from 'react';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
@@ -97,6 +98,7 @@ export function DisplaySheet() {
 function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
   const isMobile = useIsMobile();
   const close = useDisplay((s) => s.closeSheet);
+  const { panelRef, requestClose } = useSheetDismiss(close, isMobile);
   const setConfig = useDisplay((s) => s.setConfig);
   const stored = useDisplay((s) => s.configs[viewKey]);
   const config = stored ?? defaultConfigFor(viewKey);
@@ -149,8 +151,8 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
     return (
       <ModalDialog label="Display options" onClose={close}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[92dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
+          <BackdropDismiss onDismiss={requestClose} className="sheet-backdrop" />
+          <div ref={panelRef} className="safe-bottom relative z-10 flex max-h-[92dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
             <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">{body}</div>

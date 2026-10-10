@@ -1,3 +1,4 @@
+import { useSheetDismiss } from '@/lib/useSheetDismiss';
 import { useState } from 'react';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
@@ -40,6 +41,7 @@ export function TaskActionSheet() {
 function Inner({ task }: { task: Task }) {
   const isMobile = useIsMobile();
   const close = useDisplay((s) => s.closeActions);
+  const { panelRef, requestClose } = useSheetDismiss(close, isMobile);
   const startSelecting = useDisplay((s) => s.startSelecting);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
   const { data: projects = [] } = useSelectableProjects();
@@ -154,8 +156,8 @@ function Inner({ task }: { task: Task }) {
     return (
       <ModalDialog label="Task actions" onClose={close}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
+          <BackdropDismiss onDismiss={requestClose} className="sheet-backdrop" />
+          <div ref={panelRef} className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
             <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 overflow-y-auto">{body}</div>

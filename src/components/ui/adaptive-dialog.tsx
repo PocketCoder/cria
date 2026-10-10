@@ -1,3 +1,4 @@
+import { useSheetDismiss } from '@/lib/useSheetDismiss';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { ModalDialog } from '@/components/ui/modal-dialog';
@@ -24,6 +25,7 @@ export function AdaptiveDialog({
   maxWidth?: string;
 }) {
   const isMobile = useIsMobile();
+  const { panelRef, requestClose } = useSheetDismiss(onClose, isMobile);
   const header = (
     <header className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2">
       <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold [&>*]:min-w-0">
@@ -31,7 +33,7 @@ export function AdaptiveDialog({
       </h2>
       <button
         type="button"
-        onClick={onClose}
+        onClick={isMobile ? requestClose : onClose}
         aria-label="Close"
         className={cn(
           'flex shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
@@ -47,8 +49,8 @@ export function AdaptiveDialog({
     return (
       <ModalDialog label={label} onClose={onClose}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
+          <BackdropDismiss onDismiss={requestClose} className="sheet-backdrop" />
+          <div ref={panelRef} className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
             <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
