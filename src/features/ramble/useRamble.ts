@@ -35,6 +35,11 @@ export function useRamble(onClose: () => void) {
   const setPendingLines = useUi((s) => s.setRambleLines);
   // The model writes, and every parse reads, the user's Quick Add Magic syntax.
   const mode = useSettings((s) => s.quickAddMagicMode);
+  // Latest values for the async mic flow, whose callbacks outlive the render
+  // that started dictation (projects may still be loading then).
+  const latest = useRef({ projects, labels, mode });
+  latest.current = { projects, labels, mode };
+  const suggestionCtx = { projects, labels, mode };
 
   const [phase, setPhase] = useState<Phase>('input');
   const [error, setError] = useState<string | null>(null);
@@ -81,12 +86,12 @@ export function useRamble(onClose: () => void) {
   // Lines organised while the sheet was closed: review them on reopen.
   useEffect(() => {
     if (!pendingLines || phase !== 'input') return;
-    setDrafts(draftsFromLines(pendingLines, nextId.current));
+    setDrafts(draftsFromLines(pendingLines, nextId.current, mode));
     nextId.current += pendingLines.length;
     setPendingLines(null);
     setError(null);
     setPhase('review');
-  }, [pendingLines, phase, setPendingLines]);
+  }, [pendingLines, phase, setPendingLines, mode]);
 
   const organise = async () => {
     // Only from the input step: not mid-organise, and not mid-save (the save
@@ -116,7 +121,7 @@ export function useRamble(onClose: () => void) {
         setPhase('input');
         return;
       }
-      setDrafts(draftsFromLines(lines, nextId.current));
+      setDrafts(draftsFromLines(lines, nextId.current, mode));
       nextId.current += lines.length;
       setPhase('review');
     } catch (err) {
@@ -135,7 +140,7 @@ export function useRamble(onClose: () => void) {
     }
     const first = nextId.current;
     nextId.current += lines.length;
-    setDrafts((prev) => [...prev, ...draftsFromLines(lines, first)]);
+    setDrafts((prev) => [...prev, ...draftsFromLines(lines, first, latest.current.mode)]);
   };
 
   const flush = async () => {
@@ -148,6 +153,7 @@ export function useRamble(onClose: () => void) {
         let lines = [chunk];
         if (aiOk.current) {
           try {
+            const { projects, labels, mode } = latest.current;
             lines = parseLines(
               await generate({
                 title: 'Organising your ramble',
@@ -272,8 +278,8 @@ export function useRamble(onClose: () => void) {
   const updateDraft = (id: number, patch: Partial<Draft>) =>
     setDrafts((prev) => patchDraft(prev, id, patch));
   const acceptOne = (id: number) =>
-    setDrafts((prev) => prev.map((d) => (d.id === id ? acceptSuggestion(d) : d)));
-  const acceptAll = () => setDrafts((prev) => acceptAllSuggestions(prev));
+    setDrafts((prev) => prev.map((d) => (d.id === id ? acceptSuggestion(d, suggestionCtx) : d)));
+  const acceptAll = () => setDrafts((prev) => acceptAllSuggestions(prev, suggestionCtx));
   const deleteDraft = (id: number) => setDrafts((prev) => removeDraft(prev, id));
   const addBlankDraft = () => {
     // Allocate the id here, not in the updater: updaters must stay pure.
@@ -306,6 +312,7 @@ export function useRamble(onClose: () => void) {
   return {
     acceptOne,
     acceptAll,
+    suggestionCtx,
     listening,
     interim,
     organising,

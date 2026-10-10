@@ -27,7 +27,15 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import type { Project } from '@/domain/project';
-import { findProjectByTitle, hasTitle, projectPreview, type Draft, type Phase } from './rambleLogic';
+import {
+  hasTitle,
+  hasUsableSuggestion,
+  projectPreview,
+  usableSuggestion,
+  type Draft,
+  type Phase,
+  type SuggestionContext,
+} from './rambleLogic';
 
 export function RambleHeader({
   reviewing,
@@ -202,9 +210,11 @@ export function RambleReview({
   onAddOne,
   onAccept,
   onAcceptAll,
+  suggestionCtx,
 }: {
   onAccept: (id: number) => void;
   onAcceptAll: () => void;
+  suggestionCtx: SuggestionContext;
   listening: boolean;
   interim: string;
   organising: boolean;
@@ -226,7 +236,7 @@ export function RambleReview({
 }) {
   const saving = phase === 'saving';
   const magicOff = useSettings((s) => s.quickAddMagicMode === 'disabled');
-  const suggestionCount = drafts.filter((d) => d.suggestion).length;
+  const suggestionCount = drafts.filter((d) => hasUsableSuggestion(d, suggestionCtx)).length;
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
@@ -267,6 +277,7 @@ export function RambleReview({
             onDelete={onDelete}
             onAdd={onAddOne}
             onAccept={onAccept}
+            suggestionCtx={suggestionCtx}
             busy={saving || busyIds.has(d.id)}
           />
         ))}
@@ -332,9 +343,11 @@ function DraftRow({
   onDelete,
   onAdd,
   onAccept,
+  suggestionCtx,
   busy,
 }: {
   onAccept: (id: number) => void;
+  suggestionCtx: SuggestionContext;
   draft: Draft;
   projects: Project[];
   fallbackProjectId: string;
@@ -370,7 +383,7 @@ function DraftRow({
           projects={projects}
           fallbackProjectId={fallbackProjectId}
         />
-        {d.suggestion && <SuggestionRow draft={d} projects={projects} onAccept={onAccept} />}
+        {d.suggestion && <SuggestionRow draft={d} ctx={suggestionCtx} busy={busy} onAccept={onAccept} />}
       </div>
       <button
         type="button"
@@ -397,18 +410,18 @@ function DraftRow({
 /** Model-suggested project and labels: shown, but only applied when accepted. */
 function SuggestionRow({
   draft: d,
-  projects,
+  ctx,
+  busy,
   onAccept,
 }: {
   draft: Draft;
-  projects: Project[];
+  ctx: SuggestionContext;
+  busy: boolean;
   onAccept: (id: number) => void;
 }) {
-  const mode = useSettings((s) => s.quickAddMagicMode);
-  const parsed = useMemo(() => parseQuickAdd(`x ${d.suggestion ?? ''}`, new Date(), mode), [d.suggestion, mode]);
-  const known = parsed.projectTitle ? findProjectByTitle(projects, parsed.projectTitle) : undefined;
-  const names = [...(known ? [known.title] : []), ...parsed.labelTitles];
-  // A project the user doesn't have would fall back to the default on save; don't offer it.
+  // Only existing projects/labels the line doesn't already set are offered.
+  const u = usableSuggestion(d, ctx);
+  const names = [...(u.project ? [u.project] : []), ...u.labels];
   if (names.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
@@ -424,7 +437,8 @@ function SuggestionRow({
       <button
         type="button"
         onClick={() => onAccept(d.id)}
-        className="rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-foreground)] hover:bg-[var(--color-border)]"
+        disabled={busy}
+        className="rounded-full disabled:opacity-50 bg-[var(--color-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-foreground)] hover:bg-[var(--color-border)]"
         aria-label={`Accept suggestion for ${d.line}`}
       >
         Accept

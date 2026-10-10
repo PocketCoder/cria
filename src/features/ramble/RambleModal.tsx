@@ -49,6 +49,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
           onAddAll={() => void r.addAll()}
           onAccept={r.acceptOne}
           onAcceptAll={r.acceptAll}
+          suggestionCtx={r.suggestionCtx}
           listening={r.listening}
           interim={r.interim}
           organising={r.organising}

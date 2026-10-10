@@ -1,6 +1,6 @@
 import type { Project } from '@/domain/project';
 import { parseQuickAdd } from '@/lib/quickAddParser';
-import type { QuickAddMagicMode } from '@/lib/quickAddPrefixes';
+import { QUICK_ADD_PREFIXES, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import type { ActiveView } from '@/stores/ui';
 
 export type Phase = 'input' | 'thinking' | 'review' | 'saving';
@@ -16,28 +16,87 @@ export interface Draft {
   suggestion?: string;
 }
 
-/** Split a model line "Title ~ +Flat *house" into the line and its suggestion. */
-export function splitSuggestion(raw: string): { line: string; suggestion?: string } {
+/**
+ * Split a model line "Title ~ +Flat *house" into the line and its suggestion.
+ * With Quick Add Magic off the model writes no tokens, so nothing is split.
+ */
+export function splitSuggestion(
+  raw: string,
+  mode: QuickAddMagicMode = 'vikunja',
+): { line: string; suggestion?: string } {
+  if (!QUICK_ADD_PREFIXES[mode]) return { line: raw.trim() };
   const m = /^(.*?)\s+~\s+(.+)$/.exec(raw);
   const line = (m ? m[1]! : raw).trim();
   const suggestion = m ? m[2]!.trim() : '';
   return suggestion ? { line, suggestion } : { line };
 }
 
-/** The draft with its suggestion applied to the line. */
-export function acceptSuggestion(d: Draft): Draft {
-  if (!d.suggestion) return d;
-  const { suggestion: _drop, ...rest } = d;
-  return { ...rest, line: `${d.line.trim()} ${d.suggestion}` };
+export interface SuggestionContext {
+  projects: readonly Pick<Project, 'title'>[];
+  labels: readonly { title: string }[];
+  mode: QuickAddMagicMode;
 }
 
-export function acceptAllSuggestions(drafts: readonly Draft[]): Draft[] {
-  return drafts.map(acceptSuggestion);
+/**
+ * The parts of a draft's suggestion worth offering: an existing project when
+ * the line names none, and existing labels the line doesn't already carry.
+ * Unknown names would fall back to the default project or create new labels.
+ */
+export function usableSuggestion(
+  d: Draft,
+  ctx: SuggestionContext,
+): { project?: string; labels: string[] } {
+  if (!d.suggestion || !QUICK_ADD_PREFIXES[ctx.mode]) return { labels: [] };
+  const now = new Date();
+  const s = parseQuickAdd(`x ${d.suggestion}`, now, ctx.mode);
+  const line = parseQuickAdd(`x ${d.line}`, now, ctx.mode);
+  const project =
+    s.projectTitle && !line.projectTitle ? findProjectByTitle(ctx.projects, s.projectTitle)?.title : undefined;
+  const have = new Set(line.labelTitles.map((l) => l.toLowerCase()));
+  const labels: string[] = [];
+  for (const t of s.labelTitles) {
+    const known = ctx.labels.find((l) => l.title.toLowerCase() === t.toLowerCase());
+    if (!known || have.has(known.title.toLowerCase())) continue;
+    have.add(known.title.toLowerCase());
+    labels.push(known.title);
+  }
+  return project ? { project, labels } : { labels };
+}
+
+export function hasUsableSuggestion(d: Draft, ctx: SuggestionContext): boolean {
+  const u = usableSuggestion(d, ctx);
+  return !!u.project || u.labels.length > 0;
+}
+
+function token(prefix: string, name: string): string {
+  return /^[A-Za-z0-9_-]+$/.test(name) ? `${prefix}${name}` : `${prefix}"${name}"`;
+}
+
+/** The draft with the usable part of its suggestion applied to the line. */
+export function acceptSuggestion(d: Draft, ctx: SuggestionContext): Draft {
+  if (d.suggestion === undefined) return d;
+  const { suggestion: _drop, ...rest } = d;
+  const p = QUICK_ADD_PREFIXES[ctx.mode];
+  const u = usableSuggestion(d, ctx);
+  if (!p) return rest;
+  const tokens = [
+    ...(u.project ? [token(p.project, u.project)] : []),
+    ...u.labels.map((l) => token(p.label, l)),
+  ];
+  return tokens.length ? { ...rest, line: `${d.line.trim()} ${tokens.join(' ')}` } : rest;
+}
+
+export function acceptAllSuggestions(drafts: readonly Draft[], ctx: SuggestionContext): Draft[] {
+  return drafts.map((d) => acceptSuggestion(d, ctx));
 }
 
 /** Drafts for freshly parsed lines, numbered from `firstId`. */
-export function draftsFromLines(lines: readonly string[], firstId: number): Draft[] {
-  return lines.map((raw, i) => ({ id: firstId + i, ...splitSuggestion(raw), include: true }));
+export function draftsFromLines(
+  lines: readonly string[],
+  firstId: number,
+  mode: QuickAddMagicMode = 'vikunja',
+): Draft[] {
+  return lines.map((raw, i) => ({ id: firstId + i, ...splitSuggestion(raw, mode), include: true }));
 }
 
 /**
