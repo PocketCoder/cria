@@ -14,8 +14,9 @@ import {
   chosenDrafts,
   createDrafts,
   defaultProjectId,
-  draftToRaw,
   draftsFromLines,
+  draftsFromRows,
+  toKeptRow,
   hasTitle,
   patchDraft,
   removeDraft,
@@ -29,8 +30,8 @@ export function useRamble(onClose: () => void) {
   const { data: projects = [] } = useSelectableProjects();
   const { data: labels = [] } = useLabels();
   const activeView = useUi((s) => s.activeView);
-  const pendingLines = useUi((s) => s.rambleLines);
-  const setPendingLines = useUi((s) => s.setRambleLines);
+  const pendingRows = useUi((s) => s.rambleRows);
+  const setPendingRows = useUi((s) => s.setRambleRows);
   // The model writes, and every parse reads, the user's Quick Add Magic syntax.
   const mode = useSettings((s) => s.quickAddMagicMode);
   // Latest values for the async mic flow, whose callbacks outlive the render
@@ -80,24 +81,25 @@ export function useRamble(onClose: () => void) {
   // Read and clear the store synchronously: StrictMode re-runs this effect with
   // the same `pendingLines`, which would otherwise add the rows twice.
   useEffect(() => {
-    const lines = useUi.getState().rambleLines;
-    if (!lines) return;
-    setPendingLines(null);
+    const rows = useUi.getState().rambleRows;
+    if (!rows) return;
+    setPendingRows(null);
     const first = nextId.current;
-    nextId.current += lines.length;
-    setDrafts((prev) => [...prev, ...draftsFromLines(lines, first, mode)]);
-  }, [pendingLines, setPendingLines, mode]);
+    nextId.current += rows.length;
+    setDrafts((prev) => [...prev, ...draftsFromRows(rows, first)]);
+  }, [pendingRows, setPendingRows]);
 
   const appendLines = (lines: string[]) => {
     if (lines.length === 0) return;
+    const first = nextId.current;
+    const fresh = draftsFromLines(lines, first, latest.current.mode);
     if (!alive.current) {
       // Closed mid-batch: keep the rows for the next open.
-      setPendingLines([...(useUi.getState().rambleLines ?? []), ...lines]);
+      setPendingRows([...(useUi.getState().rambleRows ?? []), ...fresh.map(toKeptRow)]);
       return;
     }
-    const first = nextId.current;
     nextId.current += lines.length;
-    setDrafts((prev) => [...prev, ...draftsFromLines(lines, first, latest.current.mode)]);
+    setDrafts((prev) => [...prev, ...fresh]);
   };
 
   const flush = async () => {
@@ -221,14 +223,14 @@ export function useRamble(onClose: () => void) {
         // Unmounted mid-save: the sheet is gone, and a reopened one is not ours to close.
         return;
       }
-      setPendingLines(null);
+      setPendingRows(null);
       onClose();
     } catch (err) {
       console.error('[ramble] task creation failed:', err);
       if (!alive.current) {
         // Keep the unsaved lines for the next open, so a retry skips the saved ones.
-        const left = withoutSaved(remaining, savedIds).map(draftToRaw);
-        if (left.length > 0 && useUi.getState().rambleLines === null) setPendingLines(left);
+        const left = withoutSaved(remaining, savedIds).map(toKeptRow);
+        if (left.length > 0 && useUi.getState().rambleRows === null) setPendingRows(left);
         return;
       }
       // Tasks already created must not come back on retry as duplicates.
@@ -237,6 +239,23 @@ export function useRamble(onClose: () => void) {
       setPhase('review');
     }
   };
+
+  // The add-all button: stop listening, wait for any speech still turning into
+  // rows (so nothing unseen is dropped or added), then save what is on screen.
+  const [addQueued, setAddQueued] = useState(false);
+  const addAllRef = useRef(addAll);
+  addAllRef.current = addAll;
+  const requestAddAll = () => {
+    if (addQueued || phase === 'saving') return;
+    if (speech.current) speech.current.stop();
+    else if (starting.current) stopRequested.current = true;
+    setAddQueued(true);
+  };
+  useEffect(() => {
+    if (!addQueued || listening || organising || interim || busyIds.size > 0) return;
+    setAddQueued(false);
+    void addAllRef.current();
+  }, [addQueued, listening, organising, interim, busyIds]);
 
   const updateDraft = (id: number, patch: Partial<Draft>) =>
     setDrafts((prev) => patchDraft(prev, id, patch));
@@ -284,7 +303,8 @@ export function useRamble(onClose: () => void) {
     projects,
     projectId,
     setProjectId,
-    addAll,
+    addAll: requestAddAll,
+    addQueued,
     updateDraft,
     deleteDraft,
   };

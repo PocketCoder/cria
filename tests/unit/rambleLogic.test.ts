@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   acceptAllSuggestions,
-  draftToRaw,
+  draftsFromRows,
+  toKeptRow,
   notesToHtml,
   splitNotes,
   acceptSuggestion,
@@ -174,7 +175,9 @@ describe('saving a batch of drafts', () => {
     expect(splitNotes('Book dentist')).toEqual({ text: 'Book dentist' });
     const [d] = draftsFromLines(['Email landlord ~ +Flat || About the boiler & the rent'], 0);
     expect(d).toMatchObject({ line: 'Email landlord', suggestion: '+Flat', notes: 'About the boiler & the rent' });
-    expect(draftToRaw(d!)).toBe('Email landlord ~ +Flat || About the boiler & the rent');
+    // Kept rows are stored as written, so typed " || " or " ~ " is never re-split.
+    const kept = toKeptRow({ ...d!, line: 'Read 3 || 5 pages ~ ok' });
+    expect(draftsFromRows([kept], 4)[0]).toMatchObject({ id: 4, line: 'Read 3 || 5 pages ~ ok', notes: 'About the boiler & the rent' });
     expect(notesToHtml('a <b> & c')).toBe('<p>a &lt;b&gt; &amp; c</p>');
   });
 });

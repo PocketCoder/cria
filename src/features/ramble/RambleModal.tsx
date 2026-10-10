@@ -34,7 +34,8 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
         error={r.error}
         onUpdate={r.updateDraft}
         onDelete={r.deleteDraft}
-        onAddAll={() => void r.addAll()}
+        onAddAll={r.addAll}
+        adding={r.addQueued}
         suggestionCtx={r.suggestionCtx}
         onAccept={r.acceptOne}
         onAcceptAll={r.acceptAll}

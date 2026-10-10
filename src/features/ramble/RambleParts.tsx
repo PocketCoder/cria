@@ -3,6 +3,7 @@ import {
   Mic,
   Pause,
   Check,
+  CheckCheck,
   Loader2,
   X,
   Trash2,
@@ -91,6 +92,7 @@ export function RambleReview({
   onUpdate,
   onDelete,
   onAddAll,
+  adding,
   listening,
   interim,
   organising,
@@ -104,6 +106,7 @@ export function RambleReview({
   onAccept: (id: number) => void;
   onAcceptAll: () => void;
   suggestionCtx: SuggestionContext;
+  adding: boolean;
   listening: boolean;
   interim: string;
   organising: boolean;
@@ -122,11 +125,13 @@ export function RambleReview({
   onAddAll: () => void;
 }) {
   const saving = phase === 'saving';
+  // Add-all pressed: waiting for speech to settle, or saving.
+  const busyAll = saving || adding;
   // Speech still being heard or turned into rows: adding now would leave out
   // tasks the user hasn't seen yet.
   const settling = organising || interim !== '';
   const suggestionCount = drafts.filter((d) => hasUsableSuggestion(d, suggestionCtx)).length;
-  const status = saving
+  const status = busyAll
     ? 'Adding…'
     : settling
       ? 'Working on it…'
@@ -206,27 +211,28 @@ export function RambleReview({
         <button
           type="button"
           onClick={onMic}
-          disabled={saving}
+          disabled={busyAll}
           aria-label={listening ? 'Pause listening' : 'Start listening'}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-muted)] text-[var(--color-foreground)] hover:opacity-90 disabled:opacity-50"
         >
           {listening ? <Pause className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
         </button>
-        <Waveform active={listening && !saving} />
         <button
           type="button"
-          disabled={saving || settling || busyIds.size > 0 || chosenCount === 0 || !projectId}
+          disabled={busyAll || chosenCount === 0 || !projectId}
           onClick={onAddAll}
           aria-label={`Add all ${chosenCount} tasks`}
+          title="Add all"
           className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
-          {chosenCount > 0 && !saving && (
+          {busyAll ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCheck className="h-5 w-5" />}
+          {chosenCount > 0 && !busyAll && (
             <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--color-foreground)] px-1 text-center text-[11px] font-semibold leading-5 text-[var(--color-background)]">
               {chosenCount}
             </span>
           )}
         </button>
+        <Waveform active={listening && !busyAll} />
       </div>
     </div>
   );

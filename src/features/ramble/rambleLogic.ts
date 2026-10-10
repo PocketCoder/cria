@@ -1,7 +1,7 @@
 import type { Project } from '@/domain/project';
 import { parseQuickAdd } from '@/lib/quickAddParser';
 import { QUICK_ADD_PREFIXES, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
-import type { ActiveView } from '@/stores/ui';
+import type { ActiveView, KeptRow } from '@/stores/ui';
 
 export type Phase = 'review' | 'saving';
 
@@ -26,9 +26,18 @@ export function splitNotes(raw: string): { text: string; notes?: string } {
   return notes ? { text: raw.slice(0, i), notes } : { text: raw.slice(0, i) };
 }
 
-/** A draft written back as a model line, so rows kept for a later open lose nothing. */
-export function draftToRaw(d: Draft): string {
-  return `${d.line}${d.suggestion ? ` ~ ${d.suggestion}` : ''}${d.notes ? ` || ${d.notes}` : ''}`;
+/** The part of a draft worth keeping for a later open (no id, no tick state). */
+export function toKeptRow(d: Draft): KeptRow {
+  return {
+    line: d.line,
+    ...(d.suggestion ? { suggestion: d.suggestion } : {}),
+    ...(d.notes ? { notes: d.notes } : {}),
+  };
+}
+
+/** Drafts for rows kept from an earlier open, numbered from `firstId`. */
+export function draftsFromRows(rows: readonly KeptRow[], firstId: number): Draft[] {
+  return rows.map((r, i) => ({ ...r, id: firstId + i, include: true }));
 }
 
 /** Plain notes as the HTML the task editor stores. */

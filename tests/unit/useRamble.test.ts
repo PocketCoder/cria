@@ -49,6 +49,14 @@ async function open(onClose: () => void = () => {}) {
   return view;
 }
 
+/** Press the add-all button and let the queued save start. */
+async function pressAddAll(result: { current: { addAll: () => void } }) {
+  await act(async () => {
+    result.current.addAll();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
 /** Say one finished phrase and let the batch flush. */
 async function say(text: string) {
   await act(async () => {
@@ -63,7 +71,7 @@ describe('useRamble (voice only)', () => {
     generate.mockReset();
     createFromQuickAdd.mockReset();
     speech.handlers = null;
-    useUi.setState({ rambleLines: null, activeView: null });
+    useUi.setState({ rambleRows: null, activeView: null });
   });
   afterEach(() => {
     cleanup();
@@ -91,18 +99,40 @@ describe('useRamble (voice only)', () => {
     expect(result.current.drafts.map((d) => d.line)).toEqual(['buy milk tomorrow']);
   });
 
-  it('will not add while speech is still being turned into rows', async () => {
+  it('waits for speech to become rows before adding, and adds them', async () => {
     const out = deferred<string>();
     generate.mockReturnValue(out.promise);
     createFromQuickAdd.mockResolvedValue(undefined);
     const { result } = await open();
     await say('call mum');
     expect(result.current.organising).toBe(true);
-    await act(() => result.current.addAll());
+    await pressAddAll(result);
     expect(createFromQuickAdd).not.toHaveBeenCalled();
-    await act(async () => out.resolve('Call mum'));
-    await act(() => result.current.addAll());
+    expect(result.current.addQueued).toBe(true);
+    await act(async () => {
+      out.resolve('Call mum');
+      await vi.advanceTimersByTimeAsync(0);
+    });
     expect(createFromQuickAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes a phrase that is still being heard when add-all is pressed', async () => {
+    generate.mockResolvedValue('Buy milk');
+    createFromQuickAdd.mockResolvedValue(undefined);
+    const { result } = await open();
+    await act(async () => speech.handlers!.onInterim('buy milk'));
+    expect(result.current.interim).toBe('buy milk');
+    await say('x');
+    await act(async () => speech.handlers!.onInterim('and call mum'));
+    await pressAddAll(result);
+    // The engine finalises the pending phrase as it stops.
+    await act(async () => {
+      speech.handlers!.onFinal('and call mum');
+      speech.handlers!.onEnd();
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(createFromQuickAdd).toHaveBeenCalled();
+    expect(createFromQuickAdd.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 
   it('adds rows one at a time and drops the added row', async () => {
@@ -121,7 +151,7 @@ describe('useRamble (voice only)', () => {
     createFromQuickAdd.mockResolvedValue(undefined);
     const { result } = await open();
     await say('x');
-    await act(() => result.current.addAll());
+    await pressAddAll(result);
     expect(createFromQuickAdd.mock.calls[0]![0]).toBe('Email landlord');
   });
 
@@ -133,18 +163,18 @@ describe('useRamble (voice only)', () => {
     first.unmount();
     await act(async () => out.resolve('Call mum'));
     expect(createFromQuickAdd).not.toHaveBeenCalled();
-    expect(useUi.getState().rambleLines).toEqual(['Call mum']);
+    expect(useUi.getState().rambleRows).toEqual([{ line: 'Call mum' }]);
 
     const second = await open();
     expect(second.result.current.drafts.map((d) => d.line)).toEqual(['Call mum']);
-    expect(useUi.getState().rambleLines).toBeNull();
+    expect(useUi.getState().rambleRows).toBeNull();
   });
 
   it('shows kept rows once under StrictMode', async () => {
-    useUi.setState({ rambleLines: ['Call mum || ring after six'] });
+    useUi.setState({ rambleRows: [{ line: 'Call mum || not notes', notes: 'ring after six' }] });
     const { result } = renderHook(() => useRamble(() => {}), { wrapper: StrictMode });
     await act(async () => {});
-    expect(result.current.drafts.map((d) => [d.line, d.notes])).toEqual([['Call mum', 'ring after six']]);
+    expect(result.current.drafts.map((d) => [d.line, d.notes])).toEqual([['Call mum || not notes', 'ring after six']]);
   });
 
   it('stops the mic when paused while it was still starting', async () => {
@@ -194,14 +224,13 @@ describe('useRamble (voice only)', () => {
       const save = deferred<void>();
       createFromQuickAdd.mockReturnValue(save.promise);
       const { result } = await withTwoRows(onClose);
-      let adding!: Promise<void>;
-      act(() => {
-        adding = result.current.addAll();
-      });
+      await pressAddAll(result);
       act(() => result.current.close());
       expect(onClose).not.toHaveBeenCalled();
-      save.resolve();
-      await act(() => adding);
+      await act(async () => {
+        save.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+      });
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
@@ -217,28 +246,28 @@ describe('useRamble (voice only)', () => {
       const save = deferred<void>();
       createFromQuickAdd.mockReturnValue(save.promise);
       const first = await withTwoRows(onClose);
-      let adding!: Promise<void>;
-      act(() => {
-        adding = first.result.current.addAll();
-      });
+      await pressAddAll(first.result);
       first.unmount();
-      save.resolve();
-      await adding;
+      await act(async () => {
+        save.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+      });
       expect(onClose).not.toHaveBeenCalled();
     });
 
     it('keeps only the unsaved rows for next open when a save fails after unmount', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      createFromQuickAdd.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('boom'));
+      const second = deferred<void>();
+      createFromQuickAdd.mockResolvedValueOnce(undefined).mockReturnValueOnce(second.promise);
       const first = await withTwoRows(() => {});
-      let adding!: Promise<void>;
-      act(() => {
-        adding = first.result.current.addAll();
-      });
+      await pressAddAll(first.result);
       first.unmount();
-      await adding;
+      await act(async () => {
+        second.reject(new Error('boom'));
+        await vi.advanceTimersByTimeAsync(0);
+      });
       errorSpy.mockRestore();
-      expect(useUi.getState().rambleLines).toEqual(['Buy milk']);
+      expect(useUi.getState().rambleRows).toEqual([{ line: 'Buy milk' }]);
     });
   });
 });

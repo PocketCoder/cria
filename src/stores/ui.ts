@@ -17,6 +17,13 @@ export type ActiveView =
   | { kind: 'inbox' }
   | { kind: 'browse' };
 
+/** A Ramble row kept for the next open, stored as written (never re-parsed from text). */
+export interface KeptRow {
+  line: string;
+  suggestion?: string;
+  notes?: string;
+}
+
 interface UiState {
   activeView: ActiveView | null;
   selectedTaskLocalId: string | null;
@@ -26,7 +33,7 @@ interface UiState {
   /** Transient: the Ramble (speak → many tasks) sheet is open. */
   rambleOpen: boolean;
   /** Transient: lines organised after the sheet was closed, for the next open to review. */
-  rambleLines: string[] | null;
+  rambleRows: KeptRow[] | null;
   setActiveView: (view: ActiveView | null) => void;
   /** Convenience for the common "open a project" path. */
   setSelectedProject: (id: string | null) => void;
@@ -34,7 +41,7 @@ interface UiState {
   toggleSidebar: () => void;
   setPhotoCaptureOpen: (open: boolean) => void;
   setRambleOpen: (open: boolean) => void;
-  setRambleLines: (lines: string[] | null) => void;
+  setRambleRows: (rows: KeptRow[] | null) => void;
 }
 
 /** Bumped by every `setSelectedTask`; lets a deferred view commit spot a newer selection. */
@@ -124,7 +131,7 @@ export const useUi = create<UiState>()(
       sidebarCollapsed: false,
       photoCaptureOpen: false,
       rambleOpen: false,
-      rambleLines: null,
+      rambleRows: null,
       setActiveView: (view) => {
         // The view commit can land a frame late (View Transition). Clear the
         // selection only if nothing selected a task in between, else
@@ -152,7 +159,7 @@ export const useUi = create<UiState>()(
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
       setRambleOpen: (open) => set({ rambleOpen: open }),
-      setRambleLines: (lines) => set({ rambleLines: lines }),
+      setRambleRows: (rows) => set({ rambleRows: rows }),
     }),
     {
       name: 'cria:ui/v2',
