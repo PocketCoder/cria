@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: 9 October 2026 (v0.14.1 + `dev`)
+Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e7d7f17)
 
 ## Legend
 | Icon | Meaning |
@@ -149,7 +149,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 |---|---|---|---|
 | Auth | API token + server URL login | ✅ | LoginScreen |
 | Auth | Sign-out | ✅ | Shell footer |
-| Auth | Token stored in localStorage | ✅ | auth/storage.ts |
+| Auth | Credentials stored in OS keychain | ✅ | `auth/storage.ts` + `secure.rs`; localStorage only when no keychain exists (browser dev, tests) |
 | Auth | Server health probe (`/info`) | ✅ | LoginScreen probes before auth |
 
 ### API Client
@@ -165,7 +165,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Native | SQLite with migrations (14 migrations) | ✅ | 001–014, forward-only |
+| Native | SQLite with migrations (19 migrations) | ✅ | 001–019, forward-only |
 | Native | Single instance (Tauri plugin) | ✅ | plugin-single-instance |
 | Native | macOS Dock badge (reminder count) | ✅ | In queries/badge.ts |
 | Native | Global shortcut (Cmd+Shift+A → quick add) | ✅ | tauri/globalShortcut.ts |
@@ -200,7 +200,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 | UI | Cmd+K command palette | ✅ | CommandPalette (views, projects, labels, tasks, actions) |
 | UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ✅ | Fixed Vikunja set in `src/lib/shortcuts.ts` (j/k, Enter, task-detail keys, g-sequences) |
 | UI | Rebindable shortcuts in settings | ❌ | Removed from scope |
-| UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
+| UI | Settings (General, Account, Appearance, Notifications, Security, Tokens, Teams, Data, Shortcuts, Photo capture, Advanced) | ✅ | SettingsModal, 11 tabs; language/timezone remain 🟡 (#76 / #78) |
 | UI | Inbox view (no-project tasks) | ✅ | Shipped |
 | UI | Kanban view | ✅ | M9, drag-reorder, WIP bucket limit |
 | UI | Table view (dense, sortable) | ✅ | M9, sortable columns, drag-reorder |
@@ -251,25 +251,22 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`)
 | Misc | Server-side Vikunja version in footer | ✅ | Shown in footer via useServerVersion |
 | Misc | In-app notification inbox | ✅ | `GET /notifications` wired; bell + unread badge |
 
-## Easiest next features (quickest to ship)
+## Cria-only (not in Vikunja)
 
-Ranked by effort × impact, with rationale.
+Everything here is client-side and writes ordinary Vikunja tasks.
 
-### 1. Saved filters (Vikunja filter DSL) — ~1 day
+| Feature | Notes |
+|---|---|
+| On-device AI: Ramble | Free text becomes several tasks (`features/ramble`, `tauri/ai.ts`) |
+| On-device AI: Break down | Suggests subtasks for a task |
+| On-device AI: Describe filter | Words become a filter query |
+| Photo capture / OCR | Apple Vision, Tesseract.js fallback (`features/shoppingPhoto`) |
+| Offline-first outbox + conflict modal | Includes offline attachment uploads |
+| Local FTS5 search | Works offline |
+| iOS app | OS-scheduled reminders, native tab bar |
+| Desktop shell | Tray, global shortcut, autostart, Dock badge |
+| Multi-select `SelectionBar` | Bulk complete, schedule, move, priority, delete |
 
-SmartViews scaffold exists (TodayView, UpcomingView, InboxView). Saved filters require:
-- Fetching saved filters from server (`GET /filters`)
-- A sidebar item listing them
-- Wiring each filter's query through to the task list
-- A save-current-view-as-filter button
-Server endpoints exist. Pure client-side UI work.
+## Vikunja features missing from Cria
 
-### 2. Comments (read-only) — ~0.5 day
-
-Vikunja supports comments on tasks via `GET /tasks/{id}/comments`. Read-only display in the detail card is a simple list component. No write/mentions needed for V1.
-
-### 3. Bulk operations (multi-select, batch actions) — ~1.5 days
-
-Multi-select via Cmd+click / Shift+click on task rows, then batch actions (delete, move, set labels). Leverages existing mutation functions in db/tasks.ts.
-
-
+See [FEATURE-GAPS-PLAN.md](FEATURE-GAPS-PLAN.md) for specs and an implementation order.
