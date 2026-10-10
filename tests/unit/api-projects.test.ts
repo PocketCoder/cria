@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   duplicateProject,
   fetchProjectBackground,
+  fetchUnsplashThumb,
   getProjectInfo,
   hasBackgroundProvider,
   removeProjectBackground,
@@ -125,5 +126,11 @@ describe('projects api', () => {
       ownerName: 'Jake W',
       created: '2026-01-02T03:04:05Z',
     });
+  });
+
+  it('fetchUnsplashThumb uses the plural images route', async () => {
+    mockApiFetch.mockResolvedValue(new Response('img', { status: 200 }));
+    await fetchUnsplashThumb('a b');
+    expect(mockApiFetch.mock.calls[0]![0]).toBe('/backgrounds/unsplash/images/a%20b/thumb');
   });
 });

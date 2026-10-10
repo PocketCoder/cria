@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -247,6 +247,7 @@ function SortableViewRow({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const panelId = useId();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: view.localId, disabled: !reorderable || editing || confirming });
 
@@ -373,6 +374,7 @@ function SortableViewRow({
             type="button"
             disabled={view.placeholder}
             aria-expanded={settingsOpen}
+            aria-controls={settingsOpen ? panelId : undefined}
             onClick={() => setSettingsOpen((o) => !o)}
             aria-label={`Settings for ${label}`}
             title={view.placeholder ? BLOCKER_TEXT.placeholder : 'Filter and bucket settings'}
@@ -392,7 +394,7 @@ function SortableViewRow({
           </button>
         </>
       )}
-      {settingsOpen && !editing && !confirming && <ViewSettingsPanel view={view} />}
+      {settingsOpen && !editing && !confirming && <ViewSettingsPanel view={view} id={panelId} />}
     </li>
   );
 }

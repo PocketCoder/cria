@@ -9,6 +9,7 @@ import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, getTaskByLocalId } from '@/db/tasks';
 import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
 import { DEFER_PRESETS, deferDueIso, type DeferPreset } from '@/lib/defer';
+import { showToast } from '@/stores/toasts';
 import { impactComplete, impactDeleted } from '@/utils/haptics';
 
 type Picker = 'schedule' | 'defer' | 'move' | 'priority' | null;
@@ -39,9 +40,19 @@ export function SelectionBar() {
     void Promise.all(
       ids.map(async (id) => {
         const t = await getTaskByLocalId(id);
-        if (t) await updateTask(id, { dueDate: deferDueIso(t.dueDate, preset) }).catch(() => {});
+        if (!t) return true;
+        return updateTask(id, { dueDate: deferDueIso(t.dueDate, preset) }).then(
+          () => true,
+          () => false,
+        );
       }),
-    ).then(stop);
+    ).then((results) => {
+      const failed = results.filter((ok) => !ok).length;
+      if (failed > 0) {
+        showToast(`Couldn’t defer ${failed} ${failed === 1 ? 'task' : 'tasks'}`, 'error');
+      }
+      stop();
+    });
   };
   const setPriority = (p: number) => { void eachUpdate({ priority: p }).then(stop); };
   const move = (projectLocalId: string) => {

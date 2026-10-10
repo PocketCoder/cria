@@ -26,6 +26,20 @@ describe('sessions api', () => {
     expect(mockApiFetch.mock.calls[0]![0]).toBe('/user/sessions?per_page=50');
   });
 
+  it('listSessions sorts by most recent activity, undated last', async () => {
+    mockApiFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { id: 'old', last_active: '2026-01-01T00:00:00Z' },
+          { id: 'none' },
+          { id: 'new', last_active: '2026-10-01T00:00:00Z' },
+        ]),
+        { status: 200 },
+      ),
+    );
+    expect((await listSessions())!.map((s) => s.id)).toEqual(['new', 'old', 'none']);
+  });
+
   it('listSessions is null on 404 (older servers) and throws on other errors', async () => {
     mockApiFetch.mockResolvedValueOnce(new Response('', { status: 404 }));
     expect(await listSessions()).toBeNull();

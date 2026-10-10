@@ -62,7 +62,7 @@ export async function searchUnsplash(
 /** Thumbnail bytes via the server's authenticated proxy (the CSP blocks remote images). */
 export async function fetchUnsplashThumb(imageId: string): Promise<Blob> {
   const api = createApiFetch();
-  const res = await api(`/backgrounds/unsplash/image/${encodeURIComponent(imageId)}/thumb`);
+  const res = await api(`/backgrounds/unsplash/images/${encodeURIComponent(imageId)}/thumb`);
   if (!res.ok) throw buildApiError(res.status, await res.text().catch(() => ''));
   return res.blob();
 }

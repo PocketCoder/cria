@@ -44,6 +44,7 @@ export function FilterInput({
   autoFocus,
   placeholder,
   id,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -52,6 +53,8 @@ export function FilterInput({
   placeholder?: string;
   /** Lets an external `<label htmlFor>` name the textarea. */
   id?: string;
+  /** Accessible name when there's no visible `<label>`. */
+  ariaLabel?: string;
 }) {
   const { data: labels = [] } = useLabels();
   const { data: projects = [] } = useProjects();
@@ -142,6 +145,7 @@ export function FilterInput({
       <textarea
         ref={taRef}
         id={id}
+        aria-label={ariaLabel}
         value={value}
         rows={rows}
         autoFocus={autoFocus}

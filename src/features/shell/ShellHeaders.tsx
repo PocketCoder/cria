@@ -94,7 +94,7 @@ export function MobileHeader({
         <div
           aria-hidden="true"
           data-testid="project-background"
-          className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center opacity-[0.14]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center opacity-[0.14] dark:opacity-[0.08]"
           style={{ backgroundImage: `url(${background})` }}
         />
       )}
@@ -187,7 +187,7 @@ export function DesktopHeader({
         <div
           aria-hidden="true"
           data-testid="project-background"
-          className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center opacity-[0.14]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center opacity-[0.14] dark:opacity-[0.08]"
           style={{ backgroundImage: `url(${background})` }}
         />
       )}

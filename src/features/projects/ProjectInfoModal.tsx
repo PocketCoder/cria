@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { X } from 'lucide-react';
-import { ModalDialog } from '@/components/ui/modal-dialog';
-import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
+import { AdaptiveDialog } from '@/components/ui/adaptive-dialog';
 import { RichTextView } from '@/features/task-detail/RichTextReadView';
 import { isEmptyDescription } from '@/features/task-detail/editorLogic';
 import { getProjectInfo } from '@/api/projects';
@@ -45,54 +43,46 @@ export function ProjectInfoModal({
   });
 
   return (
-    <ModalDialog label={`About “${project.title}”`} onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
-        <BackdropDismiss onDismiss={onClose} />
-        <div className="relative dialog-panel flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden">
-          <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              {project.hexColor && (
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: project.hexColor }} />
-              )}
-              {project.title}
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </header>
-          <div className="flex-1 overflow-y-auto p-4 text-xs">
-            {!isEmptyDescription(project.description) && (
-              <RichTextView
-                html={project.description ?? ''}
-                taskServerId={null}
-                className="prose-sm mb-3 text-sm"
-              />
-            )}
-            <dl className="divide-y divide-[var(--color-border)]">
-              {project.identifier && <Row label="Identifier">{project.identifier}</Row>}
-              {parent && <Row label="Parent">{parent.title}</Row>}
-              <Row label="Tasks">
-                {stats ? `${stats.open} open, ${stats.done} done` : '…'}
-              </Row>
-              {info?.ownerName && <Row label="Owner">{info.ownerName}</Row>}
-              {info?.created && <Row label="Created">{formatDate(info.created)}</Row>}
-              {project.updatedAt && <Row label="Updated">{formatDate(project.updatedAt)}</Row>}
-              {project.isArchived && <Row label="Status">Archived</Row>}
-              {project.isFavorite && <Row label="Favourite">Yes</Row>}
-            </dl>
-            {!online && (
-              <p className="pt-2 text-[var(--color-muted-foreground)]">
-                Offline: owner and creation date need a connection.
-              </p>
-            )}
-          </div>
-        </div>
+    <AdaptiveDialog
+      label={`About “${project.title}”`}
+      onClose={onClose}
+      title={
+        <>
+          {project.hexColor && (
+            <span
+              aria-hidden="true"
+              className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ background: project.hexColor }}
+            />
+          )}
+          {project.title}
+        </>
+      }
+    >
+      <div className="p-4 text-xs">
+        {!isEmptyDescription(project.description) && (
+          <RichTextView
+            html={project.description ?? ''}
+            taskServerId={null}
+            className="prose-sm mb-3 text-sm"
+          />
+        )}
+        <dl className="divide-y divide-[var(--color-border)]">
+          {project.identifier && <Row label="Identifier">{project.identifier}</Row>}
+          {parent && <Row label="Parent">{parent.title}</Row>}
+          <Row label="Tasks">{stats ? `${stats.open} open, ${stats.done} done` : '…'}</Row>
+          {info?.ownerName && <Row label="Owner">{info.ownerName}</Row>}
+          {info?.created && <Row label="Created">{formatDate(info.created)}</Row>}
+          {project.updatedAt && <Row label="Updated">{formatDate(project.updatedAt)}</Row>}
+          {project.isArchived && <Row label="Status">Archived</Row>}
+          {project.isFavorite && <Row label="Favourite">Yes</Row>}
+        </dl>
+        {!online && (
+          <p className="pt-2 text-[var(--color-muted-foreground)]">
+            Offline: owner and creation date need a connection.
+          </p>
+        )}
       </div>
-    </ModalDialog>
+    </AdaptiveDialog>
   );
 }

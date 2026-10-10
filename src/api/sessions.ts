@@ -18,6 +18,9 @@ interface SessionPayload {
   created?: string;
 }
 
+/** Sort key: undated sessions sink to the bottom. */
+const activeMs = (s: Session): number => (s.lastActive ? Date.parse(s.lastActive) : 0);
+
 const dateOrNull = (v: string | undefined) => (v && !v.startsWith('0001-') ? v : null);
 
 /**
@@ -43,7 +46,8 @@ export async function listSessions(): Promise<Session[] | null> {
       ipAddress: s.ip_address ?? '',
       lastActive: dateOrNull(s.last_active),
       created: dateOrNull(s.created),
-    }));
+    }))
+    .sort((a, b) => activeMs(b) - activeMs(a));
 }
 
 export async function revokeSession(id: string): Promise<void> {

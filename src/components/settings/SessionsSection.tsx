@@ -10,6 +10,7 @@ import {
 } from '@/api/sessions';
 import { getAuthSnapshot, useAuth } from '@/auth/store';
 import { useDateFormatter } from '@/lib/dateFormat';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 /** Devices signed in to this account; revoke any of them. Hidden when the server has no sessions route. */
 export function SessionsSection({ disabled }: { disabled?: boolean }) {
@@ -25,8 +26,15 @@ export function SessionsSection({ disabled }: { disabled?: boolean }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [failure, setFailure] = useState('');
+  const isMobile = useIsMobile();
+  const action = isMobile ? 'h-11 px-4 text-sm' : '';
 
   if (sessions === null) return null;
+
+  // This device first, then most recently active (the API already sorts those).
+  const ordered = [...(sessions ?? [])].sort(
+    (a, b) => Number(b.id === currentId) - Number(a.id === currentId),
+  );
 
   const revoke = async (s: Session) => {
     setBusyId(s.id);
@@ -59,54 +67,69 @@ export function SessionsSection({ disabled }: { disabled?: boolean }) {
             Couldn’t load sessions: {(error as Error).message}
           </p>
         )}
-        {sessions?.length === 0 && (
+        {sessions && sessions.length === 0 && (
           <p className="text-sm text-[var(--color-muted-foreground)]">No active sessions.</p>
         )}
-        {sessions?.map((s) => {
+        {ordered.map((s) => {
           const isCurrent = s.id === currentId;
+          const device = describeDevice(s.deviceInfo);
           return (
-            <div
-              key={s.id}
-              className="flex items-center justify-between gap-3 rounded bg-[var(--color-muted)] px-2 py-1.5"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm">
-                  {describeDevice(s.deviceInfo)}
-                  {isCurrent && (
-                    <span className="ml-2 rounded bg-[var(--color-primary)]/10 px-1.5 py-0.5 text-xs text-[var(--color-primary)]">
-                      This device
-                    </span>
-                  )}
-                </p>
-                <p className="truncate text-xs text-[var(--color-muted-foreground)]">
-                  {[s.ipAddress, s.lastActive && `active ${formatDateTime(s.lastActive)}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              </div>
-              {confirmId === s.id ? (
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={disabled || busyId === s.id}
-                    onClick={() => void revoke(s)}
-                  >
-                    {isCurrent ? 'Sign out' : 'Revoke'}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setConfirmId(null)}>
-                    Cancel
-                  </Button>
+            <div key={s.id} className="space-y-2 rounded bg-[var(--color-muted)] px-2 py-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="min-w-0 flex-1 basis-40">
+                  <p className="truncate text-sm">
+                    {device}
+                    {isCurrent && (
+                      <span className="ml-2 rounded bg-[var(--color-primary)]/10 px-1.5 py-0.5 text-xs text-[var(--color-primary)]">
+                        This device
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-[var(--color-muted-foreground)]">
+                    {[s.ipAddress, s.lastActive && `active ${formatDateTime(s.lastActive)}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
                 </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={() => setConfirmId(s.id)}
-                >
-                  {isCurrent ? 'Sign out' : 'Revoke'}
-                </Button>
+                {confirmId !== s.id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={action}
+                    disabled={disabled}
+                    onClick={() => setConfirmId(s.id)}
+                  >
+                    {isCurrent ? 'Sign out…' : 'Revoke…'}
+                  </Button>
+                )}
+              </div>
+              {confirmId === s.id && (
+                <div role="group" aria-label={`Confirm for ${device}`} className="space-y-2">
+                  <p className="text-xs">
+                    {isCurrent
+                      ? 'Sign out of this device? You’ll need to sign in again.'
+                      : `Revoke access for ${device}? It will be signed out.`}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={action}
+                      onClick={() => setConfirmId(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className={action}
+                      disabled={disabled || busyId === s.id}
+                      onClick={() => void revoke(s)}
+                    >
+                      {isCurrent ? 'Sign out' : 'Revoke access'}
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           );

@@ -366,7 +366,7 @@ export function ProjectRow({
                     }}
                   >
                     <Info className="h-3.5 w-3.5" />
-                    Info
+                    Project info
                   </button>
                 </li>
                 <li>
@@ -374,13 +374,14 @@ export function ProjectRow({
                     type="button"
                     className={cn(MENU_ITEM, 'disabled:opacity-50')}
                     disabled={!online}
+                    title={online ? undefined : 'Needs a connection'}
                     onClick={() => {
                       menu.setMenuOpen(false);
                       onBackground();
                     }}
                   >
                     <ImagePlus className="h-3.5 w-3.5" />
-                    Background
+                    Change background…
                   </button>
                 </li>
                 <li>
@@ -388,6 +389,7 @@ export function ProjectRow({
                     type="button"
                     className={cn(MENU_ITEM, 'disabled:opacity-50')}
                     disabled={!online}
+                    title={online ? undefined : 'Needs a connection'}
                     onClick={() => {
                       menu.setMenuOpen(false);
                       onDuplicate();
@@ -397,6 +399,7 @@ export function ProjectRow({
                     Duplicate
                   </button>
                 </li>
+                <li role="separator" className="my-1 h-px bg-[var(--color-border)]" />
                 <DeleteMenuItem onClick={() => menu.setConfirmDelete(true)} />
               </ul>
             )}
@@ -419,13 +422,13 @@ export function ProjectRow({
         <ContextMenuItem onSelect={() => { onInfo(); }}>
           <span className="flex items-center gap-2">
             <Info className="h-3.5 w-3.5" />
-            Info
+            Project info
           </span>
         </ContextMenuItem>
         <ContextMenuItem disabled={!online} onSelect={() => { onBackground(); }}>
           <span className="flex items-center gap-2">
             <ImagePlus className="h-3.5 w-3.5" />
-            Background
+            Change background…
           </span>
         </ContextMenuItem>
         <ContextMenuItem disabled={!online} onSelect={() => { onDuplicate(); }}>

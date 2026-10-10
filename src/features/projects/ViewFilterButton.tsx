@@ -39,7 +39,7 @@ export function ViewFilterButton({ view }: { view: ProjectView }) {
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-3">
-        <ViewFilterForm view={view} onSaved={() => setOpen(false)} />
+        <ViewFilterForm view={view} autoFocus onSaved={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );

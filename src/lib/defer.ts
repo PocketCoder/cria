@@ -5,9 +5,9 @@ import { pickDayIso } from '@/features/task-detail/taskDetailLogic';
 export type DeferPreset = '1d' | '3d' | '1w' | 'nextMonday';
 
 export const DEFER_PRESETS: { id: DeferPreset; label: string }[] = [
-  { id: '1d', label: 'Tomorrow' },
-  { id: '3d', label: '3 days' },
-  { id: '1w', label: '1 week' },
+  { id: '1d', label: 'In 1 day' },
+  { id: '3d', label: 'In 3 days' },
+  { id: '1w', label: 'In 1 week' },
   { id: 'nextMonday', label: 'Next Monday' },
 ];
 

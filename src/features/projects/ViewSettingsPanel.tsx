@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Loader2, Plus, X } from 'lucide-react';
 import {
   Select,
@@ -17,14 +17,16 @@ import {
   type BucketFilterConfig,
 } from '@/lib/bucketConfig';
 import type { ProjectView } from '@/domain/view';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { cn } from '@/lib/cn';
 import { ViewFilterForm } from './ViewFilterForm';
 
 const BLANK: BucketFilterConfig = { title: '', filter: '', includeNulls: false };
 
 /** Per-view settings inside the view manager: filter, and bucket mode for boards. */
-export function ViewSettingsPanel({ view }: { view: ProjectView }) {
+export function ViewSettingsPanel({ view, id }: { view: ProjectView; id?: string }) {
   return (
-    <div className="basis-full space-y-4 border-t border-[var(--color-border)] px-1 py-3">
+    <div id={id} className="basis-full space-y-4 border-t border-[var(--color-border)] px-1 py-3">
       <ViewFilterForm view={view} />
       {view.viewKind === 'kanban' && <BucketModeEditor view={view} />}
     </div>
@@ -32,6 +34,9 @@ export function ViewSettingsPanel({ view }: { view: ProjectView }) {
 }
 
 function BucketModeEditor({ view }: { view: ProjectView }) {
+  const isMobile = useIsMobile();
+  const uid = useId();
+  const touch = isMobile ? 'min-h-11' : '';
   const [mode, setMode] = useState<'manual' | 'filter'>(
     view.bucketConfigurationMode === 'filter' ? 'filter' : 'manual',
   );
@@ -98,13 +103,19 @@ function BucketModeEditor({ view }: { view: ProjectView }) {
                     value={c.title}
                     onChange={(e) => patch(i, { title: e.target.value })}
                     placeholder="Bucket title"
-                    className="h-7 min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
+                    className={cn(
+                      'min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
+                      isMobile ? 'min-h-11 text-base' : 'h-7 text-xs',
+                    )}
                   />
                   <button
                     type="button"
                     aria-label={`Remove bucket ${i + 1}`}
                     onClick={() => setConfigs((cs) => cs.filter((_, j) => j !== i))}
-                    className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+                    className={cn(
+                      'flex items-center justify-center rounded text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]',
+                      isMobile ? 'h-11 w-11' : 'p-1',
+                    )}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -113,11 +124,15 @@ function BucketModeEditor({ view }: { view: ProjectView }) {
                   value={c.filter}
                   onChange={(filter) => patch(i, { filter })}
                   rows={1}
+                  ariaLabel={`Bucket ${i + 1} filter`}
                   placeholder="priority >= 3"
                 />
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Include tasks without a value</span>
+                <div className={cn('flex items-center justify-between', touch)}>
+                  <span id={`${uid}-nulls-${i}`} className="text-xs">
+                    Include tasks without a value
+                  </span>
                   <Switch
+                    aria-labelledby={`${uid}-nulls-${i}`}
                     checked={c.includeNulls}
                     onCheckedChange={(includeNulls) => patch(i, { includeNulls })}
                   />
@@ -128,7 +143,10 @@ function BucketModeEditor({ view }: { view: ProjectView }) {
           <button
             type="button"
             onClick={() => setConfigs((cs) => [...cs, { ...BLANK }])}
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            className={cn(
+              'inline-flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
+              isMobile && 'min-h-11 text-sm',
+            )}
           >
             <Plus className="h-3.5 w-3.5" />
             Add bucket
@@ -146,7 +164,10 @@ function BucketModeEditor({ view }: { view: ProjectView }) {
           type="button"
           disabled={busy}
           onClick={() => void save()}
-          className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-[var(--color-primary-foreground)] disabled:opacity-50"
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] px-2.5 text-xs font-medium text-[var(--color-primary-foreground)] disabled:opacity-50',
+            isMobile ? 'min-h-11 px-4 text-sm' : 'py-1',
+          )}
         >
           {busy && <Loader2 className="h-3 w-3 animate-spin" />}
           Save buckets
