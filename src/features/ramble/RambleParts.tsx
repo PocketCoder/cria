@@ -323,17 +323,24 @@ function SuggestionRow({
 }) {
   // Only existing projects/labels the line doesn't already set are offered.
   const u = usableSuggestion(d, ctx);
-  const names = [...(u.project ? [u.project] : []), ...u.labels];
-  if (names.length === 0) return null;
+  // Typed, so a project and a label that share a name stay two distinct chips.
+  const items = [
+    ...(u.project ? [{ kind: 'project' as const, name: u.project }] : []),
+    ...u.labels.map((name) => ({ kind: 'label' as const, name })),
+  ];
+  if (items.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
       <Sparkles className="h-3 w-3 text-[var(--color-muted-foreground)]" aria-hidden />
-      {names.map((n) => (
+      {items.map((it) => (
         <span
-          key={n}
-          className="rounded-full border border-dashed border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-muted-foreground)]"
+          key={`${it.kind}:${it.name}`}
+          title={`${it.kind === 'project' ? 'Project' : 'Label'}: ${it.name}`}
+          aria-label={`${it.kind === 'project' ? 'Project' : 'Label'} ${it.name}`}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-muted-foreground)]"
         >
-          {n}
+          {it.kind === 'project' ? <Folder className="h-3 w-3" /> : <Tag className="h-3 w-3" />}
+          {it.name}
         </span>
       ))}
       <button
