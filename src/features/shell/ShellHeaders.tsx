@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Plus, Settings, Settings2, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
+import { Info, Plus, Settings, Settings2, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { ActiveView } from '@/stores/ui';
 import type { ProjectView } from '@/domain/view';
@@ -16,6 +16,8 @@ interface ViewControls {
   onSelectView: (viewLocalId: string) => void;
   /** Opens the view manager; undefined when the project's views can't be managed. */
   onManageViews: (() => void) | undefined;
+  /** Opens the project info page; undefined when the view isn't a real project. */
+  onOpenInfo: (() => void) | undefined;
 }
 
 /**
@@ -64,6 +66,8 @@ export function MobileHeader({
   projectViews,
   onSelectView,
   onManageViews,
+  onOpenInfo,
+  projectServerId,
   counts,
   onOpenOutbox,
   onOpenConflicts,
@@ -72,6 +76,8 @@ export function MobileHeader({
   onOpenSettings,
 }: ViewControls & {
   title: string;
+  /** Server id of the open project, for its background image. */
+  projectServerId?: number | null;
   counts: SyncCounts;
   onOpenOutbox: () => void;
   onOpenConflicts: () => void;
@@ -79,8 +85,19 @@ export function MobileHeader({
   onOpenDisplay: () => void;
   onOpenSettings: () => void;
 }) {
+  const background = useProjectBackground(
+    activeView?.kind === 'project' ? (projectServerId ?? null) : null,
+  );
   return (
-    <header className="flex select-none items-center border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2">
+    <header className="relative isolate flex select-none items-center border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2">
+      {background && (
+        <div
+          aria-hidden="true"
+          data-testid="project-background"
+          className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center opacity-[0.14]"
+          style={{ backgroundImage: `url(${background})` }}
+        />
+      )}
       <div className="flex flex-1 items-center gap-2">
         <h1 className="vt-title nav-title-large">
           {title}
@@ -93,6 +110,7 @@ export function MobileHeader({
             activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
             onSelect={onSelectView}
             onManage={onManageViews}
+            onInfo={onOpenInfo}
           />
         )}
         <SyncStatusButton
@@ -132,6 +150,7 @@ export function DesktopHeader({
   projectViews,
   onSelectView,
   onManageViews,
+  onOpenInfo,
   currentView,
   currentViewKey,
   onOpenDisplay,
@@ -210,6 +229,17 @@ export function DesktopHeader({
             className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
           >
             <Settings2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {activeView?.kind === 'project' && onOpenInfo && (
+          <button
+            type="button"
+            onClick={onOpenInfo}
+            aria-label="Project info"
+            title="Project info"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          >
+            <Info className="h-3.5 w-3.5" />
           </button>
         )}
         {activeView?.kind === 'project' && currentView && (

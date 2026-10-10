@@ -5,6 +5,8 @@ import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
 import { Toasts } from '@/components/Toasts';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
+import { ProjectInfoModal } from '@/features/projects/ProjectInfoModal';
+import type { Project } from '@/domain/project';
 import { ViewManagerModal } from '@/features/projects/ViewManagerModal';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
 import { TaskActionSheet } from '@/features/tasks/TaskActionSheet';
@@ -41,6 +43,7 @@ export function ShellOverlays({
   rambleOpen,
   setRambleOpen,
   viewManager,
+  infoProject,
 }: {
   modals: ShellModals;
   photoCaptureOpen: boolean;
@@ -53,6 +56,8 @@ export function ShellOverlays({
     activeViewLocalId: string | undefined;
     onSelectView: (viewLocalId: string) => void;
   } | null;
+  /** The open project, when it has an info page (else null). */
+  infoProject: Project | null;
 }) {
   const m = modals;
   return (
@@ -109,6 +114,9 @@ export function ShellOverlays({
           onSelectView={viewManager.onSelectView}
           onClose={() => m.setShowViewManager(false)}
         />
+      )}
+      {m.showProjectInfo && infoProject && (
+        <ProjectInfoModal project={infoProject} onClose={() => m.setShowProjectInfo(false)} />
       )}
       <UndoToasts />
       <Toasts />

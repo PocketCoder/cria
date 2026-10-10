@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutGrid, Check, Settings2 } from 'lucide-react';
+import { LayoutGrid, Check, Info, Settings2 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/cn';
 import type { ProjectView } from '@/domain/view';
@@ -23,14 +23,17 @@ export function MobileViewSwitcher({
   activeViewLocalId,
   onSelect,
   onManage,
+  onInfo,
 }: {
   views: ProjectView[];
   activeViewLocalId: string | undefined;
   onSelect: (viewLocalId: string) => void;
   onManage?: (() => void) | undefined;
+  /** Adds a "Project info" entry. */
+  onInfo?: (() => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
-  if (views.length <= 1 && !onManage) return null;
+  if (views.length <= 1 && !onManage && !onInfo) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -43,7 +46,7 @@ export function MobileViewSwitcher({
           <LayoutGrid className="h-5 w-5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-40 p-1">
+      <PopoverContent align="end" className="w-44 p-1">
         {views.map((v) => {
           const active = v.localId === activeViewLocalId;
           return (
@@ -66,9 +69,24 @@ export function MobileViewSwitcher({
             </button>
           );
         })}
+        {(onManage || onInfo) && (
+          <div role="separator" className="my-1 h-px bg-[var(--color-border)]" />
+        )}
+        {onInfo && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onInfo();
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+          >
+            <Info className="h-4 w-4 text-[var(--color-muted-foreground)]" />
+            Project info
+          </button>
+        )}
         {onManage && (
           <>
-            <div role="separator" className="my-1 h-px bg-[var(--color-border)]" />
             <button
               type="button"
               onClick={() => {

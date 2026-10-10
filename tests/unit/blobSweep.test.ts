@@ -80,6 +80,12 @@ describe('sweepOrphanBlobs', () => {
     expect(deleted()).toEqual(['orphan1', 'orphan2']);
   });
 
+  it('never deletes cache blobs, however old', async () => {
+    stored(['project-bg-7', OLD - BLOB_GRACE_MS], ['orphan', OLD]);
+    expect(await sweepOrphanBlobs(NOW)).toBe(1);
+    expect(deleted()).toEqual(['orphan']);
+  });
+
   it('keeps the bytes of a queued upload (row and op)', async () => {
     await insertPendingAttachment({
       taskLocalId: 'task1',

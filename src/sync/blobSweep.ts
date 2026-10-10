@@ -12,6 +12,7 @@
  *    being picked right now (written, row not yet inserted) are never touched;
  *  - no attachment row and no outbox or dead-letter op refers to it
  *    (isBlobReferenced).
+ * Cache blobs (see isCacheBlobId) are never touched.
  * Anything uncertain keeps the file: no modified time, one in the future, a
  * failed lookup. Errors are logged, never thrown, so app start can't fail
  * here.
@@ -19,6 +20,7 @@
 import { getDb } from '@/db';
 import { isBlobReferenced } from '@/db/attachments';
 import { deleteBlob, listBlobs, type BlobEntry } from '@/tauri/blobStore';
+import { isCacheBlobId } from '@/tauri/blobIds';
 
 /** How old an unreferenced blob must be before the sweep deletes it. */
 export const BLOB_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -43,6 +45,7 @@ export async function sweepOrphanBlobs(now: number = Date.now()): Promise<number
 
   let removed = 0;
   for (const entry of entries) {
+    if (isCacheBlobId(entry?.id)) continue;
     const modified = entry?.modifiedMs;
     if (typeof modified !== 'number' || !Number.isFinite(modified)) continue;
     if (now - modified < BLOB_GRACE_MS) continue;

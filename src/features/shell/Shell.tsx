@@ -127,6 +127,12 @@ export function Shell() {
           onSelectView: handleSelectView,
         }
       : null;
+  // Project info for real (synced or local) projects, not pseudo-projects.
+  const infoProject =
+    activeView?.kind === 'project' && currentProject && canManageViews(currentProject)
+      ? currentProject
+      : null;
+  const openProjectInfo = infoProject ? () => modals.setShowProjectInfo(true) : undefined;
   const openViewManager = viewManager ? () => modals.setShowViewManager(true) : undefined;
 
   return (
@@ -143,6 +149,8 @@ export function Shell() {
           projectViews={projectViews}
           onSelectView={handleSelectView}
           onManageViews={openViewManager}
+          onOpenInfo={openProjectInfo}
+          projectServerId={currentProject?.serverId ?? null}
           counts={{ isOnline, outboxCount, deadLetterCount, conflictCount }}
           onOpenOutbox={() => setShowOutbox(true)}
           onOpenConflicts={() => setShowConflicts(true)}
@@ -184,6 +192,7 @@ export function Shell() {
                 projectViews={projectViews}
                 onSelectView={handleSelectView}
                 onManageViews={openViewManager}
+                onOpenInfo={openProjectInfo}
                 currentView={currentView}
                 currentViewKey={currentViewKey}
                 onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
@@ -229,6 +238,7 @@ export function Shell() {
         rambleOpen={rambleOpen}
         setRambleOpen={setRambleOpen}
         viewManager={viewManager}
+        infoProject={infoProject}
       />
 
       {/* Mobile search overlay */}

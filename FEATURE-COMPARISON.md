@@ -55,7 +55,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Projects | Hex color picker | ✅ | Shown in sidebar |
 | Projects | Sidebar list (flat) | ✅ | Sortable, filterable |
 | Projects | Sub-project hierarchy in sidebar | ✅ | Nested tree in `ProjectSidebar` from `parent_project_id` |
-| Projects | Project background images | ✅ | Upload + Unsplash + remove (`ProjectBackgroundModal`), shown faintly in the desktop header; not shown on iOS header |
+| Projects | Project background images | ✅ | Upload + Unsplash + remove (`ProjectBackgroundModal`), shown faintly in the desktop and iPhone headers; cached in the blob store (works offline) |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
 | Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. Per-view settings panel edits the filter and, for boards, bucket mode |
 | Projects | Filter-mode kanban buckets | 🟡 | Configured in the view manager; board renders one read-only column per filter from local data (no drag between buckets). Switching back to manual relies on the next pull to restore buckets |
@@ -246,8 +246,9 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Category | Feature | Status | Notes |
 |---|---|---|---|
 | Misc | CalDAV docs link in settings | ✅ | Link shown in SettingsModal Advanced section |
-| Misc | Project info page | ✅ | Sidebar menu → `ProjectInfoModal` (description, parent, task counts; owner/created when online) |
+| Misc | Project info page | ✅ | Sidebar menu, desktop header button and iPhone view menu → `ProjectInfoModal` (description, parent, task counts; owner/created when online) |
 | Misc | Defer task | ✅ | Presets (tomorrow, 3 days, 1 week, next Monday) in the due-date popover, iOS action sheet and selection bar (`lib/defer.ts`) |
+| Misc | Sessions list and revoke | ✅ | Settings → Security (`SessionsSection`); current device from the JWT `sid`; hidden on servers without `/user/sessions` |
 | Misc | Webhook management UI | ❌ | Server endpoints exist, no UI |
 | Misc | External-link handling (opens in OS browser) | ✅ | openExternal.ts |
 | Misc | Dev-only keyboard shortcuts | ✅ | Cmd+F for search, Cmd+Shift+A dev fallback |

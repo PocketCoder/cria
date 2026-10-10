@@ -13,6 +13,7 @@ export function useShellModals() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
+  const [showProjectInfo, setShowProjectInfo] = useState(false);
   return {
     showOutbox,
     setShowOutbox,
@@ -30,6 +31,8 @@ export function useShellModals() {
     setShowLabelManager,
     showViewManager,
     setShowViewManager,
+    showProjectInfo,
+    setShowProjectInfo,
   };
 }
 
