@@ -215,13 +215,7 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
 
   const submitDisabled = submitting || !parsed.title || (!parsed.projectTitle && !projectId);
 
-  const disabledReason = submitting
-    ? 'busy'
-    : !parsed.title
-      ? 'no title'
-      : !parsed.projectTitle && !projectId
-        ? 'no project'
-        : undefined;
+  const disabledReason = submitting ? 'busy' : undefined;
 
   const chipProps = {
     parsed,

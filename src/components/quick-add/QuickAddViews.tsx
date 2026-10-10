@@ -46,7 +46,7 @@ interface MobileProps extends ViewProps {
 /**
  * Capture sheet: a solid card anchored to the bottom (lifted above the
  * keyboard) with a 21px token-highlighted Task-name field, a muted note line,
- * only-set chips + dashed affordance, and a syntax-hint footer with a 46px ink
+ * only-set chips + a dashed chip whose placeholder is the quick-add syntax, and a footer with a 46px ink
  * send button.
  */
 export function MobileQuickAdd({
@@ -109,26 +109,26 @@ export function MobileQuickAdd({
           </div>
 
           <div className="mt-4 px-5 pb-4">
-            <SetChips {...chipProps} />
+            <SetChips
+              {...chipProps}
+              placeholder={
+                prefixes ? (
+                  <span className="font-mono text-[var(--color-primary)]">
+                    {prefixes.project}project<span className="mx-1.5 text-[var(--color-muted-foreground)]">·</span>
+                    {prefixes.label}label<span className="mx-1.5 text-[var(--color-muted-foreground)]">·</span>
+                    {prefixes.priority}2
+                  </span>
+                ) : undefined
+              }
+            />
           </div>
 
-          {/* Footer — syntax hint (left) + camera & 46px ink send (right). */}
+          {/* Footer — camera & 46px ink send (right). */}
           <div
             className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-4 py-3"
             style={{ paddingBottom: keyboardInset ? undefined : 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
           >
-            {/* Empty when Quick Add Magic is off, keeping the buttons right-aligned. */}
-            <span className="text-[12.5px] text-[var(--color-muted-foreground)]">
-              {prefixes && (
-                <>
-                  <code className="font-mono text-[var(--color-primary)]">{prefixes.project}project</code>
-                  <span className="mx-1.5">·</span>
-                  <code className="font-mono text-[var(--color-primary)]">{prefixes.label}label</code>
-                  <span className="mx-1.5">·</span>
-                  <code className="font-mono text-[var(--color-primary)]">{prefixes.priority}2</code>
-                </>
-              )}
-            </span>
+            <span />
             {submitDisabled && disabledReason ? (
               <span className="text-[11px] text-[var(--color-destructive)]">{disabledReason}</span>
             ) : null}
