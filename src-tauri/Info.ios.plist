@@ -10,6 +10,11 @@
 	<string>Cria uses the camera to photograph a shopping list and turn it into tasks.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cria reads a photo you choose to turn a shopping list into tasks.</string>
+	<!-- Ramble's live dictation (Web Speech API in the webview) needs both. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cria listens while you ramble so it can turn what you say into tasks.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Cria transcribes your speech to turn it into tasks.</string>
 	<!-- On-device AI calls run as BGContinuedProcessingTasks so they survive the
 	     user switching apps (system progress Live Activity). Identifiers are
 	     generated per call under this prefix; see swift/CriaAI/Background.swift. -->

@@ -10,9 +10,10 @@ import { useRamble } from './useRamble';
 /**
  * Ramble: talk (or type) freely, get a reviewed batch of tasks.
  *
- * Speech comes from the OS's own dictation into the text box (no mic
- * permission or speech code of ours). The on-device model rewrites the ramble
- * as quick-add lines ("Call dentist next tue !3 +Health"), so the existing
+ * The mic button listens live (Web Speech API, src/tauri/speech.ts): finished
+ * phrases are organised by the on-device model and appear as editable rows,
+ * each addable on its own, with Add all at the bottom. Typing then Organise
+ * still works. The model rewrites speech as quick-add lines ("Call dentist next tue !3 +Health"), so the existing
  * quick-add parser resolves dates, projects and labels, and the user edits
  * those lines directly in review. The model call survives app switching
  * (iOS Live Activity / desktop notification, see src/tauri/ai.ts).
@@ -29,7 +30,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
       <RambleHeader
         reviewing={reviewing}
         busy={r.phase === 'saving'}
-        onBack={() => r.setPhase('input')}
+        onBack={r.back}
         onClose={r.close}
       />
       {reviewing ? (
@@ -46,6 +47,12 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
           onAddBlank={r.addBlankDraft}
           onCancel={r.close}
           onAddAll={() => void r.addAll()}
+          listening={r.listening}
+          interim={r.interim}
+          organising={r.organising}
+          busyIds={r.busyIds}
+          onMic={r.toggleMic}
+          onAddOne={(id) => void r.addOne(id)}
         />
       ) : (
         <RambleInput
@@ -57,6 +64,7 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
           hint={dictationHint(isMobilePlatform())}
           rows={isMobile ? 6 : 8}
           onOrganise={() => void r.organise()}
+          onMic={r.toggleMic}
         />
       )}
     </>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { generate } from '@/tauri/ai';
+import { speechErrorMessage, startSpeech, type SpeechSession } from '@/tauri/speech';
 import { aiErrorMessage, parseLines, rambleInstructions, clip } from '@/lib/aiPrompts';
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
@@ -12,6 +13,7 @@ import {
   createDrafts,
   defaultProjectId,
   draftsFromLines,
+  hasTitle,
   patchDraft,
   removeDraft,
   withoutSaved,
@@ -41,8 +43,23 @@ export function useRamble(onClose: () => void) {
     alive.current = true;
     return () => {
       alive.current = false;
+      speech.current?.stop();
+      if (flushTimer.current) clearTimeout(flushTimer.current);
     };
   }, []);
+
+  // Live mic: finished phrases are buffered, then organised in one batch so a
+  // burst of speech costs one model call rather than one per phrase.
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState('');
+  const [organising, setOrganising] = useState(false);
+  const speech = useRef<SpeechSession | null>(null);
+  const buffer = useRef<string[]>([]);
+  const flushing = useRef(false);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Off after the first model failure (no Apple Intelligence, etc.): phrases
+  // then become rows verbatim, and quick-add parsing still resolves dates.
+  const aiOk = useRef(true);
 
   // Tasks with no (known) +project land here; defaults to the open project.
   const [projectId, setProjectId] = useState('');
@@ -103,6 +120,94 @@ export function useRamble(onClose: () => void) {
     }
   };
 
+  const appendLines = (lines: string[]) => {
+    if (lines.length === 0) return;
+    if (!alive.current) {
+      // Closed mid-batch: keep the rows for the next open.
+      setPendingLines([...(useUi.getState().rambleLines ?? []), ...lines]);
+      return;
+    }
+    const first = nextId.current;
+    nextId.current += lines.length;
+    setDrafts((prev) => [...prev, ...draftsFromLines(lines, first)]);
+  };
+
+  const flush = async () => {
+    if (flushing.current) return;
+    flushing.current = true;
+    setOrganising(true);
+    try {
+      while (buffer.current.length > 0) {
+        const chunk = buffer.current.splice(0).join('. ');
+        let lines = [chunk];
+        if (aiOk.current) {
+          try {
+            lines = parseLines(
+              await generate({
+                title: 'Organising your ramble',
+                instructions: rambleInstructions({
+                  projects: projects.map((p) => p.title),
+                  labels: labels.map((l) => l.title),
+                }),
+                prompt: clip(chunk),
+              }),
+            );
+          } catch (err) {
+            console.warn('[ramble] organise failed, keeping raw phrase:', err);
+            aiOk.current = false;
+          }
+        }
+        appendLines(lines);
+      }
+    } finally {
+      flushing.current = false;
+      if (alive.current) setOrganising(false);
+    }
+  };
+
+  const scheduleFlush = (delay: number) => {
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(() => void flush(), delay);
+  };
+
+  const toggleMic = () => {
+    if (speech.current) {
+      speech.current.stop();
+      return;
+    }
+    if (phase === 'thinking' || phase === 'saving') return;
+    setError(null);
+    const session = startSpeech({
+      onInterim: (t) => alive.current && setInterim(t),
+      onFinal: (t) => {
+        buffer.current.push(t);
+        scheduleFlush(1500);
+      },
+      onEnd: (err) => {
+        speech.current = null;
+        if (flushTimer.current) clearTimeout(flushTimer.current);
+        void flush();
+        if (!alive.current) return;
+        setListening(false);
+        setInterim('');
+        if (err) setError(speechErrorMessage(err));
+      },
+    });
+    if (!session) {
+      setError('Live dictation is not available here. Type, or use your keyboard dictation.');
+      return;
+    }
+    speech.current = session;
+    setListening(true);
+    // Rows appear as you talk, so go straight to the list.
+    if (phase === 'input') setPhase('review');
+  };
+
+  const back = () => {
+    speech.current?.stop();
+    setPhase('input');
+  };
+
   const chosen = chosenDrafts(drafts);
 
   // Closing is inert while saving: the save loop can't be cancelled and its
@@ -113,6 +218,7 @@ export function useRamble(onClose: () => void) {
 
   const addAll = async () => {
     if (chosen.length === 0 || !projectId) return;
+    speech.current?.stop();
     setPhase('saving');
     const savedIds = new Set<number>();
     const savedText = text;
@@ -156,7 +262,36 @@ export function useRamble(onClose: () => void) {
     setDrafts((prev) => appendBlankDraft(prev, id));
   };
 
+  const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
+  const addOne = async (id: number) => {
+    const d = drafts.find((x) => x.id === id);
+    if (!d || !projectId || !hasTitle(d.line) || busyIds.has(id) || phase === 'saving') return;
+    setBusyIds((prev) => new Set(prev).add(id));
+    setError(null);
+    try {
+      await createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId });
+      if (alive.current) setDrafts((prev) => removeDraft(prev, id));
+    } catch (err) {
+      console.error('[ramble] task creation failed:', err);
+      if (alive.current) setError("Couldn't add that task. Try again.");
+    } finally {
+      if (alive.current)
+        setBusyIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+    }
+  };
+
   return {
+    listening,
+    interim,
+    organising,
+    toggleMic,
+    back,
+    addOne,
+    busyIds,
     text,
     setText,
     textRef,

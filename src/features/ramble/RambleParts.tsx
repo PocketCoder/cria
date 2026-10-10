@@ -1,6 +1,8 @@
 import { useMemo, type ReactNode, type RefObject } from 'react';
 import {
   Mic,
+  Square,
+  Check,
   Loader2,
   X,
   Plus,
@@ -24,7 +26,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import type { Project } from '@/domain/project';
-import { hasTitle, projectPreview, taskCount, type Draft, type Phase } from './rambleLogic';
+import { hasTitle, projectPreview, type Draft, type Phase } from './rambleLogic';
 
 export function RambleHeader({
   reviewing,
@@ -71,6 +73,38 @@ export function RambleHeader({
   );
 }
 
+/** Mic toggle: tap and talk, tap again to stop. Pulses while listening. */
+export function MicButton({
+  listening,
+  disabled,
+  onToggle,
+  size = 'md',
+}: {
+  listening: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  size?: 'md' | 'lg';
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={listening}
+      aria-label={listening ? 'Stop listening' : 'Start talking'}
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50',
+        size === 'lg' ? 'h-14 w-14' : 'h-9 w-9',
+        listening
+          ? 'animate-pulse bg-[var(--color-destructive)] text-white'
+          : 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90',
+      )}
+    >
+      {listening ? <Square className="h-4 w-4 fill-current" /> : <Mic className={size === 'lg' ? 'h-6 w-6' : 'h-4 w-4'} />}
+    </button>
+  );
+}
+
 /** Free-text box plus the Organise button. */
 export function RambleInput({
   text,
@@ -81,6 +115,7 @@ export function RambleInput({
   hint,
   rows,
   onOrganise,
+  onMic,
 }: {
   text: string;
   setText: (v: string) => void;
@@ -90,9 +125,14 @@ export function RambleInput({
   hint: string;
   rows: number;
   onOrganise: () => void;
+  onMic: () => void;
 }) {
   return (
     <div className="space-y-3">
+      <div className="flex flex-col items-center gap-1 py-1">
+        <MicButton listening={false} disabled={thinking} onToggle={onMic} size="lg" />
+        <span className="text-caption text-[var(--color-muted-foreground)]">Tap and start talking</span>
+      </div>
       <textarea
         aria-label="Everything on your mind"
         ref={textRef}
@@ -153,7 +193,19 @@ export function RambleReview({
   onAddBlank,
   onCancel,
   onAddAll,
+  listening,
+  interim,
+  organising,
+  busyIds,
+  onMic,
+  onAddOne,
 }: {
+  listening: boolean;
+  interim: string;
+  organising: boolean;
+  busyIds: ReadonlySet<number>;
+  onMic: () => void;
+  onAddOne: (id: number) => void;
   phase: Phase;
   drafts: Draft[];
   chosenCount: number;
@@ -170,10 +222,21 @@ export function RambleReview({
   const saving = phase === 'saving';
   return (
     <div className="space-y-3">
-      <p className="text-caption text-[var(--color-muted-foreground)]">
-        {chosenCount} task{chosenCount === 1 ? '' : 's'} selected. Edit any line; quick-add syntax
-        works.
-      </p>
+      <div className="flex items-center gap-3">
+        <MicButton listening={listening} disabled={saving} onToggle={onMic} />
+        <div className="min-w-0 flex-1 text-caption text-[var(--color-muted-foreground)]" aria-live="polite">
+          {interim ? (
+            <span className="italic">{interim}</span>
+          ) : listening ? (
+            'Listening… say what you need to do.'
+          ) : drafts.length === 0 ? (
+            'Tap the mic and start talking.'
+          ) : (
+            `${chosenCount} task${chosenCount === 1 ? '' : 's'} ready. Edit any line; quick-add syntax works.`
+          )}
+        </div>
+        {organising && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-muted-foreground)]" />}
+      </div>
 
       <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
         {drafts.map((d) => (
@@ -184,6 +247,8 @@ export function RambleReview({
             fallbackProjectId={projectId}
             onUpdate={onUpdate}
             onDelete={onDelete}
+            onAdd={onAddOne}
+            busy={saving || busyIds.has(d.id)}
           />
         ))}
       </ul>
@@ -233,7 +298,7 @@ export function RambleReview({
           className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
         >
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {saving ? 'Adding…' : `Add ${taskCount(chosenCount)}`}
+          {saving ? 'Adding…' : `Add all (${chosenCount})`}
         </button>
       </div>
     </div>
@@ -246,12 +311,16 @@ function DraftRow({
   fallbackProjectId,
   onUpdate,
   onDelete,
+  onAdd,
+  busy,
 }: {
   draft: Draft;
   projects: Project[];
   fallbackProjectId: string;
   onUpdate: (id: number, patch: Partial<Draft>) => void;
   onDelete: (id: number) => void;
+  onAdd: (id: number) => void;
+  busy: boolean;
 }) {
   return (
     <li className="group flex items-start gap-2">
@@ -280,6 +349,16 @@ function DraftRow({
           fallbackProjectId={fallbackProjectId}
         />
       </div>
+      <button
+        type="button"
+        onClick={() => onAdd(d.id)}
+        disabled={busy || !hasTitle(d.line)}
+        className="mt-1 shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-primary)] disabled:opacity-40"
+        aria-label={`Add ${d.line} now`}
+        title="Add this task now"
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+      </button>
       <button
         type="button"
         onClick={() => onDelete(d.id)}
