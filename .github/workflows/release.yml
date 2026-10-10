@@ -363,6 +363,41 @@ jobs:
           mkdir -p gh-pages-out
           cp update.json gh-pages-out/
 
+      # SideStore/AltStore source for stable releases. The .ipa keeps the plain
+      # version as both CFBundleShortVersionString and CFBundleVersion, so the
+      # source lists it as version and buildVersion (SideStore rejects a mismatch).
+      # Add https://pocketcoder.github.io/cria/sidestore-stable.json in SideStore.
+      - name: Write sidestore-stable.json
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          ipa="$(ls release/*.ipa | head -n1)"
+          jq -n \
+            --arg v "$version" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg notes "Release $tag" \
+            --arg url "https://github.com/${{ github.repository }}/releases/download/${tag}/$(basename "$ipa")" \
+            --arg icon "https://raw.githubusercontent.com/${{ github.repository }}/${tag}/src-tauri/icons/icon.png" \
+            --argjson size "$(stat -c %s "$ipa")" '{
+              name: "Cria",
+              identifier: "io.cria.app.source",
+              apps: [{
+                name: "Cria",
+                bundleIdentifier: "io.cria.app",
+                developerName: "Cria",
+                subtitle: "Native Vikunja client",
+                localizedDescription: "Native desktop and iOS client for Vikunja.",
+                iconURL: $icon,
+                versions: [{
+                  version: $v, buildVersion: $v, date: $date, size: $size,
+                  downloadURL: $url, localizedDescription: $notes
+                }]
+              }],
+              news: []
+            }' > gh-pages-out/sidestore-stable.json
+          cat gh-pages-out/sidestore-stable.json
+
       - name: Publish update.json to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
