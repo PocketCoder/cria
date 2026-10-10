@@ -56,7 +56,9 @@ final class LabelRepositoryTests: XCTestCase {
         """).relatedTasks ?? [:]
         try store.replaceRelationsFromServer(taskLocalId: task.localId, related)
         let kinds = try store.database.writer.read { connection in
-            try String.fetchAll(connection, sql: "SELECT relation_kind FROM task_relations WHERE task_local_id = ?", arguments: [task.localId])
+            try String.fetchAll(
+                connection, sql: "SELECT relation_kind FROM task_relations WHERE task_local_id = ?", arguments: [task.localId]
+            )
         }
         XCTAssertEqual(kinds, ["subtask"])
     }

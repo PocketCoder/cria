@@ -48,7 +48,10 @@ extension CriaStore {
     public func upsertLabelFromServer(_ payload: LabelResponse, rawJSON: String) throws -> String {
         try database.writer.write { connection -> String in
             let now = isoNow()
-            if let existing = try Row.fetchOne(connection, sql: "SELECT local_id, dirty FROM labels WHERE server_id = ?", arguments: [payload.id]) {
+            let existing = try Row.fetchOne(
+                connection, sql: "SELECT local_id, dirty FROM labels WHERE server_id = ?", arguments: [payload.id]
+            )
+            if let existing {
                 let localId: String = existing["local_id"]
                 let dirty: Bool = existing["dirty"]
                 if !dirty {
@@ -95,7 +98,7 @@ extension CriaStore {
             try connection.enqueue(
                 .taskLabel,
                 localId: entityId,
-                op: nowDeleted ? .delete : .create,
+                operation: nowDeleted ? .delete : .create,
                 payload: ["task_local_id": taskLocalId, "label_local_id": labelLocalId],
                 at: now
             )

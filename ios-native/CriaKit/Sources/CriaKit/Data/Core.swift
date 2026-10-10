@@ -94,12 +94,12 @@ enum OutboxOp: String, Sendable {
 
 extension Database {
     /// Queues a change for the push engine. Call inside the same write as the row change.
-    func enqueue(_ entity: OutboxEntity, localId: String, op: OutboxOp, payload: [String: Any], at now: String) throws {
+    func enqueue(_ entity: OutboxEntity, localId: String, operation: OutboxOp, payload: [String: Any], at now: String) throws {
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
-        let json = String(decoding: data, as: UTF8.self)
+        let json = String(bytes: data, encoding: .utf8) ?? "{}"
         try execute(
             sql: "INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at) VALUES (?, ?, ?, ?, ?)",
-            arguments: [entity.rawValue, localId, op.rawValue, json, now]
+            arguments: [entity.rawValue, localId, operation.rawValue, json, now]
         )
     }
 }

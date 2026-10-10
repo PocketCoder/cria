@@ -180,7 +180,7 @@ extension CriaStore {
             guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
                 throw CriaStoreError.notFound(localId)
             }
-            try connection.enqueue(.task, localId: localId, op: .create, payload: CriaStore.taskPayload(record), at: now)
+            try connection.enqueue(.task, localId: localId, operation: .create, payload: CriaStore.taskPayload(record), at: now)
             return record
         }
     }
@@ -221,7 +221,7 @@ extension CriaStore {
             guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
                 throw CriaStoreError.notFound(localId)
             }
-            try connection.enqueue(.task, localId: localId, op: .update, payload: CriaStore.taskPayload(record), at: now)
+            try connection.enqueue(.task, localId: localId, operation: .update, payload: CriaStore.taskPayload(record), at: now)
             return record
         }
     }
@@ -234,7 +234,7 @@ extension CriaStore {
                 sql: "UPDATE tasks SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ?",
                 arguments: [now, localId]
             )
-            try connection.enqueue(.task, localId: localId, op: .delete, payload: [:], at: now)
+            try connection.enqueue(.task, localId: localId, operation: .delete, payload: [:], at: now)
         }
     }
 
@@ -258,7 +258,9 @@ extension CriaStore {
                 let dirty: Bool = existing["dirty"]
                 if dirty {
                     let lastSynced: String? = existing["last_synced"]
-                    try CriaStore.recordConflictIfDiverged(connection, localId: localId, lastSynced: lastSynced, remoteJSON: rawJSON, now: now)
+                    try CriaStore.recordConflictIfDiverged(
+                        connection, localId: localId, lastSynced: lastSynced, remoteJSON: rawJSON, now: now
+                    )
                     return localId
                 }
             } else {
@@ -309,7 +311,8 @@ extension CriaStore {
             (before[field] as? AnyHashable) != (after[field] as? AnyHashable)
         }
         guard !fields.isEmpty else { return }
-        let fieldsJSON = String(decoding: try JSONSerialization.data(withJSONObject: fields), as: UTF8.self)
+        let fieldsData = try JSONSerialization.data(withJSONObject: fields)
+        let fieldsJSON = String(bytes: fieldsData, encoding: .utf8) ?? "[]"
         try connection.execute(sql: """
             INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at)
             VALUES ('task', ?, ?, ?, ?, ?)

@@ -99,10 +99,12 @@ extension CriaStore {
                 arguments: [isFavorite, now, localId]
             )
             // Vikunja's project POST replaces the whole object, so queue every field, not just the flag.
-            let row = try Row.fetchOne(connection, sql: "SELECT \(CriaStore.projectColumns) FROM projects WHERE local_id = ?", arguments: [localId])
+            let row = try Row.fetchOne(
+                connection, sql: "SELECT \(CriaStore.projectColumns) FROM projects WHERE local_id = ?", arguments: [localId]
+            )
             guard let row else { throw CriaStoreError.notFound(localId) }
             let record = ProjectRecord(row: row)
-            try connection.enqueue(.project, localId: localId, op: .update, payload: [
+            try connection.enqueue(.project, localId: localId, operation: .update, payload: [
                 "title": record.title,
                 "description": jsonNullable(record.description),
                 "hex_color": jsonNullable(record.hexColor),
