@@ -599,6 +599,39 @@ html[data-vt='theme']::view-transition-new(root) {
   to { grid-template-rows: 1fr; opacity: 1; }
 }
 
+/* Popovers as bottom sheets on iPhone-width layouts. Radix positions the
+   content through an inline-styled wrapper, so the override needs !important. */
+@media (max-width: 768px) {
+  [data-radix-popper-content-wrapper]:has(> .popover-sheet) {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    transform: none !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+  .popover-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 75dvh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    padding: 12px 12px calc(env(safe-area-inset-bottom) + 12px);
+    background: var(--sheet-bg);
+    box-shadow: var(--shadow-sheet);
+    animation: sheet-up 300ms var(--spring-snappy);
+  }
+  .popover-sheet::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: -4px auto 10px;
+    border-radius: 9999px;
+    background: color-mix(in oklch, var(--color-muted-foreground) 30%, transparent);
+  }
+}
+
 /* Inline reveals (fields that appear under a row): fade and settle in. */
 .reveal-in {
   animation: reveal-in 200ms var(--spring-snappy);
