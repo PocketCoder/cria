@@ -1,0 +1,25 @@
+{
+  "name": "Cria",
+  "identifier": "io.cria.source",
+  "news": [],
+  "apps": [
+    {
+      "name": "Cria (Nightly)",
+      "bundleIdentifier": "io.cria.app.nightly",
+      "developerName": "Cria",
+      "subtitle": "Unstable dev builds",
+      "localizedDescription": "Automated build of the dev branch. Unstable.",
+      "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
+      "versions": [
+        {
+          "version": "0.14.1",
+          "buildVersion": "50",
+          "date": "2026-10-10T11:17:17Z",
+          "size": 6136031,
+          "downloadURL": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-unsigned.ipa",
+          "localizedDescription": "dev @ e2b4227"
+        }
+      ]
+    }
+  ]
+}
