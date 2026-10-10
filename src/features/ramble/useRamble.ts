@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { generate } from '@/tauri/ai';
 import { speechErrorMessage, startSpeech, type SpeechSession } from '@/tauri/speech';
-import { aiErrorMessage, parseLines, rambleInstructions, clip } from '@/lib/aiPrompts';
+import { parseLines, rambleInstructions, clip } from '@/lib/aiPrompts';
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { useUi } from '@/stores/ui';
@@ -11,7 +11,6 @@ import { createFromQuickAdd } from './createFromQuickAdd';
 import {
   acceptAllSuggestions,
   acceptSuggestion,
-  appendBlankDraft,
   chosenDrafts,
   createDrafts,
   defaultProjectId,
@@ -24,13 +23,11 @@ import {
   type Phase,
 } from './rambleLogic';
 
-/** State and actions for the Ramble flow: input, on-device organise, review, save. */
+/** State and actions for the Ramble flow: listen, organise on-device into rows, review, save. Voice only. */
 export function useRamble(onClose: () => void) {
   const { data: projects = [] } = useSelectableProjects();
   const { data: labels = [] } = useLabels();
   const activeView = useUi((s) => s.activeView);
-  const text = useUi((s) => s.rambleDraft);
-  const setText = useUi((s) => s.setRambleDraft);
   const pendingLines = useUi((s) => s.rambleLines);
   const setPendingLines = useUi((s) => s.setRambleLines);
   // The model writes, and every parse reads, the user's Quick Add Magic syntax.
@@ -41,11 +38,10 @@ export function useRamble(onClose: () => void) {
   latest.current = { projects, labels, mode };
   const suggestionCtx = { projects, labels, mode };
 
-  const [phase, setPhase] = useState<Phase>('input');
+  const [phase, setPhase] = useState<Phase>('review');
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const nextId = useRef(0);
-  const textRef = useRef<HTMLTextAreaElement>(null);
   // False once the sheet is closed; the model call can't be cancelled, so it
   // may still resolve afterwards.
   const alive = useRef(true);
@@ -79,57 +75,13 @@ export function useRamble(onClose: () => void) {
     if (next) setProjectId(next);
   }, [projects, activeView, projectId]);
 
+  // Rows organised while the sheet was closed: shown (never auto-added) on reopen.
   useEffect(() => {
-    textRef.current?.focus({ preventScroll: true });
-  }, []);
-
-  // Lines organised while the sheet was closed: review them on reopen.
-  useEffect(() => {
-    if (!pendingLines || phase !== 'input') return;
-    setDrafts(draftsFromLines(pendingLines, nextId.current, mode));
+    if (!pendingLines) return;
+    setDrafts((prev) => [...prev, ...draftsFromLines(pendingLines, nextId.current, mode)]);
     nextId.current += pendingLines.length;
     setPendingLines(null);
-    setError(null);
-    setPhase('review');
-  }, [pendingLines, phase, setPendingLines, mode]);
-
-  const organise = async () => {
-    // Only from the input step: not mid-organise, and not mid-save (the save
-    // loop is still creating the old drafts).
-    if (!text.trim() || phase !== 'input') return;
-    setPendingLines(null);
-    setPhase('thinking');
-    setError(null);
-    try {
-      const out = await generate({
-        title: 'Organising your ramble',
-        instructions: rambleInstructions({
-          projects: projects.map((p) => p.title),
-          labels: labels.map((l) => l.title),
-          mode,
-        }),
-        prompt: clip(text.trim()),
-      });
-      const lines = parseLines(out);
-      if (!alive.current) {
-        // Closed while organising: keep the result for the next open.
-        if (lines.length > 0) setPendingLines(lines);
-        return;
-      }
-      if (lines.length === 0) {
-        setError("Couldn't find any tasks in that. Try saying what you need to do.");
-        setPhase('input');
-        return;
-      }
-      setDrafts(draftsFromLines(lines, nextId.current, mode));
-      nextId.current += lines.length;
-      setPhase('review');
-    } catch (err) {
-      if (!alive.current) return;
-      setError(aiErrorMessage(err));
-      setPhase('input');
-    }
-  };
+  }, [pendingLines, setPendingLines, mode]);
 
   const appendLines = (lines: string[]) => {
     if (lines.length === 0) return;
@@ -189,7 +141,7 @@ export function useRamble(onClose: () => void) {
       speech.current.stop();
       return;
     }
-    if (starting.current || phase === 'thinking' || phase === 'saving') return;
+    if (starting.current || phase === 'saving') return;
     starting.current = true;
     setError(null);
     try {
@@ -197,6 +149,7 @@ export function useRamble(onClose: () => void) {
         onInterim: (t) => alive.current && setInterim(t),
         onFinal: (t) => {
           buffer.current.push(t);
+          setOrganising(true);
           scheduleFlush(600);
         },
         onEnd: (err) => {
@@ -215,20 +168,19 @@ export function useRamble(onClose: () => void) {
       }
       speech.current = session;
       setListening(true);
-      // Rows appear as you talk, so go straight to the list.
-      if (phase === 'input') setPhase('review');
     } catch (err) {
       console.warn('[ramble] dictation unavailable:', err);
-      setError('Dictation is not available on this device. Type instead.');
+      setError('Dictation is not available on this device.');
     } finally {
       starting.current = false;
     }
   };
 
-  const back = () => {
-    speech.current?.stop();
-    setPhase('input');
-  };
+  // Listen as soon as the sheet opens, like speaking to an assistant.
+  useEffect(() => {
+    void toggleMic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
+  }, []);
 
   const chosen = chosenDrafts(drafts, mode);
 
@@ -239,11 +191,11 @@ export function useRamble(onClose: () => void) {
   };
 
   const addAll = async () => {
-    if (chosen.length === 0 || !projectId) return;
+    // Not while speech is still turning into rows: those tasks haven't been seen yet.
+    if (chosen.length === 0 || !projectId || organising || interim) return;
     speech.current?.stop();
     setPhase('saving');
     const savedIds = new Set<number>();
-    const savedText = text;
     const remaining = drafts;
     try {
       await createDrafts(
@@ -252,12 +204,9 @@ export function useRamble(onClose: () => void) {
         (d) => savedIds.add(d.id),
       );
       if (!alive.current) {
-        // Unmounted mid-save: the sheet is gone, and a reopened one is not
-        // ours to close. Only drop the draft text if it is still the saved one.
-        if (useUi.getState().rambleDraft === savedText) setText('');
+        // Unmounted mid-save: the sheet is gone, and a reopened one is not ours to close.
         return;
       }
-      setText('');
       setPendingLines(null);
       onClose();
     } catch (err) {
@@ -281,11 +230,6 @@ export function useRamble(onClose: () => void) {
     setDrafts((prev) => prev.map((d) => (d.id === id ? acceptSuggestion(d, suggestionCtx) : d)));
   const acceptAll = () => setDrafts((prev) => acceptAllSuggestions(prev, suggestionCtx));
   const deleteDraft = (id: number) => setDrafts((prev) => removeDraft(prev, id));
-  const addBlankDraft = () => {
-    // Allocate the id here, not in the updater: updaters must stay pure.
-    const id = nextId.current++;
-    setDrafts((prev) => appendBlankDraft(prev, id));
-  };
 
   const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
   const addOne = async (id: number) => {
@@ -317,14 +261,9 @@ export function useRamble(onClose: () => void) {
     interim,
     organising,
     toggleMic,
-    back,
     addOne,
     busyIds,
-    text,
-    setText,
-    textRef,
     phase,
-    setPhase,
     close,
     error,
     drafts,
@@ -332,10 +271,8 @@ export function useRamble(onClose: () => void) {
     projects,
     projectId,
     setProjectId,
-    organise,
     addAll,
     updateDraft,
     deleteDraft,
-    addBlankDraft,
   };
 }

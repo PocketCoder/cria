@@ -978,3 +978,9 @@ mention-user {
 .mention-suggestion-item.is-selected {
   background: var(--color-muted);
 }
+
+/* Ramble: decorative listening waveform. */
+@keyframes ramble-wave {
+  0%, 100% { height: 4px; }
+  50% { height: 26px; }
+}

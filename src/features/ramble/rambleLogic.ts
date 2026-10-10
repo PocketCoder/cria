@@ -3,7 +3,7 @@ import { parseQuickAdd } from '@/lib/quickAddParser';
 import { QUICK_ADD_PREFIXES, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import type { ActiveView } from '@/stores/ui';
 
-export type Phase = 'input' | 'thinking' | 'review' | 'saving';
+export type Phase = 'review' | 'saving';
 
 export interface Draft {
   id: number;
@@ -176,10 +176,6 @@ export async function createDrafts(
   }
 }
 
-export function appendBlankDraft(drafts: readonly Draft[], id: number): Draft[] {
-  return [...drafts, { id, line: '', include: true }];
-}
-
 /** "3 tasks" / "1 task". */
 export function taskCount(n: number): string {
   return `${n} task${n === 1 ? '' : 's'}`;
@@ -196,10 +192,4 @@ export function defaultProjectId(
   if (projects.length === 0) return '';
   const open = activeView?.kind === 'project' ? activeView.localId : null;
   return projects.find((p) => p.localId === open)?.localId ?? projects[0]!.localId;
-}
-
-export function dictationHint(mobile: boolean): string {
-  return mobile
-    ? 'Tap the microphone on the keyboard and talk.'
-    : 'Press the dictation key (or fn twice) and talk.';
 }

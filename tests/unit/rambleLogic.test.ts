@@ -3,12 +3,10 @@ import {
   acceptAllSuggestions,
   acceptSuggestion,
   hasUsableSuggestion,
-  appendBlankDraft,
   splitSuggestion,
   chosenDrafts,
   createDrafts,
   defaultProjectId,
-  dictationHint,
   draftsFromLines,
   findProjectByTitle,
   hasTitle,
@@ -88,7 +86,6 @@ describe('rambleLogic', () => {
     expect(patched[1]).toEqual({ id: 1, line: 'b', include: false });
     expect(drafts[1]!.include).toBe(true);
     expect(removeDraft(drafts, 0)).toEqual([drafts[1]]);
-    expect(appendBlankDraft(drafts, 9).at(-1)).toEqual({ id: 9, line: '', include: true });
     expect(drafts).toHaveLength(2);
   });
 
@@ -107,10 +104,6 @@ describe('rambleLogic', () => {
     expect(defaultProjectId([], { kind: 'today' })).toBe('');
   });
 
-  it('words the dictation hint per platform', () => {
-    expect(dictationHint(true)).toContain('microphone');
-    expect(dictationHint(false)).toContain('dictation key');
-  });
 });
 
 describe('saving a batch of drafts', () => {

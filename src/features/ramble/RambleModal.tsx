@@ -1,10 +1,8 @@
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useEscapeKey } from '@/components/quick-add/useSheetBehaviour';
-import { isMobilePlatform } from '@/lib/platform';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
-import { RambleHeader, RambleInput, RambleReview } from './RambleParts';
-import { dictationHint } from './rambleLogic';
+import { RambleHeader, RambleReview } from './RambleParts';
 import { useRamble } from './useRamble';
 
 /**
@@ -23,53 +21,30 @@ export function RambleModal({ onClose }: { onClose: () => void }) {
   const r = useRamble(onClose);
   useEscapeKey(r.close);
 
-  const reviewing = r.phase === 'review' || r.phase === 'saving';
-
   const body = (
     <>
-      <RambleHeader
-        reviewing={reviewing}
-        busy={r.phase === 'saving'}
-        onBack={r.back}
-        onClose={r.close}
+      <RambleHeader busy={r.phase === 'saving'} onClose={r.close} />
+      <RambleReview
+        phase={r.phase}
+        drafts={r.drafts}
+        chosenCount={r.chosen.length}
+        projects={r.projects}
+        projectId={r.projectId}
+        setProjectId={r.setProjectId}
+        error={r.error}
+        onUpdate={r.updateDraft}
+        onDelete={r.deleteDraft}
+        onAddAll={() => void r.addAll()}
+        suggestionCtx={r.suggestionCtx}
+        onAccept={r.acceptOne}
+        onAcceptAll={r.acceptAll}
+        listening={r.listening}
+        interim={r.interim}
+        organising={r.organising}
+        busyIds={r.busyIds}
+        onMic={() => void r.toggleMic()}
+        onAddOne={(id) => void r.addOne(id)}
       />
-      {reviewing ? (
-        <RambleReview
-          phase={r.phase}
-          drafts={r.drafts}
-          chosenCount={r.chosen.length}
-          projects={r.projects}
-          projectId={r.projectId}
-          setProjectId={r.setProjectId}
-          error={r.error}
-          onUpdate={r.updateDraft}
-          onDelete={r.deleteDraft}
-          onAddBlank={r.addBlankDraft}
-          onCancel={r.close}
-          onAddAll={() => void r.addAll()}
-          onAccept={r.acceptOne}
-          onAcceptAll={r.acceptAll}
-          suggestionCtx={r.suggestionCtx}
-          listening={r.listening}
-          interim={r.interim}
-          organising={r.organising}
-          busyIds={r.busyIds}
-          onMic={() => void r.toggleMic()}
-          onAddOne={(id) => void r.addOne(id)}
-        />
-      ) : (
-        <RambleInput
-          text={r.text}
-          setText={r.setText}
-          textRef={r.textRef}
-          thinking={r.phase === 'thinking'}
-          error={r.error}
-          hint={dictationHint(isMobilePlatform())}
-          rows={isMobile ? 6 : 8}
-          onOrganise={() => void r.organise()}
-          onMic={() => void r.toggleMic()}
-        />
-      )}
     </>
   );
 

@@ -1,14 +1,12 @@
-import { useMemo, type ReactNode, type RefObject } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   Mic,
-  Square,
+  Pause,
   Check,
   Loader2,
   X,
-  Plus,
   Trash2,
   Sparkles,
-  ArrowLeft,
   Calendar,
   Repeat,
   Tag,
@@ -19,6 +17,7 @@ import { parseQuickAdd } from '@/lib/quickAddParser';
 import { useSettings } from '@/stores/settings';
 import { hasTimeOfDay, useDateFormatter } from '@/lib/dateFormat';
 import { cn } from '@/lib/cn';
+import { priorityColor } from '@/components/ui/priority';
 import {
   Select,
   SelectTrigger,
@@ -37,37 +36,11 @@ import {
   type SuggestionContext,
 } from './rambleLogic';
 
-export function RambleHeader({
-  reviewing,
-  busy,
-  onBack,
-  onClose,
-}: {
-  reviewing: boolean;
-  /**
-   * Saving: Back and Close are inert. Back would let Organise replace drafts
-   * mid-save; closing would let the save finish against a reopened sheet.
-   */
-  busy: boolean;
-  onBack: () => void;
-  onClose: () => void;
-}) {
+export function RambleHeader({ busy, onClose }: { busy: boolean; onClose: () => void }) {
   return (
     <div className="mb-3 flex items-center justify-between">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
-        {reviewing ? (
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={busy}
-            className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50 disabled:hover:text-[var(--color-muted-foreground)]"
-            aria-label="Back to ramble"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-        ) : (
-          <Mic className="h-4 w-4" />
-        )}
+        <Mic className="h-4 w-4" />
         Ramble
       </h2>
       <button
@@ -82,113 +55,31 @@ export function RambleHeader({
   );
 }
 
-/** Mic toggle: tap and talk, tap again to stop. Pulses while listening. */
-export function MicButton({
-  listening,
-  disabled,
-  onToggle,
-  size = 'md',
-}: {
-  listening: boolean;
-  disabled?: boolean;
-  onToggle: () => void;
-  size?: 'md' | 'lg';
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      aria-pressed={listening}
-      aria-label={listening ? 'Stop listening' : 'Start talking'}
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50',
-        size === 'lg' ? 'h-14 w-14' : 'h-9 w-9',
-        listening
-          ? 'animate-pulse bg-[var(--color-destructive)] text-white'
-          : 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90',
-      )}
-    >
-      {listening ? <Square className="h-4 w-4 fill-current" /> : <Mic className={size === 'lg' ? 'h-6 w-6' : 'h-4 w-4'} />}
-    </button>
-  );
-}
+const WAVE_BARS = 28;
 
-/** Free-text box plus the Organise button. */
-export function RambleInput({
-  text,
-  setText,
-  textRef,
-  thinking,
-  error,
-  hint,
-  rows,
-  onOrganise,
-  onMic,
-}: {
-  text: string;
-  setText: (v: string) => void;
-  textRef: RefObject<HTMLTextAreaElement>;
-  thinking: boolean;
-  error: string | null;
-  hint: string;
-  rows: number;
-  onOrganise: () => void;
-  onMic: () => void;
-}) {
+/** Decorative level meter: the native bridge sends no audio levels, so it just moves while listening. */
+function Waveform({ active }: { active: boolean }) {
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col items-center gap-1 py-1">
-        <MicButton listening={false} disabled={thinking} onToggle={onMic} size="lg" />
-        <span className="text-caption text-[var(--color-muted-foreground)]">Tap and start talking</span>
-      </div>
-      <textarea
-        aria-label="Everything on your mind"
-        ref={textRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            onOrganise();
-          }
-        }}
-        disabled={thinking}
-        rows={rows}
-        placeholder="Everything on your mind: “call the dentist next week, renew car insurance before Friday, that’s important, and buy milk…”"
-        className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm leading-relaxed placeholder-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] disabled:opacity-60"
-      />
-      {error ? (
-        <p className="text-caption text-[var(--color-destructive)]">{error}</p>
-      ) : (
-        <p className="text-caption text-[var(--color-muted-foreground)]">{hint}</p>
-      )}
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex h-8 flex-1 items-center justify-center gap-[3px]" aria-hidden>
+      {Array.from({ length: WAVE_BARS }, (_, i) => (
         <span
-          className="flex items-center gap-1 text-caption text-[var(--color-muted-foreground)]"
-          title="Processed on-device with Apple Intelligence"
-        >
-          <Sparkles className="h-3 w-3" /> On-device
-        </span>
-        <button
-          type="button"
-          disabled={!text.trim() || thinking}
-          onClick={onOrganise}
-          className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
-        >
-          {thinking ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="h-3.5 w-3.5" />
+          key={i}
+          className={cn(
+            'w-[3px] rounded-full bg-[var(--color-primary)] transition-opacity',
+            active ? 'animate-[ramble-wave_900ms_ease-in-out_infinite] motion-reduce:animate-none' : 'opacity-30',
           )}
-          {thinking ? 'Organising…' : 'Organise'}
-        </button>
-      </div>
+          style={{
+            height: active ? undefined : 4,
+            animationDelay: `${(i * 67) % 600}ms`,
+            opacity: active ? 0.35 + ((i * 37) % 65) / 100 : undefined,
+          }}
+        />
+      ))}
     </div>
   );
 }
 
-/** Editable list of drafted tasks, default project and the Add button. */
+/** Voice-only review: task cards as you speak, a status line, and the pause / waveform / confirm bar. */
 export function RambleReview({
   phase,
   drafts,
@@ -199,8 +90,6 @@ export function RambleReview({
   error,
   onUpdate,
   onDelete,
-  onAddBlank,
-  onCancel,
   onAddAll,
   listening,
   interim,
@@ -230,43 +119,52 @@ export function RambleReview({
   error: string | null;
   onUpdate: (id: number, patch: Partial<Draft>) => void;
   onDelete: (id: number) => void;
-  onAddBlank: () => void;
-  onCancel: () => void;
   onAddAll: () => void;
 }) {
   const saving = phase === 'saving';
-  const magicOff = useSettings((s) => s.quickAddMagicMode === 'disabled');
+  // Speech still being heard or turned into rows: adding now would leave out
+  // tasks the user hasn't seen yet.
+  const settling = organising || interim !== '';
   const suggestionCount = drafts.filter((d) => hasUsableSuggestion(d, suggestionCtx)).length;
+  const status = saving
+    ? 'Adding…'
+    : settling
+      ? 'Working on it…'
+      : listening
+        ? 'Listening…'
+        : drafts.length > 0
+          ? 'Paused'
+          : 'Tap the mic to start';
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <MicButton listening={listening} disabled={saving} onToggle={onMic} />
-        <div className="min-w-0 flex-1 text-caption text-[var(--color-muted-foreground)]" aria-live="polite">
-          {interim ? (
-            <span className="italic">{interim}</span>
-          ) : listening ? (
-            'Listening… say what you need to do.'
-          ) : drafts.length === 0 ? (
-            'Tap the mic and start talking.'
-          ) : (
-            `${chosenCount} task${chosenCount === 1 ? '' : 's'} ready. Edit any line${magicOff ? '.' : '; quick-add syntax works.'}`
-          )}
-        </div>
-        {organising && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-muted-foreground)]" />}
-      </div>
+      <Select value={projectId} onValueChange={setProjectId}>
+        <SelectTrigger
+          className="mx-auto flex w-auto min-w-40 max-w-full items-center justify-center gap-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-base font-semibold hover:border-[var(--color-border)]"
+          aria-label="Project for new tasks"
+        >
+          <SelectValue placeholder="Select project" />
+        </SelectTrigger>
+        <SelectContent>
+          {projects.map((p) => (
+            <SelectItem key={p.localId} value={p.localId}>
+              {p.title}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {suggestionCount > 0 && (
         <button
           type="button"
           onClick={onAcceptAll}
           disabled={saving}
-          className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-caption text-[var(--color-foreground)] hover:bg-[var(--color-muted)] disabled:opacity-50"
+          className="mx-auto flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1 text-caption text-[var(--color-foreground)] hover:bg-[var(--color-muted)] disabled:opacity-50"
         >
           <Sparkles className="h-3 w-3" /> Accept all suggestions ({suggestionCount})
         </button>
       )}
 
-      <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+      <ul className="max-h-[45dvh] min-h-24 space-y-2 overflow-y-auto pr-1">
         {drafts.map((d) => (
           <DraftRow
             key={d.id}
@@ -281,54 +179,54 @@ export function RambleReview({
             busy={saving || busyIds.has(d.id)}
           />
         ))}
+        {(listening || settling) && (
+          <li
+            className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-card)] px-3 py-3"
+            aria-live="polite"
+          >
+            <span className="h-5 w-5 shrink-0 rounded-full border-2 border-[var(--color-border)]" />
+            {interim ? (
+              <span className="text-sm italic text-[var(--color-muted-foreground)]">{interim}</span>
+            ) : (
+              <span className="h-3 flex-1 animate-pulse rounded bg-[var(--color-muted)]" />
+            )}
+          </li>
+        )}
       </ul>
 
-      <button
-        type="button"
-        onClick={onAddBlank}
-        className="flex items-center gap-1 text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-      >
-        <Plus className="h-3.5 w-3.5" /> Add task
-      </button>
+      <div className="space-y-0.5 text-center" aria-live="polite">
+        <p className="text-sm font-medium">{status}</p>
+        <p className="text-caption text-[var(--color-muted-foreground)]">
+          Say everything you need to get done.
+        </p>
+      </div>
 
-      <label className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-3 text-caption">
-        <span className="text-[var(--color-muted-foreground)]">Project for the rest</span>
-        <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger
-            className="w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-sm"
-            aria-label="Default project"
-          >
-            <SelectValue placeholder="Select project" />
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((p) => (
-              <SelectItem key={p.localId} value={p.localId}>
-                {p.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+      {error && <p className="text-center text-caption text-[var(--color-destructive)]">{error}</p>}
 
-      {error && <p className="text-caption text-[var(--color-destructive)]">{error}</p>}
-
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="flex items-center gap-3 pt-1">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={onMic}
           disabled={saving}
-          className="rounded-md px-3 py-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50"
+          aria-label={listening ? 'Pause listening' : 'Start listening'}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-muted)] text-[var(--color-foreground)] hover:opacity-90 disabled:opacity-50"
         >
-          Cancel
+          {listening ? <Pause className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
         </button>
+        <Waveform active={listening && !saving} />
         <button
           type="button"
-          disabled={saving || chosenCount === 0 || !projectId}
+          disabled={saving || settling || chosenCount === 0 || !projectId}
           onClick={onAddAll}
-          className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
+          aria-label={`Add all ${chosenCount} tasks`}
+          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50"
         >
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {saving ? 'Adding…' : `Add all (${chosenCount})`}
+          {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+          {chosenCount > 0 && !saving && (
+            <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--color-foreground)] px-1 text-center text-[11px] font-semibold leading-5 text-[var(--color-background)]">
+              {chosenCount}
+            </span>
+          )}
         </button>
       </div>
     </div>
@@ -357,14 +255,13 @@ function DraftRow({
   busy: boolean;
 }) {
   const mode = useSettings((s) => s.quickAddMagicMode);
+  const priority = useMemo(() => parseQuickAdd(d.line, new Date(), mode).priority, [d.line, mode]);
   return (
-    <li className="group flex items-start gap-2">
-      <input
-        type="checkbox"
-        checked={d.include}
-        onChange={(e) => onUpdate(d.id, { include: e.target.checked })}
-        className="mt-1.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
-        aria-label={`Include ${d.line}`}
+    <li className="group flex items-start gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 shadow-sm">
+      <span
+        className="mt-1.5 h-5 w-5 shrink-0 rounded-full border-2"
+        style={{ borderColor: priority ? priorityColor(priority) : 'var(--color-border)' }}
+        aria-hidden
       />
       <div className="min-w-0 flex-1">
         <input
@@ -372,14 +269,11 @@ function DraftRow({
           type="text"
           value={d.line}
           onChange={(e) => onUpdate(d.id, { line: e.target.value })}
-          className={cn(
-            'w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-ring)] focus:outline-none',
-            !d.include && 'text-[var(--color-muted-foreground)] line-through',
-          )}
+          className="w-full rounded-md border border-transparent bg-transparent px-1 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-ring)] focus:outline-none"
         />
         <DraftChips
           line={d.line}
-          included={d.include}
+          included
           projects={projects}
           fallbackProjectId={fallbackProjectId}
         />
@@ -398,7 +292,7 @@ function DraftRow({
       <button
         type="button"
         onClick={() => onDelete(d.id)}
-        className="hover-reveal mt-1 shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+        className="mt-1 shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
         aria-label={`Remove ${d.line}`}
       >
         <Trash2 className="h-3.5 w-3.5" />

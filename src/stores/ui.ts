@@ -25,8 +25,6 @@ interface UiState {
   photoCaptureOpen: boolean;
   /** Transient: the Ramble (speak → many tasks) sheet is open. */
   rambleOpen: boolean;
-  /** Unsent ramble text, kept across close/reopen so a slip doesn't lose it. */
-  rambleDraft: string;
   /** Transient: lines organised after the sheet was closed, for the next open to review. */
   rambleLines: string[] | null;
   setActiveView: (view: ActiveView | null) => void;
@@ -36,7 +34,6 @@ interface UiState {
   toggleSidebar: () => void;
   setPhotoCaptureOpen: (open: boolean) => void;
   setRambleOpen: (open: boolean) => void;
-  setRambleDraft: (text: string) => void;
   setRambleLines: (lines: string[] | null) => void;
 }
 
@@ -127,7 +124,6 @@ export const useUi = create<UiState>()(
       sidebarCollapsed: false,
       photoCaptureOpen: false,
       rambleOpen: false,
-      rambleDraft: '',
       rambleLines: null,
       setActiveView: (view) => {
         // The view commit can land a frame late (View Transition). Clear the
@@ -156,7 +152,6 @@ export const useUi = create<UiState>()(
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPhotoCaptureOpen: (open) => set({ photoCaptureOpen: open }),
       setRambleOpen: (open) => set({ rambleOpen: open }),
-      setRambleDraft: (text) => set({ rambleDraft: text }),
       setRambleLines: (lines) => set({ rambleLines: lines }),
     }),
     {

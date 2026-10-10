@@ -272,11 +272,8 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
         onOpenRamble={
           aiAvailable
             ? () => {
-                // Carry over anything already typed.
-                const ui = useUi.getState();
-                if (text.trim() && !ui.rambleDraft.trim()) ui.setRambleDraft(text);
                 onClose();
-                ui.setRambleOpen(true);
+                useUi.getState().setRambleOpen(true);
               }
             : undefined
         }
