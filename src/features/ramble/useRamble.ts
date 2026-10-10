@@ -170,37 +170,46 @@ export function useRamble(onClose: () => void) {
     flushTimer.current = setTimeout(() => void flush(), delay);
   };
 
-  const toggleMic = () => {
+  const starting = useRef(false);
+  const toggleMic = async () => {
     if (speech.current) {
       speech.current.stop();
       return;
     }
-    if (phase === 'thinking' || phase === 'saving') return;
+    if (starting.current || phase === 'thinking' || phase === 'saving') return;
+    starting.current = true;
     setError(null);
-    const session = startSpeech({
-      onInterim: (t) => alive.current && setInterim(t),
-      onFinal: (t) => {
-        buffer.current.push(t);
-        scheduleFlush(1500);
-      },
-      onEnd: (err) => {
-        speech.current = null;
-        if (flushTimer.current) clearTimeout(flushTimer.current);
-        void flush();
-        if (!alive.current) return;
-        setListening(false);
-        setInterim('');
-        if (err) setError(speechErrorMessage(err));
-      },
-    });
-    if (!session) {
-      setError('Live dictation is not available here. Type, or use your keyboard dictation.');
-      return;
+    try {
+      const session = await startSpeech({
+        onInterim: (t) => alive.current && setInterim(t),
+        onFinal: (t) => {
+          buffer.current.push(t);
+          scheduleFlush(600);
+        },
+        onEnd: (err) => {
+          speech.current = null;
+          if (flushTimer.current) clearTimeout(flushTimer.current);
+          void flush();
+          if (!alive.current) return;
+          setListening(false);
+          setInterim('');
+          if (err) setError(speechErrorMessage(err));
+        },
+      });
+      if (!alive.current) {
+        session.stop();
+        return;
+      }
+      speech.current = session;
+      setListening(true);
+      // Rows appear as you talk, so go straight to the list.
+      if (phase === 'input') setPhase('review');
+    } catch (err) {
+      console.warn('[ramble] dictation unavailable:', err);
+      setError('Dictation is not available on this device. Type instead.');
+    } finally {
+      starting.current = false;
     }
-    speech.current = session;
-    setListening(true);
-    // Rows appear as you talk, so go straight to the list.
-    if (phase === 'input') setPhase('review');
   };
 
   const back = () => {

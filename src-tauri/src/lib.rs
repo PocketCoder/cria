@@ -1,6 +1,7 @@
 mod ai;
 mod ocr;
 mod secure;
+mod speech;
 mod tx;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -370,6 +371,9 @@ pub fn run() {
         ocr::recognize_text,
         ai::ai_generate,
         ai::ai_availability,
+        speech::speech_start,
+        speech::speech_stop,
+        speech::speech_available,
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
@@ -383,6 +387,9 @@ pub fn run() {
         ocr::recognize_text,
         ai::ai_generate,
         ai::ai_availability,
+        speech::speech_start,
+        speech::speech_stop,
+        speech::speech_available,
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,

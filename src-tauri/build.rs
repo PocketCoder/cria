@@ -28,6 +28,10 @@ fn main() {
         // Weak-link so the app still launches on OSes without FoundationModels;
         // the Swift side checks #available before touching it.
         println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
+        // Live dictation (src/speech.rs). Both frameworks exist on every
+        // supported OS, so a normal link is fine.
+        println!("cargo:rustc-link-arg=-Wl,-framework,Speech");
+        println!("cargo:rustc-link-arg=-Wl,-framework,AVFoundation");
     }
     tauri_build::build()
 }
