@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CalendarDays, Tag, Bell } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { PrioritySelect } from '@/components/ui/priority-select';
@@ -33,6 +33,8 @@ interface SetChipsProps {
   repeatMode: number | null;
   onChangeRepeat: (after: number | null, mode: number | null) => void;
   className?: string;
+  /** Content of the dashed affordance chip. Defaults to `+ Priority, labels…`. */
+  placeholder?: ReactNode;
 }
 
 /**
@@ -40,7 +42,7 @@ interface SetChipsProps {
  * labels…` chip that opens the full picker set in a popover. Every chip is a
  * trigger, so tapping a set chip re-opens the pickers to edit it.
  */
-export function SetChips({ className, ...props }: SetChipsProps) {
+export function SetChips({ className, placeholder, ...props }: SetChipsProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -51,7 +53,7 @@ export function SetChips({ className, ...props }: SetChipsProps) {
           )}
         >
           <ChipList {...props} />
-          <span className="chip-dashed">+ Priority, labels…</span>
+          <span className="chip-dashed">{placeholder ?? '+ Priority, labels…'}</span>
         </div>
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6} className="w-max max-w-[320px]">
