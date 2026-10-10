@@ -4,7 +4,7 @@ import { Plus, Calendar as CalendarIcon, Check, ChevronRight } from 'lucide-reac
 import { listProjects } from '@/db/projects';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { PrioritySelect } from '@/components/ui/priority-select';
+import { PriorityList } from '@/components/ui/priority-select';
 import { PRIORITY_LABELS, priorityColor } from '@/components/ui/priority';
 import { COLOR_PRESETS } from '@/lib/colorPresets';
 import { dueCalendarDate, toCalendarDate } from '@/lib/dateFormat';
@@ -116,10 +116,11 @@ export function ChipRow({
             {PRIORITY_LABELS[task.priority] ?? 'Priority'}
           </Chip>
         </PopoverTrigger>
-        <PopoverContent align="start" sideOffset={6} className="w-48 p-1">
-          <PrioritySelect
+        <PopoverContent align="start" sideOffset={6} className="w-40 p-1">
+          <PriorityList
             value={task.priority}
             onChange={(p) => void onSetPriority(p)}
+            onPicked={() => setPicker(null)}
           />
         </PopoverContent>
       </Popover>

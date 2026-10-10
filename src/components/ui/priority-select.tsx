@@ -43,6 +43,51 @@ function radioKeyDown(e: KeyboardEvent<HTMLElement>, i: number, pick: (i: number
   pick(next);
 }
 
+/* Vertical radio list of the six levels. Roomy enough for labels on narrow
+   (mobile) popovers, where the segmented row clips them. */
+export function PriorityList({
+  value,
+  onChange,
+  onPicked,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  onPicked?: () => void;
+}) {
+  // Roving tabindex: only the checked row (or the first, if none) is tabbable.
+  const tabStop = Math.max(0, PRIORITY_META.findIndex((m) => m.value === value));
+  return (
+    <div role="radiogroup" aria-label="Priority" className="flex flex-col">
+      {PRIORITY_META.map((m, i) => {
+        const selected = m.value === value;
+        return (
+          <button
+            key={m.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={i === tabStop ? 0 : -1}
+            onClick={() => {
+              onChange(m.value);
+              onPicked?.();
+            }}
+            onKeyDown={(e) => radioKeyDown(e, i, (n) => onChange(PRIORITY_META[n]!.value))}
+            className={cn(pickerRowClass, selected && 'bg-[var(--color-muted)]')}
+          >
+            <Flag
+              className="h-3.5 w-3.5 shrink-0"
+              style={m.value > 0 ? { color: m.color } : { color: 'var(--color-muted-foreground)' }}
+              fill={m.value > 0 ? 'currentColor' : 'none'}
+            />
+            <span className="flex-1">{m.label}</span>
+            {selected ? <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* Single chip + popover. The trigger shows a flag (tinted to the chosen
    priority) and its label; the popover lists the six levels. */
 function PriorityPill({
@@ -56,8 +101,6 @@ function PriorityPill({
   const setOpen = ctl.onOpenChange ?? setInnerOpen;
   const meta = PRIORITY_META[value] ?? PRIORITY_META[0]!;
   const isSet = value > 0;
-  // Roving tabindex: only the checked row (or the first, if none) is tabbable.
-  const tabStop = Math.max(0, PRIORITY_META.findIndex((m) => m.value === value));
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -79,34 +122,7 @@ function PriorityPill({
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6} className="w-40 p-1">
-        <div role="radiogroup" aria-label="Priority" className="flex flex-col">
-          {PRIORITY_META.map((m, i) => {
-            const selected = m.value === value;
-            return (
-              <button
-                key={m.value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                tabIndex={i === tabStop ? 0 : -1}
-                onClick={() => {
-                  onChange(m.value);
-                  setOpen(false);
-                }}
-                onKeyDown={(e) => radioKeyDown(e, i, (n) => onChange(PRIORITY_META[n]!.value))}
-                className={cn(pickerRowClass, selected && 'bg-[var(--color-muted)]')}
-              >
-                <Flag
-                  className="h-3.5 w-3.5 shrink-0"
-                  style={m.value > 0 ? { color: m.color } : { color: 'var(--color-muted-foreground)' }}
-                  fill={m.value > 0 ? 'currentColor' : 'none'}
-                />
-                <span className="flex-1">{m.label}</span>
-                {selected ? <Check className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : null}
-              </button>
-            );
-          })}
-        </div>
+        <PriorityList value={value} onChange={onChange} onPicked={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );
