@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCurrentUser } from '@/queries/user';
 import { useSelectableProjects } from '@/queries/projects';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { notify } from '@/db/bus';
+import { showToast } from '@/stores/toasts';
 import { saveUserSettings } from '@/sync/settingsSync';
 import { QUICK_ADD_PREFIXES, isQuickAddMagicMode, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import { QUICK_ADD_MAGIC_KEY, type SettingsChange } from '@/sync/frontendSettings';
@@ -67,11 +68,6 @@ function groupTimezones(timezones: string[]): { label: string; items: { value: s
     }));
 }
 
-interface FeedbackState {
-  type: 'success' | 'error';
-  message: string;
-}
-
 export function GeneralTab({ disabled }: Props) {
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useSelectableProjects();
@@ -91,7 +87,8 @@ export function GeneralTab({ disabled }: Props) {
   const [timezone, setTimezone] = useState('UTC');
   const [discoverableByEmail, setDiscoverableByEmail] = useState(false);
   const [discoverableByName, setDiscoverableByName] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  // Saves in flight: a refetched user must not overwrite a switch the user has just flipped.
+  const inflight = useRef(0);
   const [timezoneGroups, setTimezoneGroups] = useState<{ label: string; items: { value: string; label: string }[] }[]>([]);
 
   useEffect(() => {
@@ -99,39 +96,43 @@ export function GeneralTab({ disabled }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || inflight.current > 0) return;
     const raw = user.raw as Record<string, unknown> | undefined;
-    const settings = (raw?.settings as Record<string, unknown> | undefined) ?? {};
-    const s = settings as Record<string, unknown>;
-    if (s.email_reminders_enabled === false) setEmailRemindersEnabled(false);
-    if (s.overdue_tasks_reminders_enabled === false) setOverdueRemindersEnabled(false);
-    if (typeof s.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(s.overdue_tasks_reminders_time as string);
-    if (typeof s.week_start === 'number') setWeekStart(s.week_start as number);
-    if (typeof s.default_project_id === 'number') setDefaultProjectId((s.default_project_id as number) || null);
-    if (typeof s.language === 'string') setLanguage(s.language as string);
-    if (typeof s.timezone === 'string') setTimezone(s.timezone as string);
-    if (typeof s.discoverable_by_email === 'boolean') setDiscoverableByEmail(s.discoverable_by_email as boolean);
-    if (typeof s.discoverable_by_name === 'boolean') setDiscoverableByName(s.discoverable_by_name as boolean);
+    const s = (raw?.settings as Record<string, unknown> | undefined) ?? {};
+    // Take every stored value, on and off alike: only copying "off" values left
+    // a switch showing its default after the page was left and reopened.
+    setEmailRemindersEnabled(s.email_reminders_enabled !== false);
+    setOverdueRemindersEnabled(s.overdue_tasks_reminders_enabled !== false);
+    if (typeof s.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(s.overdue_tasks_reminders_time);
+    if (typeof s.week_start === 'number') setWeekStart(s.week_start);
+    if (typeof s.default_project_id === 'number') setDefaultProjectId(s.default_project_id || null);
+    if (typeof s.language === 'string') setLanguage(s.language);
+    if (typeof s.timezone === 'string') setTimezone(s.timezone);
+    setDiscoverableByEmail(s.discoverable_by_email === true);
+    setDiscoverableByName(s.discoverable_by_name === true);
   }, [user]);
 
-  const clearFeedback = () => setFeedback(null);
+  // Every save: refresh the cached user (so the page shows what the server now
+  // holds when reopened; the user query is otherwise fresh for 60s), then say
+  // so in a toast, which never moves the layout. `revert` undoes an optimistic change.
+  const save = (change: Promise<unknown>, revert?: () => void) => {
+    inflight.current += 1;
+    return change
+      .then(() => {
+        inflight.current -= 1;
+        notify('user');
+        showToast('Saved');
+      })
+      .catch((e: unknown) => {
+        inflight.current -= 1;
+        revert?.();
+        showToast(e instanceof Error ? e.message : 'Could not save', 'error');
+        notify('user');
+      });
+  };
 
   // Each save re-reads the server's settings and changes only these fields.
-  const pushWithSettings = (patch: SettingsChange['settings']) => saveUserSettings({ settings: patch });
-
-  const pushWithFeedback = (patch: SettingsChange['settings']) => {
-    pushWithSettings(patch)
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e: Error) => { setFeedback({ type: 'error', message: e.message }); setTimeout(clearFeedback, 4000); });
-  };
-
-  const handleDateFormatChange = (fmt: string) => {
-    setDateFormat(fmt as DateFormat);
-  };
-
-  const handleTimeFormatChange = (fmt: string) => {
-    setTimeFormat(fmt as TimeFormat);
-  };
+  const pushWithFeedback = (patch: SettingsChange['settings']) => save(saveUserSettings({ settings: patch }));
 
   // Shared with Vikunja-web (frontend_settings.quick_add_magic_mode). The
   // local parser switches at once; a failed save puts the old mode back so
@@ -140,32 +141,27 @@ export function GeneralTab({ disabled }: Props) {
     if (!isQuickAddMagicMode(v)) return;
     const previous = quickAddMagicMode;
     setQuickAddMagicMode(v);
-    saveUserSettings({ frontend: { [QUICK_ADD_MAGIC_KEY]: v } })
-      .then(() => notify('user'))
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e) => {
-        setQuickAddMagicMode(previous);
-        setFeedback({ type: 'error', message: (e as Error).message });
-        setTimeout(clearFeedback, 4000);
-      });
+    void save(saveUserSettings({ frontend: { [QUICK_ADD_MAGIC_KEY]: v } }), () => setQuickAddMagicMode(previous));
   };
 
   const handleWeekStartChange = (v: string) => {
     const n = Number(v);
     setWeekStart(n);
-    pushWithSettings({ week_start: n })
-      .then(() => notify('user'))
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e) => { setFeedback({ type: 'error', message: (e as Error).message }); setTimeout(clearFeedback, 4000); });
+    void pushWithFeedback({ week_start: n });
   };
 
   const handleDefaultProjectChange = (v: string) => {
     const n = v === 'none' ? 0 : Number(v);
     setDefaultProjectId(n || null);
-    pushWithSettings({ default_project_id: n })
-      .then(() => notify('user'))
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e) => { setFeedback({ type: 'error', message: (e as Error).message }); setTimeout(clearFeedback, 4000); });
+    void pushWithFeedback({ default_project_id: n });
+  };
+
+  const handleDateFormatChange = (fmt: string) => {
+    setDateFormat(fmt as DateFormat);
+  };
+
+  const handleTimeFormatChange = (fmt: string) => {
+    setTimeFormat(fmt as TimeFormat);
   };
 
   const handleEmailRemindersToggle = (enabled: boolean) => {
@@ -191,11 +187,6 @@ export function GeneralTab({ disabled }: Props) {
   return (
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">General</h3>
-      {feedback && (
-        <p className={`mb-2 text-xs ${feedback.type === 'success' ? 'text-[var(--color-success-text)]' : 'text-[var(--color-destructive)]'}`}>
-          {feedback.message}
-        </p>
-      )}
       <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
         <div className="flex items-center justify-between">
           <Label>Date Format</Label>

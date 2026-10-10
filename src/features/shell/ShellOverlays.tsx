@@ -3,6 +3,7 @@ import { Plus, Search } from 'lucide-react';
 import { OutboxModal } from '@/components/OutboxModal';
 import { ConflictModal } from '@/components/ConflictModal';
 import { UndoToasts } from '@/components/UndoToast';
+import { Toasts } from '@/components/Toasts';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { ViewManagerModal } from '@/features/projects/ViewManagerModal';
 import { DisplaySheet } from '@/features/shell/DisplaySheet';
@@ -110,6 +111,7 @@ export function ShellOverlays({
         />
       )}
       <UndoToasts />
+      <Toasts />
     </>
   );
 }
