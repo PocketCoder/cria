@@ -12,3 +12,8 @@ SQLite database in the App Group container `group.io.cria.app`.
 - **Database:** GRDB 7 (`groue/GRDB.swift`, `from: 7.0.0`), linked into `CriaKit`.
 - **API client:** hand-written on `URLSession` (S-20), not `swift-openapi-generator`. The app uses a small endpoint set, and this avoids a codegen step in CI.
 - **Lint:** SwiftLint with `ios-native/.swiftlint.yml`. CI runs `swiftlint lint --strict`.
+
+## Data layer (S-10)
+
+- `CriaKit/Sources/CriaKit/Resources/Migrations/`: copies of `src/db/migrations/*.sql`, bundled as resources. Keep them byte-identical to the Tauri copies; never edit a shipped file.
+- `CriaMigrations.migrate(_:)` runs them through GRDB's `DatabaseMigrator`, keyed on the file stem (`001_initial`, ...).

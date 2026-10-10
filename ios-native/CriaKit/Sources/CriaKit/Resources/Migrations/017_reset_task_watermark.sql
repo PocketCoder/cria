@@ -1,0 +1,12 @@
+-- Reset the cross-project task delta watermark.
+--
+-- Older builds stamped `tasks_synced_at` from per-project pulls
+-- (pullTasksForProject). That watermark drives the delta filter for the
+-- cross-project pullAllTasks, so a single opened project told pullAllTasks
+-- "everything is synced as of now" and it then delta-skipped every other
+-- project's tasks — the "only the project I opened has tasks; Today/Upcoming/
+-- Inbox are empty" bug. The stamping bug is fixed in code (only pullAllTasks
+-- advances the watermark now); this clears any poisoned value left in an
+-- existing install so the next pullAllTasks does a full pull and self-corrects.
+-- No reinstall required. On a fresh DB this is a harmless no-op.
+UPDATE sync_state SET tasks_synced_at = NULL WHERE id = 1;

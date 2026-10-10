@@ -16,7 +16,8 @@ let package = Package(
     targets: [
         .target(
             name: "CriaKit",
-            dependencies: [.product(name: "GRDB", package: "GRDB.swift")]
+            dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
+            resources: [.copy("Resources/Migrations")]
         ),
         .testTarget(name: "CriaKitTests", dependencies: ["CriaKit"]),
     ],
