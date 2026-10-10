@@ -137,7 +137,7 @@ public enum TaskRelationKind: String, CaseIterable, Sendable {
 
     /// Kinds the user can pick in the add-relation UI. The rest arrive automatically as inverses.
     public static let pickable: [TaskRelationKind] = [
-        .subtask, .parenttask, .related, .blocking, .blocked, .duplicates, .precedes, .follows, .copiedfrom,
+        .subtask, .parenttask, .related, .blocking, .blocked, .duplicates, .precedes, .follows, .copiedfrom
     ]
 
     /// The kind the server writes on the other task. Mirrors `inverseRelationKind` in `task.ts`.

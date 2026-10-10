@@ -104,7 +104,7 @@ final class DomainDecodingTests: XCTestCase {
             .subtask: .parenttask, .parenttask: .subtask, .related: .related,
             .duplicates: .duplicateof, .duplicateof: .duplicates, .blocking: .blocked,
             .blocked: .blocking, .precedes: .follows, .follows: .precedes,
-            .copiedfrom: .copiedto, .copiedto: .copiedfrom,
+            .copiedfrom: .copiedto, .copiedto: .copiedfrom
         ]
         XCTAssertEqual(TaskRelationKind.allCases.count, 11)
         for kind in TaskRelationKind.allCases {
