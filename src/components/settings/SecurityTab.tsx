@@ -11,6 +11,7 @@ import {
   type TotpStatus,
 } from '@/api/account';
 import { Button } from '@/components/ui/button';
+import { SessionsSection } from './SessionsSection';
 import { validateEmailAddress, validateNewPassword } from '@/lib/accountValidation';
 
 interface Props {
@@ -25,6 +26,7 @@ export function SecurityTab({ disabled }: Props) {
       <PasswordSection disabled={disabled} />
       <EmailSection disabled={disabled} />
       <TotpSection disabled={disabled} />
+      <SessionsSection disabled={disabled} />
     </div>
   );
 }
