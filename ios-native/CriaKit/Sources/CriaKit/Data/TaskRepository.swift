@@ -139,7 +139,9 @@ extension CriaStore {
     }
 
     static func fetchTask(_ connection: Database, localId: String) throws -> TaskRecord? {
-        try Row.fetchOne(connection, sql: "SELECT \(taskColumns) FROM tasks WHERE local_id = ?", arguments: [localId])
+        try Row.fetchOne(
+            connection, sql: "SELECT \(taskColumns) FROM tasks WHERE local_id = ? AND deleted = 0", arguments: [localId]
+        )
             .map(TaskRecord.init(row:))
     }
 
