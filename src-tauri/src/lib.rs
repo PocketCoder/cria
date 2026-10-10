@@ -1,6 +1,6 @@
 mod ai;
-mod glass;
 mod blobs;
+mod glass;
 mod ocr;
 mod secure;
 mod tx;
