@@ -11,7 +11,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Re-read the relevant AGENTS.md gotcha before each sync or data section. They apply unchanged.
 - Update the status table at the bottom as sections complete.
 - **Models:** each section carries a `Model:` tag. Builder sessions use Sonnet 5.5 at most, at low effort, and hand `haiku` sections to a Haiku 5.5 subagent. Opus 5.5 is used only by the Thursday and Friday review routines, never to build. If a builder fails a section twice, record it as a blocker in the status table for Thursday's review instead of escalating.
-- **Cadence:** builders run nightly Friday to Wednesday, one section per fresh session. Thursday night (Opus) reviews the week's progress; Friday early morning (Opus) finishes the review and fixes what it finds, ending by 09:00.
+- **Cadence:** builders run Friday, Sunday and Tuesday nights, one section per fresh session. Thursday night (Opus) reviews the week's progress; Friday early morning (Opus) finishes the review and fixes what it finds, ending by 09:00.
 
 ## Ground rules (carry across all sections)
 
