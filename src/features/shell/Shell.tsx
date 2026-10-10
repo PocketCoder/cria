@@ -18,6 +18,7 @@ import { TabBar } from './TabBar';
 import { useDisplay } from '@/stores/display';
 import { viewKey } from '@/lib/displayConfig';
 import { resolveCurrentProjectView, showMobileFab, viewTitle } from './shellLogic';
+import { canManageViews } from '@/lib/viewManagement';
 import {
   useConflictNotification,
   useDeepLinks,
@@ -87,7 +88,7 @@ export function Shell() {
 
   /* ── search ───────────────────────────────────────────── */
   const search = useShellSearch(activeView, setActiveView);
-  const { mobileSearchOpen, setMobileSearchOpen, searchQuery, searchInputRef } = search;
+  const { mobileSearchOpen, searchQuery } = search;
 
   useGlobalQuickAddShortcut(setShowQuickAdd);
   useDevShortcuts(setShowQuickAdd, setShowCommandPalette);
@@ -117,11 +118,22 @@ export function Shell() {
     projectViews,
   );
 
+  // View management (add / rename / delete / reorder) for real projects only.
+  const viewManager =
+    activeView?.kind === 'project' && currentProject && canManageViews(currentProject)
+      ? {
+          projectLocalId: activeView.localId,
+          activeViewLocalId: activeView.viewLocalId ?? projectViews[0]?.localId,
+          onSelectView: handleSelectView,
+        }
+      : null;
+  const openViewManager = viewManager ? () => modals.setShowViewManager(true) : undefined;
+
   return (
     <div
       className={cn(
         'app-root flex h-full w-full flex-col overflow-x-hidden',
-        isMobile && 'safe-top safe-bottom safe-x',
+        isMobile ? 'safe-top safe-bottom safe-x' : 'app-root-desktop',
       )}
     >
       {isMobile && (
@@ -130,13 +142,10 @@ export function Shell() {
           activeView={activeView}
           projectViews={projectViews}
           onSelectView={handleSelectView}
+          onManageViews={openViewManager}
           counts={{ isOnline, outboxCount, deadLetterCount, conflictCount }}
           onOpenOutbox={() => setShowOutbox(true)}
           onOpenConflicts={() => setShowConflicts(true)}
-          onOpenSearch={() => {
-            setMobileSearchOpen(true);
-            setTimeout(() => searchInputRef.current?.focus(), 100);
-          }}
           currentViewKey={currentViewKey}
           onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
           onOpenSettings={() => setShowSettings(true)}
@@ -156,43 +165,49 @@ export function Shell() {
           />
         )}
 
-        {/* Content pane — a white card floating on the paper canvas. */}
+        {/* Content pane — a white card floating on the paper canvas. The
+            desktop inspector floats inside it, on the right. */}
         <div
           className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-card)]',
-            !isMobile && !sidebarCollapsed && 'rounded-l-xl border-l border-[var(--color-border)]',
+            'flex min-h-0 min-w-0 flex-1 bg-[var(--color-card)]',
+            !isMobile && !sidebarCollapsed &&
+              'rounded-l-2xl border-l border-[var(--color-border)] shadow-[var(--shadow-card)]',
           )}
         >
-          {!isMobile && (
-            <DesktopHeader
-              title={title}
-              sidebarCollapsed={sidebarCollapsed}
-              onToggleSidebar={toggleSidebar}
-              activeView={activeView}
-              projectViews={projectViews}
-              onSelectView={handleSelectView}
-              currentView={currentView}
-              currentViewKey={currentViewKey}
-              onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
-              onQuickAdd={() => setShowQuickAdd(true)}
-            />
-          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {!isMobile && (
+              <DesktopHeader
+                title={title}
+                sidebarCollapsed={sidebarCollapsed}
+                onToggleSidebar={toggleSidebar}
+                activeView={activeView}
+                projectViews={projectViews}
+                onSelectView={handleSelectView}
+                onManageViews={openViewManager}
+                currentView={currentView}
+                currentViewKey={currentViewKey}
+                onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
+                onQuickAdd={() => setShowQuickAdd(true)}
+                onDragMouseDown={handleHeaderMouseDown}
+              />
+            )}
 
-          <main className="vt-pane flex min-h-0 min-w-0 flex-1 flex-col">
-            <MainView
-              activeView={activeView}
-              searchQuery={searchQuery}
-              currentProject={currentProject}
-              currentView={currentView}
-              viewsPending={viewsPending}
-            />
-          </main>
+            <main className="vt-pane flex min-h-0 min-w-0 flex-1 flex-col">
+              <MainView
+                activeView={activeView}
+                searchQuery={searchQuery}
+                currentProject={currentProject}
+                currentView={currentView}
+                viewsPending={viewsPending}
+              />
+            </main>
+          </div>
+
+          {/* Inspector: a floating glass card on desktop. This and the mobile
+              mount below are the only TaskDetail instances: a second one
+              would double-register every task shortcut. */}
+          {!isMobile && <TaskDetail />}
         </div>
-
-        {/* Inspector — permanent right-hand column on desktop. This and the
-            mobile mount below are the only TaskDetail instances: a second
-            one would double-register every task shortcut. */}
-        {!isMobile && <TaskDetail />}
       </div>
 
       {/* Update pill — floats bottom-left instead of living in the removed
@@ -212,6 +227,7 @@ export function Shell() {
         setPhotoCaptureOpen={setPhotoCaptureOpen}
         rambleOpen={rambleOpen}
         setRambleOpen={setRambleOpen}
+        viewManager={viewManager}
       />
 
       {/* Mobile search overlay */}

@@ -6,6 +6,7 @@ import { ConflictModal } from '@/components/ConflictModal';
 import { OutboxModal } from '@/components/OutboxModal';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { SavedFilterModal } from '@/features/smart-views/SavedFilterModal';
+import { ViewManagerModal } from '@/features/projects/ViewManagerModal';
 import { renderWithProviders, resetDb, signIn } from './render';
 
 beforeEach(async () => {
@@ -18,6 +19,18 @@ const cases: Array<{ name: string; label: string | RegExp; ui: (onClose: () => v
   { name: 'OutboxModal', label: 'Sync queue', ui: (c) => <OutboxModal onClose={c} /> },
   { name: 'LabelManagerModal', label: 'Manage labels', ui: (c) => <LabelManagerModal onClose={c} /> },
   { name: 'SavedFilterModal', label: 'New filter', ui: (c) => <SavedFilterModal onClose={c} /> },
+  {
+    name: 'ViewManagerModal',
+    label: 'Manage views',
+    ui: (c) => (
+      <ViewManagerModal
+        projectLocalId="proj_1"
+        activeViewLocalId={undefined}
+        onSelectView={() => undefined}
+        onClose={c}
+      />
+    ),
+  },
 ];
 
 describe.each(cases)('$name as a native modal dialog', ({ label, ui }) => {

@@ -145,10 +145,10 @@ export function ShareProjectModal({
 
   return (
     <ModalDialog label={`Share “${project.title}”`} onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
+        className="relative dialog-panel flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Share “{project.title}”</h2>
@@ -226,10 +226,10 @@ export function ShareProjectModal({
 function UnsyncedNotice({ onClose }: { onClose: () => void }) {
   return (
     <ModalDialog label="Share project" onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 shadow-lg"
+        className="relative dialog-panel p-6"
       >
         <p className="text-sm">Sync this project before sharing it.</p>
         <button

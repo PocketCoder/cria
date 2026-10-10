@@ -46,7 +46,7 @@ export function ProjectSidebar({
   const [shareProject, setShareProject] = useState<Project | null>(null);
 
   return (
-    <aside className="flex h-full w-[236px] shrink-0 flex-col bg-[var(--color-background)]">
+    <aside className="sidebar-surface flex h-full w-[var(--sidebar-width)] shrink-0 flex-col bg-[var(--color-background)]">
       {/* 44px strip under the native (overlay) traffic lights — the window drag region */}
       <div role="presentation" onMouseDown={onDragMouseDown} className="h-11 flex-none select-none" />
 

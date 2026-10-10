@@ -15,6 +15,7 @@ vi.mock('@/features/ramble/createFromQuickAdd', () => ({ createFromQuickAdd }));
 
 import { useRamble } from '@/features/ramble/useRamble';
 import { useUi } from '@/stores/ui';
+import { useSettings } from '@/stores/settings';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -54,6 +55,22 @@ describe('useRamble', () => {
 
     save.resolve();
     await act(() => adding);
+  });
+
+  it("prompts and saves in the user's Quick Add Magic mode", async () => {
+    useSettings.setState({ quickAddMagicMode: 'todoist' });
+    generate.mockResolvedValue('Call mum #Inbox\n#Inbox @calls');
+    createFromQuickAdd.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useRamble(() => {}));
+    await act(() => result.current.organise());
+
+    expect(generate.mock.calls[0]![0].instructions).toContain('#Project to file it');
+    // "#Inbox @calls" is only todoist tokens, so it has no title to create.
+    expect(result.current.chosen.map((d) => d.line)).toEqual(['Call mum #Inbox']);
+
+    await act(() => result.current.addAll());
+    expect(createFromQuickAdd).toHaveBeenCalledWith('Call mum #Inbox', expect.objectContaining({ mode: 'todoist' }));
+    useSettings.setState({ quickAddMagicMode: 'vikunja' });
   });
 
   it('keeps a result that lands after close for the next open', async () => {

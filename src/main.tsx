@@ -1,13 +1,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-// Instrument Sans (variable weight) — Cria's branded humanist sans. Bundled
-// so it ships offline and renders identically on every platform. Must be
-// imported before globals.css references the family in --font-sans.
+// Onest (variable weight), Cria's UI face. Bundled so it ships offline and
+// renders identically on every platform. Must be imported before globals.css
+// references the family in --font-sans.
 import '@fontsource-variable/onest';
 import './styles/globals.css';
 import { App } from './App';
 import { initPlatform, isMobilePlatform } from './lib/platform';
+import { initNativeGlass } from './tauri/glass';
 
 // `networkMode: 'offlineFirst'` is load-bearing. The default
 // (`'online'`) tells TanStack Query to *pause* every query when
@@ -29,7 +30,9 @@ if (!rootEl) throw new Error('Missing #root element');
 // The QueryClient is built *inside* the callback so `isMobilePlatform()` reads
 // the resolved value: on mobile we widen `staleTime` (background sync keeps
 // data fresh, so foreground refetches are wasteful battery/network).
-void initPlatform().finally(() => {
+// Native glass (macOS window material / iOS glass tab bar) is resolved here
+// too, so the first paint already has the right surfaces. Neither rejects.
+void Promise.all([initPlatform(), initNativeGlass()]).finally(() => {
   const mobile = isMobilePlatform();
   const queryClient = new QueryClient({
     defaultOptions: {

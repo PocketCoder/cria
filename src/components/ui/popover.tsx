@@ -17,7 +17,7 @@ export const PopoverAnchor = PopoverPrimitive.Anchor;
 export const PopoverContent = forwardRef<
   ElementRef<typeof PopoverPrimitive.Content>,
   ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = 'start', sideOffset = 4, ...props }, ref) => (
+>(({ className, align = 'start', sideOffset = 6, ...props }, ref) => (
   <PopoverPrimitive.Portal container={useTopModalDialog() ?? undefined}>
     <PopoverPrimitive.Content
       ref={ref}
@@ -34,11 +34,11 @@ export const PopoverContent = forwardRef<
 ));
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
-/** Trigger chip for the create-flow pickers (quick-add). Mirrors the `chip`
-    utility plus a border, spelled as Tailwind classes so `cn` can merge
+/** Trigger pill for the create-flow pickers (quick-add): full radius, 6px 12px,
+    12px text, muted wash on hover. Spelled as Tailwind classes so `cn` can merge
     overrides (e.g. SelectTrigger's base padding). */
 export const pickerChipClass =
-  'inline-flex cursor-pointer items-center gap-1.5 rounded-[9px] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13.5px] font-medium text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-muted)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ring)]';
+  'inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-muted)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ring)]';
 
 /** Option row inside a picker popover; matches the task-detail chip menus. */
 export const pickerRowClass =

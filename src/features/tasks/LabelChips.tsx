@@ -25,7 +25,7 @@ export const LabelChips = memo(function LabelChips({
       {labels.map((l) => {
         const bg = normaliseHex(l.hexColor) ?? 'var(--color-muted)';
         const fg =
-          normaliseHex(l.hexColor) && isLight(bg) ? '#111' : 'inherit';
+          normaliseHex(l.hexColor) ? (isLight(bg) ? '#111' : '#fff') : 'inherit';
         return (
           <li
             key={l.localId}

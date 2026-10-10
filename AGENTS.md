@@ -67,6 +67,7 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
 | Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased |
 | Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ on `dev`, unreleased; tokens + motion in `src/styles/globals.css` |
+| Native glass: macOS sidebar material, iOS 26 Liquid Glass tab bar | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
 **Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
@@ -82,8 +83,8 @@ in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 18 migrations in
-  `src/db/migrations/` (`001_initial.sql` → `018_saved_filters.sql`).
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 19 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `019_attachment_uploads.sql`).
   Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
   Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),
@@ -167,6 +168,12 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
 - `globalThis.__cria_refreshInFlight__`: token-refresh single-flight (a
   duplicate refresh would reuse an already-rotated refresh token).
 - `globalThis.__cria_settingsHydrated__`: synced-prefs hydrate-once flag.
+- `globalThis.__cria_serverQuickAddMode__`: last server Quick Add Magic mode
+  seen, so a refetch only applies a mode the server changed to.
+- `globalThis.__cria_settingsSaveChain__`: settings-save queue tail, so two
+  saves never interleave (v1 GET and POST, or two v2 PATCHes).
+- `globalThis.__cria_settingsPatchUnsupported__`: server URLs with no v2
+  settings PATCH, so only the first save there probes it.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
@@ -182,6 +189,22 @@ sticks forever and the UI starves.
 **Rule:** sync upserts are silent. User-driven mutations live in *different*
 functions that *do* call `notify()`. See the inline comments in
 [src/db/projects.ts](src/db/projects.ts) and [src/db/tasks.ts](src/db/tasks.ts).
+
+### Attachment uploads ride the outbox; their bytes don't
+
+Picking or pasting a file never hits the network. `queueAttachmentUpload`
+writes the bytes to a Rust side-store ([src-tauri/src/blobs.rs](src-tauri/src/blobs.rs),
+one file per attachment in the app data dir, raw-bytes IPC) and inserts a
+`pending` `task_attachments` row plus a `task_attachment`·`upload` outbox op;
+[src/sync/push/attachment.ts](src/sync/push/attachment.ts) uploads on drain.
+Don't base64 file bytes into an outbox payload. Inline images pasted before
+upload are `cria://pending/{localId}` (allowed by `sanitizeHtml`); the
+executor rewrites them to the server URL, and the task/comment push swaps any
+it finds that have already uploaded, so the server never keeps one.
+Leftover bytes are cleared once per launch by
+[src/sync/blobSweep.ts](src/sync/blobSweep.ts) (via `blob_list`), which only
+deletes a blob over 24h old that no attachment row and no outbox or
+dead-letter op mentions, keeping anything it can't rule out.
 
 ### Vikunja's verb semantics
 
@@ -218,20 +241,51 @@ field of the request body onto the user record and saves with
 value (`""`, `0`, `false`, `nil`) — silently wiping the server's stored `name`,
 `default_project_id`, `week_start`, language/timezone, and reminder flags. The
 generated `schema.ts` only shows the body *shape* (a complete `v1.UserSettings`);
-the Go handler is the ground truth (`pkg/routes/api/v1/user_settings.go`,
-`UpdateGeneralUserSettings`). When upstream runtime behaviour is in doubt, read
-the handler — a local clone of the Vikunja source (`real-vikunja-git/`,
-gitignored) makes this checkable in
-seconds and beats inferring from the schema.
+the Go code is the ground truth (`pkg/routes/api/v1/user_settings.go`,
+`UpdateGeneralUserSettings`, which calls `models.UpdateUserGeneralSettings` in
+`pkg/models/user_settings.go`). `frontend_settings` is stored and returned
+verbatim as any JSON value; Vikunja-web keeps its own snake_case keys there
+(`quick_add_magic_mode`, `color_schema`, …). When upstream runtime behaviour is
+in doubt, read the source rather than inferring from the schema. A local clone
+(`real-vikunja-git/`, gitignored) makes this quick, but it is local-only: a
+fresh container or worktree won't have it. There, shallow-clone
+`https://github.com/go-vikunja/vikunja` (`--depth 1`) into a new, empty scratch
+directory outside the repo and read it; never run its scripts.
 
-**Rule:** never send a partial settings object. Seed the complete current
-settings (`user.raw.settings`), merge your one change on top, then POST the
-whole thing. [`SettingsModal`](src/components/SettingsModal.tsx)'s `settingsRef`
-+ `pushSettings()` wrapper is the reference pattern; `UserSettingsInput` carries
-even the non-UI fields (`default_project_id`, discoverability,
-`frontend_settings`) purely so they round-trip untouched. Assume any other
-"update the whole entity" POST behaves the same — read the handler before
-sending a subset.
+**Rule:** never send a partial *or stale* settings object. Every write goes
+through `saveUserSettings(change)` in
+[src/sync/settingsSync.ts](src/sync/settingsSync.ts), which picks one of two
+paths. Saves are queued one at a time on both.
+
+- **v2 (Vikunja v2.7.0+):** `PATCH /api/v2/user/settings/general` with
+  `Content-Type: application/merge-patch+json`, the same call Vikunja-web
+  makes. The body names only the changed fields (`settingsMergePatch` in
+  [src/sync/frontendSettings.ts](src/sync/frontendSettings.ts)); no GET first.
+  Upstream has no hand-written PATCH: Huma's AutoPatch
+  (`EnableAutoPatch` in `pkg/routes/api/v2/huma.go`) synthesises it for any
+  path with a GET and a PUT. Server-side it GETs the stored settings, applies
+  an RFC 7386 merge-patch (objects merge recursively, so `frontend_settings`
+  and `frontend_settings.cria` merge key by key; arrays and scalars replace; a
+  `null` deletes, and a deleted top-level field is then written as its Go zero
+  value), answers an empty **304** if nothing changed, else PUTs the merged
+  object (200 `{message}`). `settingsMergePatch` therefore drops every null.
+  The server's own read-to-write step has no ETag, so the window is narrowed to
+  that, not zero.
+- **v1 fallback:** v2.4.0 to v2.6.0 have the v2 PUT but no GET on that path, so
+  no PATCH (405); earlier releases have no `/api/v2` (404). On 404, 405, 501
+  or a non-JSON 2xx, nothing was written: the save GETs `/user`, applies only
+  the named change (`applySettingsChange` passes every other field and every
+  unknown `frontend_settings` key through untouched), then POSTs the whole
+  thing; a failed GET sends nothing. Detection is that first PATCH, remembered
+  per server URL for the session. Any other PATCH error is thrown, not
+  retried on v1.
+
+Never build a v1 body from the cached user or a snapshot taken when a screen
+opened: another client (Vikunja-web, another Cria) may have changed it since,
+and the POST would silently revert that. `UserSettingsInput` carries even the
+non-UI fields (`default_project_id`, discoverability, `frontend_settings`)
+purely so they round-trip. Assume any other "update the whole entity" POST
+behaves the same — read the handler before sending a subset.
 
 ### pnpm 11 build-script approvals
 
@@ -262,11 +316,33 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
   `cargo test --lib ai -- --ignored --nocapture` (in `src-tauri/`).
 - Prompts live in [src/lib/aiPrompts.ts](src/lib/aiPrompts.ts). The model
   never does date maths: it writes dates in words (or quick-add / filter
-  syntax) and the existing parsers resolve them. To iterate on a prompt, write
+  syntax) and the existing parsers resolve them. Ramble's quick-add syntax
+  follows the user's Quick Add Magic mode, and every ramble parse passes the
+  same mode; with the magic `disabled` it writes plain titles with dates left
+  in words (nothing is parsed, as in Vikunja-web). To iterate on a prompt, write
   `<name>.instr` + `<name>.prompt` files to a folder and run
   `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
 - AI buttons render only when `useAiAvailable()` is true, so unsupported
   devices never see them.
+
+### Native glass (macOS window material, iOS 26 tab bar)
+
+[src-tauri/src/glass.rs](src-tauri/src/glass.rs) + [src/tauri/glass.ts](src/tauri/glass.ts).
+`native_glass` reports `window`, `tabbar` or `none`, mirrored on
+`<html data-native-glass>` before first render.
+- **macOS:** the window is `transparent` (tauri.macos/dev conf) and
+  `window-vibrancy` puts `NSGlassEffectView` (26+) or the sidebar
+  `NSVisualEffectView` behind the webview. globals.css keeps every screen
+  opaque except `.sidebar-surface` in the desktop shell (`.app-root-desktop`).
+  A new full-window screen with no background of its own shows the desktop
+  through it, so give it one. The material follows the NSWindow appearance,
+  so ThemeProvider calls `native_glass_theme`.
+- **iOS 26+:** `Glass.swift` (in the CriaAI Swift package) lays a
+  `UIGlassEffect` tab bar over the WKWebView. The web TabBar stays mounted at
+  opacity 0 and streams frame/tabs/visibility (`useNativeTabBar`); the native
+  bar hides whenever a hit-test of the capsule centre lands on anything else
+  (sheets, dialogs). Taps return as a `cria:native-tab` DOM event. Older iOS
+  keeps the web capsule.
 
 ### Keychain prompts after updates (signing identity)
 
@@ -381,8 +457,10 @@ All client preferences live in one Zustand `persist` store
 ([src/stores/settings.ts](src/stores/settings.ts), key `cria:settings/v2`).
 Bump that key only alongside a migration — a bare rename silently resets every
 persisted preference to its default. Server-backed prefs (language, timezone,
-week start, name, reminders) also sync through `pushUserSettings` — which is
-full-object, see the gotcha above.
+week start, name, reminders, the Quick Add Magic mode) are saved through
+`saveUserSettings`, never `pushUserSettings` or `patchUserSettings`
+directly: the v1 POST is full-object and the v2 PATCH needs the fallback and
+the save queue, see the gotcha above.
 
 **A setting isn't done until something reads it.** A persisted/synced toggle
 with no consumer looks like it works but does nothing — that's a bug, not a

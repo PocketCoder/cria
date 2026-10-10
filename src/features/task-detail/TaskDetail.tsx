@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Check, Trash2, Search } from 'lucide-react';
 import { useUi } from '@/stores/ui';
+import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { onShortcut } from '@/lib/shortcutBus';
-import { getTaskByLocalId, createTask, updateTask, moveTask, searchTasks, deleteTask } from '@/db/tasks';
+import { getTaskByLocalId, createTask, updateTask, moveTask, searchTasks } from '@/db/tasks';
 import { getProjectByLocalId } from '@/db/projects';
 import { searchProjectUsers } from '@/api/users';
 import { toggleTaskLabel } from '@/db/labels';
@@ -315,10 +316,10 @@ function useTaskShortcuts(
         void updateTask(task.localId, { isFavorite: !task.isFavorite }),
       ),
       onShortcut('task.delete', () => {
-        // Mirror TaskActions' "Delete forever?" confirmation — the mouse
-        // path never deletes in one step, so the shortcut shouldn't either.
-        if (!window.confirm('Delete this task forever?')) return;
-        void deleteTask(task.localId).then(() => setSelectedTask(null));
+        // Undo over confirm, same as the Delete button: deferred, with the
+        // undo toast offering it back.
+        usePendingDeletes.getState().enqueue(task);
+        setSelectedTask(null);
       }),
       // Picker-opening actions — open the same popover/section the mouse uses.
       onShortcut('task.priority', () => setPicker('priority')),

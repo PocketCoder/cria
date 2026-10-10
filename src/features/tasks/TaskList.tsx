@@ -452,8 +452,10 @@ const TaskRow = memo(function TaskRow({
             isOpen={!isSelected && selectedTaskId === task.localId}
             onToggleSelect={() => toggleSelected(task.localId)}
             onOpen={handleOpen}
-            className="py-2.5 pr-6"
-            style={{ paddingLeft: `${28 + depth * 28}px` }}
+            // Desktop rows: 12px 24px, 28px left + 28px per level. iPhone
+            // (max-md): 14px 20px.
+            className="py-3 pr-6 [--row-pad:var(--row-indent)] max-md:py-3.5 max-md:pr-5 max-md:[--row-pad:20px]"
+            style={{ paddingLeft: `calc(var(--row-pad) + ${depth} * var(--row-indent))` }}
             titleSlot={
               editing ? (
                 <input
@@ -469,11 +471,16 @@ const TaskRow = memo(function TaskRow({
               ) : (
                 <TaskHoverPreview task={task} className="min-w-0 flex-1">
                   <p
-                    className="truncate rounded px-1 py-0.5 text-sm"
+                    className={cn(
+                      'truncate rounded px-1 py-0.5 text-sm max-md:text-md',
+                      task.done && 'text-[var(--color-muted-foreground)]',
+                    )}
                     onDoubleClick={handleTitleEdit}
                     title={task.title}
                   >
-                    {task.title}
+                    <span className="task-strike" data-done={task.done || undefined}>
+                      {task.title}
+                    </span>
                   </p>
                 </TaskHoverPreview>
               )

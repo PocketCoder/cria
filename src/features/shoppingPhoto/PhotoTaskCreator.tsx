@@ -261,14 +261,14 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
       aria-label="Add from Photo"
       className={cn(
         'fixed inset-0 z-50',
-        isMobile ? '' : 'flex items-start justify-center bg-black/50 pt-24',
+        isMobile ? '' : 'flex items-start justify-center bg-[var(--dialog-backdrop)] pt-24',
       )}
     >
       {hiddenInput}
       {isMobile ? (
         <>
           <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
-          <div className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--color-card)] px-4 pb-8 pt-2 shadow-lg">
+          <div className="absolute bottom-0 left-0 right-0 z-10 animate-[sheet-up_350ms_var(--spring-snappy)] rounded-t-2xl bg-[var(--sheet-bg)] px-4 pb-8 pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)]">
             <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {body}
           </div>
@@ -276,7 +276,7 @@ export function PhotoTaskCreator({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <BackdropDismiss onDismiss={onClose} />
-          <div className="relative bg-[var(--color-card)] border border-[var(--color-border)] w-11/12 max-w-lg rounded-lg p-4 shadow-lg">
+          <div className="relative dialog-panel w-11/12 max-w-lg p-4">
             {body}
           </div>
         </>

@@ -124,7 +124,7 @@ export function RecurrencePicker({
                 apply(value, u as Unit, mode);
               }}
             >
-              <SelectTrigger className="h-7 text-xs">
+              <SelectTrigger variant="ghost" className="text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

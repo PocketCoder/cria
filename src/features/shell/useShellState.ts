@@ -12,6 +12,7 @@ export function useShellModals() {
   const [settingsTab, setSettingsTab] = useState<'teams' | undefined>(undefined);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const [showViewManager, setShowViewManager] = useState(false);
   return {
     showOutbox,
     setShowOutbox,
@@ -27,6 +28,8 @@ export function useShellModals() {
     setShowCommandPalette,
     showLabelManager,
     setShowLabelManager,
+    showViewManager,
+    setShowViewManager,
   };
 }
 

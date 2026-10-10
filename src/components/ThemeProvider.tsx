@@ -1,5 +1,6 @@
 import { useLayoutEffect, type ReactNode } from 'react';
 import { useSettings, type ColorScheme } from '@/stores/settings';
+import { syncNativeGlassTheme } from '@/tauri/glass';
 
 function applyTheme(scheme: ColorScheme) {
   const root = document.documentElement;
@@ -19,6 +20,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // transition needs to snapshot the new colours (see AppearanceTab).
   useLayoutEffect(() => {
     applyTheme(colorScheme);
+    syncNativeGlassTheme(colorScheme);
 
     if (colorScheme !== 'system') return;
 

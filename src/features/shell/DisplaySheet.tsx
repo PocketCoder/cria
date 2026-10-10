@@ -150,7 +150,8 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
       <ModalDialog label="Display options" onClose={close}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--color-background)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
+          <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
+            <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">{body}</div>
           </div>
@@ -162,7 +163,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
   // Desktop: centered panel, same content.
   return (
     <ModalDialog label="Display options" onClose={close}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--dialog-backdrop)] p-4 pt-20">
         <BackdropDismiss onDismiss={close} />
         <div className="relative flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
           {header}
@@ -418,7 +419,7 @@ function NavRow({
   onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-[var(--color-muted)]">
       <Icon className="h-5 w-5 shrink-0 text-[var(--color-muted-foreground)]" />
       <span className="flex-1 text-base">{label}</span>
       <span className="text-sm text-[var(--color-muted-foreground)]">{value}</span>
@@ -443,7 +444,7 @@ function RadioList({
           key={it.key}
           type="button"
           onClick={() => onPick(it.key)}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-[var(--color-muted)]"
         >
           <span className="flex-1 text-base">{it.label}</span>
           {selected === it.key && <Check className="h-5 w-5 text-[var(--color-primary)]" />}
@@ -476,7 +477,7 @@ function CheckList({
             key={it.key}
             type="button"
             onClick={() => onToggle(it.key)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left"
+            className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-[var(--color-muted)]"
           >
             {it.color && (
               <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: it.color }} aria-hidden />

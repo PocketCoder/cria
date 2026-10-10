@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Plus, Search, Settings, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
+import { Plus, Settings, Settings2, CloudOff, CloudUpload, CloudAlert, MoreHorizontal, SlidersHorizontal, PanelLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { ActiveView } from '@/stores/ui';
 import type { ProjectView } from '@/domain/view';
@@ -13,6 +13,8 @@ interface ViewControls {
   activeView: ActiveView | null;
   projectViews: ProjectView[];
   onSelectView: (viewLocalId: string) => void;
+  /** Opens the view manager; undefined when the project's views can't be managed. */
+  onManageViews: (() => void) | undefined;
 }
 
 /**
@@ -60,10 +62,10 @@ export function MobileHeader({
   activeView,
   projectViews,
   onSelectView,
+  onManageViews,
   counts,
   onOpenOutbox,
   onOpenConflicts,
-  onOpenSearch,
   currentViewKey,
   onOpenDisplay,
   onOpenSettings,
@@ -72,7 +74,6 @@ export function MobileHeader({
   counts: SyncCounts;
   onOpenOutbox: () => void;
   onOpenConflicts: () => void;
-  onOpenSearch: () => void;
   currentViewKey: string | null | undefined;
   onOpenDisplay: () => void;
   onOpenSettings: () => void;
@@ -90,6 +91,7 @@ export function MobileHeader({
             views={projectViews}
             activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
             onSelect={onSelectView}
+            onManage={onManageViews}
           />
         )}
         <SyncStatusButton
@@ -97,14 +99,6 @@ export function MobileHeader({
           onOpenOutbox={onOpenOutbox}
           onOpenConflicts={onOpenConflicts}
         />
-        <button
-          type="button"
-          aria-label="Search"
-          onClick={onOpenSearch}
-          className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-        >
-          <Search className="h-5 w-5" />
-        </button>
         {currentViewKey && (
           <button
             type="button"
@@ -136,10 +130,12 @@ export function DesktopHeader({
   activeView,
   projectViews,
   onSelectView,
+  onManageViews,
   currentView,
   currentViewKey,
   onOpenDisplay,
   onQuickAdd,
+  onDragMouseDown,
 }: ViewControls & {
   title: string;
   sidebarCollapsed: boolean;
@@ -148,33 +144,38 @@ export function DesktopHeader({
   currentViewKey: string | null | undefined;
   onOpenDisplay: () => void;
   onQuickAdd: () => void;
+  onDragMouseDown?: (e: React.MouseEvent) => void;
 }) {
+  // One-line view header (16px/600 title). With the sidebar hidden it clears
+  // the overlay traffic lights, and it doubles as the window drag strip.
   return (
     <header
+      onMouseDown={onDragMouseDown}
       className={cn(
-        'flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-3 px-10 pb-4 pt-11',
+        'flex min-h-[52px] flex-none select-none flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[var(--color-border)] py-2.5 pl-7 pr-6',
+        sidebarCollapsed && 'pl-[var(--traffic-light-inset)]',
         activeView?.kind === 'upcoming' && 'bg-[var(--color-background)]',
       )}
     >
-      <div className="flex min-w-[200px] flex-1 items-end gap-3">
+      <div className="flex min-w-[200px] flex-1 items-center gap-2">
         {sidebarCollapsed && (
           <button
             type="button"
             onClick={onToggleSidebar}
             aria-label="Show sidebar"
             title="Show sidebar (⌘E)"
-            className="mb-1.5 shrink-0 rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            className="shrink-0 rounded-md p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
           >
-            <PanelLeft className="h-[18px] w-[18px]" />
+            <PanelLeft className="h-4 w-4" />
           </button>
         )}
-        <div className="min-w-0 flex-1">
-        <h1 className="vt-title truncate text-[32px] font-semibold leading-none tracking-[-0.035em] text-[var(--color-foreground)]">
-          {title}
-        </h1>
-        <p className="mt-1.5 truncate text-sm text-[var(--color-muted-foreground)]">
-          {format(new Date(), 'EEEE d MMMM')}
-        </p>
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h1 className="vt-title truncate text-base font-semibold tracking-tight text-[var(--color-foreground)]">
+            {title}
+          </h1>
+          <p className="shrink-0 text-xs text-[var(--color-muted-foreground)]">
+            {format(new Date(), 'EEEE d MMMM')}
+          </p>
         </div>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -184,6 +185,17 @@ export function DesktopHeader({
             activeViewLocalId={activeView.viewLocalId ?? projectViews[0]?.localId}
             onSelect={onSelectView}
           />
+        )}
+        {activeView?.kind === 'project' && onManageViews && (
+          <button
+            type="button"
+            onClick={onManageViews}
+            aria-label="Manage views"
+            title="Manage views"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </button>
         )}
         {activeView?.kind === 'project' && currentView && (
           <ViewFilterButton view={currentView} />

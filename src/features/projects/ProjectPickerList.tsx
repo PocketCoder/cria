@@ -47,6 +47,9 @@ export function ProjectPickerList({
   // Sub-project tree for the unfiltered list (search stays flat).
   const visibleIds = new Set(projects.map((p) => p.localId));
   const { isOpen, toggle } = useProjectExpand();
+  // Only reserve the chevron gutter when some project actually has children,
+  // so a flat list sits flush-left like the header and labels.
+  const hasNested = projects.some((p) => p.parentLocalId && visibleIds.has(p.parentLocalId));
 
   const openProject = (id: string) => {
     setActiveView({ kind: 'project', localId: id });
@@ -101,9 +104,9 @@ export function ProjectPickerList({
               >
                 {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </button>
-            ) : (
+            ) : hasNested ? (
               <span className="h-7 w-7 shrink-0" aria-hidden="true" />
-            )}
+            ) : null}
             {projectButton(p)}
           </div>
         </li>,
@@ -113,7 +116,7 @@ export function ProjectPickerList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-4 pb-2">
+      <div className="px-4 pb-2 pt-3">
         <div className="flex items-center gap-2 rounded-[11px] bg-[var(--color-input)] px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
           <input
@@ -129,12 +132,12 @@ export function ProjectPickerList({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {!term && (
-          <ul className="mb-2 divide-y divide-[var(--color-border)]">
+          <ul className="surface-card mb-2 divide-y divide-[var(--color-border)] overflow-hidden">
             <li>
               <button
                 type="button"
                 onClick={openInbox}
-                className="flex w-full items-center gap-3 py-[13px] text-left"
+                className="list-row w-full text-left"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                   <Inbox className="h-5 w-5 text-[var(--color-primary)]" />
@@ -151,7 +154,7 @@ export function ProjectPickerList({
               <button
                 type="button"
                 onClick={openFavorites}
-                className="flex w-full items-center gap-3 py-[13px] text-left"
+                className="list-row w-full text-left"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                   <Star className="h-5 w-5 text-[var(--color-primary)]" />
@@ -163,7 +166,7 @@ export function ProjectPickerList({
               <button
                 type="button"
                 onClick={() => openSheet(viewKey(activeView) ?? 'today')}
-                className="flex w-full items-center gap-3 py-[13px] text-left"
+                className="list-row w-full text-left"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                   <SlidersHorizontal className="h-5 w-5 text-[var(--color-primary)]" />

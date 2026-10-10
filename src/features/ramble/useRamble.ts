@@ -5,6 +5,7 @@ import { aiErrorMessage, parseLines, rambleInstructions, clip } from '@/lib/aiPr
 import { useSelectableProjects } from '@/queries/projects';
 import { useLabels } from '@/queries/labels';
 import { useUi } from '@/stores/ui';
+import { useSettings } from '@/stores/settings';
 import { partialSaveMessage } from '@/lib/partialSave';
 import { createFromQuickAdd } from './createFromQuickAdd';
 import {
@@ -30,6 +31,8 @@ export function useRamble(onClose: () => void) {
   const setText = useUi((s) => s.setRambleDraft);
   const pendingLines = useUi((s) => s.rambleLines);
   const setPendingLines = useUi((s) => s.setRambleLines);
+  // The model writes, and every parse reads, the user's Quick Add Magic syntax.
+  const mode = useSettings((s) => s.quickAddMagicMode);
 
   const [phase, setPhase] = useState<Phase>('input');
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +99,7 @@ export function useRamble(onClose: () => void) {
         instructions: rambleInstructions({
           projects: projects.map((p) => p.title),
           labels: labels.map((l) => l.title),
+          mode,
         }),
         prompt: clip(text.trim()),
       });
@@ -148,6 +152,7 @@ export function useRamble(onClose: () => void) {
                 instructions: rambleInstructions({
                   projects: projects.map((p) => p.title),
                   labels: labels.map((l) => l.title),
+                  mode,
                 }),
                 prompt: clip(chunk),
               }),
@@ -217,7 +222,7 @@ export function useRamble(onClose: () => void) {
     setPhase('input');
   };
 
-  const chosen = chosenDrafts(drafts);
+  const chosen = chosenDrafts(drafts, mode);
 
   // Closing is inert while saving: the save loop can't be cancelled and its
   // completion would close (or clear) a sheet the user has since reopened.
@@ -235,7 +240,7 @@ export function useRamble(onClose: () => void) {
     try {
       await createDrafts(
         chosen,
-        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId }),
+        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode }),
         (d) => savedIds.add(d.id),
       );
       if (!alive.current) {
@@ -274,11 +279,11 @@ export function useRamble(onClose: () => void) {
   const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
   const addOne = async (id: number) => {
     const d = drafts.find((x) => x.id === id);
-    if (!d || !projectId || !hasTitle(d.line) || busyIds.has(id) || phase === 'saving') return;
+    if (!d || !projectId || !hasTitle(d.line, mode) || busyIds.has(id) || phase === 'saving') return;
     setBusyIds((prev) => new Set(prev).add(id));
     setError(null);
     try {
-      await createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId });
+      await createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode });
       if (alive.current) setDrafts((prev) => removeDraft(prev, id));
     } catch (err) {
       console.error('[ramble] task creation failed:', err);

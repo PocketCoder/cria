@@ -78,7 +78,7 @@ function PriorityPill({
           <span>{isSet ? meta.label : 'Priority'}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-44 p-1">
+      <PopoverContent align="start" sideOffset={6} className="w-40 p-1">
         <div role="radiogroup" aria-label="Priority" className="flex flex-col">
           {PRIORITY_META.map((m, i) => {
             const selected = m.value === value;
@@ -167,7 +167,7 @@ function PrioritySegmented({
           className="absolute rounded-[5px] shadow-sm"
           style={{
             ...indicatorStyle(box, moved, 'background-color var(--duration-slide) ease'),
-            backgroundColor: current.value === 0 ? 'var(--color-card)' : current.color,
+            backgroundColor: current.value === 0 ? 'var(--color-muted-foreground)' : current.color,
           }}
         />
       ) : null}
@@ -198,10 +198,13 @@ function PrioritySegmented({
             className={cn(
               'relative z-[1] flex min-w-0 flex-[1_1_0] items-center justify-center gap-1 overflow-hidden rounded-[5px] font-medium transition-colors duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
               compact ? 'px-1.5 py-0.5 text-footnote' : 'px-1 py-1 text-caption',
+              // Selected text sits on the fill: the priority ramp is light
+              // (marigold reads 1.9:1 under white), so it takes dark ink;
+              // None's grey fill takes the card colour.
               selected
                 ? isNone
-                  ? 'text-[var(--color-foreground)]'
-                  : 'text-white'
+                  ? 'text-[var(--color-card)]'
+                  : 'text-[var(--prio-foreground)]'
                 : isNone
                   ? 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-card)]'
                   : 'hover:bg-[var(--color-card)]',

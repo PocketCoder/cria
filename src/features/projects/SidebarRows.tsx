@@ -27,9 +27,8 @@ import type { Project } from '@/domain/project';
 import type { Label } from '@/domain/label';
 import { PROJECT_COLORS } from './sidebarLogic';
 
-/** Primary tint + primary text so the active row stays distinct from the neutral muted hover fill. */
-const SELECTED_ROW =
-  'bg-[var(--color-primary)]/10 font-medium text-[color:var(--color-primary)] hover:bg-[var(--color-primary)]/15 hover:text-[color:var(--color-primary)]';
+/** Selected nav item: muted fill + medium weight (design system NavItem). */
+const SELECTED_ROW = 'bg-[var(--color-muted)] font-medium text-[var(--color-foreground)]';
 
 /* ────────────────────────── shared nav item ─────────────────────────── */
 
@@ -52,24 +51,16 @@ export function NavItem({
       onClick={onClick}
       aria-current={isSelected ? 'page' : undefined}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px]',
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
         'hover:bg-[var(--color-muted)]',
         isSelected && SELECTED_ROW,
       )}
     >
-      <Icon
-        className={cn(
-          'h-3.5 w-3.5 shrink-0',
-          isSelected ? '' : 'text-[var(--color-muted-foreground)]',
-        )}
-      />
+      <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
       <span className="truncate">{label}</span>
       {count != null && (
         <span
-          className={cn(
-            'ml-auto text-[11.5px] tabular-nums',
-            isSelected ? 'opacity-70' : 'text-[var(--color-muted-foreground)]',
-          )}
+          className="ml-auto text-footnote tabular-nums text-[var(--color-muted-foreground)]"
         >
           {count}
         </span>
@@ -426,14 +417,14 @@ function ProjectSelectButton({
   taskCount: number;
   onSelect: () => void;
 }) {
-  const badgeTone = isSelected ? 'opacity-70' : 'text-[var(--color-muted-foreground)]';
+  const badgeTone = 'text-[var(--color-muted-foreground)]';
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-current={isSelected ? 'page' : undefined}
       className={cn(
-        'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
+        'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
         'hover:bg-[var(--color-muted)] hover:text-[color:var(--color-foreground)]',
         isSelected && SELECTED_ROW,
       )}
@@ -549,7 +540,7 @@ export function LabelRow({
             onClick={onSelect}
             aria-current={isSelected ? 'page' : undefined}
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-2 py-[6px] pr-8 text-left text-[13.5px]',
+              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm',
               'hover:bg-[var(--color-muted)]',
               isSelected && SELECTED_ROW,
             )}

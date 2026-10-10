@@ -340,8 +340,9 @@ function AddChipView({
   }
   const field = view === 'start' ? 'startDate' : 'endDate';
   const currentIso = view === 'start' ? task.startDate : task.endDate;
+  // No extra padding: the 252px calendar only just fits the w-64 popover.
   return (
-    <div className="p-2">
+    <div>
       <Calendar
         selected={currentIso ? toCalendarDate(currentIso) : undefined}
         onSelect={(date) => {

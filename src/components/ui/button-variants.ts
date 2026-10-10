@@ -9,9 +9,9 @@ export const buttonVariants = cva(
           'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90',
         outline:
           'border border-[var(--color-border)] bg-transparent hover:bg-[var(--color-muted)]',
-        ghost: 'hover:bg-[var(--color-muted)]',
+        ghost: 'border border-transparent hover:bg-[var(--color-muted)]',
         glass:
-          'bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--glass-border)] hover:bg-[var(--glass-bg)] hover:opacity-90',
+          'bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--glass-border)] hover:opacity-90',
         destructive:
           'bg-[var(--color-destructive)] text-[var(--color-destructive-foreground)] hover:opacity-90',
       },

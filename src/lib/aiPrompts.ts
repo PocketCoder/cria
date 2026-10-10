@@ -8,6 +8,11 @@
  */
 
 import { needsQuoting } from '@/lib/quickAddParser';
+import {
+  DEFAULT_QUICK_ADD_MAGIC_MODE,
+  QUICK_ADD_PREFIXES,
+  type QuickAddMagicMode,
+} from '@/lib/quickAddPrefixes';
 
 /** On-device context is 4K tokens on OS 26, 8K on OS 27; ~6K chars is safe. */
 const MAX_INPUT_CHARS = 6000;
@@ -23,7 +28,8 @@ export function clipStart(text: string, max = MAX_INPUT_CHARS): string {
 }
 
 function nameList(names: string[]): string {
-  // Quote exactly the names the quick-add parser can't match bare (`+Café`).
+  // Quote exactly the names the quick-add parser can't match bare (`+Café`);
+  // the bare-name rule is the same for every prefix mode.
   const shown = names.slice(0, MAX_NAMES).map((n) => (needsQuoting(n) ? `"${n}"` : n));
   return shown.length > 0 ? shown.join(', ') : '(none)';
 }
@@ -76,7 +82,21 @@ export function parseLines(text: string, max = 50): string[] {
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-export function rambleInstructions(ctx: { projects: string[]; labels: string[]; now?: Date }): string {
+const EXAMPLE_RAMBLE =
+  "ugh I need to call the dentist sometime next week, and email the landlord tomorrow, and um renew the car insurance before the end of the month, that's really important, oh and buy milk";
+
+/**
+ * Instructions for turning a ramble into quick-add lines written in the
+ * user's Quick Add Magic `mode`, so the same parser (with the same mode)
+ * resolves them. With the magic `disabled` nothing is parsed, so the model
+ * writes plain titles and keeps any date or repeat in words inside them.
+ */
+export function rambleInstructions(ctx: {
+  projects: string[];
+  labels: string[];
+  now?: Date;
+  mode?: QuickAddMagicMode;
+}): string {
   const now = ctx.now ?? new Date();
   const today = now.toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -84,26 +104,44 @@ export function rambleInstructions(ctx: { projects: string[]; labels: string[]; 
     month: 'long',
     year: 'numeric',
   });
+  const intro = `You turn a person's spoken ramble into a to-do list. Today is ${today}.
+Output one task per line and nothing else: no numbering, bullets, headings or commentary.`;
+  const outro = `Write each title without a full stop at the end.
+Skip filler, thinking aloud and anything that is not a task. Merge repeats of the same task.`;
+
+  const p = QUICK_ADD_PREFIXES[ctx.mode ?? DEFAULT_QUICK_ADD_MAGIC_MODE];
+  if (!p) {
+    return `${intro}
+Each line is a short imperative task title in plain words, with no symbols or tags such as + * @ # or !.
+Keep every date and repeat the person mentions in the title, in plain words as they said them (tomorrow, next friday, every week).
+${outro}
+
+Example ramble: ${EXAMPLE_RAMBLE}
+Example output:
+Call the dentist next week
+Email the landlord tomorrow
+Renew car insurance before the end of the month
+Buy milk`;
+  }
+
   // The date parser can't do "end of the month", so the model names the day;
   // the example shows it with this month's real last day.
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const endOfMonth = `${MONTHS[lastDay.getMonth()]} ${lastDay.getDate()}`;
-  return `You turn a person's spoken ramble into a to-do list. Today is ${today}.
-Output one task per line and nothing else: no numbering, bullets, headings or commentary.
+  return `${intro}
 Each line is a short imperative task title, optionally followed by these tokens:
 - A due date in plain words, as the person said it (tomorrow, tomorrow 5pm, next friday, in 3 days, this weekend). Keep every date the person mentions. Only for "end of the month/week" style deadlines, write the month and day instead (${endOfMonth}).
 - A repeat in plain words (every week, daily, every monday).
-- +Project to file it in a project. Only use these projects: ${nameList(ctx.projects)}. Put quotes around names with spaces or any character other than letters, digits, - and _, like +"Home Admin" or +"Mum's". Leave it out if none fits.
-- *label to tag it. Existing labels: ${nameList(ctx.labels)}. Only add a label if it clearly fits.
-- !3 only if the person says it is important, !4 only if they say it is urgent. Most tasks have no priority.
-Write each title without a full stop at the end.
-Skip filler, thinking aloud and anything that is not a task. Merge repeats of the same task.
+- ${p.project}Project to file it in a project. Only use these projects: ${nameList(ctx.projects)}. Put quotes around names with spaces or any character other than letters, digits, - and _, like ${p.project}"Home Admin" or ${p.project}"Mum's". Leave it out if none fits.
+- ${p.label}label to tag it. Existing labels: ${nameList(ctx.labels)}. Only add a label if it clearly fits.
+- ${p.priority}3 only if the person says it is important, ${p.priority}4 only if they say it is urgent. Most tasks have no priority.
+${outro}
 
-Example ramble: ugh I need to call the dentist sometime next week, and email the landlord tomorrow, and um renew the car insurance before the end of the month, that's really important, oh and buy milk
+Example ramble: ${EXAMPLE_RAMBLE}
 Example output:
 Call the dentist next week
 Email the landlord tomorrow
-Renew car insurance ${endOfMonth} !3
+Renew car insurance ${endOfMonth} ${p.priority}3
 Buy milk`;
 }
 

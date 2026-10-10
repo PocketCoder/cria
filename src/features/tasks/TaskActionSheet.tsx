@@ -68,7 +68,7 @@ function Inner({ task }: { task: Task }) {
               key={p.localId}
               type="button"
               onClick={() => { void moveTask(task.localId, p.localId); close(); }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]"
             >
               {p.hexColor && (
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.hexColor }} aria-hidden />
@@ -86,9 +86,9 @@ function Inner({ task }: { task: Task }) {
               key={m.value}
               type="button"
               onClick={() => { void updateTask(task.localId, { priority: m.value }); close(); }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]"
             >
-              <Flag className="h-4 w-4 shrink-0" style={{ color: m.color }} />
+              <Flag className="h-5 w-5 shrink-0" style={{ color: m.color }} />
               <span className="flex-1">{m.label}</span>
               {task.priority === m.value && <span className="text-[var(--color-primary)]">✓</span>}
             </button>
@@ -138,8 +138,8 @@ function Inner({ task }: { task: Task }) {
       <ModalDialog label="Task actions" onClose={close}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-1 shadow-xl animate-[sheet-up_300ms_var(--spring-snappy)] dark:border dark:border-[var(--sheet-border)]">
-            <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
+          <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
+            <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 overflow-y-auto">{body}</div>
           </div>
@@ -150,7 +150,7 @@ function Inner({ task }: { task: Task }) {
 
   return (
     <ModalDialog label="Task actions" onClose={close}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
         <BackdropDismiss onDismiss={close} />
         <div className="relative w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
           {header}
@@ -183,7 +183,7 @@ function ActionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-3 px-4 py-3 text-left text-base',
+        'flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]',
         destructive ? 'text-[var(--color-destructive)]' : 'text-[var(--color-foreground)]',
       )}
     >

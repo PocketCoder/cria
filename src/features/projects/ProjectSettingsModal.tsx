@@ -154,10 +154,10 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
   return (
     <ModalDialog label="Edit This Project" onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
+        className="relative dialog-panel flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden"
       >
         {/* ── Header ── */}
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">

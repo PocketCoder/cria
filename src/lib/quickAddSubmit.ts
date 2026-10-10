@@ -106,3 +106,36 @@ export function mergeLabelTitles(prev: string[], incoming: string[]): string[] {
   }
   return merged;
 }
+
+/**
+ * A picker's value after the parsed token behind it changes from `before` to
+ * `after` (null when the line has no such token). A parsed value is copied
+ * in. When the parse stops producing one, because its token was deleted or
+ * the line became a literal title, the value it put there is taken back out
+ * (`empty`), unless the user has changed the picker since.
+ */
+export function followParsed<T>(
+  current: T,
+  before: T | null,
+  after: T | null,
+  empty: T,
+  same: (a: T, b: T) => boolean = Object.is,
+): T {
+  if (after !== null) return after;
+  if (before !== null && same(current, before)) return empty;
+  return current;
+}
+
+/**
+ * The label picker after the typed label tokens change from `before` to
+ * `after`: labels whose token is gone leave the picker and new ones join it
+ * (case-insensitive). Other picks stay, unless they match a removed token.
+ */
+export function followParsedLabels(current: string[], before: string[], after: string[]): string[] {
+  const kept = new Set(after.map((t) => t.toLowerCase()));
+  const gone = new Set(before.map((t) => t.toLowerCase()).filter((t) => !kept.has(t)));
+  return mergeLabelTitles(
+    current.filter((t) => !gone.has(t.toLowerCase())),
+    after,
+  );
+}

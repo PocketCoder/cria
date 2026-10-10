@@ -1,6 +1,6 @@
 # FEATURE-COMPARISON.md — Cria vs Vikunja
 
-Last updated: 24 September 2026 (v0.13.0 + `dev`)
+Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e7d7f17)
 
 ## Legend
 | Icon | Meaning |
@@ -23,7 +23,9 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Tasks | Delete with undo | ✅ | 20s undo toast via UndoToast |
 | Tasks | Inline field editing (dates, priority, color) | ✅ | Popover pickers in TaskActions |
 | Tasks | Percent done slider | ✅ | 0–100 slider in TaskActions |
-| Tasks | Natural-language quick-add (date, #label, !priority, @assignee) | ✅ | `quickAddParser` + QuickAddPreview |
+| Tasks | Natural-language quick-add (date, *label, !priority, @assignee) | ✅ | `quickAddParser` + QuickAddPreview |
+| Tasks | Quick Add Magic modes (Disabled / Vikunja / Todoist prefixes) | ✅ | `quickAddPrefixes`; mode follows the user's Vikunja-web `frontend_settings.quick_add_magic_mode` and is selectable in Settings → General (#62) |
+| Tasks | Quick-add literal titles (input wrapped in quotes, or only magic) | ✅ | As Vikunja-web: `"…"` or `'…'` around the whole input skips all parsing in every mode; a line that is only tokens (`*Urgent`, `+Home`, `tomorrow`) is kept as typed with nothing applied (`parseQuickAddTask`, quick-add modal and Kanban). Ramble still skips token-only lines |
 | Tasks | **+ProjectName in quick-add** | ✅ | Shipped via feat/quick-features merge |
 | Tasks | **NL recurrence in quick-add (every day/week etc.)** | ✅ | Shipped via feat/quick-features merge |
 | Tasks | **Task identifier (PROJ-42) in detail card** | ✅ | Shipped via feat/quick-features merge |
@@ -55,6 +57,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Projects | Sub-project hierarchy in sidebar | ✅ | Nested tree in `ProjectSidebar` from `parent_project_id` |
 | Projects | Project background images | ❌ | Not started (Unsplash integration) |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
+| Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. View filter editing and bucket-config mode not in it yet |
 
 ### Labels
 
@@ -90,10 +93,11 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Attachments | Upload (button + drag-drop) | ✅ | AttachmentList + uploadAttachment |
-| Attachments | Delete | ✅ | Per-row delete |
+| Attachments | Upload (button + drag-drop) | ✅ | AttachmentList + queueAttachmentUpload |
+| Attachments | Offline uploads (queued, survive restart) | ✅ | Pending row + outbox `task_attachment`·`upload`; bytes in the Rust side-store (`blobs.rs`) |
+| Attachments | Delete | ✅ | Per-row delete (online only; a queued upload can be cancelled offline) |
 | Attachments | Download | ✅ | Via Tauri save dialog |
-| Attachments | Inline images in descriptions | ✅ | VikunjaImage extension + auth-fetch |
+| Attachments | Inline images in descriptions and comments | ✅ | VikunjaImage extension + auth-fetch (comments share the description's read view); loads the `/api/v1/` URLs Cria and Vikunja-web up to 2.6 write and the `/api/v2/` ones 2.7+ writes; offline pastes use a `cria://pending/{id}` placeholder rewritten on upload |
 | Attachments | Image lightbox | ✅ | ImageLightbox component |
 | Attachments | Paperclip indicator on task rows | ✅ | Shows count in TaskList |
 
@@ -145,7 +149,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 |---|---|---|---|
 | Auth | API token + server URL login | ✅ | LoginScreen |
 | Auth | Sign-out | ✅ | Shell footer |
-| Auth | Token stored in localStorage | ✅ | auth/storage.ts |
+| Auth | Credentials stored in OS keychain | ✅ | `auth/storage.ts` + `secure.rs`; localStorage only when no keychain exists (browser dev, tests) |
 | Auth | Server health probe (`/info`) | ✅ | LoginScreen probes before auth |
 
 ### API Client
@@ -161,7 +165,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Native | SQLite with migrations (14 migrations) | ✅ | 001–014, forward-only |
+| Native | SQLite with migrations (19 migrations) | ✅ | 001–019, forward-only |
 | Native | Single instance (Tauri plugin) | ✅ | plugin-single-instance |
 | Native | macOS Dock badge (reminder count) | ✅ | In queries/badge.ts |
 | Native | Global shortcut (Cmd+Shift+A → quick add) | ✅ | tauri/globalShortcut.ts |
@@ -196,7 +200,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | UI | Cmd+K command palette | ✅ | CommandPalette (views, projects, labels, tasks, actions) |
 | UI | Per-row keyboard shortcuts (j/k, e, d, l, p) | ✅ | Fixed Vikunja set in `src/lib/shortcuts.ts` (j/k, Enter, task-detail keys, g-sequences) |
 | UI | Rebindable shortcuts in settings | ❌ | Removed from scope |
-| UI | Settings page (date format, time format, color scheme, name, reminders, notification, tray, autostart) | ✅ | SettingsModal with 6 sections; locale prefs (language/timezone/week start) removed pending local wiring — #76 / #77 / #78 |
+| UI | Settings (General, Account, Appearance, Notifications, Security, Tokens, Teams, Data, Shortcuts, Photo capture, Advanced) | ✅ | SettingsModal, 11 tabs; language/timezone remain 🟡 (#76 / #78) |
 | UI | Inbox view (no-project tasks) | ✅ | Shipped |
 | UI | Kanban view | ✅ | M9, drag-reorder, WIP bucket limit |
 | UI | Table view (dense, sortable) | ✅ | M9, sortable columns, drag-reorder |
@@ -224,6 +228,7 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Settings | Notification toggle (desktop) | ✅ | SettingsModal Notifications, with OS permission gate |
 | Settings | Email reminders (server) | ✅ | SettingsModal General toggle, server-synced |
 | Settings | Overdue task email reminders | ✅ | SettingsModal General toggle + time picker, server-synced |
+| Settings | Quick Add Magic mode | ✅ | SettingsModal General select, shared with Vikunja-web via `frontend_settings.quick_add_magic_mode`; drives the quick-add modal, Kanban inline add and Ramble (prompt and parsing) |
 | Settings | CalDAV link | ✅ | SettingsModal Advanced, opens docs URL |
 
 ### Export/Import
@@ -246,25 +251,22 @@ Last updated: 24 September 2026 (v0.13.0 + `dev`)
 | Misc | Server-side Vikunja version in footer | ✅ | Shown in footer via useServerVersion |
 | Misc | In-app notification inbox | ✅ | `GET /notifications` wired; bell + unread badge |
 
-## Easiest next features (quickest to ship)
+## Cria-only (not in Vikunja)
 
-Ranked by effort × impact, with rationale.
+Everything here is client-side and writes ordinary Vikunja tasks.
 
-### 1. Saved filters (Vikunja filter DSL) — ~1 day
+| Feature | Notes |
+|---|---|
+| On-device AI: Ramble | Free text becomes several tasks (`features/ramble`, `tauri/ai.ts`) |
+| On-device AI: Break down | Suggests subtasks for a task |
+| On-device AI: Describe filter | Words become a filter query |
+| Photo capture / OCR | Apple Vision, Tesseract.js fallback (`features/shoppingPhoto`) |
+| Offline-first outbox + conflict modal | Includes offline attachment uploads |
+| Local FTS5 search | Works offline |
+| iOS app | OS-scheduled reminders, native tab bar |
+| Desktop shell | Tray, global shortcut, autostart, Dock badge |
+| Multi-select `SelectionBar` | Bulk complete, schedule, move, priority, delete |
 
-SmartViews scaffold exists (TodayView, UpcomingView, InboxView). Saved filters require:
-- Fetching saved filters from server (`GET /filters`)
-- A sidebar item listing them
-- Wiring each filter's query through to the task list
-- A save-current-view-as-filter button
-Server endpoints exist. Pure client-side UI work.
+## Vikunja features missing from Cria
 
-### 2. Comments (read-only) — ~0.5 day
-
-Vikunja supports comments on tasks via `GET /tasks/{id}/comments`. Read-only display in the detail card is a simple list component. No write/mentions needed for V1.
-
-### 3. Bulk operations (multi-select, batch actions) — ~1.5 days
-
-Multi-select via Cmd+click / Shift+click on task rows, then batch actions (delete, move, set labels). Leverages existing mutation functions in db/tasks.ts.
-
-
+See [FEATURE-GAPS-PLAN.md](FEATURE-GAPS-PLAN.md) for specs and an implementation order.

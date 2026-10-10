@@ -98,8 +98,37 @@ describe('buildKanbanTaskInput', () => {
     expect(r.labelTitles).toEqual(['work']);
   });
 
-  it('falls back to the raw text when parsing leaves no title', () => {
+  it('keeps a title that is only tokens as literal text, with nothing parsed from it', () => {
     const r = buildKanbanTaskInput('!2', 'p1')!;
     expect(r.input.title).toBe('!2');
+    expect(r.input.priority).toBeUndefined();
+
+    const labelOnly = buildKanbanTaskInput(' *Urgent tomorrow ', 'p1')!;
+    expect(labelOnly.input.title).toBe('*Urgent tomorrow');
+    expect(labelOnly.input.dueDate).toBeUndefined();
+    expect(labelOnly.labelTitles).toEqual([]);
+
+    const todoist = buildKanbanTaskInput('@Urgent !3', 'p1', 'todoist')!;
+    expect(todoist.input).toMatchObject({ title: '@Urgent !3', priority: undefined });
+    expect(todoist.labelTitles).toEqual([]);
+  });
+
+  it('keeps a quoted title literal, without its quotes', () => {
+    const r = buildKanbanTaskInput('"Write report !3 *work tomorrow"', 'p1')!;
+    expect(r.input).toMatchObject({ title: 'Write report !3 *work tomorrow', priority: undefined, dueDate: undefined });
+    expect(r.labelTitles).toEqual([]);
+    expect(buildKanbanTaskInput('""', 'p1')!.input.title).toBe('""');
+  });
+
+  it('parses with the given Quick Add Magic mode', () => {
+    const todoist = buildKanbanTaskInput('Write report !3 @work *draft', 'p1', 'todoist')!;
+    expect(todoist.input.title).toBe('Write report *draft');
+    expect(todoist.input.priority).toBe(3);
+    expect(todoist.labelTitles).toEqual(['work']);
+
+    const off = buildKanbanTaskInput('Write report !3 *work', 'p1', 'disabled')!;
+    expect(off.input.title).toBe('Write report !3 *work');
+    expect(off.input.priority).toBeUndefined();
+    expect(off.labelTitles).toEqual([]);
   });
 });

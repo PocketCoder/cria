@@ -24,6 +24,10 @@ export default defineConfig({
     // Forks give each test file its own Node process and clean module
     // graph.
     pool: 'forks',
+    // Coverage instrumentation slows the jsdom UI tests enough that a few
+    // (view-manager, quick-add) pass alone in ~2.5s but crossed the 5s default
+    // in CI's `--coverage` run. A roomier limit keeps them stable.
+    testTimeout: 20000,
     // `pnpm test:coverage` (CI). Scoped to the logic layers; UI components
     // have no unit tests. Thresholds are a floor just under current numbers:
     // raise them as coverage grows, never lower them.

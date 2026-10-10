@@ -319,11 +319,14 @@ export function createApiClient(opts?: {
 /**
  * Build an authenticated `fetch`-like function bound to the current auth
  * context.  Use this for endpoints the generated OpenAPI types don't cover
- * (e.g. views/buckets pagination where `query` is typed `never`).
+ * (e.g. views/buckets pagination where `query` is typed `never`), and for
+ * the few `/api/v2` endpoints Cria uses (`apiVersion: 'v2'`).
  */
-export function createApiFetch(): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+export function createApiFetch(
+  apiVersion: 'v1' | 'v2' = 'v1',
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   const snap = getAuthSnapshot();
-  const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/v1`;
+  const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/${apiVersion}`;
   const token = snap.token ?? '';
   guardTokenDestination(baseUrl, token);
   return async (input, init) => {

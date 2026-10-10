@@ -1,9 +1,9 @@
 /**
  * Natural-language quick-add parser, in the Vikunja-web style.
  *
- *   "Buy milk tomorrow at 5pm @groceries !2 +alice #Personal"
+ *   "Buy milk tomorrow at 5pm *groceries !2 @alice +Personal"
  *
- * is parsed into:
+ * is parsed (in the default `vikunja` mode) into:
  *
  *   {
  *     title: "Buy milk",
@@ -17,23 +17,42 @@
  *
  * Pure function — no DB, no React, no Tauri. Trivially unit-testable.
  *
+ * The symbols depend on the Quick Add Magic mode (see quickAddPrefixes):
+ *
+ *   mode      label  project  assignee  priority
+ *   vikunja   *      +        @         !
+ *   todoist   @      #        +         !
+ *   disabled  no parsing at all: the whole input is the title
+ *
  * Token rules (a "token" here is a substring of the input that
  * contributes to a non-title field; everything else is title text):
  *
- *   @label      — `@` followed by one or more of `[A-Za-z0-9_-]` and
- *                 optionally extended with inner spaces via the quoted
- *                 form `@"two words"`. Multiple `@` tokens accumulate.
- *   !priority   — `!` followed by a digit `1`..`5`. Highest wins if the
+ *   label       — prefix followed by one or more of `[A-Za-z0-9_-]`, or the
+ *                 quoted form `*"two words"`. Multiple labels accumulate.
+ *   priority    — prefix followed by a digit `1`..`5`. Highest wins if the
  *                 user wrote several.
- *   +assignee   — `+` followed by `[A-Za-z0-9_-]`. Multiple accumulate.
- *   #project    — `#` followed by a project name (same quoting as labels).
- *                 Only one project token is kept (last wins).
+ *   assignee    — prefix followed by `[A-Za-z0-9_-]`. Multiple accumulate.
+ *   project     — prefix followed by a project name (same quoting as
+ *                 labels). Only one project token is kept (last wins).
+ *   <recurrence> — "every 2 weeks", "daily", "every monday"…
  *   <date>      — *anywhere*, parsed by chrono-node. We take the first
  *                 non-empty result.
+ *
+ * Input wrapped entirely in a pair of straight double or single quotes is a
+ * literal title in every mode, as in Vikunja-web: the pair is dropped and
+ * nothing inside it is parsed (see `unquoteLiteral`). Cria also accepts the
+ * curly pairs “…” and ‘…’, which is what iOS Smart Punctuation and macOS smart
+ * quotes type, so the escape works from those keyboards.
  */
 
 import * as chrono from 'chrono-node';
 import { timedIso } from '@/lib/dateFormat';
+import {
+  DEFAULT_QUICK_ADD_MAGIC_MODE,
+  QUICK_ADD_PREFIXES,
+  type QuickAddMagicMode,
+  type QuickAddPrefixes,
+} from '@/lib/quickAddPrefixes';
 
 export interface QuickAddResult {
   title: string;
@@ -56,21 +75,56 @@ export type QuickAddToken =
   | { kind: 'project'; start: number; end: number; text: string; title: string }
   | { kind: 'recurrence'; start: number; end: number; text: string; repeatAfter: number | null; repeatMode: number | null };
 
-// Vikunja's *default* Quick Add Magic prefixes
-// (pkg frontend: src/modules/quickAddMagic/prefixes.ts → VIKUNJA_PREFIXES):
-//   label '*'  project '+'  assignee '@'  priority '!'
-// (Vikunja's Todoist mode swaps these to @ / # / + — see issue tracking
-// making the mode user-selectable + synced with the user's Vikunja-web
-// setting.)
 // Quote class accepts straight (") and macOS "smart" curly quotes
 // (“ ”), which text inputs substitute by default — otherwise
 // `*"two words"` typed in the app wouldn't match.
 // The unquoted class is shared with `needsQuoting` below so the two can't drift.
 const BARE_NAME = '[A-Za-z0-9_-]+';
-const LABEL_RE = new RegExp(`(?:^|\\s)(\\*["“”][^"“”]+["“”]|\\*${BARE_NAME})(?=\\s|$)`, 'g');
-const PROJECT_RE = new RegExp(`(?:^|\\s)(\\+["“”][^"“”]+["“”]|\\+${BARE_NAME})(?=\\s|$)`, 'g');
-const ASSIGNEE_RE = /(?:^|\s)(@[A-Za-z0-9_-]+)(?=\s|$)/g;
-const PRIORITY_RE = /(?:^|\s)(![1-5])(?=\s|$)/g;
+
+interface PrefixRegexes {
+  prefixes: QuickAddPrefixes;
+  label: RegExp;
+  project: RegExp;
+  assignee: RegExp;
+  priority: RegExp;
+  /** An opening quote after the label/project prefix running to end-of-input. */
+  openQuote: RegExp;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildRegexes(prefixes: QuickAddPrefixes): PrefixRegexes {
+  const quotable = (prefix: string) => {
+    const p = escapeRe(prefix);
+    return new RegExp(`(?:^|\\s)(${p}["“”][^"“”]+["“”]|${p}${BARE_NAME})(?=\\s|$)`, 'g');
+  };
+  return {
+    prefixes,
+    label: quotable(prefixes.label),
+    project: quotable(prefixes.project),
+    assignee: new RegExp(`(?:^|\\s)(${escapeRe(prefixes.assignee)}${BARE_NAME})(?=\\s|$)`, 'g'),
+    priority: new RegExp(`(?:^|\\s)(${escapeRe(prefixes.priority)}[1-5])(?=\\s|$)`, 'g'),
+    openQuote: new RegExp(
+      `(?:^|\\s)(${escapeRe(prefixes.label)}|${escapeRe(prefixes.project)})(["“”])([^"“”]*)$`,
+    ),
+  };
+}
+
+const REGEX_CACHE = new Map<QuickAddMagicMode, PrefixRegexes>();
+
+/** The mode's compiled token regexes, or null when the mode parses nothing. */
+function regexesFor(mode: QuickAddMagicMode): PrefixRegexes | null {
+  const prefixes = QUICK_ADD_PREFIXES[mode];
+  if (!prefixes) return null;
+  let regexes = REGEX_CACHE.get(mode);
+  if (!regexes) {
+    regexes = buildRegexes(prefixes);
+    REGEX_CACHE.set(mode, regexes);
+  }
+  return regexes;
+}
 
 // Recurrence phrases. Must be checked before chrono-date so "every monday"
 // is consumed here and not by chrono-node.
@@ -140,43 +194,82 @@ function parseQuoted(raw: string, prefix: string): string {
   return afterPrefix;
 }
 
-export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddResult {
+/**
+ * Vikunja-web's escape from the magic (`parseTaskText`): input that starts and
+ * ends with the same straight quote, `"` or `'`, is a literal title. Only the
+ * first and last characters are checked, as upstream does, so inner quotes
+ * stay as typed. Returns the text inside the pair, or null when the input
+ * isn't wrapped. Unlike upstream, surrounding whitespace is ignored, since
+ * Cria trims every title's ends anyway, and the curly pairs “…” and ‘…’ also
+ * count (upstream only knows the straight ones; this only adds cases).
+ */
+const CURLY_PAIRS: Record<string, string> = { '\u201C': '\u201D', '\u2018': '\u2019' };
+
+function unquoteLiteral(input: string): string | null {
+  const text = input.trim();
+  if (text.length < 2) return null;
+  const quote = text.charAt(0);
+  const close = CURLY_PAIRS[quote] ?? (quote === '"' || quote === "'" ? quote : null);
+  if (close && text.endsWith(close)) return text.slice(1, -1);
+  return null;
+}
+
+/**
+ * Parse a quick-add line. `mode` picks the prefix table; `disabled` mirrors
+ * Vikunja-web, which turns the magic off entirely: no symbols, dates or
+ * recurrence, so the whole input becomes the title.
+ *
+ * A title left empty by the magic stays empty here, as in Vikunja-web's
+ * `parseTaskText`. Code that creates a task from typed input, and its
+ * preview, uses `parseQuickAddTask`, which keeps such input as a literal title.
+ */
+export function parseQuickAdd(
+  input: string,
+  now: Date = new Date(),
+  mode: QuickAddMagicMode = DEFAULT_QUICK_ADD_MAGIC_MODE,
+): QuickAddResult {
   const raw = input;
+  // Checked before the mode, as upstream does, so it applies with the magic off too.
+  const literal = unquoteLiteral(raw);
+  if (literal !== null) return plainTitle(raw, literal);
+  const re = regexesFor(mode);
+  if (!re) return plainTitle(raw);
+  const { prefixes } = re;
   const claimed: RawToken[] = [];
 
   // --- Symbol tokens first (cheap, unambiguous) ---
 
-  for (const m of raw.matchAll(LABEL_RE)) {
+  for (const m of raw.matchAll(re.label)) {
     const matchText = m[1]!;
     const start = m.index! + (m[0]!.length - matchText.length);
     const end = start + matchText.length;
-    const title = parseQuoted(matchText, '*');
+    const title = parseQuoted(matchText, prefixes.label);
     if (title.length > 0) {
       claimed.push({ kind: 'label', start, end, text: matchText, payload: title });
     }
   }
 
-  for (const m of raw.matchAll(PRIORITY_RE)) {
+  for (const m of raw.matchAll(re.priority)) {
     const matchText = m[1]!;
     const start = m.index! + (m[0]!.length - matchText.length);
     const end = start + matchText.length;
-    const value = parseInt(matchText.slice(1), 10);
+    const value = parseInt(matchText.slice(prefixes.priority.length), 10);
     claimed.push({ kind: 'priority', start, end, text: matchText, payload: value });
   }
 
-  for (const m of raw.matchAll(ASSIGNEE_RE)) {
+  for (const m of raw.matchAll(re.assignee)) {
     const matchText = m[1]!;
     const start = m.index! + (m[0]!.length - matchText.length);
     const end = start + matchText.length;
-    const username = matchText.slice(1);
+    const username = matchText.slice(prefixes.assignee.length);
     claimed.push({ kind: 'assignee', start, end, text: matchText, payload: username });
   }
 
-  for (const m of raw.matchAll(PROJECT_RE)) {
+  for (const m of raw.matchAll(re.project)) {
     const matchText = m[1]!;
     const start = m.index! + (m[0]!.length - matchText.length);
     const end = start + matchText.length;
-    const title = parseQuoted(matchText, '+');
+    const title = parseQuoted(matchText, prefixes.project);
     if (title.length > 0) {
       claimed.push({ kind: 'project', start, end, text: matchText, payload: title });
     }
@@ -201,13 +294,13 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   }
 
   // --- Unterminated quoted token at end-of-input (live preview) ---
-  // While the user is mid-typing `*"two words` (no closing quote yet) the
-  // balanced-pair regexes above can't match, so the chip wouldn't appear
-  // until the final quote. Recognise an opening quote that runs to the end
+  // While the user is mid-typing `*"two words` (a label or project prefix,
+  // no closing quote yet) the balanced-pair regexes above can't match, so the
+  // chip wouldn't appear until the final quote. Recognise an opening quote that runs to the end
   // of the string so the chip shows as they type; once they add the closing
   // quote the balanced form takes over with the same payload.
   {
-    const m = /(?:^|\s)([*+])(["“”])([^"“”]*)$/.exec(raw);
+    const m = re.openQuote.exec(raw);
     if (m) {
       const prefix = m[1]!;
       const tokenText = prefix + m[2]! + m[3]!;
@@ -216,7 +309,7 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
       const title = m[3]!.trim();
       if (title.length > 0 && !overlaps(start, end, claimed)) {
         claimed.push({
-          kind: prefix === '*' ? 'label' : 'project',
+          kind: prefix === prefixes.label ? 'label' : 'project',
           start,
           end,
           text: tokenText,
@@ -322,6 +415,44 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   }
 
   return { title, dueDate, priority, labelTitles, assigneeUsernames, projectTitle, repeatAfter, repeatMode, tokens };
+}
+
+/**
+ * The parse a typed quick-add line creates its task from, as Vikunja-web's
+ * quick add does (`useQuickAddTask`): when the magic leaves no title, because
+ * the line is only tokens ("*errands", "+Home", "tomorrow", "!3") or an empty
+ * quoted pair, the line is kept as a literal title and nothing parsed from it
+ * (label, project, date, priority, assignee or repeat) applies. Previews use
+ * this too, so they show what will be saved.
+ */
+export function parseQuickAddTask(
+  input: string,
+  now: Date = new Date(),
+  mode: QuickAddMagicMode = DEFAULT_QUICK_ADD_MAGIC_MODE,
+): QuickAddResult {
+  const parsed = parseQuickAdd(input, now, mode);
+  return parsed.title === '' && input.trim() !== '' ? plainTitle(input) : parsed;
+}
+
+/**
+ * A literal title: nothing is parsed, matching Vikunja-web's `parseTaskText`,
+ * which returns the text verbatim (`disabled` mode) or without its quotes
+ * (quoted input). Only the ends are trimmed, so a blank line still reads as
+ * "no title"; inner spacing is kept as typed. The preview shows the whole
+ * input, quotes included, as plain text.
+ */
+function plainTitle(raw: string, title: string = raw): QuickAddResult {
+  return {
+    title: title.trim(),
+    dueDate: null,
+    priority: null,
+    labelTitles: [],
+    assigneeUsernames: [],
+    projectTitle: null,
+    repeatAfter: null,
+    repeatMode: null,
+    tokens: raw.length > 0 ? [{ kind: 'text', start: 0, end: raw.length, text: raw }] : [],
+  };
 }
 
 function overlaps(start: number, end: number, ranges: RawToken[]): boolean {

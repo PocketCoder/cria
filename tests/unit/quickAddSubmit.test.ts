@@ -13,10 +13,13 @@ vi.mock('@/db/reminders', () => ({ addReminder: (...a: unknown[]) => addReminder
 import {
   buildQuickAddInput,
   canSubmitQuickAdd,
+  followParsed,
+  followParsedLabels,
   mergeLabelTitles,
   persistQuickAdd,
 } from '@/lib/quickAddSubmit';
 import { findProjectByTitle, pickFallbackProjectId, resolveProjectChip } from '@/lib/quickAddProject';
+import { parseQuickAddTask } from '@/lib/quickAddParser';
 import { repeatLabel } from '@/lib/repeatLabel';
 
 const fields = {
@@ -54,6 +57,13 @@ describe('buildQuickAddInput', () => {
     expect(
       buildQuickAddInput({ title: 'x', projectTitle: 'hOmE' }, projects, 'p2', fields),
     ).toEqual({ title: 'x', projectLocalId: 'p1' });
+  });
+
+  // Ported from Vikunja-web's useQuickAddTask tests.
+  it('keeps a title that is only a project token in the selected project', () => {
+    const parsed = parseQuickAddTask('+Work');
+    expect(canSubmitQuickAdd(parsed, 'p1')).toBe(true);
+    expect(buildQuickAddInput(parsed, projects, 'p1', fields)).toEqual({ title: '+Work', projectLocalId: 'p1' });
   });
 
   it('omits the project for an unknown token (falls back to Inbox)', () => {
@@ -125,6 +135,68 @@ describe('mergeLabelTitles', () => {
   it('unions case-insensitively and keeps order', () => {
     expect(mergeLabelTitles(['Home'], ['home', 'Work'])).toEqual(['Home', 'Work']);
     expect(mergeLabelTitles([], ['a'])).toEqual(['a']);
+  });
+});
+
+describe('followParsed', () => {
+  it('copies a parsed value in, over a manual one', () => {
+    expect(followParsed(0, null, 3, 0)).toBe(3);
+    expect(followParsed(4, 3, 2, 0)).toBe(2);
+  });
+
+  it('takes a parsed value back out when its token goes', () => {
+    expect(followParsed(3, 3, null, 0)).toBe(0);
+  });
+
+  it('keeps a value the user changed since, or set without a token', () => {
+    expect(followParsed(4, 3, null, 0)).toBe(4);
+    expect(followParsed(4, null, null, 0)).toBe(4);
+  });
+
+  it('compares with the given equality', () => {
+    const same = (a: { n: number }, b: { n: number }) => a.n === b.n;
+    const none = { n: 0 };
+    expect(followParsed({ n: 7 }, { n: 7 }, null, none, same)).toBe(none);
+    expect(followParsed({ n: 8 }, { n: 7 }, null, none, same)).toEqual({ n: 8 });
+  });
+
+  it('drops a date typed inside quotes once the closing quote makes the line literal', () => {
+    const now = new Date('2026-05-27T10:00:00Z');
+    const open = parseQuickAddTask('"buy milk tomorrow', now);
+    const closed = parseQuickAddTask('"buy milk tomorrow"', now);
+    const typed = followParsed<string | null>(null, null, open.dueDate, null);
+    expect(typed).not.toBeNull();
+    expect(followParsed(typed, open.dueDate, closed.dueDate, null)).toBeNull();
+  });
+});
+
+describe('followParsedLabels', () => {
+  const typeOut = (lines: string[]) => {
+    let picked: string[] = [];
+    let before: string[] = [];
+    for (const line of lines) {
+      const after = parseQuickAddTask(line).labelTitles;
+      picked = followParsedLabels(picked, before, after);
+      before = after;
+    }
+    return picked;
+  };
+
+  it('follows a label token as it is typed, rather than keeping each prefix', () => {
+    expect(typeOut(['Fix *w', 'Fix *wo', 'Fix *work'])).toEqual(['work']);
+  });
+
+  it('drops the labels when the line becomes a literal title', () => {
+    expect(typeOut(['"Fix *bug', '"Fix *bug"'])).toEqual([]);
+    expect(typeOut(['*bug Fix', '*bug'])).toEqual([]);
+  });
+
+  it('keeps manual picks and drops the label of a removed token', () => {
+    expect(followParsedLabels(['Home', 'work'], ['work'], [])).toEqual(['Home']);
+  });
+
+  it('adds new tokens case-insensitively', () => {
+    expect(followParsedLabels(['Work'], [], ['work', 'Home'])).toEqual(['Work', 'Home']);
   });
 });
 

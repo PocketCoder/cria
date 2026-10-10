@@ -17,7 +17,7 @@ import { forceSync } from '@/sync/forceSync';
 import { useSyncProgress } from '@/stores/syncProgress';
 import { cn } from '@/lib/cn';
 import { formatFailedAt, rowToText, safeFormatJson } from '@/lib/outboxFormat';
-import { RefreshCw, Copy, Check, Trash2 } from 'lucide-react';
+import { RefreshCw, Copy, Check, Trash2, X } from 'lucide-react';
 
 interface OutboxModalProps {
   onClose: () => void;
@@ -126,7 +126,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
 
   return (
     <ModalDialog label="Sync queue" onClose={onClose}>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center bg-[var(--dialog-backdrop)] sm:items-center">
       <BackdropDismiss onDismiss={onClose} />
       <div
         className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
@@ -138,9 +138,9 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
             <button
               onClick={onClose}
               aria-label="Close"
-              className="rounded p-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+              className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
             >
-              ✕
+              <X className="h-4 w-4" />
             </button>
           </div>
           <div className="flex items-center gap-2 px-4 pb-3">
@@ -175,7 +175,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
           )}
           {nothing && (
             <p className="text-sm text-[var(--color-muted-foreground)]">
-              Nothing queued — everything's synced. 🎉
+              Nothing queued. Everything's synced.
             </p>
           )}
 

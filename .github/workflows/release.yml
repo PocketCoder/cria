@@ -363,6 +363,39 @@ jobs:
           mkdir -p gh-pages-out
           cp update.json gh-pages-out/
 
+      # Stable app entry in the shared SideStore source (nightly.yml writes the
+      # nightly entry into the same file). The .ipa keeps the plain version as
+      # both CFBundleShortVersionString and CFBundleVersion, so version and
+      # buildVersion match (SideStore rejects a mismatch).
+      - name: Write sidestore.json
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          ipa="$(ls release/*.ipa | head -n1)"
+          jq -n \
+            --arg v "$version" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg notes "Release $tag" \
+            --arg url "https://github.com/${{ github.repository }}/releases/download/${tag}/$(basename "$ipa")" \
+            --arg icon "https://raw.githubusercontent.com/${{ github.repository }}/${tag}/src-tauri/icons/icon.png" \
+            --argjson size "$(stat -c %s "$ipa")" '{
+              name: "Cria",
+              bundleIdentifier: "io.cria.app",
+              developerName: "Cria",
+              subtitle: "Native Vikunja client",
+              localizedDescription: "Native desktop and iOS client for Vikunja.",
+              iconURL: $icon,
+              versions: [{version: $v, buildVersion: $v, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
+            }' > app.json
+          # Merge into the shared source: keep the other channel's app entry.
+          git fetch --depth 1 origin gh-pages 2>/dev/null && git show origin/gh-pages:sidestore.json > existing.json 2>/dev/null || echo '{}' > existing.json
+          jq -n --slurpfile old existing.json --argjson app "$(cat app.json)" '
+            {name: "Cria", identifier: "io.cria.source", news: [],
+             apps: ((($old[0].apps // []) | map(select(.bundleIdentifier != $app.bundleIdentifier))) + [$app] | sort_by(.bundleIdentifier))}
+          ' > gh-pages-out/sidestore.json
+          cat gh-pages-out/sidestore.json
+
       - name: Publish update.json to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:

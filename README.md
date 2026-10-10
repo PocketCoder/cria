@@ -19,7 +19,7 @@ A native desktop and iOS client for [Vikunja](https://vikunja.io) — an offline
 
 Download the macOS `.dmg` (Apple silicon or Intel) from [GitHub Releases](https://github.com/PocketCoder/cria/releases/latest). The app isn't notarised yet, so macOS blocks the first launch: open **System Settings → Privacy & Security** and choose **Open Anyway**. After that it updates itself.
 
-iOS: each release attaches an unsigned `.ipa` for sideloading with SideStore or iLoader (see [iOS](#ios)).
+iOS: each release attaches an unsigned `.ipa` for sideloading with SideStore or iLoader. To install and auto-update from SideStore, add `https://pocketcoder.github.io/cria/sidestore.json` as a source (full steps in [iOS Build instructions](iOS%20Build%20instructions.md)).
 
 ## Stack
 

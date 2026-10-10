@@ -3,20 +3,31 @@ import { ArrowUp, Camera, Mic } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import type { QuickAddResult } from '@/lib/quickAddParser';
+import { QUICK_ADD_PREFIXES, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import { TokenInput } from './TokenInput';
 import { SetChips } from './SetChips';
 
 type ChipProps = Parameters<typeof SetChips>[0];
 
+/** Desktop placeholder: a worked example in the active mode's syntax. */
+function examplePlaceholder(mode: QuickAddMagicMode): string {
+  const p = QUICK_ADD_PREFIXES[mode];
+  if (!p) return 'Task name';
+  return `Buy milk tomorrow ${p.label}groceries ${p.priority}2 ${p.assignee}alice ${p.project}Personal`;
+}
+
 interface ViewProps {
   text: string;
   setText: (v: string) => void;
   parsed: QuickAddResult;
+  magicMode: QuickAddMagicMode;
   titleRef: RefObject<HTMLInputElement>;
   onTitleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
   submitDisabled: boolean;
+  /** Why submit is disabled (temporary diagnostic, shown on mobile). */
+  disabledReason?: string;
   chipProps: ChipProps;
 }
 
@@ -42,11 +53,13 @@ export function MobileQuickAdd({
   text,
   setText,
   parsed,
+  magicMode,
   titleRef,
   onTitleKeyDown,
   onSubmit,
   onClose,
   submitDisabled,
+  disabledReason,
   chipProps,
   description,
   setDescription,
@@ -57,13 +70,14 @@ export function MobileQuickAdd({
   onOpenPhotoCapture,
   onOpenRamble,
 }: MobileProps) {
+  const prefixes = QUICK_ADD_PREFIXES[magicMode];
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
       <div
         ref={panelRef}
         className={cn(
-          'relative z-10 w-full rounded-t-[22px] bg-[var(--color-card)] pt-2.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] dark:border dark:border-[var(--sheet-border)]',
+          'relative z-10 w-full rounded-t-2xl bg-[var(--sheet-bg)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)]',
           dragY === 0 && !drag.current.active && 'animate-[sheet-up_300ms_var(--spring-snappy)]',
         )}
         style={{
@@ -72,7 +86,7 @@ export function MobileQuickAdd({
           transition: drag.current.active ? 'none' : 'transform 240ms var(--spring-snappy)',
         }}
       >
-        <div className="mx-auto mb-1 h-[5px] w-[38px] rounded-full bg-[var(--color-muted-foreground)]/30" />
+        <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-[var(--color-muted-foreground)]/30" />
         <form onSubmit={onSubmit}>
           <div className="px-5 pt-3">
             <TokenInput
@@ -82,7 +96,7 @@ export function MobileQuickAdd({
               onKeyDown={onTitleKeyDown}
               inputRef={titleRef}
               placeholder="Task name"
-              className="text-[21px] font-medium leading-[1.35] tracking-[-0.015em]"
+              className="text-title font-semibold leading-[1.35] tracking-tight"
             />
             <input
               aria-label="Note"
@@ -103,13 +117,21 @@ export function MobileQuickAdd({
             className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-4 py-3"
             style={{ paddingBottom: keyboardInset ? undefined : 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
           >
+            {/* Empty when Quick Add Magic is off, keeping the buttons right-aligned. */}
             <span className="text-[12.5px] text-[var(--color-muted-foreground)]">
-              <code className="font-mono text-[var(--color-primary)]">+project</code>
-              <span className="mx-1.5">·</span>
-              <code className="font-mono text-[var(--color-primary)]">*label</code>
-              <span className="mx-1.5">·</span>
-              <code className="font-mono text-[var(--color-primary)]">!2</code>
+              {prefixes && (
+                <>
+                  <code className="font-mono text-[var(--color-primary)]">{prefixes.project}project</code>
+                  <span className="mx-1.5">·</span>
+                  <code className="font-mono text-[var(--color-primary)]">{prefixes.label}label</code>
+                  <span className="mx-1.5">·</span>
+                  <code className="font-mono text-[var(--color-primary)]">{prefixes.priority}2</code>
+                </>
+              )}
             </span>
+            {submitDisabled && disabledReason ? (
+              <span className="text-[11px] text-[var(--color-destructive)]">{disabledReason}</span>
+            ) : null}
             <div className="flex shrink-0 items-center gap-1.5">
               {onOpenRamble && (
                 <button
@@ -155,6 +177,7 @@ export function DesktopQuickAdd({
   text,
   setText,
   parsed,
+  magicMode,
   titleRef,
   onTitleKeyDown,
   onSubmit,
@@ -164,9 +187,9 @@ export function DesktopQuickAdd({
   chipProps,
 }: DesktopProps) {
   return (
-    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--overlay-backdrop)] pt-[70px]">
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--dialog-backdrop)] pt-[70px]">
       <BackdropDismiss onDismiss={onClose} />
-      <div className="relative w-[560px] rounded-[14px] bg-[var(--color-card)] shadow-[0_24px_60px_-16px_rgba(0,0,0,0.4)] dark:border dark:border-[var(--sheet-border)]">
+      <div className="relative dialog-panel w-[560px]">
         <form onSubmit={onSubmit}>
           <div className="px-5 pt-5">
             <TokenInput
@@ -175,7 +198,7 @@ export function DesktopQuickAdd({
               onChange={setText}
               onKeyDown={onTitleKeyDown}
               inputRef={titleRef}
-              placeholder="Buy milk tomorrow *groceries !2 @alice +Personal"
+              placeholder={examplePlaceholder(magicMode)}
               className="text-[19px] font-semibold tracking-[-0.015em]"
             />
           </div>

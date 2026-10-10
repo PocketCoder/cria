@@ -134,14 +134,14 @@ export function TaskTitle({
         onBlur={() => void handleSave()}
         onKeyDown={handleKeyDown}
         autoFocus
-        className="mb-[18px] w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-[21px] font-semibold leading-[1.28] tracking-[-0.025em] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+        className="mb-[18px] w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-title font-semibold leading-[1.28] tracking-tight focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
       />
     );
   }
   return (
     <h2
       data-inspector-title
-      className="vt-task-title mb-[18px] w-fit max-w-full text-[21px] font-semibold leading-[1.28] tracking-[-0.025em]"
+      className="vt-task-title mb-[18px] w-fit max-w-full text-title font-semibold leading-[1.28] tracking-tight"
     >
       <button
         ref={buttonRef}

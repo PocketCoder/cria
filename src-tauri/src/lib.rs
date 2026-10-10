@@ -1,4 +1,6 @@
 mod ai;
+mod blobs;
+mod glass;
 mod ocr;
 mod secure;
 mod speech;
@@ -37,6 +39,7 @@ const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_in
 const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project_identifier.sql");
 const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
 const MIGRATION_18_SQL: &str = include_str!("../../src/db/migrations/018_saved_filters.sql");
+const MIGRATION_19_SQL: &str = include_str!("../../src/db/migrations/019_attachment_uploads.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -146,6 +149,12 @@ fn migrations() -> Vec<Migration> {
             version: 18,
             description: "saved filters",
             sql: MIGRATION_18_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 19,
+            description: "local-first attachment uploads (pending rows)",
+            sql: MIGRATION_19_SQL,
             kind: MigrationKind::Up,
         },
     ]
@@ -360,11 +369,17 @@ pub fn run() {
             // chevrons + Done) so the quick-add sheet sits flush on the keyboard.
             #[cfg(target_os = "ios")]
             hide_input_accessory_bar();
+            // macOS: native glass behind the (transparent) window; the CSS
+            // lets it through only on the sidebar. See glass.rs.
+            #[cfg(target_os = "macos")]
+            if let Some(window) = tauri::Manager::get_webview_window(_app, "main") {
+                glass::apply_window_glass(&window);
+            }
             Ok(())
         });
 
-    // The tray/dock commands only exist on desktop; mobile gets just the
-    // shared transaction command.
+    // The tray/dock commands only exist on desktop; mobile gets the shared
+    // commands (transactions, OCR, AI, keychain, attachment side-store).
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
@@ -377,6 +392,13 @@ pub fn run() {
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        glass::native_glass,
+        glass::native_glass_theme,
+        glass::glass_tabbar_update,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
+        blobs::blob_list,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
@@ -393,6 +415,13 @@ pub fn run() {
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        glass::native_glass,
+        glass::native_glass_theme,
+        glass::glass_tabbar_update,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
+        blobs::blob_list,
     ]);
 
     builder
