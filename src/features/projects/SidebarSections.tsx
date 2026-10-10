@@ -31,7 +31,7 @@ import {
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import type { Project } from '@/domain/project';
-import { childProjectsOf, useProjectExpand } from './projectTree';
+import { childProjectsOf, siblingProjects, useProjectExpand } from './projectTree';
 import { LabelRow, NavItem, ProjectRow } from './SidebarRows';
 import { computeDropPosition, computeSyncLine, visibleProjectList } from './sidebarLogic';
 
@@ -277,7 +277,7 @@ export function ProjectsSection({
 
   /* ── project drag-to-reorder ───────────────────────────── */
   const draggedIdRef = useRef<string | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const visibleProjects = visibleProjectList(projects);
 
@@ -294,31 +294,41 @@ export function ProjectsSection({
     draggedIdRef.current = localId;
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  // Rows only accept a drop from a sibling (same parent): positions are
+  // per-parent, so reordering across parents would need a re-parent too.
+  const isSibling = (draggedId: string | null, targetId: string) =>
+    draggedId != null &&
+    siblingProjects(visibleProjects, visibleIds, draggedId).some((s) => s.localId === targetId);
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    if (!isSibling(draggedIdRef.current, targetId)) return;
     e.preventDefault();
-    setDragOverIndex(index);
+    setDragOverId(targetId);
   };
 
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    setDragOverIndex(null);
+    setDragOverId(null);
     const draggedId = draggedIdRef.current;
     draggedIdRef.current = null;
-    if (!draggedId) return;
+    if (!draggedId || !isSibling(draggedId, targetId)) return;
 
-    const newPosition = computeDropPosition(visibleProjects, draggedId, dropIndex);
+    const siblings = siblingProjects(visibleProjects, visibleIds, draggedId);
+    const dropIndex = siblings.findIndex((x) => x.localId === targetId);
+    const newPosition = computeDropPosition(siblings, draggedId, dropIndex);
     if (newPosition === null) return;
 
     try {
       await updateProject(draggedId, { position: newPosition });
     } catch (err) {
       console.error('[sidebar] drag-reorder failed:', err);
+      showToast('Could not reorder project', 'error');
     }
   };
 
   const handleDragEnd = () => {
     draggedIdRef.current = null;
-    setDragOverIndex(null);
+    setDragOverId(null);
   };
 
   const handleCreate = async () => {
@@ -381,7 +391,6 @@ export function ProjectsSection({
 
   const renderTree = (parentId: string | null, depth: number): React.ReactNode[] =>
     childrenOf(parentId).flatMap((p) => {
-      const i = visibleProjects.indexOf(p);
       const kids = childrenOf(p.localId);
       const open = isProjectOpen(p.localId);
       return [
@@ -396,7 +405,7 @@ export function ProjectsSection({
           isSelected={activeView?.kind === 'project' && activeView.localId === p.localId}
           isEditing={editingId === p.localId}
           editingTitle={editingTitle}
-          isDragOver={dragOverIndex === i}
+          isDragOver={dragOverId === p.localId}
           onSelect={() =>
             setActiveView({
               kind: 'project',
@@ -427,8 +436,8 @@ export function ProjectsSection({
             }
           }}
           onDragStart={() => handleDragStart(p.localId)}
-          onDragOver={(e) => handleDragOver(e, i)}
-          onDrop={(e) => void handleDrop(e, i)}
+          onDragOver={(e) => handleDragOver(e, p.localId)}
+          onDrop={(e) => void handleDrop(e, p.localId)}
           onDragEnd={handleDragEnd}
         />,
         ...(open && kids.length > 0 ? renderTree(p.localId, depth + 1) : []),
