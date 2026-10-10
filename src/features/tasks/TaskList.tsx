@@ -47,6 +47,8 @@ import {
 } from '@/components/ui/context-menu';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { TaskHoverPreview } from './TaskHoverPreview';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { forceSync } from '@/sync/forceSync';
 import { TaskRowCore } from './TaskRowCore';
 import { countChecklistItems } from './taskRowHelpers';
 import {
@@ -101,6 +103,10 @@ export function TaskList({ project, view }: TaskListProps) {
   );
   const { data: attachmentIds } = useTasksWithAttachments();
   const qc = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    await forceSync();
+    await qc.invalidateQueries();
+  }, [qc]);
   const {
     data: subtaskMap = new Map()
   } = useQuery({
@@ -231,7 +237,8 @@ export function TaskList({ project, view }: TaskListProps) {
           items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
-          <ul className={cn('min-h-0 flex-1 overflow-y-auto', isMobile && 'tab-bar-safe-bottom')}>
+          <PullToRefresh onRefresh={handleRefresh}>
+          <ul className={cn(!isMobile && 'min-h-0 flex-1 overflow-y-auto')}>
             {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
@@ -262,6 +269,7 @@ export function TaskList({ project, view }: TaskListProps) {
               </li>
             ) : null}
           </ul>
+          </PullToRefresh>
         </SortableContext>
         <DragOverlay>
           {activeId ? (
