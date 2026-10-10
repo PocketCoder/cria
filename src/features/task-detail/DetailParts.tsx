@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Star, Ellipsis, X, Plus, Bell, Paperclip, MessageSquare, RefreshCw, Check, ChevronRight, Link2 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/cn';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { updateTask } from '@/db/tasks';
 import type { TaskReminder } from '@/db/reminders';
 import type { Task } from '@/domain/task';
@@ -22,7 +23,7 @@ import {
 } from './taskDetailLogic';
 
 const CHROME_BUTTON =
-  'rounded p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer';
+  'flex items-center justify-center rounded text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] cursor-pointer';
 
 /** Favourite / overflow (copy link) / close strip at the top of the card. */
 export function DetailChrome({
@@ -36,24 +37,28 @@ export function DetailChrome({
   onCopyLink: () => void;
   onClose: () => void;
 }) {
+  const isMobile = useIsMobile();
+  // 44pt touch targets on mobile, compact on desktop.
+  const btn = cn(CHROME_BUTTON, isMobile ? 'h-11 w-11' : 'h-7 w-7');
+  const icon = isMobile ? 'h-5 w-5' : 'h-[15px] w-[15px]';
   return (
     <div className="flex items-center gap-0.5">
       <button
         type="button"
         onClick={() => void updateTask(task.localId, { isFavorite: !task.isFavorite })}
         aria-label={task.isFavorite ? 'Unfavourite' : 'Favourite'}
-        className={CHROME_BUTTON}
+        className={btn}
       >
         <Star
-          className="h-[15px] w-[15px]"
+          className={icon}
           style={{ color: task.isFavorite ? 'var(--color-warning-text)' : undefined }}
           fill={task.isFavorite ? 'currentColor' : 'none'}
         />
       </button>
       <Popover>
         <PopoverTrigger asChild>
-          <button type="button" aria-label="More actions" className={CHROME_BUTTON}>
-            <Ellipsis className="h-[15px] w-[15px]" />
+          <button type="button" aria-label="More actions" className={btn}>
+            <Ellipsis className={icon} />
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" sideOffset={6} className="w-44 p-1">
@@ -71,8 +76,8 @@ export function DetailChrome({
           </button>
         </PopoverContent>
       </Popover>
-      <button type="button" onClick={onClose} aria-label="Close details" className={CHROME_BUTTON}>
-        <X className="h-[15px] w-[15px]" />
+      <button type="button" onClick={onClose} aria-label="Close details" className={btn}>
+        <X className={icon} />
       </button>
     </div>
   );
@@ -85,12 +90,15 @@ export function TaskTitle({
   setEditing,
   draft,
   setDraft,
+  flush = false,
 }: {
   task: Task;
   editing: boolean;
   setEditing: (v: boolean) => void;
   draft: string;
   setDraft: (v: string) => void;
+  /** Drop the bottom margin (the caller lays the title out in a row). */
+  flush?: boolean;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   // Leaving the input with Enter/Escape unmounts the focused element; hand
@@ -134,14 +142,17 @@ export function TaskTitle({
         onBlur={() => void handleSave()}
         onKeyDown={handleKeyDown}
         autoFocus
-        className="mb-[18px] w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-title font-semibold leading-[1.28] tracking-tight focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+        className={cn(flush ? '' : 'mb-[18px]', 'w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-0.5 text-title font-semibold leading-[1.28] tracking-tight focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]')}
       />
     );
   }
   return (
     <h2
       data-inspector-title
-      className="vt-task-title mb-[18px] w-fit max-w-full text-title font-semibold leading-[1.28] tracking-tight"
+      className={cn(
+        'vt-task-title w-fit max-w-full text-title font-semibold leading-[1.28] tracking-tight',
+        !flush && 'mb-[18px]',
+      )}
     >
       <button
         ref={buttonRef}
@@ -197,7 +208,7 @@ function CollapsedRow({
           )}
         />
       </button>
-      {expanded ? <div className="pb-1">{children}</div> : null}
+      {expanded ? <div className="section-expand"><div className="min-h-0 overflow-hidden pb-1">{children}</div></div> : null}
     </div>
   );
 }
@@ -285,11 +296,7 @@ export function DetailSections({
         expanded={openSection === 'repeat'}
         onToggle={toggle('repeat')}
       >
-        <InlineRepeat
-          task={task}
-          expanded={openSection === 'repeat'}
-          onToggle={toggle('repeat')}
-        />
+        <InlineRepeat task={task} />
       </CollapsedRow>
       <CollapsedRow
         icon={<Ellipsis className={ICON} />}

@@ -525,6 +525,17 @@ html[data-vt='theme']::view-transition-new(root) {
   animation: vt-reveal 480ms var(--spring-smooth);
 }
 
+/* Disclosure rows: height eases open instead of snapping. */
+.section-expand {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: section-expand 240ms var(--spring-snappy);
+}
+@keyframes section-expand {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to { grid-template-rows: 1fr; opacity: 1; }
+}
+
 /* Honour reduce-motion: every animation becomes an instant change, and the
    purely decorative completion burst (ring + sparks) doesn't render at all. */
 @media (prefers-reduced-motion: reduce) {

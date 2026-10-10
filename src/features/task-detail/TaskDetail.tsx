@@ -214,21 +214,28 @@ export function TaskDetail() {
   );
 
   return (
-    <DetailCard onClose={close} header={chrome} cardRef={cardRef}>
-      <div className="min-w-0 flex-1 overflow-y-auto px-[26px] pb-6 pt-1">
+    <DetailCard onClose={close} header={isMobile ? null : chrome} cardRef={cardRef}>
+      <div className={cn('min-w-0 flex-1 overflow-y-auto px-[26px] pb-6', isMobile ? 'pt-3' : 'pt-1')}>
         {task.identifier ? (
           <p className="mb-2 font-mono text-[10.5px] tracking-[0.08em] text-[var(--color-muted-foreground)]">
             {task.identifier}
           </p>
         ) : null}
 
-        <TaskTitle
-          task={task}
-          editing={titleEditing}
-          setEditing={setTitleEditing}
-          draft={titleDraft}
-          setDraft={setTitleDraft}
-        />
+        {/* Mobile: title and the star / more / close strip share one row. */}
+        <div className={isMobile ? 'mb-[18px] flex items-start gap-2' : undefined}>
+          <div className="min-w-0 flex-1">
+            <TaskTitle
+              task={task}
+              editing={titleEditing}
+              setEditing={setTitleEditing}
+              draft={titleDraft}
+              setDraft={setTitleDraft}
+              flush={isMobile}
+            />
+          </div>
+          {isMobile ? <div className="-mr-2.5 -mt-1.5 shrink-0">{chrome}</div> : null}
+        </div>
 
         <ChipRow
           task={task}
@@ -489,7 +496,7 @@ function SubtasksBlock({
             type="button"
             onClick={() => void handleRemove(r)}
             aria-label="Remove subtask"
-            className="rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-destructive)] hover:bg-[var(--color-muted)] group-hover:opacity-100 cursor-pointer"
+            className="rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-destructive)] hover:bg-[var(--color-muted)] group-hover:opacity-100 [@media(hover:none)]:opacity-100 cursor-pointer"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>

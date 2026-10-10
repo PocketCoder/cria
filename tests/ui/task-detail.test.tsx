@@ -225,7 +225,7 @@ describe('TaskDetail repeat row', () => {
     const row = await screen.findByRole('button', { name: /^Repeat\s*Monthly$/ });
     await user.click(row);
 
-    expect(await screen.findByRole('button', { name: 'Repeats monthly' })).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: 'Monthly (same day)' })).toBeChecked();
     await user.click(await screen.findByRole('button', { name: 'Remove repeat' }));
 
     await waitFor(async () => {
@@ -251,7 +251,7 @@ describe('TaskDetail repeat row', () => {
     renderWithProviders(<TaskDetail />);
 
     await user.click(await screen.findByRole('button', { name: /^Repeat\s*Monthly$/ }));
-    await user.click(await screen.findByRole('button', { name: label }));
+    await user.click(await screen.findByRole('radio', { name: label }));
 
     await waitFor(async () => {
       const t = await getTaskByLocalId(monthly.localId);
@@ -273,7 +273,7 @@ describe('TaskDetail repeat row', () => {
     renderWithProviders(<TaskDetail />);
 
     await user.click(await screen.findByRole('button', { name: /^Repeat\s*Every 7 days$/ }));
-    await user.click(await screen.findByRole('button', { name: 'Monthly (same day)' }));
+    await user.click(await screen.findByRole('radio', { name: 'Monthly (same day)' }));
 
     await waitFor(async () => {
       const t = await getTaskByLocalId(weekly.localId);

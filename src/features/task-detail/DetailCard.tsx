@@ -17,6 +17,7 @@ export function DetailCard({
   children,
 }: {
   onClose: () => void;
+  /** `undefined`: default close button. `null`: no header strip (caller renders its own). */
   header?: React.ReactNode;
   cardRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
@@ -114,18 +115,20 @@ export function DetailCard({
           {isMobile && (
             <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
           )}
-          <header className="flex shrink-0 items-center justify-end px-3.5 py-[13px]">
-            {header ?? (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close details"
-                className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </header>
+          {header === null ? null : (
+            <header className="flex shrink-0 items-center justify-end px-3.5 py-[13px]">
+              {header ?? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close details"
+                  className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </header>
+          )}
           {children}
         </div>
       </aside>

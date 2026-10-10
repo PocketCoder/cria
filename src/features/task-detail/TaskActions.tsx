@@ -9,8 +9,8 @@ import {
   Trash2,
   Bell,
   User,
-  RefreshCw,
   Tags,
+  Check,
 } from 'lucide-react';
 import { updateTask, duplicateTask, moveTask } from '@/db/tasks';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -615,15 +615,7 @@ function valueUnitToSeconds(value: number, unit: 'day' | 'month' | 'hour'): numb
 
 const UNIT_OPTIONS = ['hour', 'day', 'month'] as const;
 
-export function InlineRepeat({
-  task,
-  expanded,
-  onToggle,
-}: {
-  task: Task;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
+export function InlineRepeat({ task }: { task: Task }) {
   const init = secondsToValueUnit(task.repeatAfter);
   const [value, setValue] = useState(init.value);
   const [unit, setUnit] = useState<'hour' | 'day' | 'month'>(init.unit);
@@ -654,85 +646,83 @@ export function InlineRepeat({
 
   // Monthly mode ignores repeatAfter (often 0), so it can't gate on that alone.
   const repeating = isRepeating(task.repeatAfter, task.repeatMode);
-  const label = repeating
-    ? `Repeats ${task.repeatMode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
-    : 'Set repeating';
 
+  // The collapsed "Repeat" row above already names the current setting, so
+  // this is only the editor. Fields are 16px on mobile (smaller makes iOS
+  // zoom the page on focus) with 44pt-tall targets.
   return (
-    <div>
-      <ActionButton
-        icon={<RefreshCw className="h-4 w-4" />}
-        label={label}
-        onClick={onToggle}
-      />
-      {expanded && (
-        <div className="mx-3 mb-1 flex flex-col gap-2">
-          {/* Interval input */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-[var(--color-muted-foreground)]">Every</span>
-            <input
-              aria-label="Repeat interval"
-              type="number"
-              min={1}
-              value={value}
-              onChange={(e) => setValue(Number.isFinite(e.target.valueAsNumber) ? Math.max(1, e.target.valueAsNumber) : 1)}
-              className="w-14 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-xs text-center"
-            />
-            <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {UNIT_OPTIONS.map((u) => (
-                  <SelectItem key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <button
-              onClick={() => save(valueUnitToSeconds(value, unit), mode)}
-              className="ml-auto rounded bg-[var(--color-accent)] px-2.5 py-1 text-footnote font-medium text-[var(--color-accent-foreground)]"
-            >
-              Apply
-            </button>
-          </div>
-
-          {/* Repeat mode */}
-          <div className="flex gap-1">
-            {([0, 1, 2] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => pickMode(m)}
-                className={cn(
-                  'flex-1 rounded px-1.5 py-1 text-footnote transition-colors',
-                  m === mode
-                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                    : 'hover:bg-[var(--color-accent)]/10 text-[var(--color-muted-foreground)]',
-                )}
-              >
-                {REPEAT_MODE_LABELS[m]}
-              </button>
+    <div className="flex flex-col gap-3 px-1.5 pb-1 pt-1">
+      <div className="flex items-center gap-2">
+        <span className="text-[13.5px] text-[var(--color-muted-foreground)]">Every</span>
+        <input
+          aria-label="Repeat interval"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={value}
+          onChange={(e) => setValue(Number.isFinite(e.target.valueAsNumber) ? Math.max(1, e.target.valueAsNumber) : 1)}
+          className="h-8 w-14 rounded-md border border-[var(--color-border)] bg-transparent px-1.5 text-center text-[13.5px] max-md:h-11 max-md:w-16 max-md:text-base"
+        />
+        <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
+          <SelectTrigger className="h-8 w-auto min-w-24 text-[13.5px] max-md:h-11 max-md:text-base">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {UNIT_OPTIONS.map((u) => (
+              <SelectItem key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</SelectItem>
             ))}
-          </div>
+          </SelectContent>
+        </Select>
+        <button
+          type="button"
+          onClick={() => save(valueUnitToSeconds(value, unit), mode)}
+          className="ml-auto rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-[13.5px] font-medium text-[var(--color-primary-foreground)] transition-opacity active:opacity-80 max-md:h-11 max-md:px-4 cursor-pointer"
+        >
+          Apply
+        </button>
+      </div>
 
-          {/* Clear */}
-          {repeating && (
-            <button
-              onClick={() => save(0, 0)}
-              className="self-start rounded px-2 py-0.5 text-footnote text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+      {/* Repeat mode: a short radio list reads at one size, unlike three
+          squeezed columns that wrapped to three lines each. */}
+      <div role="radiogroup" aria-label="Repeat from" className="flex flex-col">
+        {([0, 1, 2] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={m === mode}
+            onClick={() => pickMode(m)}
+            className={cn(
+              'flex items-center gap-2.5 rounded-md px-1.5 py-2 text-left text-[13.5px] transition-colors max-md:min-h-11 cursor-pointer',
+              m === mode
+                ? 'text-[var(--color-foreground)]'
+                : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors',
+                m === mode
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
+                  : 'border-[var(--color-muted-foreground)]/40',
+              )}
             >
-              Remove repeat
-            </button>
-          )}
-        </div>
+              {m === mode ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+            </span>
+            {REPEAT_MODE_LABELS[m]}
+          </button>
+        ))}
+      </div>
+
+      {repeating && (
+        <button
+          type="button"
+          onClick={() => save(0, 0)}
+          className="self-start rounded-md px-1.5 py-2 text-[13.5px] text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10 max-md:min-h-11 cursor-pointer"
+        >
+          Remove repeat
+        </button>
       )}
     </div>
   );
 }
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-}
-
