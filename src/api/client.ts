@@ -381,7 +381,11 @@ export async function callApi<T>(
  */
 export async function probeServer(
   serverUrl: string,
-): Promise<{ version: string | null; frontendUrl: string | null }> {
+): Promise<{
+  version: string | null;
+  frontendUrl: string | null;
+  backgroundProviders: string[];
+}> {
   const client = createClient<paths>({
     baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
     fetch: platformFetch,
@@ -390,6 +394,7 @@ export async function probeServer(
   return {
     version: info.version ?? null,
     frontendUrl: (info as { frontend_url?: string }).frontend_url || null,
+    backgroundProviders: info.enabled_background_providers ?? [],
   };
 }
 

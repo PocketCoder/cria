@@ -55,7 +55,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Projects | Hex color picker | ✅ | Shown in sidebar |
 | Projects | Sidebar list (flat) | ✅ | Sortable, filterable |
 | Projects | Sub-project hierarchy in sidebar | ✅ | Nested tree in `ProjectSidebar` from `parent_project_id` |
-| Projects | Project background images | ❌ | Not started (Unsplash integration) |
+| Projects | Project background images | ✅ | Upload + Unsplash + remove (`ProjectBackgroundModal`), shown faintly in the desktop header; not shown on iOS header |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
 | Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. View filter editing and bucket-config mode not in it yet |
 
@@ -238,7 +238,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Export/Import | Vikunja data export | ✅ | Request + download in Settings → Data (`src/api/account.ts`) |
 | Export/Import | Import from Todoist/Trello/Asana/etc. | ❌ | Server-side exists, no UI |
 | Export/Import | Duplicate task (server endpoint) | ✅ | `duplicateTask` in db/tasks |
-| Export/Import | Duplicate project | ❌ | Server endpoint exists, no UI |
+| Export/Import | Duplicate project | ✅ | Sidebar menu → `duplicateProject` in api/projects; online-only, copy opens after pull |
 
 ### Miscellaneous
 

@@ -189,6 +189,7 @@ export function Shell() {
                 onOpenDisplay={() => currentViewKey && openDisplaySheet(currentViewKey)}
                 onQuickAdd={() => setShowQuickAdd(true)}
                 onDragMouseDown={handleHeaderMouseDown}
+                projectServerId={currentProject?.serverId ?? null}
               />
             )}
 

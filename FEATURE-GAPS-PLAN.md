@@ -107,7 +107,7 @@ event triggers an immediate targeted pull instead of waiting for the tick.
 **Risks.** Token expiry mid-connection (refresh, then re-auth); proxies that
 drop idle sockets (needs a ping or reconnect timer).
 
-## 3. Duplicate project
+## 3. Duplicate project (shipped)
 
 **API.** `PUT /projects/{projectid}/duplicate` (v1), `project_duplicate.go`
 (v2). Returns the new project.
@@ -119,7 +119,7 @@ views and sharing by reading the handler.
 **Implementation.** `src/api/projects.ts` call, menu item in `SidebarRows`,
 disabled when offline. No outbox.
 
-## 4. Project backgrounds
+## 4. Project backgrounds (shipped)
 
 **API.** `GET/DELETE /projects/{id}/background`,
 `PUT /projects/{id}/backgrounds/upload`, `GET /backgrounds/unsplash/search`,

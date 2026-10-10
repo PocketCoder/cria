@@ -6,10 +6,13 @@ import {
   Trash2,
   Share2,
   Palette,
+  Copy,
+  ImagePlus,
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useOnline } from '@/hooks/useOnline';
 import { updateProject } from '@/db/projects';
 import {
   Popover,
@@ -230,6 +233,8 @@ interface ProjectRowProps {
   onSaveRename: () => void;
   onCancelRename: () => void;
   onShare: () => void;
+  onDuplicate: () => void;
+  onBackground: () => void;
   onDelete: () => Promise<void> | void;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
@@ -254,6 +259,8 @@ export function ProjectRow({
   onSaveRename,
   onCancelRename,
   onShare,
+  onDuplicate,
+  onBackground,
   onDelete,
   onDragStart,
   onDragOver,
@@ -262,6 +269,7 @@ export function ProjectRow({
 }: ProjectRowProps) {
   const menu = useRowMenuState();
   const [colorOpen, setColorOpen] = useState(false);
+  const online = useOnline();
 
   if (isEditing) {
     return (
@@ -345,6 +353,34 @@ export function ProjectRow({
                     />
                   )}
                 </li>
+                <li>
+                  <button
+                    type="button"
+                    className={cn(MENU_ITEM, 'disabled:opacity-50')}
+                    disabled={!online}
+                    onClick={() => {
+                      menu.setMenuOpen(false);
+                      onBackground();
+                    }}
+                  >
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    Background
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className={cn(MENU_ITEM, 'disabled:opacity-50')}
+                    disabled={!online}
+                    onClick={() => {
+                      menu.setMenuOpen(false);
+                      onDuplicate();
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Duplicate
+                  </button>
+                </li>
                 <DeleteMenuItem onClick={() => menu.setConfirmDelete(true)} />
               </ul>
             )}
@@ -362,6 +398,18 @@ export function ProjectRow({
           <span className="flex items-center gap-2">
             <Share2 className="h-3.5 w-3.5" />
             Share
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!online} onSelect={() => { onBackground(); }}>
+          <span className="flex items-center gap-2">
+            <ImagePlus className="h-3.5 w-3.5" />
+            Background
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!online} onSelect={() => { onDuplicate(); }}>
+          <span className="flex items-center gap-2">
+            <Copy className="h-3.5 w-3.5" />
+            Duplicate
           </span>
         </ContextMenuItem>
         <ContextMenuSeparator />

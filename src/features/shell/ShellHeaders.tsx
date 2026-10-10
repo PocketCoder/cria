@@ -7,6 +7,7 @@ import { MobileViewSwitcher } from '@/features/projects/MobileViewSwitcher';
 import { ViewSwitcher } from '@/features/projects/ViewSwitcher';
 import { ViewFilterButton } from '@/features/projects/ViewFilterButton';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
+import { useProjectBackground } from '@/features/projects/useProjectBackground';
 import { syncStatus, type SyncCounts } from './shellLogic';
 
 interface ViewControls {
@@ -136,8 +137,11 @@ export function DesktopHeader({
   onOpenDisplay,
   onQuickAdd,
   onDragMouseDown,
+  projectServerId,
 }: ViewControls & {
   title: string;
+  /** Server id of the open project, for its background image. */
+  projectServerId?: number | null;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   currentView: ProjectView | undefined;
@@ -146,17 +150,28 @@ export function DesktopHeader({
   onQuickAdd: () => void;
   onDragMouseDown?: (e: React.MouseEvent) => void;
 }) {
+  const background = useProjectBackground(
+    activeView?.kind === 'project' ? (projectServerId ?? null) : null,
+  );
   // One-line view header (16px/600 title). With the sidebar hidden it clears
   // the overlay traffic lights, and it doubles as the window drag strip.
   return (
     <header
       onMouseDown={onDragMouseDown}
       className={cn(
-        'flex min-h-[52px] flex-none select-none flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[var(--color-border)] py-2.5 pl-7 pr-6',
+        'relative isolate flex min-h-[52px] flex-none select-none flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[var(--color-border)] py-2.5 pl-7 pr-6',
         sidebarCollapsed && 'pl-[var(--traffic-light-inset)]',
         activeView?.kind === 'upcoming' && 'bg-[var(--color-background)]',
       )}
     >
+      {background && (
+        <div
+          aria-hidden="true"
+          data-testid="project-background"
+          className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center opacity-[0.14]"
+          style={{ backgroundImage: `url(${background})` }}
+        />
+      )}
       <div className="flex min-w-[200px] flex-1 items-center gap-2">
         {sidebarCollapsed && (
           <button

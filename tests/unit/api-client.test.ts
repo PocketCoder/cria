@@ -168,6 +168,7 @@ describe('probeServer', () => {
     expect(result).toEqual({
       version: '1.2.3',
       frontendUrl: 'https://vikunja.example.com/',
+      backgroundProviders: [],
     });
     expect(mockClient.GET).toHaveBeenCalledWith('/info');
   });
@@ -175,7 +176,7 @@ describe('probeServer', () => {
   it('returns nulls when not present', async () => {
     mockClient.GET.mockReturnValue(mockResponse({}));
     const result = await probeServer('https://example.com');
-    expect(result).toEqual({ version: null, frontendUrl: null });
+    expect(result).toEqual({ version: null, frontendUrl: null, backgroundProviders: [] });
   });
 
   it('normalises trailing slash', async () => {

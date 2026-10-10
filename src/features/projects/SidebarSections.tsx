@@ -7,6 +7,11 @@ import { useSavedFilters } from '@/queries/savedFilters';
 import { deleteSavedFilter } from '@/api/savedFilters';
 import type { SavedFilter } from '@/db/savedFilters';
 import { useUi } from '@/stores/ui';
+import { duplicateProject } from '@/api/projects';
+import { showToast } from '@/stores/toasts';
+import { pullProjects } from '@/sync/pull';
+import { listProjects } from '@/db/projects';
+import { notify } from '@/db/bus';
 import { createProject, updateProject, deleteProject } from '@/db/projects';
 import { createLabel, updateLabel, deleteLabel } from '@/db/labels';
 import { listActiveTaskCounts } from '@/db/tasks';
@@ -236,7 +241,13 @@ export function LabelsSection() {
 
 /* ────────────────────────── projects ─────────────────────────── */
 
-export function ProjectsSection({ onShare }: { onShare: (project: Project) => void }) {
+export function ProjectsSection({
+  onShare,
+  onBackground,
+}: {
+  onShare: (project: Project) => void;
+  onBackground: (project: Project) => void;
+}) {
   const { data: projects = [], isLoading, isError, error } = useProjects();
   const activeView = useUi((s) => s.activeView);
   const setActiveView = useUi((s) => s.setActiveView);
@@ -347,6 +358,25 @@ export function ProjectsSection({ onShare }: { onShare: (project: Project) => vo
     }
   };
 
+  const handleDuplicate = async (project: Project) => {
+    if (project.serverId == null) {
+      showToast('Project is still syncing. Try again in a moment.', 'error');
+      return;
+    }
+    try {
+      const parent = projects.find((x) => x.localId === project.parentLocalId);
+      const newServerId = await duplicateProject(project.serverId, parent?.serverId ?? 0);
+      await pullProjects();
+      notify('projects');
+      const copy = (await listProjects()).find((x) => x.serverId === newServerId);
+      if (copy) setActiveView({ kind: 'project', localId: copy.localId });
+      showToast(`Duplicated “${project.title}”`);
+    } catch (err) {
+      console.error('[sidebar] duplicateProject failed:', err);
+      showToast(err instanceof Error ? err.message : 'Duplicate failed', 'error');
+    }
+  };
+
   const renderTree = (parentId: string | null, depth: number): React.ReactNode[] =>
     childrenOf(parentId).flatMap((p) => {
       const i = visibleProjects.indexOf(p);
@@ -382,6 +412,8 @@ export function ProjectsSection({ onShare }: { onShare: (project: Project) => vo
             setEditingTitle('');
           }}
           onShare={() => onShare(p)}
+          onBackground={() => onBackground(p)}
+          onDuplicate={() => void handleDuplicate(p)}
           onDelete={async () => {
             try {
               await deleteProject(p.localId);
