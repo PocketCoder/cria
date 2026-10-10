@@ -109,10 +109,10 @@ describe('prompt builders', () => {
     expect(s).toContain('!3 only if');
   });
 
-  it('tells the model to file tasks by subject, not exact words', () => {
+  it('keeps subject matches as suggestions after a ~ separator', () => {
     const s = rambleInstructions({ projects: ['Flat'], labels: ['house'] });
-    expect(s).toContain('Choose by subject');
-    expect(s).toContain('Add every label whose name matches');
+    expect(s).toContain('is a suggestion, not a choice');
+    expect(s).toContain(' ~ ');
   });
 
   it('asks for todoist syntax in todoist mode, and the todoist parser reads it back', () => {

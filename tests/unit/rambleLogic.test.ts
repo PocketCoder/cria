@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  acceptAllSuggestions,
+  acceptSuggestion,
   appendBlankDraft,
+  splitSuggestion,
   chosenDrafts,
   createDrafts,
   defaultProjectId,
@@ -127,5 +130,25 @@ describe('saving a batch of drafts', () => {
     create.mockResolvedValue(undefined);
     await createDrafts(chosenDrafts(remaining, 'vikunja'), create, (d) => savedIds.add(d.id));
     expect(create.mock.calls.map(([d]) => d.line)).toEqual(['c', 'd', 'e']);
+  });
+
+  it('splits a model line into its title and a suggestion after " ~ "', () => {
+    expect(splitSuggestion('Email landlord tomorrow ~ +Flat *house')).toEqual({
+      line: 'Email landlord tomorrow',
+      suggestion: '+Flat *house',
+    });
+    expect(splitSuggestion('Buy milk +Home')).toEqual({ line: 'Buy milk +Home' });
+    expect(splitSuggestion('Fix ~ approx 5 things')).toEqual({ line: 'Fix', suggestion: 'approx 5 things' });
+  });
+
+  it('keeps suggestions off the line until accepted', () => {
+    const drafts = draftsFromLines(['Email landlord ~ +Flat', 'Buy milk'], 0);
+    expect(drafts[0]).toMatchObject({ line: 'Email landlord', suggestion: '+Flat' });
+    expect(drafts[1]!.suggestion).toBeUndefined();
+    expect(chosenDrafts(drafts, 'vikunja').map((d) => d.line)).toEqual(['Email landlord', 'Buy milk']);
+    const accepted = acceptSuggestion(drafts[0]!);
+    expect(accepted.line).toBe('Email landlord +Flat');
+    expect('suggestion' in accepted).toBe(false);
+    expect(acceptAllSuggestions(drafts).map((d) => d.line)).toEqual(['Email landlord +Flat', 'Buy milk']);
   });
 });

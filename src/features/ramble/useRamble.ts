@@ -9,6 +9,8 @@ import { useSettings } from '@/stores/settings';
 import { partialSaveMessage } from '@/lib/partialSave';
 import { createFromQuickAdd } from './createFromQuickAdd';
 import {
+  acceptAllSuggestions,
+  acceptSuggestion,
   appendBlankDraft,
   chosenDrafts,
   createDrafts,
@@ -269,6 +271,9 @@ export function useRamble(onClose: () => void) {
 
   const updateDraft = (id: number, patch: Partial<Draft>) =>
     setDrafts((prev) => patchDraft(prev, id, patch));
+  const acceptOne = (id: number) =>
+    setDrafts((prev) => prev.map((d) => (d.id === id ? acceptSuggestion(d) : d)));
+  const acceptAll = () => setDrafts((prev) => acceptAllSuggestions(prev));
   const deleteDraft = (id: number) => setDrafts((prev) => removeDraft(prev, id));
   const addBlankDraft = () => {
     // Allocate the id here, not in the updater: updaters must stay pure.
@@ -299,6 +304,8 @@ export function useRamble(onClose: () => void) {
   };
 
   return {
+    acceptOne,
+    acceptAll,
     listening,
     interim,
     organising,

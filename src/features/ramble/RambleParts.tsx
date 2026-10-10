@@ -27,7 +27,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import type { Project } from '@/domain/project';
-import { hasTitle, projectPreview, type Draft, type Phase } from './rambleLogic';
+import { findProjectByTitle, hasTitle, projectPreview, type Draft, type Phase } from './rambleLogic';
 
 export function RambleHeader({
   reviewing,
@@ -200,7 +200,11 @@ export function RambleReview({
   busyIds,
   onMic,
   onAddOne,
+  onAccept,
+  onAcceptAll,
 }: {
+  onAccept: (id: number) => void;
+  onAcceptAll: () => void;
   listening: boolean;
   interim: string;
   organising: boolean;
@@ -222,6 +226,7 @@ export function RambleReview({
 }) {
   const saving = phase === 'saving';
   const magicOff = useSettings((s) => s.quickAddMagicMode === 'disabled');
+  const suggestionCount = drafts.filter((d) => d.suggestion).length;
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
@@ -240,6 +245,17 @@ export function RambleReview({
         {organising && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-muted-foreground)]" />}
       </div>
 
+      {suggestionCount > 0 && (
+        <button
+          type="button"
+          onClick={onAcceptAll}
+          disabled={saving}
+          className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-caption text-[var(--color-foreground)] hover:bg-[var(--color-muted)] disabled:opacity-50"
+        >
+          <Sparkles className="h-3 w-3" /> Accept all suggestions ({suggestionCount})
+        </button>
+      )}
+
       <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
         {drafts.map((d) => (
           <DraftRow
@@ -250,6 +266,7 @@ export function RambleReview({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onAdd={onAddOne}
+            onAccept={onAccept}
             busy={saving || busyIds.has(d.id)}
           />
         ))}
@@ -314,8 +331,10 @@ function DraftRow({
   onUpdate,
   onDelete,
   onAdd,
+  onAccept,
   busy,
 }: {
+  onAccept: (id: number) => void;
   draft: Draft;
   projects: Project[];
   fallbackProjectId: string;
@@ -351,6 +370,7 @@ function DraftRow({
           projects={projects}
           fallbackProjectId={fallbackProjectId}
         />
+        {d.suggestion && <SuggestionRow draft={d} projects={projects} onAccept={onAccept} />}
       </div>
       <button
         type="button"
@@ -371,6 +391,45 @@ function DraftRow({
         <Trash2 className="h-3.5 w-3.5" />
       </button>
     </li>
+  );
+}
+
+/** Model-suggested project and labels: shown, but only applied when accepted. */
+function SuggestionRow({
+  draft: d,
+  projects,
+  onAccept,
+}: {
+  draft: Draft;
+  projects: Project[];
+  onAccept: (id: number) => void;
+}) {
+  const mode = useSettings((s) => s.quickAddMagicMode);
+  const parsed = useMemo(() => parseQuickAdd(`x ${d.suggestion ?? ''}`, new Date(), mode), [d.suggestion, mode]);
+  const known = parsed.projectTitle ? findProjectByTitle(projects, parsed.projectTitle) : undefined;
+  const names = [...(known ? [known.title] : []), ...parsed.labelTitles];
+  // A project the user doesn't have would fall back to the default on save; don't offer it.
+  if (names.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+      <Sparkles className="h-3 w-3 text-[var(--color-muted-foreground)]" aria-hidden />
+      {names.map((n) => (
+        <span
+          key={n}
+          className="rounded-full border border-dashed border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-muted-foreground)]"
+        >
+          {n}
+        </span>
+      ))}
+      <button
+        type="button"
+        onClick={() => onAccept(d.id)}
+        className="rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-foreground)] hover:bg-[var(--color-border)]"
+        aria-label={`Accept suggestion for ${d.line}`}
+      >
+        Accept
+      </button>
+    </div>
   );
 }
 

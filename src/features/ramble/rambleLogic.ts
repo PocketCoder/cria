@@ -9,11 +9,35 @@ export interface Draft {
   id: number;
   line: string;
   include: boolean;
+  /**
+   * Quick-add tokens the model only suggested (a project or label that fits the
+   * subject but was not named). Never applied unless the user accepts them.
+   */
+  suggestion?: string;
+}
+
+/** Split a model line "Title ~ +Flat *house" into the line and its suggestion. */
+export function splitSuggestion(raw: string): { line: string; suggestion?: string } {
+  const m = /^(.*?)\s+~\s+(.+)$/.exec(raw);
+  const line = (m ? m[1]! : raw).trim();
+  const suggestion = m ? m[2]!.trim() : '';
+  return suggestion ? { line, suggestion } : { line };
+}
+
+/** The draft with its suggestion applied to the line. */
+export function acceptSuggestion(d: Draft): Draft {
+  if (!d.suggestion) return d;
+  const { suggestion: _drop, ...rest } = d;
+  return { ...rest, line: `${d.line.trim()} ${d.suggestion}` };
+}
+
+export function acceptAllSuggestions(drafts: readonly Draft[]): Draft[] {
+  return drafts.map(acceptSuggestion);
 }
 
 /** Drafts for freshly parsed lines, numbered from `firstId`. */
 export function draftsFromLines(lines: readonly string[], firstId: number): Draft[] {
-  return lines.map((line, i) => ({ id: firstId + i, line, include: true }));
+  return lines.map((raw, i) => ({ id: firstId + i, ...splitSuggestion(raw), include: true }));
 }
 
 /**
