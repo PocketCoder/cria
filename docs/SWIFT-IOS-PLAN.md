@@ -386,7 +386,7 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 
 | Phase | Sections | Status |
 |---|---|---|
-| 0 Foundations | S-00 to S-02 | S-00, S-01 done; S-02 in review (CI pending) |
+| 0 Foundations | S-00 to S-02 | S-00, S-01 done; S-02 lint fix pushed (ca9e3ee), CI queued, confirm next run before S-10 |
 | 1 Data | S-10 to S-19 | not started |
 | 2 API and auth | S-20 to S-23 | not started |
 | 3 Sync | S-30 to S-39 | not started |
