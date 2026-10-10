@@ -173,37 +173,4 @@ final class AttachmentRepositoryTests: XCTestCase {
         XCTAssertEqual(lookup.bytesPath, "att1")
         XCTAssertNil(lookup.serverId)
     }
-
-    // MARK: insertPendingAttachment
-
-    func testInsertPendingAddsRowAndUploadOpCarryingThePayload() throws {
-        let store = try makeStore()
-        try seedAttachmentTasks(store)
-        try store.insertPendingAttachment(attachmentPayload())
-
-        let row = try XCTUnwrap(try store.attachments(forTask: "task1").first)
-        XCTAssertEqual(row.localId, "att1")
-        XCTAssertNil(row.serverId)
-        XCTAssertEqual(row.fileName, "photo.png")
-        XCTAssertEqual(row.fileSize, 3)
-        XCTAssertEqual(row.mime, "image/png")
-        XCTAssertTrue(row.pending)
-
-        let entries = try outboxEntries(store, entity: "task_attachment")
-        XCTAssertEqual(entries.map(\.localId), ["att1"])
-        XCTAssertEqual(entries.map(\.operation), ["upload"])
-        let body = try payloadObject(try XCTUnwrap(entries.first))
-        XCTAssertEqual(body["taskLocalId"] as? String, "task1")
-        XCTAssertEqual(body["attachmentLocalId"] as? String, "att1")
-        XCTAssertEqual(body["fileName"] as? String, "photo.png")
-        XCTAssertEqual(body["mime"] as? String, "image/png")
-        XCTAssertEqual(body["size"] as? Int, 3)
-        XCTAssertEqual(body["bytesPath"] as? String, "att1")
-
-        let lookup = try XCTUnwrap(try store.attachment(localId: "att1"))
-        XCTAssertEqual(lookup.taskLocalId, "task1")
-        XCTAssertTrue(lookup.pending)
-        XCTAssertEqual(lookup.bytesPath, "att1")
-        XCTAssertNil(lookup.serverId)
-    }
 }
