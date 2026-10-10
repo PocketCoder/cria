@@ -387,7 +387,7 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 | Phase | Sections | Status |
 |---|---|---|
 | 0 Foundations | S-00 to S-02 | done (S-02 CI green on ca9e3ee) |
-| 1 Data | S-10 to S-19 | S-10 to S-16 done (CI green on eb5b435); S-17 to S-19 written, CI pending |
+| 1 Data | S-10 to S-19 | done (CI green on cdc59cb) |
 | 2 API and auth | S-20 to S-23 | not started |
 | 3 Sync | S-30 to S-39 | not started |
 | 4 Core screens | S-40 to S-48 | not started |
