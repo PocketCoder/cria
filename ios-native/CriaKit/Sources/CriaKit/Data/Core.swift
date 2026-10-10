@@ -18,7 +18,7 @@ public final class CriaDatabase: Sendable {
 
 /// Kinds of change announced to observers. Only user mutations publish these.
 public enum ChangeKind: String, Sendable, CaseIterable {
-    case projects, tasks, labels, outbox
+    case projects, tasks, labels, outbox, views, comments, savedFilters
 }
 
 /// Change notifications. Sync upserts never call `notify` (AGENTS.md: infinite-loop footgun).
@@ -86,10 +86,15 @@ func jsonNullable<T>(_ value: T?) -> Any {
 
 enum OutboxEntity: String, Sendable {
     case project, task, label, taskLabel = "task_label"
+    case view, bucket
+    case taskBucket = "task_bucket"
+    case taskPosition = "task_position"
+    case taskComment = "task_comment"
+    case taskAttachment = "task_attachment"
 }
 
 enum OutboxOp: String, Sendable {
-    case create, update, delete
+    case create, update, delete, upload
 }
 
 extension Database {
