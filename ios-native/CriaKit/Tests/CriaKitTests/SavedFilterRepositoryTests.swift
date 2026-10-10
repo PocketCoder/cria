@@ -7,7 +7,7 @@ final class SavedFilterRepositoryTests: XCTestCase {
             id: id,
             title: title,
             description: nil,
-            filters: SavedFilterResponse.Filters(filter: filter, filterIncludeNulls: false),
+            filters: SavedFilterResponseFilters(filter: filter, filterIncludeNulls: false),
             updated: "2026-07-01T00:00:00Z"
         )
     }

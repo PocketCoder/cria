@@ -118,7 +118,7 @@ extension CriaStore {
     public func replaceBucketsForViewFromServer(
         viewLocalId: String, _ payloads: [(payload: BucketResponse, rawJSON: String)]
     ) throws {
-        try database.writer.write { connection -> Void in
+        try database.writer.write { connection in
             var upserted: [String] = []
             for item in payloads {
                 upserted.append(try CriaStore.mergeBucket(connection, payload: item.payload, rawJSON: item.rawJSON))
@@ -177,7 +177,7 @@ extension CriaStore {
     public func replaceBucketAssignmentsFromServer(
         viewLocalId: String, _ assignments: [(taskServerId: Int, bucketServerId: Int)]
     ) throws {
-        try database.writer.write { connection -> Void in
+        try database.writer.write { connection in
             for item in assignments {
                 let taskLocalId = try String.fetchOne(
                     connection, sql: "SELECT local_id FROM tasks WHERE server_id = ? LIMIT 1", arguments: [item.taskServerId]

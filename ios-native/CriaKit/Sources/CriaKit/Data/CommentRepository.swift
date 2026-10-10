@@ -139,7 +139,7 @@ extension CriaStore {
     /// are never overwritten or removed (the outbox is authoritative), the `read` flag survives a re-sync, and clean
     /// rows the server no longer holds are deleted. Does nothing while the task itself has a pending local edit.
     public func replaceTaskCommentsFromServer(taskLocalId: String, _ comments: [CommentResponse]) throws {
-        try database.writer.write { connection -> Void in
+        try database.writer.write { connection in
             let taskDirty = try Bool.fetchOne(
                 connection, sql: "SELECT dirty FROM tasks WHERE local_id = ? LIMIT 1", arguments: [taskLocalId]
             ) ?? false

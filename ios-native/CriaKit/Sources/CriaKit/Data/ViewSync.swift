@@ -28,7 +28,7 @@ extension CriaStore {
     public func replaceViewsForProjectFromServer(
         projectLocalId: String, _ payloads: [(payload: ViewResponse, rawJSON: String)]
     ) throws {
-        try database.writer.write { connection -> Void in
+        try database.writer.write { connection in
             var upserted: [String] = []
             for item in payloads {
                 let localId = try CriaStore.mergeView(

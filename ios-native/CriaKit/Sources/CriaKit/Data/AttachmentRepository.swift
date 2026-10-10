@@ -185,7 +185,7 @@ extension CriaStore {
     /// Silent: mirrors the server's attachment set for a task. Pending rows are left alone. Mirrored rows are
     /// upserted on (task, server id) so they keep their local id; rows the server no longer has are dropped.
     public func replaceTaskAttachmentsFromServer(taskLocalId: String, _ attachments: [TaskAttachmentResponse]) throws {
-        try database.writer.write { connection -> Void in
+        try database.writer.write { connection in
             var deleteSQL = "DELETE FROM task_attachments WHERE task_local_id = ? AND pending = 0"
             var arguments: [(any DatabaseValueConvertible)?] = [taskLocalId]
             if !attachments.isEmpty {

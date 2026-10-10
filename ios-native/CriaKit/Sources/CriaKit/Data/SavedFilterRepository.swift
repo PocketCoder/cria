@@ -20,30 +20,31 @@ public struct SavedFilterRecord: Equatable, Sendable {
     }
 }
 
-/// The relevant fields of `GET /filters/{id}`.
-public struct SavedFilterResponse: Decodable, Equatable, Sendable {
-    public struct Filters: Decodable, Equatable, Sendable {
-        public let filter: String?
-        public let filterIncludeNulls: Bool?
+/// The `filters` object of a saved filter response.
+public struct SavedFilterResponseFilters: Decodable, Equatable, Sendable {
+    public let filter: String?
+    public let filterIncludeNulls: Bool?
 
-        enum CodingKeys: String, CodingKey {
-            case filter
-            case filterIncludeNulls = "filter_include_nulls"
-        }
-
-        public init(filter: String?, filterIncludeNulls: Bool?) {
-            self.filter = filter
-            self.filterIncludeNulls = filterIncludeNulls
-        }
+    enum CodingKeys: String, CodingKey {
+        case filter
+        case filterIncludeNulls = "filter_include_nulls"
     }
 
+    public init(filter: String?, filterIncludeNulls: Bool?) {
+        self.filter = filter
+        self.filterIncludeNulls = filterIncludeNulls
+    }
+}
+
+/// The relevant fields of `GET /filters/{id}`.
+public struct SavedFilterResponse: Decodable, Equatable, Sendable {
     public let id: Int?
     public let title: String?
     public let description: String?
-    public let filters: Filters?
+    public let filters: SavedFilterResponseFilters?
     public let updated: String?
 
-    public init(id: Int?, title: String?, description: String? = nil, filters: Filters? = nil, updated: String? = nil) {
+    public init(id: Int?, title: String?, description: String? = nil, filters: SavedFilterResponseFilters? = nil, updated: String? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -101,7 +102,7 @@ extension CriaStore {
 
     /// Silent: removes rows whose server id is not in `keepServerIds` (sync reconcile). An empty list removes all.
     public func pruneSavedFilters(keeping keepServerIds: [Int]) throws {
-        try database.writer.write { connection -> Void in
+        try database.writer.write { connection in
             if keepServerIds.isEmpty {
                 try connection.execute(sql: "DELETE FROM saved_filters")
             } else {
