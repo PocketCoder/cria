@@ -101,9 +101,9 @@ final class DomainDecodingTests: XCTestCase {
 
     func testInverseRelationKinds() {
         let expected: [TaskRelationKind: TaskRelationKind] = [
-            .subtask: .parenttask, .parenttask: .subtask, .related: .related,
-            .duplicates: .duplicateof, .duplicateof: .duplicates, .blocking: .blocked,
-            .blocked: .blocking, .precedes: .follows, .follows: .precedes,
+            .subtask: .parenttask, .parenttask: .subtask, .related: .related
+            .duplicates: .duplicateof, .duplicateof: .duplicates, .blocking: .blocked
+            .blocked: .blocking, .precedes: .follows, .follows: .precedes
             .copiedfrom: .copiedto, .copiedto: .copiedfrom
         ]
         XCTAssertEqual(TaskRelationKind.allCases.count, 11)

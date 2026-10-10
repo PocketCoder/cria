@@ -127,19 +127,19 @@ extension CriaStore {
              WHERE \(clauses.joined(separator: " AND "))
              ORDER BY \(CriaStore.taskOrder)
             """
-        return try database.writer.read { db in
-            try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments)).map(TaskRecord.init(row:))
+        return try database.writer.read { connection in
+            try Row.fetchAll(connection, sql: sql, arguments: StatementArguments(arguments)).map(TaskRecord.init(row:))
         }
     }
 
     public func task(localId: String) throws -> TaskRecord? {
-        try database.writer.read { db in
-            try CriaStore.fetchTask(db, localId: localId)
+        try database.writer.read { connection in
+            try CriaStore.fetchTask(connection, localId: localId)
         }
     }
 
-    static func fetchTask(_ db: Database, localId: String) throws -> TaskRecord? {
-        try Row.fetchOne(db, sql: "SELECT \(taskColumns) FROM tasks WHERE local_id = ?", arguments: [localId])
+    static func fetchTask(_ connection: Database, localId: String) throws -> TaskRecord? {
+        try Row.fetchOne(connection, sql: "SELECT \(taskColumns) FROM tasks WHERE local_id = ?", arguments: [localId])
             .map(TaskRecord.init(row:))
     }
 
@@ -159,35 +159,35 @@ extension CriaStore {
             "hex_color": jsonNullable(task.hexColor),
             "is_favorite": task.isFavorite,
             "repeat_after": task.repeatAfter,
-            "repeat_mode": task.repeatMode,
+            "repeat_mode": task.repeatMode
         ]
     }
 
     @discardableResult
     public func createTask(_ input: TaskInput) throws -> TaskRecord {
-        try userWrite(announcing: [.tasks, .outbox]) { db in
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
             let localId = UUID().uuidString
             let now = isoNow()
-            try db.execute(sql: """
+            try connection.execute(sql: """
                 INSERT INTO tasks (local_id, server_id, project_local_id, title, description, done, due_date,
                        priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
                        updated_at, created_at, dirty, deleted)
                 VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, 0, 0, ?, ?, 1, 0)
                 """, arguments: [
                     localId, input.projectLocalId, input.title, input.description, input.dueDate,
-                    input.priority, input.isFavorite, now, now,
+                    input.priority, input.isFavorite, now, now
                 ])
-            guard let record = try CriaStore.fetchTask(db, localId: localId) else {
+            guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
                 throw CriaStoreError.notFound(localId)
             }
-            try db.enqueue(.task, localId: localId, op: .create, payload: CriaStore.taskPayload(record), at: now)
+            try connection.enqueue(.task, localId: localId, op: .create, payload: CriaStore.taskPayload(record), at: now)
             return record
         }
     }
 
     @discardableResult
     public func updateTask(localId: String, patch: TaskPatch) throws -> TaskRecord {
-        try userWrite(announcing: [.tasks, .outbox]) { db in
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
             let now = isoNow()
             var assignments = ["dirty = 1", "updated_at = ?"]
             var arguments: [(any DatabaseValueConvertible)?] = [now]
@@ -214,27 +214,27 @@ extension CriaStore {
                 arguments.append(isFavorite)
             }
             arguments.append(localId)
-            try db.execute(
+            try connection.execute(
                 sql: "UPDATE tasks SET \(assignments.joined(separator: ", ")) WHERE local_id = ? AND deleted = 0",
                 arguments: StatementArguments(arguments)
             )
-            guard let record = try CriaStore.fetchTask(db, localId: localId) else {
+            guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
                 throw CriaStoreError.notFound(localId)
             }
-            try db.enqueue(.task, localId: localId, op: .update, payload: CriaStore.taskPayload(record), at: now)
+            try connection.enqueue(.task, localId: localId, op: .update, payload: CriaStore.taskPayload(record), at: now)
             return record
         }
     }
 
     /// Soft delete. The row stays until the outbox drains, so the delete can be pushed.
     public func deleteTask(localId: String) throws {
-        try userWrite(announcing: [.tasks, .outbox]) { db in
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
             let now = isoNow()
-            try db.execute(
+            try connection.execute(
                 sql: "UPDATE tasks SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ?",
                 arguments: [now, localId]
             )
-            try db.enqueue(.task, localId: localId, op: .delete, payload: [:], at: now)
+            try connection.enqueue(.task, localId: localId, op: .delete, payload: [:], at: now)
         }
     }
 
@@ -242,15 +242,15 @@ extension CriaStore {
     /// also changed a field since the last sync, a conflict is recorded. Returns nil when the project is not synced.
     @discardableResult
     public func upsertTaskFromServer(_ payload: TaskResponse, rawJSON: String) throws -> String? {
-        try database.writer.write { db -> String? in
+        try database.writer.write { connection -> String? in
             guard let projectLocalId = try String.fetchOne(
-                db, sql: "SELECT local_id FROM projects WHERE server_id = ?", arguments: [payload.projectId]
+                connection, sql: "SELECT local_id FROM projects WHERE server_id = ?", arguments: [payload.projectId]
             ) else {
                 return nil
             }
             let now = isoNow()
             let existing = try Row.fetchOne(
-                db, sql: "SELECT local_id, dirty, last_synced FROM tasks WHERE server_id = ?", arguments: [payload.id]
+                connection, sql: "SELECT local_id, dirty, last_synced FROM tasks WHERE server_id = ?", arguments: [payload.id]
             )
             let localId: String
             if let existing {
@@ -258,12 +258,12 @@ extension CriaStore {
                 let dirty: Bool = existing["dirty"]
                 if dirty {
                     let lastSynced: String? = existing["last_synced"]
-                    try CriaStore.recordConflictIfDiverged(db, localId: localId, lastSynced: lastSynced, remoteJSON: rawJSON, now: now)
+                    try CriaStore.recordConflictIfDiverged(connection, localId: localId, lastSynced: lastSynced, remoteJSON: rawJSON, now: now)
                     return localId
                 }
             } else {
                 localId = UUID().uuidString
-                try db.execute(
+                try connection.execute(
                     sql: """
                         INSERT INTO tasks (local_id, server_id, project_local_id, title, updated_at, dirty, deleted)
                         VALUES (?, ?, ?, ?, ?, 0, 0)
@@ -276,9 +276,9 @@ extension CriaStore {
                 payload.dueDate, payload.startDate, payload.endDate, payload.priority ?? 0,
                 payload.percentDone ?? 0, payload.hexColor, payload.position, payload.isFavorite ?? false,
                 payload.repeatAfter ?? 0, payload.repeatMode ?? 0, payload.identifier, payload.updated ?? now,
-                payload.created, payload.createdBy?.id, now, rawJSON, localId,
+                payload.created, payload.createdBy?.id, now, rawJSON, localId
             ]
-            try db.execute(sql: """
+            try connection.execute(sql: """
                 UPDATE tasks SET project_local_id = ?, title = ?, description = ?, done = ?, done_at = ?,
                        due_date = ?, start_date = ?, end_date = ?, priority = ?, percent_done = ?, hex_color = ?,
                        position = ?, is_favorite = ?, repeat_after = ?, repeat_mode = ?, identifier = ?,
@@ -294,10 +294,10 @@ extension CriaStore {
     static let conflictFields = ["title", "description", "done", "due_date"]
 
     static func recordConflictIfDiverged(
-        _ db: Database, localId: String, lastSynced: String?, remoteJSON: String, now: String
+        _ connection: Database, localId: String, lastSynced: String?, remoteJSON: String, now: String
     ) throws {
         guard let lastSynced, lastSynced != remoteJSON else { return }
-        let duplicate = try Int.fetchOne(db, sql: """
+        let duplicate = try Int.fetchOne(connection, sql: """
             SELECT id FROM conflicts
              WHERE entity_type = 'task' AND entity_local_id = ?
                AND local_snapshot = ? AND remote_snapshot = ?
@@ -310,7 +310,7 @@ extension CriaStore {
         }
         guard !fields.isEmpty else { return }
         let fieldsJSON = String(decoding: try JSONSerialization.data(withJSONObject: fields), as: UTF8.self)
-        try db.execute(sql: """
+        try connection.execute(sql: """
             INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at)
             VALUES ('task', ?, ?, ?, ?, ?)
             """, arguments: [localId, fieldsJSON, lastSynced, remoteJSON, now])

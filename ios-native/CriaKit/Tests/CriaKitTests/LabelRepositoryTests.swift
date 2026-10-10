@@ -46,8 +46,8 @@ final class LabelRepositoryTests: XCTestCase {
         """).reminders ?? []
         try store.replaceRemindersFromServer(taskLocalId: task.localId, reminders)
         try store.replaceRemindersFromServer(taskLocalId: task.localId, reminders)
-        let count = try store.database.writer.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM task_reminders WHERE task_local_id = ?", arguments: [task.localId]) ?? 0
+        let count = try store.database.writer.read { connection in
+            try Int.fetchOne(connection, sql: "SELECT COUNT(*) FROM task_reminders WHERE task_local_id = ?", arguments: [task.localId]) ?? 0
         }
         XCTAssertEqual(count, 2)
 
@@ -55,8 +55,8 @@ final class LabelRepositoryTests: XCTestCase {
         {"id": 2, "project_id": 1, "title": "y", "related_tasks": {"subtask": [{"id": 7, "title": "child"}]}}
         """).relatedTasks ?? [:]
         try store.replaceRelationsFromServer(taskLocalId: task.localId, related)
-        let kinds = try store.database.writer.read { db in
-            try String.fetchAll(db, sql: "SELECT relation_kind FROM task_relations WHERE task_local_id = ?", arguments: [task.localId])
+        let kinds = try store.database.writer.read { connection in
+            try String.fetchAll(connection, sql: "SELECT relation_kind FROM task_relations WHERE task_local_id = ?", arguments: [task.localId])
         }
         XCTAssertEqual(kinds, ["subtask"])
     }

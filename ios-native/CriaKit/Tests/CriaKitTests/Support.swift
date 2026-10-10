@@ -30,7 +30,7 @@ func taskJSON(id: Int, projectId: Int = 1, title: String, done: Bool = false, po
 }
 
 func outboxRows(_ store: CriaStore) throws -> [Row] {
-    try store.database.writer.read { db in
-        try Row.fetchAll(db, sql: "SELECT entity_type, entity_local_id, op FROM outbox ORDER BY id")
+    try store.database.writer.read { connection in
+        try Row.fetchAll(connection, sql: "SELECT entity_type, entity_local_id, op FROM outbox ORDER BY id")
     }
 }

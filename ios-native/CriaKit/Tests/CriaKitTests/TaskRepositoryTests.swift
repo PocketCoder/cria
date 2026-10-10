@@ -11,7 +11,7 @@ final class TaskRepositoryTests: XCTestCase {
             taskJSON(id: 3, title: "second", position: 2),
             taskJSON(id: 4, title: "first", position: 1),
             taskJSON(id: 5, title: "Alpha", position: 1, dueDate: "2026-06-01T00:00:00Z"),
-            taskJSON(id: 6, title: "beta", position: 1, dueDate: "2026-07-01T00:00:00Z"),
+            taskJSON(id: 6, title: "beta", position: 1, dueDate: "2026-07-01T00:00:00Z")
         ]
         for json in fixtures {
             try store.upsertTaskFromServer(try decodeFixture(TaskResponse.self, json), rawJSON: json)
@@ -99,8 +99,8 @@ final class TaskRepositoryTests: XCTestCase {
     }
 
     private func conflictCount(_ store: CriaStore) throws -> Int {
-        try store.database.writer.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM conflicts") ?? 0
+        try store.database.writer.read { connection in
+            try Int.fetchOne(connection, sql: "SELECT COUNT(*) FROM conflicts") ?? 0
         }
     }
 }
