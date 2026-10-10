@@ -9,8 +9,8 @@ final class CriaKitTests: XCTestCase {
 
     func testGRDBLinksAgainstInMemoryDatabase() throws {
         let queue = try DatabaseQueue()
-        let value = try queue.read { db in
-            try Int.fetchOne(db, sql: "SELECT 1")
+        let value = try queue.read { database in
+            try Int.fetchOne(database, sql: "SELECT 1")
         }
         XCTAssertEqual(value, 1)
     }
