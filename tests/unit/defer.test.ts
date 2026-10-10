@@ -12,6 +12,17 @@ describe('deferDueIso', () => {
     expect(day(deferDueIso('2026-10-20T00:00:00.000Z', '1w', NOW))).toBe('2026-10-27');
   });
 
+  it('counts from today when the due date is already past', () => {
+    expect(day(deferDueIso('2026-10-04T00:00:00.000Z', '1d', NOW))).toBe('2026-10-15');
+    expect(day(deferDueIso('2026-10-04T00:00:00.000Z', '1w', NOW))).toBe('2026-10-21');
+  });
+
+  it('keeps the time of day when an overdue timed task is deferred', () => {
+    const current = new Date(2026, 9, 4, 9, 15).toISOString();
+    const out = new Date(deferDueIso(current, '1d', NOW));
+    expect([out.getDate(), out.getHours(), out.getMinutes()]).toEqual([15, 9, 15]);
+  });
+
   it('counts from today when there is no due date', () => {
     expect(day(deferDueIso(null, '1d', NOW))).toBe('2026-10-15');
     expect(day(deferDueIso(null, '1w', NOW))).toBe('2026-10-21');

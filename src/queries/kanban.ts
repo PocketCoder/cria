@@ -179,9 +179,19 @@ export function useKanbanBoard(
     // 'views' → bucket CRUD; 'tasks' → task→bucket assignment changes.
     const unsubViews = subscribe('views', inval);
     const unsubTasks = subscribe('tasks', inval);
+    // Filter-mode columns re-run each bucket's filter, which can depend on
+    // labels and assignees as well as the task row itself.
+    const invalMatch = () =>
+      void queryClient.invalidateQueries({
+        queryKey: ['kanban-filter-match', view?.localId],
+      });
+    const matchTopics = (['tasks', 'views', 'labels', 'task_labels', 'task_assignees'] as const).map(
+      (topic) => subscribe(topic, invalMatch),
+    );
     return () => {
       unsubViews();
       unsubTasks();
+      matchTopics.forEach((off) => off());
     };
   }, [queryClient, view?.localId]);
 

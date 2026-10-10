@@ -12,7 +12,7 @@ const { listBlobs, deleteBlob } = vi.hoisted(() => ({
 vi.mock('@/tauri/blobStore', () => ({ listBlobs, deleteBlob }));
 
 import { getDb } from '@/db';
-import { initSchema, clearTables } from './_helpers';
+import { initSchema, clearTables, seedProject } from './_helpers';
 import { ATTACHMENT_ENTITY, ATTACHMENT_UPLOAD_OP, insertPendingAttachment } from '@/db/attachments';
 import {
   BLOB_GRACE_MS,
@@ -80,10 +80,20 @@ describe('sweepOrphanBlobs', () => {
     expect(deleted()).toEqual(['orphan1', 'orphan2']);
   });
 
-  it('never deletes cache blobs, however old', async () => {
+  it('keeps a cache blob while its project exists, however old', async () => {
+    await seedProject(7);
     stored(['project-bg-7', OLD - BLOB_GRACE_MS], ['orphan', OLD]);
     expect(await sweepOrphanBlobs(NOW)).toBe(1);
     expect(deleted()).toEqual(['orphan']);
+  });
+
+  it('deletes a cache blob once its project is gone, even a fresh one', async () => {
+    await seedProject(7);
+    const db = await getDb();
+    await db.execute('UPDATE projects SET deleted = 1 WHERE server_id = 7');
+    stored(['project-bg-7', NOW], ['project-bg-8', null]);
+    expect(await sweepOrphanBlobs(NOW)).toBe(2);
+    expect(deleted()).toEqual(['project-bg-7', 'project-bg-8']);
   });
 
   it('keeps the bytes of a queued upload (row and op)', async () => {
