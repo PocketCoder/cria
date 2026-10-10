@@ -1,0 +1,14 @@
+# SwiftLint config for ios-native. Keep rules minimal; add only when a real defect class appears.
+included:
+  - CriaKit/Sources
+  - CriaKit/Tests
+  - CriaApp/CriaApp
+excluded:
+  - CriaApp/CriaApp.xcodeproj
+  - CriaKit/.build
+  - CriaKit/.swiftpm
+disabled_rules:
+  - trailing_whitespace
+line_length:
+  warning: 140
+  error: 200

@@ -10,8 +10,14 @@ let package = Package(
     products: [
         .library(name: "CriaKit", targets: ["CriaKit"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+    ],
     targets: [
-        .target(name: "CriaKit"),
+        .target(
+            name: "CriaKit",
+            dependencies: [.product(name: "GRDB", package: "GRDB.swift")]
+        ),
         .testTarget(name: "CriaKitTests", dependencies: ["CriaKit"]),
     ],
     swiftLanguageModes: [.v6]
