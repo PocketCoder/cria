@@ -194,8 +194,8 @@ jobs:
               }
             }' > gh-pages-out/nightly.json
           cat gh-pages-out/nightly.json
-      # SideStore/AltStore source: add https://<owner>.github.io/<repo>/sidestore.json
-      # in SideStore > Sources to get one-tap nightly updates without a computer.
+      # One SideStore/AltStore source for both channels (release.yml writes the
+      # stable app into the same file). Add https://<owner>.github.io/<repo>/sidestore.json
       - name: Write sidestore.json
         run: |
           set -euo pipefail
@@ -203,26 +203,25 @@ jobs:
           ipa="release/Cria-Nightly-unsigned.ipa"
           jq -n \
             --arg v "$version" \
+            --arg b "${{ github.run_number }}" \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg notes "dev @ ${GITHUB_SHA::7}" \
             --arg url "https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-unsigned.ipa" \
             --argjson size "$(stat -c %s "$ipa")" '{
-              name: "Cria Nightly",
-              identifier: "io.cria.app.nightly.source",
-              apps: [{
-                name: "Cria (Nightly)",
-                bundleIdentifier: "io.cria.app.nightly",
-                developerName: "Cria",
-                subtitle: "Vikunja client (unstable dev builds)",
-                localizedDescription: "Automated build of the dev branch. Unstable.",
-                iconURL: "https://raw.githubusercontent.com/${{ github.repository }}/dev/src-tauri/icons/icon.png",
-                versions: [{
-                  version: $v, buildVersion: "${{ github.run_number }}", date: $date, size: $size,
-                  downloadURL: $url, localizedDescription: $notes
-                }]
-              }],
-              news: []
-            }' > gh-pages-out/sidestore.json
+              name: "Cria (Nightly)",
+              bundleIdentifier: "io.cria.app.nightly",
+              developerName: "Cria",
+              subtitle: "Unstable dev builds",
+              localizedDescription: "Automated build of the dev branch. Unstable.",
+              iconURL: "https://raw.githubusercontent.com/${{ github.repository }}/dev/src-tauri/icons/icon.png",
+              versions: [{version: $v, buildVersion: $b, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
+            }' > app.json
+          # Merge into the shared source: keep the other channel's app entry.
+          git fetch --depth 1 origin gh-pages 2>/dev/null && git show origin/gh-pages:sidestore.json > existing.json 2>/dev/null || echo '{}' > existing.json
+          jq --slurpfile old existing.json --argjson app "$(cat app.json)" '
+            {name: "Cria", identifier: "io.cria.source", news: [],
+             apps: ((($old[0].apps // []) | map(select(.bundleIdentifier != $app.bundleIdentifier))) + [$app] | sort_by(.bundleIdentifier))}
+          ' > gh-pages-out/sidestore.json
           cat gh-pages-out/sidestore.json
       # Recreate the release so the tag, assets, and notes track the latest push.
       - name: Replace nightly release
