@@ -5,6 +5,7 @@ import { Shell } from '@/features/shell/Shell';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
 import { useReminderScheduler } from '@/sync/useReminderScheduler';
+import { useSummaryNotifications } from '@/sync/useSummaryNotifications';
 import { startSettingsSync } from '@/sync/settingsSync';
 import { scheduleBlobSweep } from '@/sync/blobSweep';
 import { useDockBadge } from '@/queries/badge';
@@ -30,6 +31,7 @@ export function App() {
 
   usePeriodicSync();
   useReminderScheduler();
+  useSummaryNotifications();
   useDockBadge();
 
   let body: React.ReactNode;

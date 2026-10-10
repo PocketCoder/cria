@@ -14,6 +14,17 @@ export type TimeFormat = '12h' | '24h';
 interface SettingsState {
   notificationsEnabled: boolean;
   setNotificationsEnabled: (enabled: boolean) => void;
+  // Morning summary + weekly round-up notifications. Times are "HH:mm" local;
+  // the round-up fires on the user's week-start day (General → Start week on).
+  // Read by src/sync/useSummaryNotifications.
+  morningSummaryEnabled: boolean;
+  setMorningSummaryEnabled: (enabled: boolean) => void;
+  morningSummaryTime: string;
+  setMorningSummaryTime: (time: string) => void;
+  weeklyRoundupEnabled: boolean;
+  setWeeklyRoundupEnabled: (enabled: boolean) => void;
+  weeklyRoundupTime: string;
+  setWeeklyRoundupTime: (time: string) => void;
   colorScheme: ColorScheme;
   setColorScheme: (scheme: ColorScheme) => void;
   dateFormat: DateFormat;
@@ -59,6 +70,14 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       notificationsEnabled: true,
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
+      morningSummaryEnabled: true,
+      setMorningSummaryEnabled: (enabled) => set({ morningSummaryEnabled: enabled }),
+      morningSummaryTime: '08:00',
+      setMorningSummaryTime: (time) => set({ morningSummaryTime: time }),
+      weeklyRoundupEnabled: true,
+      setWeeklyRoundupEnabled: (enabled) => set({ weeklyRoundupEnabled: enabled }),
+      weeklyRoundupTime: '09:00',
+      setWeeklyRoundupTime: (time) => set({ weeklyRoundupTime: time }),
       colorScheme: 'system',
       setColorScheme: (scheme) => set({ colorScheme: scheme }),
       dateFormat: 'YYYY-MM-DD',

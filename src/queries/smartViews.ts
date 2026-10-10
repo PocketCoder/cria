@@ -4,6 +4,7 @@ import { startOfDay, isBefore, isSameDay } from 'date-fns';
 import { dueCalendarDate } from '@/lib/dateFormat';
 import {
   listTasksWithDueDate,
+  listUndatedTasks,
   listTasksForLabel,
   listFavoriteTasks,
   listTasksForProject,
@@ -111,6 +112,25 @@ export function useUpcomingTasks() {
     queryFn: async () => [
       { key: 'upcoming', label: '', tasks: upcomingFrom(await listTasksWithDueDate(), new Date()) },
     ],
+  });
+}
+
+/** Open tasks with no due date, for Today's suggestions when nothing is due. */
+export function useUndatedTasks(enabled = true) {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      subscribe('tasks', () => {
+        void qc.invalidateQueries({ queryKey: ['smart', 'undated'] });
+      }),
+    [qc],
+  );
+
+  return useQuery<TaskWithProject[]>({
+    queryKey: ['smart', 'undated'],
+    enabled,
+    staleTime: 30_000,
+    queryFn: () => listUndatedTasks(20),
   });
 }
 
