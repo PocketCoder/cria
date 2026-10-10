@@ -1,0 +1,46 @@
+name: CI (native Swift iOS)
+
+on:
+  push:
+    branches: [feature/swift-ios, dev, main]
+    paths:
+      - 'ios-native/**'
+      - '.github/workflows/ci-swift.yml'
+  pull_request:
+    paths:
+      - 'ios-native/**'
+      - '.github/workflows/ci-swift.yml'
+
+concurrency:
+  group: ci-swift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Unit tests (CriaKit)
+        working-directory: ios-native/CriaKit
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
+
+      - name: Build app for simulator
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
