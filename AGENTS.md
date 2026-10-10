@@ -344,6 +344,23 @@ via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
   (sheets, dialogs). Taps return as a `cria:native-tab` DOM event. Older iOS
   keeps the web capsule.
 
+### Touch and sheet conventions (iOS feel)
+
+- **Inputs are 16px on touch** via a `pointer: coarse` floor in globals.css; the
+  viewport has no zoom lock. Don't add `maximum-scale` back, and don't set a
+  smaller font on a field without checking it on device (iOS zooms on focus).
+- **Never hide a control behind `group-hover` alone.** Tailwind v4 wraps `hover:`
+  in `(hover: hover)`, so it never applies on touch. Use `.hover-reveal` or add
+  `[@media(hover:none)]:opacity-100`.
+- **Mobile sheets use `useSheetDismiss`** ([src/lib/useSheetDismiss.ts](src/lib/useSheetDismiss.ts)):
+  attach `panelRef`, close via `requestClose` (slide-out, then `onClose`).
+  `PopoverContent` renders as a bottom sheet at iPhone width (`.popover-sheet`
+  overrides Radix's positioning wrapper, hence the `!important`s).
+- **Haptics:** `selectionTick()` for discrete changes, `impact*` for outcomes.
+  All no-op on desktop.
+- Hover previews must key off `pointerType === 'mouse'`, not `mouseenter`
+  (iOS synthesises it after a tap).
+
 ### Keychain prompts after updates (signing identity)
 
 macOS ties keychain "Always Allow" to the app's code identity. Ad-hoc signed
