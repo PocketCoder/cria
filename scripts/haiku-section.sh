@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build one section of docs/SWIFT-IOS-PLAN.md with Haiku 5.5 via OpenRouter.
 # Usage: scripts/haiku-section.sh S-10
-# Needs OPENROUTER_API_KEY in the environment. Edits files only; the caller
+# Needs OPENROUTER_API_KEY in the environment. Optional EXTRA env var is
+# appended to the prompt (e.g. a CI failure excerpt for a retry). Edits files only; the caller
 # commits, pushes and checks CI.
 set -euo pipefail
 
@@ -31,7 +32,10 @@ Plan rules:
 $rules
 
 Your section:
-$text"
+$text
+${EXTRA:+
+Extra context (fix this):
+$EXTRA}"
 
 ANTHROPIC_BASE_URL="https://openrouter.ai/api" \
 ANTHROPIC_AUTH_TOKEN="$OPENROUTER_API_KEY" \
