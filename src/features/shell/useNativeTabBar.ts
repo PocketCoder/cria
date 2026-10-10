@@ -72,10 +72,16 @@ export function useNativeTabBar(
       attributeFilter: ['class', 'style', 'open'],
     });
     window.addEventListener('resize', schedule);
+    // The keyboard resizes the visual viewport, not the layout one, so
+    // `resize` doesn't fire; without this the bar stays where it was.
+    window.visualViewport?.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('scroll', schedule);
     schedule();
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('scroll', schedule);
       if (frame) cancelAnimationFrame(frame);
       recheckRef.current = () => {};
       updateNativeTabBar(HIDDEN);

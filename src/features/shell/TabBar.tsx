@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Calendar, CalendarDays, LayoutGrid, Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { nativeGlass } from '@/tauri/glass';
@@ -70,6 +70,29 @@ export function TabBar() {
       if (view) setActiveView(view);
     },
   );
+
+  // iOS WKWebView can leave the page scrolled up after the keyboard closes,
+  // which strands the fixed bar mid-screen. Snap back once the keyboard is gone.
+  useEffect(() => {
+    if (!isMobile) return;
+    const vv = window.visualViewport;
+    const reset = () => {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLElement &&
+        (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+      if (typing) return;
+      if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+      if (vv && vv.offsetTop !== 0) window.scrollTo(0, 0);
+    };
+    const onFocusOut = () => setTimeout(reset, 50);
+    window.addEventListener('focusout', onFocusOut);
+    vv?.addEventListener('resize', reset);
+    return () => {
+      window.removeEventListener('focusout', onFocusOut);
+      vv?.removeEventListener('resize', reset);
+    };
+  }, [isMobile]);
 
   // While multi-selecting, the SelectionBar replaces the tab bar.
   if (!isMobile || selecting) return null;
