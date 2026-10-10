@@ -14,7 +14,7 @@ final class MigrationTests: XCTestCase {
         let queue = try DatabaseQueue()
         try CriaMigrations.migrate(queue)
         let applied = try queue.read { database in
-            try CriaMigrations.migrator().appliedMigrations(in: database)
+            try CriaMigrations.migrator().appliedMigrations(database)
         }
         XCTAssertEqual(applied.count, 19)
         XCTAssertEqual(applied.last, "019_attachment_uploads")
