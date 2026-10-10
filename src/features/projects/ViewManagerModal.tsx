@@ -23,6 +23,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  SlidersHorizontal,
   SquareKanban,
   Table2,
   Trash2,
@@ -54,6 +55,7 @@ import {
   viewLabel,
 } from '@/lib/viewManagement';
 import type { ProjectView, ViewKind } from '@/domain/view';
+import { ViewSettingsPanel } from './ViewSettingsPanel';
 
 const KIND_ICONS: Record<ViewKind, typeof List> = {
   list: List,
@@ -76,9 +78,9 @@ interface ViewManagerModalProps {
 
 /**
  * Manage a project's views: rename, delete (never the last one), drag to
- * reorder, and add a new list / gantt / table / board view. Filter editing and
- * bucket-configuration mode are out of scope (Cria has no filter-DSL editor
- * and only does manual buckets).
+ * reorder, add a new list / gantt / table / board view, and edit each view's
+ * filter (plus, for boards, manual vs filter-based buckets) from its settings
+ * panel.
  */
 export function ViewManagerModal({
   projectLocalId,
@@ -244,6 +246,7 @@ function SortableViewRow({
   const [draft, setDraft] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: view.localId, disabled: !reorderable || editing || confirming });
 
@@ -265,7 +268,7 @@ function SortableViewRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'relative flex items-center gap-2 rounded-md px-1.5 hover:bg-[var(--color-muted)]',
+        'relative flex flex-wrap items-center gap-2 rounded-md px-1.5 hover:bg-[var(--color-muted)]',
         compact ? 'py-1' : 'py-2',
         isDragging && 'z-10 bg-[var(--color-muted)] opacity-80 shadow-sm',
       )}
@@ -368,6 +371,17 @@ function SortableViewRow({
           </button>
           <button
             type="button"
+            disabled={view.placeholder}
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((o) => !o)}
+            aria-label={`Settings for ${label}`}
+            title={view.placeholder ? BLOCKER_TEXT.placeholder : 'Filter and bucket settings'}
+            className={cn(iconButton, settingsOpen && 'bg-[var(--color-background)] text-[var(--color-foreground)]')}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
             disabled={deleteBlocker !== null}
             onClick={() => setConfirming(true)}
             aria-label={`Delete ${label}`}
@@ -378,6 +392,7 @@ function SortableViewRow({
           </button>
         </>
       )}
+      {settingsOpen && !editing && !confirming && <ViewSettingsPanel view={view} />}
     </li>
   );
 }

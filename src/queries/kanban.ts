@@ -1,6 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useProjectTasks } from '@/queries/tasks';
+import { useProjectTasks, parseFilter } from '@/queries/tasks';
+import { listTasksForProjectFiltered } from '@/db/tasks';
+import { compileFilter } from '@/lib/filterCompiler';
+import { parseBucketConfiguration, type BucketFilterConfig } from '@/lib/bucketConfig';
 import { listBucketsForView, listBucketAssignmentsForView } from '@/db/buckets';
 import { subscribe } from '@/db/bus';
 import type { Task } from '@/domain/task';
@@ -90,6 +93,51 @@ export function buildKanbanColumns(
 }
 
 /**
+ * Columns for a filter-mode board: one per configured bucket, holding the
+ * view's tasks whose id is in that bucket's match set. A task can appear in
+ * several columns (or none), as on the server. Pure; the synthetic buckets
+ * have no server id, so they can't be renamed, moved into or deleted.
+ */
+export function buildFilterColumns(
+  view: Pick<ProjectView, 'localId'>,
+  configs: BucketFilterConfig[],
+  matchIds: Set<string>[],
+  tasks: Task[],
+): KanbanColumn[] {
+  return configs.map((config, i) => ({
+    bucket: {
+      localId: `filter:${view.localId}:${i}`,
+      serverId: null,
+      viewLocalId: view.localId,
+      title: config.title,
+      position: i,
+      limit: 0,
+      createdByServerId: null,
+      updatedAt: '',
+    },
+    tasks: tasks.filter((t) => matchIds[i]?.has(t.localId)),
+    taskPositions: {},
+  }));
+}
+
+/** Local ids of the project's tasks matching a bucket's filter query. */
+async function localIdsMatching(
+  projectLocalId: string,
+  config: BucketFilterConfig,
+): Promise<Set<string>> {
+  if (!config.filter.trim()) return new Set((await listTasksForProjectFiltered(projectLocalId, true)).map((t) => t.localId));
+  const parsed = parseFilter(config.filter);
+  const compiled = compileFilter(parsed.ast, config.includeNulls);
+  const rows = await listTasksForProjectFiltered(
+    projectLocalId,
+    !parsed.hasDoneFilter,
+    compiled.where || undefined,
+    compiled.params,
+  );
+  return new Set(rows.map((t) => t.localId));
+}
+
+/**
  * Kanban board data for a view. Tasks come from the shared `useProjectTasks`
  * query (so the board pulls on mount like the list view and stays in sync
  * with it); buckets + assignments come from a small view-scoped query.
@@ -140,15 +188,31 @@ export function useKanbanBoard(
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const bucketData = bucketsQuery.data;
 
+  // Filter-mode boards: columns come from the view's bucket configuration.
+  const filterMode = view?.bucketConfigurationMode === 'filter';
+  const configs = useMemo(
+    () => (filterMode ? parseBucketConfiguration(view?.bucketConfiguration) : []),
+    [filterMode, view?.bucketConfiguration],
+  );
+  const matchQuery = useQuery<Set<string>[]>({
+    queryKey: ['kanban-filter-match', view?.localId, view?.bucketConfiguration, tasksQuery.dataUpdatedAt],
+    queryFn: () => Promise.all(configs.map((c) => localIdsMatching(view!.projectLocalId, c))),
+    enabled: filterMode && view != null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
   const columns = useMemo<KanbanColumn[]>(() => {
-    if (!view || !bucketData) return [];
+    if (!view) return [];
+    if (filterMode) return buildFilterColumns(view, configs, matchQuery.data ?? [], tasks);
+    if (!bucketData) return [];
     return buildKanbanColumns(view, bucketData.buckets, bucketData.assignments, tasks);
-  }, [view, bucketData, tasks]);
+  }, [view, filterMode, configs, matchQuery.data, bucketData, tasks]);
 
   return {
     columns,
-    isLoading: tasksQuery.isLoading || bucketsQuery.isLoading,
-    isError: tasksQuery.isError || bucketsQuery.isError,
-    error: tasksQuery.error ?? bucketsQuery.error,
+    isLoading: tasksQuery.isLoading || (filterMode ? matchQuery.isLoading : bucketsQuery.isLoading),
+    isError: tasksQuery.isError || bucketsQuery.isError || matchQuery.isError,
+    error: tasksQuery.error ?? bucketsQuery.error ?? matchQuery.error,
   };
 }

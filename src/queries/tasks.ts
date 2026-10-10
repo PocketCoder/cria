@@ -22,7 +22,7 @@ function astReferencesField(ast: FilterNode | null, field: string): boolean {
   return false;
 }
 
-function parseFilter(expr: string): {
+export function parseFilter(expr: string): {
   ast: FilterNode | null;
   hasDoneFilter: boolean;
 } {

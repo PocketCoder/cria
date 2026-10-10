@@ -57,7 +57,8 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Projects | Sub-project hierarchy in sidebar | ✅ | Nested tree in `ProjectSidebar` from `parent_project_id` |
 | Projects | Project background images | ✅ | Upload + Unsplash + remove (`ProjectBackgroundModal`), shown faintly in the desktop header; not shown on iOS header |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
-| Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. View filter editing and bucket-config mode not in it yet |
+| Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. Per-view settings panel edits the filter and, for boards, bucket mode |
+| Projects | Filter-mode kanban buckets | 🟡 | Configured in the view manager; board renders one read-only column per filter from local data (no drag between buckets). Switching back to manual relies on the next pull to restore buckets |
 
 ### Labels
 
@@ -206,7 +207,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | UI | Table view (dense, sortable) | ✅ | M9, sortable columns, drag-reorder |
 | UI | Gantt view | ✅ | M9, timeline with dependency arrows, hide completed toggle |
 | UI | Drag-to-reorder tasks | ✅ | M9, list/kanban/table/gantt |
-| UI | Drag-to-reorder projects in sidebar | ❌ | Not started |
+| UI | Drag-to-reorder projects in sidebar | ✅ | Desktop (HTML5 drag); reorders among siblings of the same parent, pushes `position`. No touch drag |
 | UI | Recent projects in sidebar | ❌ | Not started |
 | UI | Task hover preview popup | ✅ | Shipped |
 

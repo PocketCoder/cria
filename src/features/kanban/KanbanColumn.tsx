@@ -33,6 +33,8 @@ interface ColumnProps {
   onToggleCollapse: () => void;
   view: ProjectView;
   projectLocalId: string;
+  /** Filter-mode board: no rename/limit/delete, no adding tasks into the column. */
+  readOnly?: boolean;
 }
 
 export function KanbanColumn({
@@ -41,6 +43,7 @@ export function KanbanColumn({
   onToggleCollapse,
   view,
   projectLocalId,
+  readOnly = false,
 }: ColumnProps) {
   const { bucket, tasks } = column;
   const { isDone, isDefault } = bucketRoles(bucket, view);
@@ -69,10 +72,11 @@ export function KanbanColumn({
         atLimit={atLimit}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
+        readOnly={readOnly}
       />
       {!collapsed && <BucketTasks tasks={tasks} taskIds={taskIds} />}
       <AddTaskFooter
-        hidden={collapsed}
+        hidden={collapsed || readOnly}
         bucketLocalId={bucket.localId}
         viewLocalId={view.localId}
         projectLocalId={projectLocalId}
@@ -92,6 +96,7 @@ export function BucketHeader({
   atLimit,
   collapsed,
   onToggleCollapse,
+  readOnly = false,
 }: {
   bucket: Bucket;
   view: ProjectView;
@@ -101,6 +106,7 @@ export function BucketHeader({
   atLimit: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  readOnly?: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   // Seeded from the bucket title when a rename starts (not at mount), so it
@@ -172,13 +178,15 @@ export function BucketHeader({
           {bucket.limit > 0 ? `${taskCount}/${bucket.limit}` : taskCount}
         </span>
       </div>
-      <BucketMenu
-        bucket={bucket}
-        view={view}
-        isDoneBucket={isDoneBucket}
-        isDefaultBucket={isDefaultBucket}
-        onRename={startRename}
-      />
+      {!readOnly && (
+        <BucketMenu
+          bucket={bucket}
+          view={view}
+          isDoneBucket={isDoneBucket}
+          isDefaultBucket={isDefaultBucket}
+          onRename={startRename}
+        />
+      )}
     </div>
   );
 }

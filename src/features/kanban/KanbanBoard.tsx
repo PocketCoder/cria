@@ -70,7 +70,11 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
     } catch { return new Set(); }
   });
 
-  const sensors = useSensors(
+  // Filter-mode boards derive their columns from filters, so cards can't be
+  // dragged between them (there is no bucket to move into).
+  const readOnly = view.bucketConfigurationMode === 'filter';
+  const noSensors = useSensors();
+  const dragSensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
     }),
@@ -79,6 +83,7 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
       activationConstraint: { delay: 200, tolerance: 8 },
     }),
   );
+  const sensors = readOnly ? noSensors : dragSensors;
 
   const handleCollapse = (bucketLocalId: string) => {
     const next = new Set(collapsed);
@@ -212,9 +217,10 @@ export function KanbanBoard({ view, project }: KanbanBoardProps) {
                 onToggleCollapse={() => handleCollapse(col.bucket.localId)}
                 view={view}
                 projectLocalId={view.projectLocalId}
+                readOnly={readOnly}
               />
             ))}
-            <AddBucketColumn viewLocalId={view.localId} />
+            {!readOnly && <AddBucketColumn viewLocalId={view.localId} />}
           </div>
           <DragOverlay>
             {activeTask ? (
