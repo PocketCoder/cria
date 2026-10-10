@@ -244,8 +244,10 @@ export function LabelsSection() {
 export function ProjectsSection({
   onShare,
   onBackground,
+  onInfo,
 }: {
   onShare: (project: Project) => void;
+  onInfo: (project: Project) => void;
   onBackground: (project: Project) => void;
 }) {
   const { data: projects = [], isLoading, isError, error } = useProjects();
@@ -413,6 +415,7 @@ export function ProjectsSection({
           }}
           onShare={() => onShare(p)}
           onBackground={() => onBackground(p)}
+          onInfo={() => onInfo(p)}
           onDuplicate={() => void handleDuplicate(p)}
           onDelete={async () => {
             try {

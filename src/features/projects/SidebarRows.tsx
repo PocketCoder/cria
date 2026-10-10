@@ -8,6 +8,7 @@ import {
   Palette,
   Copy,
   ImagePlus,
+  Info,
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
@@ -234,6 +235,7 @@ interface ProjectRowProps {
   onCancelRename: () => void;
   onShare: () => void;
   onDuplicate: () => void;
+  onInfo: () => void;
   onBackground: () => void;
   onDelete: () => Promise<void> | void;
   onDragStart: () => void;
@@ -260,6 +262,7 @@ export function ProjectRow({
   onCancelRename,
   onShare,
   onDuplicate,
+  onInfo,
   onBackground,
   onDelete,
   onDragStart,
@@ -356,6 +359,19 @@ export function ProjectRow({
                 <li>
                   <button
                     type="button"
+                    className={MENU_ITEM}
+                    onClick={() => {
+                      menu.setMenuOpen(false);
+                      onInfo();
+                    }}
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    Info
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
                     className={cn(MENU_ITEM, 'disabled:opacity-50')}
                     disabled={!online}
                     onClick={() => {
@@ -398,6 +414,12 @@ export function ProjectRow({
           <span className="flex items-center gap-2">
             <Share2 className="h-3.5 w-3.5" />
             Share
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { onInfo(); }}>
+          <span className="flex items-center gap-2">
+            <Info className="h-3.5 w-3.5" />
+            Info
           </span>
         </ContextMenuItem>
         <ContextMenuItem disabled={!online} onSelect={() => { onBackground(); }}>

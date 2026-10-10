@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   duplicateProject,
   fetchProjectBackground,
+  getProjectInfo,
   hasBackgroundProvider,
   removeProjectBackground,
   searchUnsplash,
@@ -108,5 +109,21 @@ describe('projects api', () => {
     expect(hasBackgroundProvider(['upload'], 'upload')).toBe(true);
     expect(hasBackgroundProvider(['upload'], 'unsplash')).toBe(false);
     expect(hasBackgroundProvider(undefined, 'upload')).toBe(false);
+  });
+
+  it('getProjectInfo maps owner and treats the no-date sentinel as unset', async () => {
+    mockCallApi.mockResolvedValue({
+      owner: { username: 'jake', name: '' },
+      created: '0001-01-01T00:00:00Z',
+    });
+    expect(await getProjectInfo(5)).toEqual({ ownerName: 'jake', created: null });
+    mockCallApi.mockResolvedValue({
+      owner: { username: 'jake', name: 'Jake W' },
+      created: '2026-01-02T03:04:05Z',
+    });
+    expect(await getProjectInfo(5)).toEqual({
+      ownerName: 'Jake W',
+      created: '2026-01-02T03:04:05Z',
+    });
   });
 });

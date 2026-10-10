@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ProjectInfoModal } from '@/features/projects/ProjectInfoModal';
 import { ProjectBackgroundModal } from '@/features/projects/ProjectBackgroundModal';
 import { ShareProjectModal } from '@/features/projects/ShareProjectModal';
 import { SavedFilterModal } from '@/features/smart-views/SavedFilterModal';
@@ -45,6 +46,7 @@ export function ProjectSidebar({
 
   const [filterModal, setFilterModal] = useState<FilterModalState>(null);
   const [shareProject, setShareProject] = useState<Project | null>(null);
+  const [infoProject, setInfoProject] = useState<Project | null>(null);
   const [backgroundProject, setBackgroundProject] = useState<Project | null>(null);
 
   return (
@@ -110,7 +112,7 @@ export function ProjectSidebar({
         <div className="my-2 border-t border-[var(--color-border)]" />
 
         {/* ── Projects ── */}
-        <ProjectsSection onShare={setShareProject} onBackground={setBackgroundProject} />
+        <ProjectsSection onShare={setShareProject} onBackground={setBackgroundProject} onInfo={setInfoProject} />
       </nav>
 
       <SidebarFooter
@@ -124,6 +126,9 @@ export function ProjectSidebar({
           existing={filterModal.mode === 'edit' ? filterModal.filter : null}
           onClose={() => setFilterModal(null)}
         />
+      )}
+      {infoProject && (
+        <ProjectInfoModal project={infoProject} onClose={() => setInfoProject(null)} />
       )}
       {backgroundProject && (
         <ProjectBackgroundModal

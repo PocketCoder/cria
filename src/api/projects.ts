@@ -133,3 +133,25 @@ export function hasBackgroundProvider(
 ): boolean {
   return (providers ?? []).includes(name);
 }
+
+export interface ProjectInfo {
+  ownerName: string | null;
+  created: string | null;
+}
+
+/** Server-side metadata the local cache doesn't keep (online-only). */
+export async function getProjectInfo(
+  projectServerId: number,
+  client: ApiClient = createApiClient(),
+): Promise<ProjectInfo> {
+  const data = await callApi(
+    client.GET('/projects/{id}', { params: { path: { id: projectServerId } } }),
+  );
+  const owner = data?.owner;
+  const created = data?.created;
+  return {
+    ownerName: owner?.name || owner?.username || null,
+    // Vikunja's "no date" sentinel means unset.
+    created: created && !created.startsWith('0001-') ? created : null,
+  };
+}

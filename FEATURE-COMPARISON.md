@@ -245,6 +245,8 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Category | Feature | Status | Notes |
 |---|---|---|---|
 | Misc | CalDAV docs link in settings | ✅ | Link shown in SettingsModal Advanced section |
+| Misc | Project info page | ✅ | Sidebar menu → `ProjectInfoModal` (description, parent, task counts; owner/created when online) |
+| Misc | Defer task | ✅ | Presets (tomorrow, 3 days, 1 week, next Monday) in the due-date popover, iOS action sheet and selection bar (`lib/defer.ts`) |
 | Misc | Webhook management UI | ❌ | Server endpoints exist, no UI |
 | Misc | External-link handling (opens in OS browser) | ✅ | openExternal.ts |
 | Misc | Dev-only keyboard shortcuts | ✅ | Cmd+F for search, Cmd+Shift+A dev fallback |
