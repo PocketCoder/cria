@@ -1,3 +1,5 @@
+import { DeferPresets } from './DeferPresets';
+import { deferDueIso } from '@/lib/defer';
 import { forwardRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Calendar as CalendarIcon, Check, ChevronRight } from 'lucide-react';
@@ -100,6 +102,9 @@ export function ChipRow({
               void onSetDate('dueDate', pickDayIso(date, task.dueDate));
             }}
             onClear={() => void onSetDate('dueDate', null)}
+          />
+          <DeferPresets
+            onDefer={(preset) => void onSetDate('dueDate', deferDueIso(task.dueDate, preset))}
           />
         </PopoverContent>
       </Popover>

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CheckCircle2,
   CalendarDays,
+  CalendarClock,
   FolderInput,
   Target,
   Flag,
@@ -24,10 +25,11 @@ import { updateTask, moveTask, duplicateTask } from '@/db/tasks';
 import { getAuthSnapshot } from '@/auth/store';
 import { dueCalendarDate } from '@/lib/dateFormat';
 import { pickDayIso } from '@/features/task-detail/taskDetailLogic';
+import { DEFER_PRESETS, deferDueIso } from '@/lib/defer';
 import { impactDeleted } from '@/utils/haptics';
 import type { Task } from '@/domain/task';
 
-type Picker = 'schedule' | 'deadline' | 'move' | 'priority' | null;
+type Picker = 'schedule' | 'defer' | 'deadline' | 'move' | 'priority' | null;
 
 export function TaskActionSheet() {
   const task = useDisplay((s) => s.actionTask);
@@ -60,6 +62,20 @@ function Inner({ task }: { task: Task }) {
           onSelect={(d) => setDate(picker === 'schedule' ? 'dueDate' : 'endDate', d)}
           onClear={() => setDate(picker === 'schedule' ? 'dueDate' : 'endDate', undefined)}
         />
+      )}
+      {picker === 'defer' && (
+        <div className="inset-list">
+          {DEFER_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => { void updateTask(task.localId, { dueDate: deferDueIso(task.dueDate, p.id) }); close(); }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       )}
       {picker === 'move' && (
         <div className="inset-list">
@@ -103,6 +119,7 @@ function Inner({ task }: { task: Task }) {
       </div>
       <div className="inset-list">
         <ActionRow icon={CalendarDays} label="Schedule" chevron onClick={() => setPicker('schedule')} />
+        <ActionRow icon={CalendarClock} label="Defer" chevron onClick={() => setPicker('defer')} />
         <ActionRow icon={FolderInput} label="Move To…" chevron onClick={() => setPicker('move')} />
         <ActionRow icon={Target} label="Deadline" chevron onClick={() => setPicker('deadline')} />
         <ActionRow icon={Flag} label="Priority" chevron onClick={() => setPicker('priority')} />
@@ -162,7 +179,7 @@ function Inner({ task }: { task: Task }) {
 }
 
 function pickerTitle(p: Exclude<Picker, null>): string {
-  return p === 'schedule' ? 'Schedule' : p === 'deadline' ? 'Deadline' : p === 'move' ? 'Move to project' : 'Priority';
+  return p === 'schedule' ? 'Schedule' : p === 'defer' ? 'Defer' : p === 'deadline' ? 'Deadline' : p === 'move' ? 'Move to project' : 'Priority';
 }
 
 function ActionRow({
