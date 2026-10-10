@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   acceptAllSuggestions,
+  draftToRaw,
+  notesToHtml,
+  splitNotes,
   acceptSuggestion,
   hasUsableSuggestion,
   splitSuggestion,
@@ -161,6 +164,18 @@ describe('saving a batch of drafts', () => {
 
   it('does not split " ~ " when Quick Add Magic is off', () => {
     expect(draftsFromLines(['Read 3 ~ 5 pages'], 0, 'disabled')[0]).toEqual({ id: 0, line: 'Read 3 ~ 5 pages', include: true });
+  });
+
+  it('moves notes after " || " off the title and round-trips them', () => {
+    expect(splitNotes('Book dentist || Needs a morning slot')).toEqual({
+      text: 'Book dentist',
+      notes: 'Needs a morning slot',
+    });
+    expect(splitNotes('Book dentist')).toEqual({ text: 'Book dentist' });
+    const [d] = draftsFromLines(['Email landlord ~ +Flat || About the boiler & the rent'], 0);
+    expect(d).toMatchObject({ line: 'Email landlord', suggestion: '+Flat', notes: 'About the boiler & the rent' });
+    expect(draftToRaw(d!)).toBe('Email landlord ~ +Flat || About the boiler & the rent');
+    expect(notesToHtml('a <b> & c')).toBe('<p>a &lt;b&gt; &amp; c</p>');
   });
 });
 

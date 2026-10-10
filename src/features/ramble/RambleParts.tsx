@@ -277,6 +277,9 @@ function DraftRow({
           projects={projects}
           fallbackProjectId={fallbackProjectId}
         />
+        {d.notes && (
+          <p className="line-clamp-2 px-1 pb-1 text-caption text-[var(--color-muted-foreground)]">{d.notes}</p>
+        )}
         {d.suggestion && <SuggestionRow draft={d} ctx={suggestionCtx} busy={busy} onAccept={onAccept} />}
       </div>
       <button

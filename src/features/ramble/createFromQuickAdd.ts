@@ -3,7 +3,7 @@ import type { QuickAddMagicMode } from '@/lib/quickAddPrefixes';
 import { createTask } from '@/db/tasks';
 import { applyLabelsByTitle } from '@/db/labels';
 import type { Project } from '@/domain/project';
-import { findProjectByTitle } from './rambleLogic';
+import { findProjectByTitle, notesToHtml } from './rambleLogic';
 
 /**
  * Create one task from a quick-add line ("Call dentist next tue +Health *calls !3").
@@ -17,13 +17,14 @@ import { findProjectByTitle } from './rambleLogic';
  */
 export async function createFromQuickAdd(
   line: string,
-  ctx: { projects: Project[]; fallbackProjectId: string; mode: QuickAddMagicMode },
+  ctx: { projects: Project[]; fallbackProjectId: string; mode: QuickAddMagicMode; notes?: string },
 ): Promise<void> {
   const parsed = parseQuickAdd(line, new Date(), ctx.mode);
   if (!parsed.title) return;
   const project = parsed.projectTitle ? findProjectByTitle(ctx.projects, parsed.projectTitle) : undefined;
   const task = await createTask({
     title: parsed.title,
+    ...(ctx.notes ? { description: notesToHtml(ctx.notes) } : {}),
     projectLocalId: project?.localId ?? ctx.fallbackProjectId,
     ...(parsed.dueDate ? { dueDate: parsed.dueDate } : {}),
     ...(parsed.priority ? { priority: parsed.priority } : {}),

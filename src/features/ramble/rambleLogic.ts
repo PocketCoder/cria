@@ -14,6 +14,27 @@ export interface Draft {
    * subject but was not named). Never applied unless the user accepts them.
    */
   suggestion?: string;
+  /** Extra detail the model moved out of a long title; saved as the task description. */
+  notes?: string;
+}
+
+/** Split a model line "Title ~ +Flat || extra detail" into the rest and its notes. */
+export function splitNotes(raw: string): { text: string; notes?: string } {
+  const i = raw.indexOf(' || ');
+  if (i < 0) return { text: raw };
+  const notes = raw.slice(i + 4).trim();
+  return notes ? { text: raw.slice(0, i), notes } : { text: raw.slice(0, i) };
+}
+
+/** A draft written back as a model line, so rows kept for a later open lose nothing. */
+export function draftToRaw(d: Draft): string {
+  return `${d.line}${d.suggestion ? ` ~ ${d.suggestion}` : ''}${d.notes ? ` || ${d.notes}` : ''}`;
+}
+
+/** Plain notes as the HTML the task editor stores. */
+export function notesToHtml(notes: string): string {
+  const esc = notes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<p>${esc}</p>`;
 }
 
 /**
@@ -96,7 +117,10 @@ export function draftsFromLines(
   firstId: number,
   mode: QuickAddMagicMode = 'vikunja',
 ): Draft[] {
-  return lines.map((raw, i) => ({ id: firstId + i, ...splitSuggestion(raw, mode), include: true }));
+  return lines.map((raw, i) => {
+    const { text, notes } = splitNotes(raw);
+    return { id: firstId + i, ...splitSuggestion(text, mode), ...(notes ? { notes } : {}), include: true };
+  });
 }
 
 /**

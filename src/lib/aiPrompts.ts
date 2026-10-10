@@ -106,7 +106,8 @@ export function rambleInstructions(ctx: {
   });
   const intro = `You turn a person's spoken ramble into a to-do list. Today is ${today}.
 Output one task per line and nothing else: no numbering, bullets, headings or commentary.`;
-  const outro = `Write each title without a full stop at the end.
+  const outro = `Keep every title short, under about 60 characters. If the person gave detail that does not fit in a short title, keep the short title and put the detail after everything else on the line, separated by " || ", as one plain sentence of notes. Most tasks have no notes.
+Write each title without a full stop at the end.
 Skip filler, thinking aloud and anything that is not a task. Merge repeats of the same task.`;
 
   const p = QUICK_ADD_PREFIXES[ctx.mode ?? DEFAULT_QUICK_ADD_MAGIC_MODE];

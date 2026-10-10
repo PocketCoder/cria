@@ -14,6 +14,7 @@ import {
   chosenDrafts,
   createDrafts,
   defaultProjectId,
+  draftToRaw,
   draftsFromLines,
   hasTitle,
   patchDraft,
@@ -200,7 +201,7 @@ export function useRamble(onClose: () => void) {
     try {
       await createDrafts(
         chosen,
-        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode }),
+        (d) => createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode, notes: d.notes }),
         (d) => savedIds.add(d.id),
       );
       if (!alive.current) {
@@ -213,7 +214,7 @@ export function useRamble(onClose: () => void) {
       console.error('[ramble] task creation failed:', err);
       if (!alive.current) {
         // Keep the unsaved lines for the next open, so a retry skips the saved ones.
-        const left = withoutSaved(remaining, savedIds).map((d) => d.line);
+        const left = withoutSaved(remaining, savedIds).map(draftToRaw);
         if (left.length > 0 && useUi.getState().rambleLines === null) setPendingLines(left);
         return;
       }
@@ -238,7 +239,7 @@ export function useRamble(onClose: () => void) {
     setBusyIds((prev) => new Set(prev).add(id));
     setError(null);
     try {
-      await createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode });
+      await createFromQuickAdd(d.line.trim(), { projects, fallbackProjectId: projectId, mode, notes: d.notes });
       if (alive.current) setDrafts((prev) => removeDraft(prev, id));
     } catch (err) {
       console.error('[ramble] task creation failed:', err);
