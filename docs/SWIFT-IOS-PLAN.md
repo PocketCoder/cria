@@ -10,8 +10,8 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Port behaviour from the TypeScript source and its tests in `tests/unit/`. The TS code is the spec; port the tests first or alongside.
 - Re-read the relevant AGENTS.md gotcha before each sync or data section. They apply unchanged.
 - Update the status table at the bottom as sections complete.
-- **Models:** each section carries a `Model:` tag. Builder sessions use Sonnet 5.5 at most, at low effort, and hand `haiku` sections to a Haiku 5.5 subagent. Opus 5.5 is used only by the Thursday and Friday review routines, never to build. If a builder fails a section twice, record it as a blocker in the status table for Thursday's review instead of escalating.
-- **Cadence:** builders run Friday, Sunday and Tuesday nights, one section per fresh session. Thursday night (Opus) reviews the week's progress; Friday early morning (Opus) finishes the review and fixes what it finds, ending by 09:00.
+- **Models:** every section is built by Sonnet 5.5 at low effort (`Model:` tags are all `sonnet`). No Haiku, no Opus in routines. Opus reviews are run manually by the user. If a builder fails a section twice, it records a blocker in the status table and stops.
+- **Cadence:** builders run Friday, Sunday and Tuesday nights, one section per fresh session. Reviews are manual.
 
 ## Ground rules (carry across all sections)
 
@@ -36,25 +36,25 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: empty app launches in simulator, `swift test` runs a placeholder test, CI job builds it.
 
 **S-01 CI**
-- Model: `haiku`
+- Model: `sonnet`
 - Add `.github/workflows/ci-swift.yml` (macOS runner): `swift test`, `xcodebuild build` for simulator. Path-filtered to `ios-native/**`.
 - Done when: green on a trivial PR.
 
 **S-02 Dependency and tooling setup**
-- Model: `haiku`
+- Model: `sonnet`
 - Add GRDB and `swift-openapi-generator` (or hand-written client, decide here). Add SwiftLint config.
 - Done when: package resolves, lint runs in CI.
 
 ## Phase 1: Data layer (`CriaKit/Data`)
 
 **S-10 Migration runner**
-- Model: `haiku`
+- Model: `sonnet`
 - Copy the 19 migrations as bundle resources. Implement an ordered, forward-only runner using GRDB's `DatabaseMigrator` keyed on the same version numbers.
 - Test: fresh DB reaches version 19; FTS5 table from `003_fts.sql` exists.
 - Done when: tests pass on an in-memory DB.
 
 **S-11 Record types and domain models**
-- Model: `haiku`
+- Model: `sonnet`
 - Port `src/domain/*` to `Codable` structs with strict decoding. Include the `0001-01-01T00:00:00Z` no-date sentinel mapping (`normaliseDate`).
 - Port Zod validation tests as decoding tests with fixtures.
 - Done when: fixtures from the Vikunja API decode; sentinel dates become `nil`.
@@ -65,7 +65,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: concurrent-write test shows no interleaving; bus emits only for user mutations.
 
 **S-13 Projects repository**
-- Model: `haiku`
+- Model: `sonnet`
 - `src/db/projects.ts` port: reads, user mutations, `upsertProjectFromServer` (silent), identifiers, favourites.
 - Done when: ported repository tests pass.
 
@@ -80,17 +80,17 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: merge tests (dirty, deleted, last_synced snapshot) pass.
 
 **S-16 Labels, relations, reminders, repeat**
-- Model: `haiku`
+- Model: `sonnet`
 - Label mutations, related tasks, reminders (absolute and relative), recurrence fields.
 - Done when: repository tests pass.
 
 **S-17 Views, Kanban, buckets**
-- Model: `haiku`
+- Model: `sonnet`
 - Views, bucket config, per-view positions, bucket position (migrations 010 to 012).
 - Done when: tests pass.
 
 **S-18 Comments, reactions, attachments rows, saved filters**
-- Model: `haiku`
+- Model: `sonnet`
 - Tables from 005, 013, 014, 018, 019. Pending attachment rows with `cria://pending/{localId}`.
 - Done when: tests pass.
 
@@ -182,7 +182,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: signed-in app shows an empty shell driven by DB observation.
 
 **S-41 Design tokens and theme**
-- Model: `haiku`
+- Model: `sonnet`
 - Port the Llama purple palette, Onest font, dark mode from `globals.css`. Reusable components (chips, buttons, rows).
 - Done when: preview catalogue renders in light and dark.
 
@@ -192,7 +192,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: tab switching works and state is preserved.
 
 **S-43 Project list and sidebar equivalent**
-- Model: `haiku`
+- Model: `sonnet`
 - Projects, favourites, hierarchy, colours, create and edit project.
 - Done when: matches web build behaviour on a test account.
 
@@ -303,17 +303,17 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: parity with web build.
 
 **S-73 Notifications inbox**
-- Model: `haiku`
+- Model: `sonnet`
 - In-app notifications list (`notificationParse`), mark read.
 - Done when: matches server list.
 
 **S-74 API tokens and account**
-- Model: `haiku`
+- Model: `sonnet`
 - API token management (`apiTokenPermissions`), password change, logout and local data wipe.
 - Done when: parity.
 
 **S-75 Project backgrounds and avatars**
-- Model: `haiku`
+- Model: `sonnet`
 - Background fetch and cache (`projectBackgroundCache`), unsplash if the TS build supports it, cache clearing.
 - Done when: caches clear from settings.
 
@@ -340,7 +340,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: widget updates after a sync.
 
 **S-84 Deep links**
-- Model: `haiku`
+- Model: `sonnet`
 - `cria://` URL handling and Universal Links if used by the Tauri build.
 - Done when: links open the right task.
 
@@ -372,7 +372,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Done when: sideloaded build installs and signs in.
 
 **S-95 Docs and cutover**
-- Model: `haiku`
+- Model: `sonnet`
 - Update AGENTS.md and FEATURE-COMPARISON.md (mark native iOS status), remove or archive the Tauri iOS lane only when parity is signed off.
 - Done when: user signs off parity checklist.
 
