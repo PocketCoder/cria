@@ -10,8 +10,8 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Port behaviour from the TypeScript source and its tests in `tests/unit/`. The TS code is the spec; port the tests first or alongside.
 - Re-read the relevant AGENTS.md gotcha before each sync or data section. They apply unchanged.
 - Update the status table at the bottom as sections complete.
-- **Models:** every section is built by Haiku 5.5 via OpenRouter (`scripts/haiku-section.sh`), billed to the OpenRouter key, not the Claude Team limits. The nightly routine session is only an orchestrator (git, CI, status table). No Opus in routines: the user runs Opus reviews manually, weekly when remembered. If Haiku fails a section twice, mark it `blocked` for that review.
-- **Cadence:** nightly, 1 to 2 sections per night, one `haiku-section.sh` call each.
+- **Models:** every section is built by Haiku 5.5 (native Claude, counts toward the Team limits). No Opus in routines: the user runs Opus reviews manually, weekly when remembered. If Haiku fails a section twice, mark it `blocked` for that review.
+- **Cadence:** nightly, 1 to 2 sections per night.
 
 ## Ground rules (carry across all sections)
 
@@ -397,19 +397,13 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 | 8 Native extras | S-80 to S-84 | not started |
 | 9 Release | S-90 to S-95 | not started |
 
-## Nightly operation (Haiku via OpenRouter)
+## Nightly operation (native Haiku 5.5)
 
-One-time setup (user):
-1. OpenRouter: create an API key and set a credit limit on it. Confirm the model slug at https://openrouter.ai/anthropic/claude-haiku-5.5 (the script defaults to `anthropic/claude-haiku-5.5`; override with `HAIKU_MODEL`).
-2. Cloud environment (menu in the session title bar, then Edit): add `OPENROUTER_API_KEY` under Network secrets (or as an environment variable if that section is not offered). Never paste the key into chat.
-3. Same place, Network access: allow the domain `openrouter.ai`.
-4. Routines UI: confirm `pocketcoder/cria` is attached as the routine's repository.
-5. Smoke test once by hand: `scripts/haiku-section.sh S-01` in a session, then check the diff.
+One-time setup (user): attach `pocketcoder/cria` as the routine's repository in the Routines UI, and check the repo is reachable on the first run.
 
-Each night (routine, orchestrator only):
-1. Pick up resume work first (WIP commit, red CI, `needs-fix`), then the next not-started section(s), in order, whose dependencies are met. Maximum two.
-2. Run `scripts/haiku-section.sh S-NN`. It makes Haiku edit files; the orchestrator reviews `git diff --stat`, commits, pushes, and reads macOS CI.
-3. Red CI: one retry run of the script with the failure log appended, then mark `blocked`.
-4. If `OPENROUTER_API_KEY` is missing or the call fails, record that in the status table and end. Do not fall back to another model.
+Each night (the routine session is Haiku 5.5 and does the work itself):
+1. Handle resume work first (WIP commit, red CI, `needs-fix`), then the next not-started section(s), in order, whose dependencies are met. Skip `blocked`. Maximum two, one at a time.
+2. Port tests first or alongside. Commit small and atomic, push to `feature/swift-ios`, and read macOS CI once (no polling loops).
+3. Red CI: one fix attempt, then mark `blocked` with the reason and move on. Never weaken or skip tests.
 
 Weekly (user, manual): run an Opus review (Routines UI, "Run now" on the weekly review routine, or ask Claude). It writes a dated `Review` section, fixes small defects, and unblocks `blocked` sections.
