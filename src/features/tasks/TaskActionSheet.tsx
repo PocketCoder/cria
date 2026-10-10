@@ -155,7 +155,7 @@ function Inner({ task }: { task: Task }) {
       <ModalDialog label="Task actions" onClose={close}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
+          <div className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
             <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 overflow-y-auto">{body}</div>
@@ -171,7 +171,7 @@ function Inner({ task }: { task: Task }) {
         <BackdropDismiss onDismiss={close} />
         <div className="relative w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
           {header}
-          <div className="max-h-[70vh] overflow-y-auto">{body}</div>
+          <div className="max-h-[70dvh] overflow-y-auto">{body}</div>
         </div>
       </div>
     </ModalDialog>

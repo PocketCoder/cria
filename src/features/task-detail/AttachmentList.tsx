@@ -319,7 +319,7 @@ function AttachmentRow({
         onClick={onDelete}
         disabled={taskServerId == null || busy}
         aria-label={`Delete ${att.fileName}`}
-        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
+        className="shrink-0 rounded p-1 max-md:p-2.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 [@media(hover:none)]:opacity-100 disabled:opacity-40 cursor-pointer"
       >
         <X className="h-3.5 w-3.5" />
       </button>

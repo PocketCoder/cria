@@ -160,7 +160,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
             <Settings className="h-4 w-4 text-[var(--color-muted-foreground)]" />
             <h2 className="text-base font-semibold">Settings</h2>
           </div>
-          <button onClick={onClose} className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]" aria-label="Close">
+          <button onClick={onClose} className="rounded p-1 max-md:p-3 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </header>

@@ -62,7 +62,7 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative dialog-panel flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden"
+        className="relative dialog-panel flex max-h-[80dvh] w-full max-w-[440px] flex-col overflow-hidden"
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-4">
           <h2 className="text-[17px] font-semibold tracking-[-0.02em]">

@@ -90,7 +90,7 @@ export function ImageLightbox({
           <img
             src={url}
             alt={fileName}
-            className="max-h-[85vh] max-w-[90vw] rounded-md object-contain shadow-2xl"
+            className="max-h-[85dvh] max-w-[90vw] rounded-md object-contain shadow-2xl"
           />
         ) : (
           <div className="flex h-32 w-32 items-center justify-center rounded-md bg-white/5">

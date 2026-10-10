@@ -139,6 +139,69 @@ body,
   height: 100%;
 }
 
+/* Native-app base rules. The page never rubber-bands behind sheets, text
+   isn't selectable or long-press-calloutable on chrome, and iOS keeps the
+   user's text size instead of auto-inflating it. Content people read or edit
+   opts back in below. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html,
+body {
+  overscroll-behavior: none;
+}
+/* Touch only: on desktop people select titles and paths freely. */
+@media (pointer: coarse) {
+  #root {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+input,
+textarea,
+select,
+[contenteditable='true'],
+.ProseMirror,
+.selectable,
+.selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+button,
+a,
+[role='button'],
+[role='tab'],
+[role='menuitem'],
+summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* iOS zooms the page when a field under 16px takes focus. Pinning fields to
+   16px on touch devices lets the viewport stay zoomable (accessibility)
+   without the jump. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Hit areas: on touch, small icon controls get an invisible 44pt target
+   without changing how they look. */
+@media (pointer: coarse) {
+  .task-check::after {
+    content: '';
+    position: absolute;
+    inset: -13px;
+  }
+}
+
 /* iOS safe-area helpers (notch / Dynamic Island / home indicator).
    `viewport-fit=cover` in index.html exposes env(safe-area-inset-*); these
    pad full-bleed surfaces (the mobile shell root, full-screen overlays) so
@@ -943,14 +1006,16 @@ dialog[data-modal-fallback] {
    so the user knows they're actionable. Radix-managed items
    with their own cursor (SelectItem, etc.) keep their explicit
    setting due to higher specificity. */
-button:not(:disabled),
-[role="button"]:not(:disabled),
-label,
-select:not(:disabled),
-input[type="checkbox"]:not(:disabled),
-input[type="radio"]:not(:disabled),
-summary {
-  cursor: pointer;
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  label,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
 }
 
 /* ── Mentions (Vikunja <mention-user> element) ─────────────────────── */

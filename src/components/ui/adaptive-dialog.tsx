@@ -48,7 +48,7 @@ export function AdaptiveDialog({
       <ModalDialog label={label} onClose={onClose}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <BackdropDismiss onDismiss={onClose} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
+          <div className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
             <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
@@ -62,7 +62,7 @@ export function AdaptiveDialog({
     <ModalDialog label={label} onClose={onClose}>
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
         <BackdropDismiss onDismiss={onClose} />
-        <div className={cn('relative dialog-panel flex max-h-[85vh] w-11/12 flex-col overflow-hidden', maxWidth)}>
+        <div className={cn('relative dialog-panel flex max-h-[85dvh] w-11/12 flex-col overflow-hidden', maxWidth)}>
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </div>

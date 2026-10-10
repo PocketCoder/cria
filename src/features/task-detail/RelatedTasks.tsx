@@ -168,7 +168,7 @@ export function RelatedTasks({
                       type="button"
                       onClick={() => void handleRemove(r)}
                       aria-label="Remove relation"
-                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
+                      className="shrink-0 rounded p-0.5 max-md:p-2.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 [@media(hover:none)]:opacity-100 disabled:opacity-40 cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

@@ -91,7 +91,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative dialog-panel flex max-h-[80vh] w-11/12 max-w-lg flex-col overflow-hidden"
+        className="relative dialog-panel flex max-h-[80dvh] w-11/12 max-w-lg flex-col overflow-hidden"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Manage labels</h2>
@@ -162,7 +162,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                         }}
                       />
                       <span className="flex-1 truncate text-sm">{label.title}</span>
-                      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                         <button
                           type="button"
                           onClick={() => startEdit(label)}

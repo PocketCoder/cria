@@ -150,7 +150,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
       <ModalDialog label="Display options" onClose={close}>
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <BackdropDismiss onDismiss={close} className="sheet-backdrop" />
-          <div className="safe-bottom relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
+          <div className="safe-bottom relative z-10 flex max-h-[92dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
             <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
             {header}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">{body}</div>
@@ -165,7 +165,7 @@ function DisplaySheetInner({ viewKey }: { viewKey: ViewKey }) {
     <ModalDialog label="Display options" onClose={close}>
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--dialog-backdrop)] p-4 pt-20">
         <BackdropDismiss onDismiss={close} />
-        <div className="relative flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
+        <div className="relative flex max-h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5">{body}</div>
         </div>

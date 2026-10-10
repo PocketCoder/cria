@@ -157,12 +157,12 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative dialog-panel flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden"
+        className="relative dialog-panel flex max-h-[85dvh] w-11/12 max-w-xl flex-col overflow-hidden"
       >
         {/* ── Header ── */}
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">
           <h2 className="text-sm font-semibold">Edit This Project</h2>
-          <button onClick={onClose} className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]" aria-label="Close">
+          <button onClick={onClose} className="rounded p-1 max-md:p-3 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </header>

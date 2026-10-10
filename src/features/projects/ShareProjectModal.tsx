@@ -148,7 +148,7 @@ export function ShareProjectModal({
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative dialog-panel flex max-h-[85vh] w-11/12 max-w-lg flex-col overflow-hidden"
+        className="relative dialog-panel flex max-h-[85dvh] w-11/12 max-w-lg flex-col overflow-hidden"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Share “{project.title}”</h2>

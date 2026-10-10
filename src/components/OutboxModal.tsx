@@ -129,7 +129,7 @@ export function OutboxModal({ onClose }: OutboxModalProps) {
       <div className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center bg-[var(--dialog-backdrop)] sm:items-center">
       <BackdropDismiss onDismiss={onClose} />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92vh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80vh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
+        className="relative bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[92dvh] w-full flex-col rounded-t-2xl shadow-lg sm:max-h-[80dvh] sm:w-11/12 sm:max-w-2xl sm:rounded-lg"
       >
         {/* Sticky header + action toolbar */}
         <div className="shrink-0 border-b border-[var(--color-border)]">

@@ -136,7 +136,7 @@ export function CommandPalette({
           </span>
         </div>
 
-        <div className="max-h-[50vh] overflow-y-auto p-2">
+        <div className="max-h-[50dvh] overflow-y-auto p-2">
           {grouped.length === 0 && (
             <p className="px-2 py-4 text-center text-xs text-[var(--color-muted-foreground)]">
               No results for &ldquo;{query}&rdquo;

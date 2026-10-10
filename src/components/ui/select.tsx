@@ -21,7 +21,7 @@ export const SelectTrigger = forwardRef<
       'flex items-center justify-between gap-1.5 px-2 py-1.5 text-sm text-[var(--color-foreground)]',
       variant === 'ghost'
         ? 'h-auto w-auto rounded-lg bg-transparent font-medium hover:bg-[var(--color-muted)]'
-        : 'h-8 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)]',
+        : 'h-8 w-full rounded-md [@media(pointer:coarse)]:min-h-11 border border-[var(--color-border)] bg-[var(--color-background)]',
       'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 ring-offset-background',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'data-[placeholder]:text-[var(--color-muted-foreground)]',
@@ -75,7 +75,7 @@ export const SelectItem = forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none',
+      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none [@media(pointer:coarse)]:py-3',
       'focus:bg-[var(--color-muted)] focus:text-[var(--color-foreground)]',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className,

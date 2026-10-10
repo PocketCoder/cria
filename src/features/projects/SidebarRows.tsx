@@ -195,7 +195,7 @@ function RowPopover({
           onClick={(e) => e.stopPropagation()}
           className={cn(
             'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted-foreground)]',
-            'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100',
+            'opacity-0 transition-opacity hover:bg-[var(--color-background)] hover:text-[var(--color-foreground)] group-hover:opacity-100 [@media(hover:none)]:opacity-100',
             open && 'opacity-100',
           )}
         >

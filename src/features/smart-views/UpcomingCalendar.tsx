@@ -107,10 +107,10 @@ export function UpcomingCalendar({
         <div className="flex items-center gap-0.5">
           {expanded && (
             <>
-              <button type="button" aria-label="Previous month" onClick={() => setMonth((m) => addMonths(m, -1))} className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)]">
+              <button type="button" aria-label="Previous month" onClick={() => setMonth((m) => addMonths(m, -1))} className="inline-flex h-7 w-7 max-md:h-11 max-md:w-11 items-center justify-center rounded-md hover:bg-[var(--color-muted)]">
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <button type="button" aria-label="Next month" onClick={() => setMonth((m) => addMonths(m, 1))} className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-[var(--color-muted)]">
+              <button type="button" aria-label="Next month" onClick={() => setMonth((m) => addMonths(m, 1))} className="inline-flex h-7 w-7 max-md:h-11 max-md:w-11 items-center justify-center rounded-md hover:bg-[var(--color-muted)]">
                 <ChevR className="h-4 w-4" />
               </button>
             </>

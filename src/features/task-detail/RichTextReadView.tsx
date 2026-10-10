@@ -135,7 +135,7 @@ export function RichTextView({
       <div
         ref={containerRef}
         role="presentation"
-        className={className}
+        className={className ? `selectable ${className}` : "selectable"}
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
         onClick={onContainerClick}
       />

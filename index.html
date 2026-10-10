@@ -2,13 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- maximum-scale=1 + user-scalable=no disables iOS's pinch-zoom and the
-         auto-zoom that fires when focusing an input with font-size < 16px
-         (e.g. the quick-add field). viewport-fit=cover keeps safe-area insets. -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-    />
+    <!-- Zoomable for accessibility. Auto-zoom on input focus is prevented by
+         a 16px font floor on touch devices (globals.css), not by a zoom lock.
+         viewport-fit=cover keeps safe-area insets. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Cria</title>
   </head>
   <body>
