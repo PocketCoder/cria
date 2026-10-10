@@ -488,8 +488,10 @@ stable config into the nightly one with
 [`scripts/nightly-config.sh`](scripts/nightly-config.sh), which rewrites
 `tauri.conf.json` in place; there is no committed nightly config. Nightly
 versions are `<package.json version>-nightly.<run_number>`, so they increase
-monotonically. The `.ipa` keeps the plain version because
-`CFBundleShortVersionString` rejects prerelease suffixes.
+monotonically. The `.ipa` can't carry the prerelease suffix
+(`CFBundleShortVersionString` rejects it) and SideStore ignores build-number-only
+changes, so the nightly `.ipa` and its `sidestore.json` entry use
+`<major>.<minor>.<run_number>` (e.g. `0.14.60`) as the marketing version.
 
 **Why `pnpm dev` uses its own identifier (don't revert this).** Migrations
 are registered Rust-side and the plugin records applied versions in the

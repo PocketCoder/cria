@@ -156,6 +156,12 @@ jobs:
           # Unique build number per nightly (CFBundleVersion); the SideStore source
           # lists the same value as buildVersion and SideStore refuses a mismatch.
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" ipa_out/Payload/*.app/Info.plist
+          # SideStore only offers an Update when the marketing version changes (a new
+          # build number alone is ignored), so every nightly gets its own: MAJOR.MINOR.RUN,
+          # e.g. 0.14.60. Plain numeric, so it is a valid CFBundleShortVersionString and
+          # sorts above the previous nightly. The source (sidestore.json) lists the same.
+          short="$(jq -r .version package.json | cut -d. -f1,2).${{ github.run_number }}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $short" ipa_out/Payload/*.app/Info.plist
           (cd ipa_out && zip -qr ../Cria-Nightly-unsigned.ipa Payload)
       - uses: actions/upload-artifact@v4
         with:
@@ -199,7 +205,8 @@ jobs:
       - name: Write sidestore.json
         run: |
           set -euo pipefail
-          version="$(jq -r .version package.json)"
+          # Must equal the .ipa's CFBundleShortVersionString (see build-ios).
+          version="$(jq -r .version package.json | cut -d. -f1,2).${{ github.run_number }}"
           ipa="release/Cria-Nightly-unsigned.ipa"
           jq -n \
             --arg v "$version" \
