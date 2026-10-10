@@ -13,11 +13,11 @@
       "versions": [
         {
           "version": "0.14.1",
-          "buildVersion": "51",
-          "date": "2026-10-10T11:45:37Z",
-          "size": 6153547,
+          "buildVersion": "52",
+          "date": "2026-10-10T12:09:59Z",
+          "size": 6153544,
           "downloadURL": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-unsigned.ipa",
-          "localizedDescription": "dev @ 06f8596"
+          "localizedDescription": "dev @ 67fb649"
         }
       ]
     }
