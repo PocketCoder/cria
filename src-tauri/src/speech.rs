@@ -23,8 +23,11 @@ mod native {
         if json.is_null() {
             return;
         }
-        let text = unsafe { CStr::from_ptr(json) }.to_string_lossy().into_owned();
-        if let (Some(app), Ok(value)) = (APP.get(), serde_json::from_str::<serde_json::Value>(&text))
+        let text = unsafe { CStr::from_ptr(json) }
+            .to_string_lossy()
+            .into_owned();
+        if let (Some(app), Ok(value)) =
+            (APP.get(), serde_json::from_str::<serde_json::Value>(&text))
         {
             let _ = app.emit("speech", value);
         }
