@@ -14,6 +14,12 @@ public final class CriaDatabase: Sendable {
     public static func inMemory() throws -> CriaDatabase {
         try CriaDatabase(writer: DatabaseQueue())
     }
+
+    /// Opens (creating if needed) the on-disk database, in WAL mode so reads never block the writer.
+    public static func open(at url: URL) throws -> CriaDatabase {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        return try CriaDatabase(writer: DatabasePool(path: url.path))
+    }
 }
 
 /// Kinds of change announced to observers. Only user mutations publish these.
