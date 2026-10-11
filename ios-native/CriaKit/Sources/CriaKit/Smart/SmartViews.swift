@@ -71,7 +71,8 @@ extension CriaStore {
         }
     }
 
-    /// Open, non-deleted tasks with a due date across live projects, soonest first (at most 5000, so a long overdue list cannot push today out).
+    /// Open, non-deleted tasks with a due date across live projects, soonest first. Capped at 5000 so a very long
+    /// overdue list cannot push today out.
     func datedOpenTasks() throws -> [TaskListItem] {
         let tasks = try database.writer.read { connection in
             try Row.fetchAll(connection, sql: """
