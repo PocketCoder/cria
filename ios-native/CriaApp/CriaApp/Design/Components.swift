@@ -183,3 +183,15 @@ extension View {
         }
     }
 }
+
+/// Confirm button in a sheet toolbar: glass prominent on iOS 26, bordered prominent before.
+struct CriaProminentToolbarButton: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.borderedProminent)
+        }
+    }
+}
+

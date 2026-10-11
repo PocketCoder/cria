@@ -20,6 +20,7 @@ targets:
     info:
       path: Config/CriaApp-Info.plist
       properties:
+        UIAppFonts: [Onest-Bold.ttf]
         CFBundleURLTypes:
           - CFBundleURLName: io.cria.app.swift
             CFBundleURLSchemes: [cria]

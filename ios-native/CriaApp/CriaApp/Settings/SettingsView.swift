@@ -35,7 +35,11 @@ struct SettingsView: View {
             .criaSurface()
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") { dismiss() }.modifier(CriaProminentToolbarButton())
+                }
+            }
             .task {
                 await model.load()
                 name = model.general.name
@@ -46,15 +50,33 @@ struct SettingsView: View {
 
     private var profileSection: some View {
         Section("Profile") {
-            LabeledContent("Username", value: model.username)
+            HStack(spacing: 14) {
+                Text(initials)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color(.primary))
+                    .frame(width: 48, height: 48)
+                    .background(Color(.primarySoft), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name.isEmpty ? model.username : name).font(Theme.rowTitle)
+                    Text("@\(model.username)").font(Theme.rowSubtitle).foregroundStyle(Color(.mutedForeground))
+                }
+            }
+            .frame(minHeight: 72)
+            .accessibilityElement(children: .combine)
             TextField("Name", text: $name)
                 .onSubmit { Task { await model.save(GeneralSettings.changeName(name)) { $0.name = name } } }
         }
     }
 
+    private var initials: String {
+        let source = name.isEmpty ? model.username : name
+        let letters = source.split(separator: " ").prefix(2).compactMap(\.first)
+        return letters.isEmpty ? "?" : String(letters).uppercased()
+    }
+
     private var appearanceSection: some View {
         Section("Appearance") {
-            Picker("Theme", selection: Binding(
+            Picker(selection: Binding(
                 get: { preferences.colorScheme },
                 set: { choice in
                     preferences.colorScheme = choice
@@ -63,33 +85,41 @@ struct SettingsView: View {
                 }
             )) {
                 ForEach(ColorSchemePreference.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            } label: {
+                SettingsLabel("Theme", symbol: "moon", token: .llama800)
             }
         }
     }
 
     private var quickAddSection: some View {
         Section("Quick Add Magic") {
-            Picker("Mode", selection: Binding(
+            Picker(selection: Binding(
                 get: { model.general.quickAddMagicMode },
                 set: { mode in Task { await model.setQuickAddMode(mode) } }
             )) {
                 Text("Vikunja (*label +project !priority)").tag("vikunja")
                 Text("Todoist (@label #project p1)").tag("todoist")
                 Text("Off").tag("disabled")
+            } label: {
+                SettingsLabel("Mode", symbol: "sparkles", token: .llama500)
             }
         }
     }
 
     private var remindersSection: some View {
         Section("Reminders") {
-            Toggle("Email reminders", isOn: Binding(
+            Toggle(isOn: Binding(
                 get: { model.general.emailRemindersEnabled },
                 set: { value in setEmailReminders(value) }
-            ))
-            Toggle("Overdue task digest", isOn: Binding(
+            )) {
+                SettingsLabel("Email reminders", symbol: "bell", token: .coral500)
+            }
+            Toggle(isOn: Binding(
                 get: { model.general.overdueRemindersEnabled },
                 set: { value in setOverdueReminders(value) }
-            ))
+            )) {
+                SettingsLabel("Overdue task digest", symbol: "sun.max", token: .marigold500)
+            }
             if model.general.overdueRemindersEnabled {
                 DatePicker("Digest time", selection: $overdueTime, displayedComponents: .hourAndMinute)
                     .onChange(of: overdueTime) { _, value in
@@ -110,17 +140,29 @@ struct SettingsView: View {
 
     private var collaborationSection: some View {
         Section("Collaboration") {
-            NavigationLink("Notifications") { NotificationsView(services: services) }
-            NavigationLink("Teams") { TeamsView(services: services) }
+            NavigationLink { NotificationsView(services: services) } label: {
+                SettingsLabel("Notifications", symbol: "bell.badge", token: .coral500)
+            }
+            NavigationLink { TeamsView(services: services) } label: {
+                SettingsLabel("Teams", symbol: "person.2", token: .sky700)
+            }
         }
     }
 
     private var accountSection: some View {
         Section("Account") {
-            NavigationLink("Change password") { ChangePasswordView(services: services) }
-            NavigationLink("API tokens") { ApiTokensView(services: services) }
-            Button("Sign out", role: .destructive) { onSignOut(false) }
-            Button("Sign out and delete local data", role: .destructive) { confirmingWipe = true }
+            NavigationLink { ApiTokensView(services: services) } label: {
+                SettingsLabel("API tokens", symbol: "key", token: .fleece500)
+            }
+            NavigationLink { ChangePasswordView(services: services) } label: {
+                SettingsLabel("Change password", symbol: "lock", token: .fleece500)
+            }
+            Button(role: .destructive) { onSignOut(false) } label: {
+                Text("Sign out").frame(maxWidth: .infinity)
+            }
+            Button(role: .destructive) { confirmingWipe = true } label: {
+                Text("Sign out and delete local data").frame(maxWidth: .infinity)
+            }
                 .confirmationDialog("Delete the local database and caches?", isPresented: $confirmingWipe, titleVisibility: .visible) {
                     Button("Sign out and delete", role: .destructive) { onSignOut(true) }
                 } message: {
@@ -146,6 +188,31 @@ struct SettingsView: View {
     private static func hourMinute(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+}
+
+/// Settings-app row label: 30pt rounded square in an accent colour with a white glyph.
+struct SettingsLabel: View {
+    let title: String
+    let symbol: String
+    let token: ThemeToken
+
+    init(_ title: String, symbol: String, token: ThemeToken) {
+        self.title = title
+        self.symbol = symbol
+        self.token = token
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: symbol)
+                .font(.system(size: 17))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(Color(token), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 }
 

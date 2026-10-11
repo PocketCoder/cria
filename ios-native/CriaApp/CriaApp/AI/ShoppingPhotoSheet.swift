@@ -34,11 +34,12 @@ struct ShoppingPhotoSheet: View {
             .navigationTitle("List from photo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
                 if !items.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button(ShoppingItems.addButtonLabel(ShoppingItems.selected(items).count)) { save() }
+                        Button(ShoppingItems.addButtonLabel(ShoppingItems.selected(items).count), systemImage: "checkmark") { save() }
                             .disabled(ShoppingItems.selected(items).isEmpty || projectId.isEmpty)
+                            .modifier(CriaProminentToolbarButton())
                     }
                 }
             }

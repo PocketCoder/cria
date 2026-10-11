@@ -10,7 +10,6 @@ struct ProjectScreen: View {
     @State private var live: LiveValue<[ViewRecord]>
     @State private var selectedId: String?
     @State private var managing = false
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(services: AppServices, projectLocalId: String, title: String) {
         self.services = services
@@ -37,11 +36,17 @@ struct ProjectScreen: View {
 
     var body: some View {
         content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if views.count > 1 {
+                    switcher
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.grouped))
+                }
+            }
             .navigationTitle(title)
             .toolbar {
-                if views.count > 1 {
-                    ToolbarItem(placement: .principal) { switcher }
-                }
                 if canManage {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Manage views", systemImage: "rectangle.3.group") { managing = true }
@@ -73,23 +78,10 @@ struct ProjectScreen: View {
         }
     }
 
-    @ViewBuilder private var switcher: some View {
-        let selection = Binding(get: { current?.localId ?? "" }, set: { selectedId = $0 })
-        if sizeClass == .regular {
-            Picker("View", selection: selection) {
-                ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 420)
-        } else {
-            Menu {
-                Picker("View", selection: selection) {
-                    ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
-                }
-            } label: {
-                Label(current.map { ViewManagement.label($0.slot) } ?? title, systemImage: "chevron.down")
-                    .labelStyle(.titleAndIcon)
-            }
+    private var switcher: some View {
+        Picker("View", selection: Binding(get: { current?.localId ?? "" }, set: { selectedId = $0 })) {
+            ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
         }
+        .pickerStyle(.segmented)
     }
 }

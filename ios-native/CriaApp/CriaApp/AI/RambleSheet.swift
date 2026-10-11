@@ -40,10 +40,12 @@ struct RambleSheet: View {
             .navigationTitle("Ramble")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
                 if !drafts.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Add \(Ramble.taskCount(chosen.count))") { save() }.disabled(chosen.isEmpty)
+                        Button("Add \(Ramble.taskCount(chosen.count))", systemImage: "checkmark") { save() }
+                            .disabled(chosen.isEmpty)
+                            .modifier(CriaProminentToolbarButton())
                     }
                 }
             }

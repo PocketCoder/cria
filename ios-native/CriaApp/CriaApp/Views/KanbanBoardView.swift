@@ -50,10 +50,11 @@ struct KanbanBoardView: View {
                 addBucketButton
             }
             .scrollTargetLayout()
-            .padding(12)
+            .padding(.vertical, 12)
         }
+        .contentMargins(.horizontal, 16, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
-        .background(Color(.background))
+        .background(Color(.grouped))
         .task { await live.run() }
         .alert("Column full", isPresented: $limitNotice) {
             Button("OK", role: .cancel) {}
@@ -145,14 +146,12 @@ struct KanbanColumnView: View {
                     }
                 }
             }
-            TextField("Add a task", text: $draft)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { addTask() }
+            addRow
         }
-        .padding(10)
-        .frame(width: 280)
+        .padding(8)
+        .frame(width: 300)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(.muted), in: RoundedRectangle(cornerRadius: Theme.radius))
+        .background(Color(.foreground).opacity(0.06), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .dropDestination(for: String.self) { items, _ in
             guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
             onDrop(taskId, nil)
@@ -165,11 +164,25 @@ struct KanbanColumnView: View {
         }
     }
 
+    private var addRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "plus").foregroundStyle(Color(.primary))
+            TextField("Add task", text: $draft)
+                .font(.subheadline.weight(.medium))
+                .onSubmit { addTask() }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 44)
+    }
+
     private var header: some View {
         HStack {
             Text(column.bucket.title).font(Theme.headline)
             Text(countText)
-                .font(Theme.caption)
+                .font(Theme.chip)
+                .padding(.horizontal, 8)
+                .frame(height: Theme.chipHeight)
+                .background(Color(.foreground).opacity(0.06), in: Capsule())
                 .foregroundStyle(column.atLimit ? Color(.destructive) : Color(.mutedForeground))
             roleBadge
             Spacer()
@@ -217,22 +230,34 @@ struct KanbanCardView: View {
     let task: TaskRecord
 
     var body: some View {
-        NavigationLink(value: Route.task(task.localId)) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
-                    .font(Theme.rowTitle)
-                    .strikethrough(task.done)
-                    .foregroundStyle(Color(.foreground))
-                    .multilineTextAlignment(.leading)
-                if let due = task.dueDate {
-                    CriaChip(text: DueDates.label(due, now: Date()), systemImage: "calendar", tint: Color(.mutedForeground))
-                }
+        HStack(alignment: .top, spacing: 0) {
+            PriorityCheck(priority: task.priority, isDone: task.done, size: 22) {
+                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(Color(.card), in: RoundedRectangle(cornerRadius: Theme.radius))
+            NavigationLink(value: Route.task(task.localId)) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(task.title)
+                        .font(.system(size: 16, weight: .medium))
+                        .strikethrough(task.done)
+                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                        .multilineTextAlignment(.leading)
+                    if let due = task.dueDate, !task.done {
+                        CriaChip(
+                            text: DueDates.label(due, now: Date()),
+                            systemImage: task.repeatAfter > 0 ? "repeat" : "calendar",
+                            tint: DueDates.isOverdue(due, now: Date()) ? Color(.destructive) : Color(.mutedForeground)
+                        )
+                    }
+                }
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.trailing, 12)
+        .background(Color(.cell), in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        .shadow(color: Color(red: 20 / 255, green: 10 / 255, blue: 40 / 255).opacity(0.05), radius: 1, y: 1)
     }
 }
 

@@ -53,8 +53,18 @@ struct TaskDetailView: View {
                 ContentUnavailableView("Task not found", systemImage: "questionmark.circle")
             }
         }
-        .navigationTitle("Task")
+        .navigationTitle(projectTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let task = live.value.task {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
+                        apply(TaskPatch(isFavorite: !task.isFavorite))
+                    }
+                    .tint(task.isFavorite ? Color(.warning) : nil)
+                }
+            }
+        }
         .task { await live.run() }
         .onChange(of: live.value.task?.localId, initial: true) { _, _ in loadDrafts() }
         .onChange(of: focus) { _, _ in saveText() }
@@ -70,10 +80,15 @@ struct TaskDetailView: View {
         }
     }
 
+    private var projectTitle: String {
+        guard let task = live.value.task else { return "Task" }
+        return live.value.projects.first { $0.localId == task.projectLocalId }?.title ?? "Task"
+    }
+
     private func form(_ task: TaskRecord) -> some View {
         Form {
             Section {
-                HStack {
+                HStack(alignment: .top) {
                     PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { apply(TaskPatch(done: !task.done)) }
                     TextField("Title", text: $title, axis: .vertical)
                         .font(Theme.title)
@@ -92,16 +107,21 @@ struct TaskDetailView: View {
             }
             datesSection(task)
             detailsSection(task)
-            Section("Labels") {
+            Section {
                 FlowLabels(labels: live.value.labels)
-                Button("Edit labels", systemImage: "tag") { showLabels = true }
+            } header: {
+                HStack {
+                    Text("Labels")
+                    Spacer()
+                    Button("Edit") { showLabels = true }.textCase(nil)
+                }
             }
             AttachmentsSection(services: services, taskLocalId: taskLocalId)
             ReminderSection(services: services, task: task)
             RelationsSection(services: services, taskLocalId: taskLocalId)
             CommentsSection(services: services, taskLocalId: taskLocalId)
             Section {
-                Button("Delete task", systemImage: "trash", role: .destructive) {
+                Button(role: .destructive) {
                     // Nothing may be saved onto a task that is going away.
                     didLoad = false
                     do {
@@ -111,6 +131,8 @@ struct TaskDetailView: View {
                         didLoad = true
                         saveError = String(describing: error)
                     }
+                } label: {
+                    Text("Delete task").frame(maxWidth: .infinity)
                 }
             }
         }
@@ -128,7 +150,7 @@ struct TaskDetailView: View {
             }
         } label: {
             if (task.description ?? "").isEmpty {
-                Text("Add description").foregroundStyle(Color(.mutedForeground))
+                Text("Add description").font(Theme.rowSubtitle).foregroundStyle(Color(.mutedForeground))
             } else {
                 RichTextView(html: task.description ?? "").frame(minHeight: 44, maxHeight: 140)
             }
@@ -155,13 +177,18 @@ struct TaskDetailView: View {
 
     private func detailsSection(_ task: TaskRecord) -> some View {
         Section("Details") {
-            Picker("Priority", selection: Binding(get: { task.priority }, set: { apply(TaskPatch(priority: $0)) })) {
-                ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
-            }
-            Picker("Project", selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
+            Picker(selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
                 ForEach(live.value.projects, id: \.localId) { Text($0.title).tag($0.localId) }
+            } label: {
+                Label("Project", systemImage: "folder")
             }
-            Toggle("Favourite", isOn: Binding(get: { task.isFavorite }, set: { apply(TaskPatch(isFavorite: $0)) }))
+            Picker(selection: Binding(get: { task.priority }, set: { apply(TaskPatch(priority: $0)) })) {
+                ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
+            } label: {
+                Label { Text("Priority") } icon: {
+                    Image(systemName: "flag").foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
+                }
+            }
             VStack(alignment: .leading) {
                 Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
                 // One write when the finger lifts, not one (and one outbox op) per 0.1 step while dragging.
@@ -232,10 +259,11 @@ struct DateFieldRow: View {
         if let iso, let current = DueDates.pickerDate(iso) {
             let timed = DueDates.hasTimeOfDay(iso)
             DatePicker(
-                title,
                 selection: Binding(get: { current }, set: { write($0, timed: timed) }),
                 displayedComponents: timed ? [.date, .hourAndMinute] : [.date]
-            )
+            ) {
+                Label(title, systemImage: "calendar")
+            }
             Toggle("\(title) time", isOn: Binding(get: { timed }, set: { setTimed($0, current: current) }))
         } else {
             Button("Add \(title.lowercased()) date", systemImage: "calendar.badge.plus") {
@@ -264,7 +292,7 @@ struct FlowLabels: View {
         } else {
             HStack {
                 ForEach(labels, id: \.localId) { label in
-                    CriaChip(text: label.title, tint: Color(hexString: label.hexColor) ?? Color(.info))
+                    CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
                 }
             }
         }

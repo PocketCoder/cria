@@ -55,12 +55,12 @@ struct BrowseView: View {
     var body: some View {
         List {
             Section {
-                NavigationLink(value: Route.favorites) {
-                    Label("Favourites", systemImage: "star.fill")
-                        .badge(live.value.favouriteCount)
-                }
                 NavigationLink(value: Route.inbox) {
-                    Label("Inbox", systemImage: "tray")
+                    Label { Text("Inbox") } icon: { Image(systemName: "tray").foregroundStyle(Color(.sky500)) }
+                }
+                NavigationLink(value: Route.favorites) {
+                    Label { Text("Favourites") } icon: { Image(systemName: "star.fill").foregroundStyle(Color(.marigold500)) }
+                        .badge(live.value.favouriteCount)
                 }
             }
             filtersSection
@@ -68,6 +68,7 @@ struct BrowseView: View {
         }
             .criaSurface()
         .navigationTitle("Browse")
+        .quickAdd(services: services)
         .refreshable { await services.refresh() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -76,9 +77,10 @@ struct BrowseView: View {
                     Button("New filter", systemImage: "line.3.horizontal.decrease.circle") {
                         filterEditor = FilterEditorTarget(record: nil)
                     }
+                    Divider()
                     Button("List from photo", systemImage: "camera.viewfinder") { showPhoto = true }
                     if aiStatus.isOfferable {
-                        Button("Ramble to tasks", systemImage: "sparkles") { showRamble = true }
+                        Button("Ramble to tasks", systemImage: "mic") { showRamble = true }
                             .disabled(aiStatus.notReadyMessage != nil)
                     }
                 }
@@ -126,14 +128,14 @@ extension BrowseView {
                 )
                 .swipeActions(edge: .trailing) {
                     Button("Delete", role: .destructive) { pendingDelete = row.project }
-                    Button("Edit") { editor = .edit(row.project) }.tint(Color(.info))
+                    Button("Edit") { editor = .edit(row.project) }.tint(Color(.sky500))
                     Button("Share") { sharing = ProjectShareTarget(project: row.project) }.tint(Color(.primary))
                 }
                 .swipeActions(edge: .leading) {
                     Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
                         try? services.store.setProjectFavorite(localId: row.project.localId, isFavorite: !row.project.isFavorite)
                     }
-                    .tint(Color(.warning))
+                    .tint(Color(.marigold500))
                 }
             }
         }
@@ -144,7 +146,9 @@ extension BrowseView {
             Section("Filters") {
                 ForEach(live.value.savedFilters, id: \.serverId) { filter in
                     NavigationLink(value: Route.savedFilter(filter.serverId)) {
-                        Label(filter.title, systemImage: "line.3.horizontal.decrease.circle")
+                        Label { Text(filter.title) } icon: {
+                            Image(systemName: "line.3.horizontal.decrease.circle").foregroundStyle(Color(.primary))
+                        }
                     }
                     .swipeActions(edge: .trailing) {
                         Button("Delete", role: .destructive) {
@@ -172,31 +176,35 @@ struct ProjectRowView: View {
         HStack(spacing: 8) {
             if row.hasChildren {
                 Button(action: onToggle) {
-                    Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(Theme.caption)
-                        .frame(width: 20)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color(.mutedForeground))
+                        .rotationEffect(.degrees(row.isExpanded ? 90 : 0))
+                        .animation(.spring(duration: 0.24, bounce: 0.25), value: row.isExpanded)
+                        .frame(width: 24, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
             } else {
-                Spacer().frame(width: 20)
+                Spacer().frame(width: 24)
             }
             NavigationLink(value: Route.project(row.project.localId)) {
-                HStack {
+                HStack(spacing: 10) {
                     Circle()
                         .fill(Color(hexString: row.project.hexColor) ?? Color(.mutedForeground))
-                        .frame(width: 10, height: 10)
+                        .frame(width: 12, height: 12)
                     Text(row.project.title).font(Theme.rowTitle)
                     if row.project.isFavorite {
                         Image(systemName: "star.fill").font(Theme.footnote).foregroundStyle(Color(.warning))
                     }
                     Spacer()
                     if openCount > 0 {
-                        Text("\(openCount)").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                        Text("\(openCount)").font(Theme.rowTitle).foregroundStyle(Color(.mutedForeground))
                     }
                 }
             }
         }
-        .padding(.leading, CGFloat(row.depth) * 16)
+        .padding(.leading, CGFloat(row.depth) * 22)
     }
 }
