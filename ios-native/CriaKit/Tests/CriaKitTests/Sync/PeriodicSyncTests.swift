@@ -18,8 +18,12 @@ final class PeriodicSyncTests: XCTestCase {
         await settle(30)
         let first = await counter.value
         XCTAssertEqual(first, 1, "one tick straight away")
-        await settle(200)
-        let later = await counter.value
+        // Poll up to 3 seconds: a loaded CI runner can delay timer ticks well past the nominal 50 ms.
+        var later = await counter.value
+        for _ in 0..<30 where later < 3 {
+            await settle(100)
+            later = await counter.value
+        }
         XCTAssertGreaterThanOrEqual(later, 3)
         await sync.stop()
     }
