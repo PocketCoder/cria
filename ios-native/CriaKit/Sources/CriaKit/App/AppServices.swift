@@ -6,13 +6,16 @@ public final class AppServices: Sendable {
     public let store: CriaStore
     public let coordinator: SyncCoordinator
     public let api: ApiClient
+    let blobs: FileBlobStore
 
     public init(api: ApiClient, store: CriaStore, blobDirectory: URL) async {
         self.api = api
         self.store = store
+        let fileBlobs = FileBlobStore(directory: blobDirectory)
+        blobs = fileBlobs
         let drainer = OutboxDrainer(api: api, store: store)
         await drainer.registerStandardExecutors()
-        await drainer.registerAttachmentExecutor(blobs: FileBlobStore(directory: blobDirectory))
+        await drainer.registerAttachmentExecutor(blobs: fileBlobs)
         coordinator = SyncCoordinator(puller: Puller(api: api, store: store), drainer: drainer, store: store)
     }
 
