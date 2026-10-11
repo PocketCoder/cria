@@ -30,12 +30,12 @@
       "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
       "versions": [
         {
-          "version": "0.14.54",
-          "buildVersion": "54",
-          "date": "2026-10-11T12:21:18Z",
-          "size": 3460212,
+          "version": "0.14.61",
+          "buildVersion": "61",
+          "date": "2026-10-11T12:47:19Z",
+          "size": 8785940,
           "downloadURL": "https://github.com/PocketCoder/cria/releases/download/swift-alpha/Cria-Swift-Alpha-unsigned.ipa",
-          "localizedDescription": "feature/swift-ios @ 452ad26"
+          "localizedDescription": "feature/swift-ios @ 18858c6"
         }
       ]
     }
