@@ -9,7 +9,7 @@ public func normaliseDate(_ value: String?) -> String? {
 }
 
 /// Arbitrary JSON, for fields the server types as "unknown" in the Zod schemas.
-public enum JSONValue: Decodable, Equatable, Sendable {
+public enum JSONValue: Codable, Equatable, Sendable {
     case null
     case bool(Bool)
     case number(Double)
@@ -31,6 +31,18 @@ public enum JSONValue: Decodable, Equatable, Sendable {
             self = .array(value)
         } else {
             self = .object(try container.decode([String: JSONValue].self))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .null: try container.encodeNil()
+        case .bool(let value): try container.encode(value)
+        case .number(let value): try container.encode(value)
+        case .string(let value): try container.encode(value)
+        case .array(let value): try container.encode(value)
+        case .object(let value): try container.encode(value)
         }
     }
 }
