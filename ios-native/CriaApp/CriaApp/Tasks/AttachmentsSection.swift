@@ -11,6 +11,7 @@ struct AttachmentsSection: View {
     @State private var live: LiveValue<[AttachmentRecord]>
     @State private var photo: PhotosPickerItem?
     @State private var showFiles = false
+    @State private var showCamera = false
     @State private var preview: URL?
     @State private var errorText: String?
 
@@ -32,6 +33,10 @@ struct AttachmentsSection: View {
             }
             PhotosPicker("Add photo", selection: $photo, matching: .images)
             Button("Add file", systemImage: "paperclip") { showFiles = true }
+            if CameraPicker.isAvailable {
+                Button("Take photo", systemImage: "camera") { showCamera = true }
+            }
+            PasteButton(supportedContentTypes: [.image]) { providers in pasteImage(providers) }
             if let errorText { Text(errorText).font(.caption).foregroundStyle(.red) }
         }
         .task { await live.run() }
@@ -41,6 +46,10 @@ struct AttachmentsSection: View {
         }
         .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in
             if case .success(let url) = result { attachFile(url) }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { data in queue(name: "camera-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg", data: data) }
+                .ignoresSafeArea()
         }
         .quickLookPreview($preview)
     }
@@ -89,6 +98,15 @@ struct AttachmentsSection: View {
         let type = item.supportedContentTypes.first
         let name = "photo-\(Int(Date().timeIntervalSince1970)).\(type?.preferredFilenameExtension ?? "jpg")"
         queue(name: name, mime: type?.preferredMIMEType ?? "image/jpeg", data: data)
+    }
+
+    private func pasteImage(_ providers: [NSItemProvider]) {
+        guard let provider = providers.first else { return }
+        Task {
+            guard let data = try? await provider.loadDataRepresentation(for: .image),
+                  let png = UIImage(data: data)?.pngData() else { return }
+            queue(name: "pasted-\(Int(Date().timeIntervalSince1970)).png", mime: "image/png", data: png)
+        }
     }
 
     private func attachFile(_ url: URL) {
