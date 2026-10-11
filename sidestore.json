@@ -20,6 +20,24 @@
           "localizedDescription": "dev @ 1b5ae4e"
         }
       ]
+    },
+    {
+      "name": "Cria (Swift Alpha)",
+      "bundleIdentifier": "io.cria.app.swift",
+      "developerName": "Cria",
+      "subtitle": "Native Swift alpha",
+      "localizedDescription": "Automated build of the native Swift app. Alpha, unstable.",
+      "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
+      "versions": [
+        {
+          "version": "0.14.31",
+          "buildVersion": "31",
+          "date": "2026-10-11T08:48:10Z",
+          "size": 2200777,
+          "downloadURL": "https://github.com/PocketCoder/cria/releases/download/swift-alpha/Cria-Swift-Alpha-unsigned.ipa",
+          "localizedDescription": "feature/swift-ios @ 0c39417"
+        }
+      ]
     }
   ]
 }
