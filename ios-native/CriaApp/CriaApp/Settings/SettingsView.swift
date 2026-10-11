@@ -130,13 +130,13 @@ struct SettingsView: View {
             }
             Toggle(isOn: Binding(
                 get: { model.general.discoverableByEmail },
-                set: { value in Task { await model.save(GeneralSettings.changeDiscoverableByEmail(value)) { $0.discoverableByEmail = value } } }
+                set: { value in setDiscoverableByEmail(value) }
             )) {
                 SettingsLabel("Discoverable by email", symbol: "envelope", token: .sky700)
             }
             Toggle(isOn: Binding(
                 get: { model.general.discoverableByName },
-                set: { value in Task { await model.save(GeneralSettings.changeDiscoverableByName(value)) { $0.discoverableByName = value } } }
+                set: { value in setDiscoverableByName(value) }
             )) {
                 SettingsLabel("Discoverable by name", symbol: "person.text.rectangle", token: .sky700)
             }
@@ -165,6 +165,14 @@ struct SettingsView: View {
                     }
             }
         }
+    }
+
+    private func setDiscoverableByEmail(_ value: Bool) {
+        Task { await model.save(GeneralSettings.changeDiscoverableByEmail(value)) { $0.discoverableByEmail = value } }
+    }
+
+    private func setDiscoverableByName(_ value: Bool) {
+        Task { await model.save(GeneralSettings.changeDiscoverableByName(value)) { $0.discoverableByName = value } }
     }
 
     private func setEmailReminders(_ value: Bool) {

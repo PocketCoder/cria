@@ -193,13 +193,13 @@ private struct CornerGuides: View {
                 let size = proxy.size
                 let arm: CGFloat = 26
                 for corner in 0..<4 {
-                    let dx: CGFloat = corner.isMultiple(of: 2) ? 1 : -1
-                    let dy: CGFloat = corner < 2 ? 1 : -1
-                    let x = corner.isMultiple(of: 2) ? 0 : size.width
-                    let y = corner < 2 ? 0 : size.height
-                    path.move(to: CGPoint(x: x + dx * arm, y: y))
-                    path.addLine(to: CGPoint(x: x, y: y))
-                    path.addLine(to: CGPoint(x: x, y: y + dy * arm))
+                    let stepX: CGFloat = corner.isMultiple(of: 2) ? 1 : -1
+                    let stepY: CGFloat = corner < 2 ? 1 : -1
+                    let originX = corner.isMultiple(of: 2) ? 0 : size.width
+                    let originY = corner < 2 ? 0 : size.height
+                    path.move(to: CGPoint(x: originX + stepX * arm, y: originY))
+                    path.addLine(to: CGPoint(x: originX, y: originY))
+                    path.addLine(to: CGPoint(x: originX, y: originY + stepY * arm))
                 }
             }
             .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
