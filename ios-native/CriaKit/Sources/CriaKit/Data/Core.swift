@@ -18,7 +18,7 @@ public final class CriaDatabase: Sendable {
 
 /// Kinds of change announced to observers. Only user mutations publish these.
 public enum ChangeKind: String, Sendable, CaseIterable {
-    case projects, tasks, labels, outbox, views, comments, savedFilters
+    case projects, tasks, labels, outbox, views, comments, savedFilters, conflicts
 }
 
 /// Change notifications. Sync upserts never call `notify` (AGENTS.md: infinite-loop footgun).

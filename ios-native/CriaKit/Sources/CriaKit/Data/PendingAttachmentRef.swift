@@ -12,6 +12,18 @@ enum PendingAttachmentRef {
         prefix + attachmentLocalId
     }
 
+    /// The distinct attachment ids referenced in `html`, in order of first appearance.
+    static func findRefs(in html: String?) -> [String] {
+        guard let html, html.contains(prefix) else { return [] }
+        var seen = Set<String>()
+        var ids: [String] = []
+        for range in matches(in: html, pattern: refPattern) {
+            let id = String(html[range].dropFirst(prefix.count))
+            if seen.insert(id).inserted { ids.append(id) }
+        }
+        return ids
+    }
+
     /// Replaces every reference to `attachmentLocalId` with `url`.
     static func replace(in html: String, attachmentLocalId: String, with url: String) -> String {
         rewrite(html, pattern: refPattern) { matched in

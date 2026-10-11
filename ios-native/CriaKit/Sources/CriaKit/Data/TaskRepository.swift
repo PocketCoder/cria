@@ -2,26 +2,26 @@ import Foundation
 import GRDB
 
 public struct TaskRecord: Equatable, Sendable {
-    public let localId: String
-    public let serverId: Int?
-    public let projectLocalId: String
-    public let title: String
-    public let description: String?
-    public let done: Bool
-    public let doneAt: String?
-    public let dueDate: String?
-    public let startDate: String?
-    public let endDate: String?
-    public let priority: Int
+    public internal(set) var localId: String
+    public internal(set) var serverId: Int?
+    public internal(set) var projectLocalId: String
+    public internal(set) var title: String
+    public internal(set) var description: String?
+    public internal(set) var done: Bool
+    public internal(set) var doneAt: String?
+    public internal(set) var dueDate: String?
+    public internal(set) var startDate: String?
+    public internal(set) var endDate: String?
+    public internal(set) var priority: Int
     /// Stored as 0 to 1, the same as the server.
-    public let percentDone: Double
-    public let hexColor: String?
-    public let position: Double?
-    public let isFavorite: Bool
-    public let repeatAfter: Int
-    public let repeatMode: Int
-    public let updatedAt: String
-    public let createdAt: String?
+    public internal(set) var percentDone: Double
+    public internal(set) var hexColor: String?
+    public internal(set) var position: Double?
+    public internal(set) var isFavorite: Bool
+    public internal(set) var repeatAfter: Int
+    public internal(set) var repeatMode: Int
+    public internal(set) var updatedAt: String
+    public internal(set) var createdAt: String?
 
     init(row: Row) {
         localId = row["local_id"]

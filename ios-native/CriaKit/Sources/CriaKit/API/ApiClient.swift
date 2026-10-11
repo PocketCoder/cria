@@ -34,6 +34,13 @@ public final class ApiClient: Sendable {
         self.version = version
     }
 
+    /// Server origin without a trailing slash, or nil when signed out.
+    public func serverBase() async -> String? {
+        if let fixedBase { return fixedBase }
+        guard let snapshot = await session?.snapshot() else { return nil }
+        return normalizeBase(snapshot.serverURL)
+    }
+
     /// Sends a request and returns the raw response. Non-2xx is returned, not thrown;
     /// use `ApiResponse.decoded()` or the typed helpers below to throw `ApiError`.
     public func send(_ method: HTTPMethod, _ path: String, query: [String: String] = [:],
