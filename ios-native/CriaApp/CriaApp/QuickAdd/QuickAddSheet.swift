@@ -176,7 +176,7 @@ enum QuickAddPreview {
     }
 }
 
-/// Adds a "+" toolbar button that opens quick add, for the screens that list tasks.
+/// Adds the floating + button that opens quick add, for the screens that list tasks.
 struct QuickAddButton: ViewModifier {
     let services: AppServices
     var contextProjectId: String?
@@ -184,12 +184,7 @@ struct QuickAddButton: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .toolbar {
-                ToolbarItem(placement: .bottomBar) {
-                    Button("New task", systemImage: "plus.circle.fill") { isPresented = true }
-                        .labelStyle(.titleAndIcon)
-                }
-            }
+            .criaFab { isPresented = true }
             .sheet(isPresented: $isPresented) {
                 QuickAddSheet(services: services, contextProjectId: contextProjectId)
             }

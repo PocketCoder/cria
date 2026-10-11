@@ -57,6 +57,11 @@ public enum ThemeToken: String, CaseIterable, Sendable {
     case destructive, success, warning, info, ring
     case destructiveForeground, successText, warningText, warningForeground
     case priorityLow, priorityMedium, priorityHigh, priorityUrgent, priorityCritical, priorityForeground
+    /// Native iOS surfaces: the screen behind inset-grouped lists, and the row/card colour on top of it.
+    case grouped, cell
+    /// Supporting accents for Settings icon squares and swipe actions, plus text-safe chip shades.
+    case sky500, sky700, coral500, meadow500, meadow700, marigold500, marigold700
+    case llama500, llama800, plum500, fleece500, heather600
 
     public var pair: ThemePair { Self.table[self] ?? Self.fallback }
 
@@ -87,7 +92,21 @@ public enum ThemeToken: String, CaseIterable, Sendable {
         .priorityHigh: ThemePair(light: .oklch(76, 0.15, 75), dark: .oklch(80, 0.12, 85)),
         .priorityUrgent: ThemePair(light: .oklch(68, 0.19, 45), dark: .oklch(72, 0.16, 45)),
         .priorityCritical: ThemePair(light: .oklch(58, 0.22, 27), dark: .oklch(66, 0.19, 25)),
-        .priorityForeground: ThemePair(light: .oklch(17, 0.045, 300), dark: .oklch(17, 0.045, 300))
+        .priorityForeground: ThemePair(light: .oklch(17, 0.045, 300), dark: .oklch(17, 0.045, 300)),
+        .grouped: ThemePair(light: .oklch(96.4, 0.006, 95), dark: .oklch(11, 0.01, 285)),
+        .cell: ThemePair(light: .oklch(100, 0, 0), dark: .oklch(19.5, 0.012, 285)),
+        .sky500: ThemePair(light: .oklch(62, 0.12, 240), dark: .oklch(62, 0.12, 240)),
+        .sky700: ThemePair(light: .oklch(47, 0.12, 240), dark: .oklch(47, 0.12, 240)),
+        .coral500: ThemePair(light: .oklch(58, 0.22, 27), dark: .oklch(58, 0.22, 27)),
+        .meadow500: ThemePair(light: .oklch(62, 0.16, 150), dark: .oklch(62, 0.16, 150)),
+        .meadow700: ThemePair(light: .oklch(46, 0.13, 150), dark: .oklch(46, 0.13, 150)),
+        .marigold500: ThemePair(light: .oklch(75, 0.16, 80), dark: .oklch(75, 0.16, 80)),
+        .marigold700: ThemePair(light: .oklch(55, 0.13, 70), dark: .oklch(55, 0.13, 70)),
+        .llama500: ThemePair(light: .oklch(55, 0.16, 300), dark: .oklch(55, 0.16, 300)),
+        .llama800: ThemePair(light: .oklch(31, 0.1, 300), dark: .oklch(31, 0.1, 300)),
+        .plum500: ThemePair(light: .oklch(58, 0.19, 345), dark: .oklch(58, 0.19, 345)),
+        .fleece500: ThemePair(light: .oklch(50, 0.015, 285), dark: .oklch(50, 0.015, 285)),
+        .heather600: ThemePair(light: .oklch(55, 0.15, 320), dark: .oklch(55, 0.15, 320))
     ]
 
     /// The priority colour for Vikunja's 1...5 scale. 0 (unset) has none.

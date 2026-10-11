@@ -7,9 +7,14 @@ struct CriaApp: App {
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        Theme.applyNavigationAppearance()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(model: model)
+                .tint(Color(.primary))
                 .task { await model.start() }
                 // One task per phase change, the previous one cancelled, so "inactive" can never land after "active".
                 .task(id: scenePhase) {

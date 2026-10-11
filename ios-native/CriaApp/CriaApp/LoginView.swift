@@ -12,6 +12,13 @@ struct LoginView: View {
     var body: some View {
         Form {
             Section {
+                header
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 48, leading: 0, bottom: 6, trailing: 0))
+            }
+
+            Section {
                 TextField("https://vikunja.example.com", text: $model.serverURL)
                     .textContentType(.URL)
                     .keyboardType(.URL)
@@ -33,6 +40,8 @@ struct LoginView: View {
                     Text("Password").tag(LoginViewModel.Method.password)
                 }
                 .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             }
 
             Section {
@@ -43,6 +52,9 @@ struct LoginView: View {
                         .autocorrectionDisabled()
                         .focused($focus, equals: .token)
                         .accessibilityIdentifier("login.token")
+                    Text("Create one in Vikunja under Settings → API tokens.")
+                        .font(Theme.caption)
+                        .foregroundStyle(Color(.mutedForeground))
                 case .password:
                     TextField("Username", text: $model.username)
                         .textContentType(.username)
@@ -73,16 +85,35 @@ struct LoginView: View {
                     focus = nil
                     Task { await model.submit() }
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         Text(model.totpRequired ? "Verify and sign in" : "Sign in")
-                        if model.isSubmitting { Spacer(); ProgressView() }
+                        if model.isSubmitting { ProgressView() }
                     }
+                    .frame(maxWidth: .infinity, minHeight: 54)
                 }
+                .criaProminent()
                 .disabled(model.isSubmitting)
                 .accessibilityIdentifier("login.submit")
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             }
         }
-            .criaSurface()
-        .navigationTitle("Cria")
+        .criaSurface()
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var header: some View {
+        VStack(spacing: 8) {
+            Image("LoginIcon")
+                .resizable()
+                .frame(width: 88, height: 88)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color(red: 60 / 255, green: 30 / 255, blue: 110 / 255).opacity(0.35), radius: 15, y: 10)
+                .accessibilityHidden(true)
+            Text("Cria").font(Theme.wordmark)
+            Text("Sign in to your Vikunja server")
+                .font(.body)
+                .foregroundStyle(Color(.mutedForeground))
+        }
     }
 }

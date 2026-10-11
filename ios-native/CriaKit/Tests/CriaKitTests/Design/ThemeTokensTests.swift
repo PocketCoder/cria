@@ -55,4 +55,14 @@ final class ThemeTokensTests: XCTestCase {
         XCTAssertEqual(ThemeToken.priority(5), .priorityCritical)
         XCTAssertNil(ThemeToken.priority(6))
     }
+
+    /// Handoff: grouped light is about #F4F3F0, cell dark about #1C1A21.
+    func testNativeSurfacesMatchHandoff() {
+        let grouped = ThemeToken.grouped.pair.light.rgb
+        XCTAssertEqual(grouped.red * 255, 244, accuracy: 2)
+        XCTAssertEqual(grouped.blue * 255, 240, accuracy: 2)
+        let cell = ThemeToken.cell.pair.dark.rgb
+        XCTAssertEqual(cell.red * 255, 28, accuracy: 2)
+        XCTAssertEqual(cell.blue * 255, 33, accuracy: 2)
+    }
 }

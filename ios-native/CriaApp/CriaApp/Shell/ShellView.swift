@@ -19,12 +19,7 @@ struct ShellView: View {
     var body: some View {
         VStack(spacing: 0) {
             SyncBanner(services: services)
-            TabView(selection: navigation.selection) {
-                tab(.today, title: "Today", symbol: "calendar")
-                tab(.upcoming, title: "Upcoming", symbol: "calendar.badge.clock")
-                tab(.browse, title: "Browse", symbol: "square.grid.2x2")
-                tab(.search, title: "Search", symbol: "magnifyingglass")
-            }
+            tabs
         }
         .environment(navigation)
         .tint(Color(.primary))
@@ -32,6 +27,27 @@ struct ShellView: View {
         .task { openPendingURL() }
         .sheet(item: $addRequest) { request in
             QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
+        }
+    }
+
+    /// Three tabs plus a search-role tab: on iOS 26 the system detaches Search into its own glass circle. Tab
+    /// needs iOS 18; iOS 17 keeps the plain tab items.
+    @ViewBuilder private var tabs: some View {
+        if #available(iOS 18, *) {
+            TabView(selection: navigation.selection) {
+                Tab("Today", systemImage: "calendar", value: AppTab.today) { stack(.today) }
+                Tab("Upcoming", systemImage: "calendar.badge.clock", value: AppTab.upcoming) { stack(.upcoming) }
+                Tab("Browse", systemImage: "square.grid.2x2", value: AppTab.browse) { stack(.browse) }
+                Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) { stack(.search) }
+            }
+            .modifier(KeepTabBarVisible())
+        } else {
+            TabView(selection: navigation.selection) {
+                stack(.today).tabItem { Label("Today", systemImage: "calendar") }.tag(AppTab.today)
+                stack(.upcoming).tabItem { Label("Upcoming", systemImage: "calendar.badge.clock") }.tag(AppTab.upcoming)
+                stack(.browse).tabItem { Label("Browse", systemImage: "square.grid.2x2") }.tag(AppTab.browse)
+                stack(.search).tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(AppTab.search)
+            }
         }
     }
 
@@ -51,15 +67,24 @@ struct ShellView: View {
         }
     }
 
-    private func tab(_ tab: AppTab, title: String, symbol: String) -> some View {
+    private func stack(_ tab: AppTab) -> some View {
         NavigationStack(path: navigation.pathBinding(for: tab)) {
             TabRoot(tab: tab, services: services, onSignOut: onSignOut)
                 .navigationDestination(for: Route.self) { route in
                     RouteDestination(route: route, services: services)
                 }
         }
-        .tabItem { Label(title, systemImage: symbol) }
-        .tag(tab)
+    }
+}
+
+/// Keeps the tab bar visible on iOS 26 so the floating + button has a stable anchor.
+private struct KeepTabBarVisible: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.tabBarMinimizeBehavior(.never)
+        } else {
+            content
+        }
     }
 }
 

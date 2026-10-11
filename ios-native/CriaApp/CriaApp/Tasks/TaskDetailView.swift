@@ -74,7 +74,7 @@ struct TaskDetailView: View {
         Form {
             Section {
                 HStack {
-                    CheckCircle(isDone: task.done) { apply(TaskPatch(done: !task.done)) }
+                    PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { apply(TaskPatch(done: !task.done)) }
                     TextField("Title", text: $title, axis: .vertical)
                         .font(Theme.title)
                         .focused($focus, equals: .title)

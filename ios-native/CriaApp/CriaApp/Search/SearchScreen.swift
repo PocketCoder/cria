@@ -44,7 +44,8 @@ struct SearchScreen: View {
             .criaSurface()
         .overlay { overlay }
         .navigationTitle("Search")
-        .searchable(text: $text, prompt: "Tasks, projects, labels")
+        .searchable(text: $text, prompt: "Tasks, projects, filters")
+        .modifier(MinimizeSearchField())
         .task(id: text) { await runSearch() }
         // A swipe on a result (done, delete) changes the store, so re-run the query rather than keep a stale snapshot.
         .task {
@@ -71,5 +72,16 @@ struct SearchScreen: View {
 
     private func search() {
         results = (try? services.store.search(text)) ?? SearchResults()
+    }
+}
+
+/// iOS 26: the search field collapses into the detached search tab button.
+private struct MinimizeSearchField: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.searchToolbarBehavior(.minimize)
+        } else {
+            content
+        }
     }
 }

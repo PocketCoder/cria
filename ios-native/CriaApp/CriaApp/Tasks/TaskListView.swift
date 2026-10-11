@@ -124,18 +124,39 @@ struct TaskRowLink: View {
         }
         .swipeActions(edge: .leading) {
             Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
-                .tint(Color(.success))
+                .tint(Color(.meadow500))
         }
         .swipeActions(edge: .trailing) {
             Button("Delete", systemImage: "trash", role: .destructive) {
                 try? services.store.deleteTask(localId: item.task.localId)
             }
-            Button("Star", systemImage: "star") {
-                let patch = TaskPatch(isFavorite: !item.task.isFavorite)
-                _ = try? services.store.updateTask(localId: item.task.localId, patch: patch)
-            }
-            .tint(Color(.warning))
+            Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
+                .tint(Color(.marigold500))
         }
+        .contextMenu {
+            Button(item.task.done ? "Mark as not done" : "Complete", systemImage: "checkmark.circle") { toggle() }
+            Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
+            Button("Due tomorrow", systemImage: "sunrise") { dueTomorrow() }
+            Divider()
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                try? services.store.deleteTask(localId: item.task.localId)
+            }
+        } preview: {
+            TaskRowView(item: item, showProject: true) {}
+                .padding()
+                .frame(width: 360)
+                .background(Color(.cell))
+        }
+    }
+
+    private func toggleStar() {
+        let patch = TaskPatch(isFavorite: !item.task.isFavorite)
+        _ = try? services.store.updateTask(localId: item.task.localId, patch: patch)
+    }
+
+    private func dueTomorrow() {
+        let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        _ = try? services.store.updateTask(localId: item.task.localId, patch: TaskPatch(dueDate: DueDates.allDayISO(for: day)))
     }
 
     private func toggle() {

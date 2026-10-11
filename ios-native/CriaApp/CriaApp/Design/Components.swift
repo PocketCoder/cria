@@ -1,37 +1,148 @@
 import CriaKit
 import SwiftUI
 
-/// Small rounded label used for labels, dates and project names.
+/// Small tinted capsule for due date, project and labels: 22pt high, 12pt medium, 13% fill.
 struct CriaChip: View {
     let text: String
     var systemImage: String?
+    var dot: Color?
     var tint: Color = Color(.mutedForeground)
     var filled = false
 
     var body: some View {
         HStack(spacing: 4) {
-            if let systemImage {
-                Image(systemName: systemImage)
-            }
+            if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
+            if let systemImage { Image(systemName: systemImage).imageScale(.small) }
             Text(text).lineLimit(1)
         }
-        .font(Theme.caption)
+        .font(Theme.chip)
         .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .frame(height: Theme.chipHeight)
         .foregroundStyle(filled ? Color(.primaryForeground) : tint)
-        .background(filled ? tint : tint.opacity(0.12), in: Capsule())
+        .background(filled ? tint : tint.opacity(0.13), in: Capsule())
     }
 }
 
+/// Todoist-style completion ring: priority-coloured stroke and soft fill. Completing pops the circle, draws
+/// the tick, bursts a ring and six sparks, and plays a success haptic. Reduce Motion skips the burst.
+struct PriorityCheck: View {
+    let priority: Int
+    let isDone: Bool
+    var size: CGFloat = Theme.checkSize
+    let action: () -> Void
+    @State private var burst = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var color: Color { ThemeToken.priority(priority).map { Color($0) } ?? Color(.mutedForeground) }
+
+    var body: some View {
+        Button {
+            if !isDone && !reduceMotion { burst += 1 }
+            action()
+        } label: {
+            ZStack {
+                Circle().fill(isDone ? color : color.opacity(priority > 0 ? 0.16 : 0))
+                Circle().strokeBorder(color, lineWidth: 2)
+                if isDone {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: size * 0.5, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(width: size, height: size)
+            .keyframeAnimator(initialValue: 1.0, trigger: burst) { view, scale in
+                view.scaleEffect(scale)
+            } keyframes: { _ in
+                SpringKeyframe(1.28, duration: 0.13)
+                SpringKeyframe(0.92, duration: 0.11)
+                SpringKeyframe(1.0, duration: 0.12)
+            }
+            .background { BurstView(trigger: burst, color: color, size: size) }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.success, trigger: burst)
+        .animation(.spring(duration: 0.28), value: isDone)
+        .accessibilityLabel(isDone ? "Mark not done" : "Mark done")
+    }
+}
+
+private struct BurstState {
+    var scale: CGFloat = 1
+    var opacity: Double = 0
+    var distance: CGFloat = 0
+}
+
+private struct BurstView: View {
+    let trigger: Int
+    let color: Color
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle().strokeBorder(color, lineWidth: 2)
+                .keyframeAnimator(initialValue: BurstState(), trigger: trigger) { view, state in
+                    view.scaleEffect(state.scale).opacity(state.opacity)
+                } keyframes: { _ in
+                    KeyframeTrack(\.scale) { MoveKeyframe(0.7); CubicKeyframe(2.1, duration: 0.56) }
+                    KeyframeTrack(\.opacity) { MoveKeyframe(trigger == 0 ? 0 : 0.55); CubicKeyframe(0, duration: 0.56) }
+                }
+            ForEach(0..<6, id: \.self) { index in
+                Circle().fill(index.isMultiple(of: 2) ? color : Color(.primary))
+                    .frame(width: 4, height: 4)
+                    .keyframeAnimator(initialValue: BurstState(scale: 0.4), trigger: trigger) { view, state in
+                        view.scaleEffect(state.scale).offset(y: -state.distance).opacity(state.opacity)
+                    } keyframes: { _ in
+                        KeyframeTrack(\.distance) { MoveKeyframe(0); CubicKeyframe(size * 0.62, duration: 0.56) }
+                        KeyframeTrack(\.scale) { MoveKeyframe(0.4); CubicKeyframe(1, duration: 0.56) }
+                        KeyframeTrack(\.opacity) {
+                            MoveKeyframe(0)
+                            LinearKeyframe(trigger == 0 ? 0 : 1, duration: 0.17)
+                            LinearKeyframe(0, duration: 0.39)
+                        }
+                    }
+                    .rotationEffect(.degrees(Double(index) * 60))
+            }
+        }
+        .frame(width: size, height: size)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Floating add button: solid primary circle (glass is reserved for bars and toolbar buttons).
+struct CriaFab: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .semibold))
+                .frame(width: 60, height: 60)
+                .foregroundStyle(Color(.primaryForeground))
+                .background(Color(.primary), in: Circle())
+                .shadow(color: Color(.primary).opacity(0.4), radius: 12, y: 6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add task")
+        .accessibilityIdentifier("fab.add")
+        .padding(.trailing, 21)
+        .padding(.bottom, 16)
+    }
+}
+
+/// Prominent capsule: filled primary with a bouncy press.
 struct CriaPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.headline)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 20)
+            .frame(minHeight: 50)
             .foregroundStyle(Color(.primaryForeground))
-            .background(Color(.primary), in: RoundedRectangle(cornerRadius: Theme.radius))
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .background(Color(.primary), in: Capsule())
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
     }
 }
 
@@ -39,107 +150,36 @@ struct CriaSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.headline)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 20)
+            .frame(minHeight: 50)
             .foregroundStyle(Color(.primary))
-            .background(Color(.primarySoft), in: RoundedRectangle(cornerRadius: Theme.radius))
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .background(Color(.primarySoft), in: Capsule())
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
     }
-}
-
-/// The coloured dot for priority 1...5. Renders nothing for an unset priority.
-struct PriorityDot: View {
-    let level: Int
-
-    var body: some View {
-        if let token = ThemeToken.priority(level) {
-            Circle().fill(Color(token)).frame(width: 8, height: 8).accessibilityLabel("Priority \(level)")
-        }
-    }
-}
-
-/// Round completion checkbox used by task rows.
-struct CheckCircle: View {
-    let isDone: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-                .font(.title2)
-                .foregroundStyle(isDone ? Color(.success) : Color(.mutedForeground))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(isDone ? "Mark not done" : "Mark done")
-    }
-}
-
-/// Generic list row: leading accessory, title, optional subtitle and trailing accessory.
-struct CriaRow<Leading: View, Trailing: View>: View {
-    let title: String
-    var subtitle: String?
-    @ViewBuilder var leading: Leading
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack(spacing: 12) {
-            leading
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.rowTitle).foregroundStyle(Color(.foreground))
-                if let subtitle {
-                    Text(subtitle).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-                }
-            }
-            Spacer(minLength: 0)
-            trailing
-        }
-        .contentShape(Rectangle())
-    }
-}
-
-struct ComponentCatalogue: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Cria").font(Theme.largeTitle)
-            HStack {
-                CriaChip(text: "Today", systemImage: "calendar", tint: Color(.primary))
-                CriaChip(text: "Errands", tint: Color(.info))
-                CriaChip(text: "Urgent", tint: Color(.destructive), filled: true)
-            }
-            HStack {
-                ForEach(0...5, id: \.self) { level in PriorityDot(level: level) }
-            }
-            HStack {
-                Button("Save") {}.buttonStyle(CriaPrimaryButtonStyle())
-                Button("Cancel") {}.buttonStyle(CriaSecondaryButtonStyle())
-            }
-            CriaRow(title: "Buy milk", subtitle: "Tomorrow, Inbox") {
-                CheckCircle(isDone: false) {}
-            } trailing: {
-                PriorityDot(level: 3)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.background))
-    }
-}
-
-#Preview("Catalogue light") {
-    ComponentCatalogue().preferredColorScheme(.light)
-}
-
-#Preview("Catalogue dark") {
-    ComponentCatalogue().preferredColorScheme(.dark)
 }
 
 extension View {
-    /// Cria's warm background behind a `List` or `Form`, with rows on the card colour and hairlines in the
-    /// border colour. Scrolling, swipe actions and edit mode stay native.
+    /// Warm grouped background behind a `List` or `Form`, rows on the cell colour. Corner radius, separators,
+    /// swipe, edit mode and the scroll-edge effect stay system-drawn.
     func criaSurface() -> some View {
         scrollContentBackground(.hidden)
-            .background(Color(.background))
-            .listRowBackground(Color(.card))
-            .listRowSeparatorTint(Color(.border))
+            .background(Color(.grouped))
+            .listRowBackground(Color(.cell))
+    }
+
+    /// FAB pinned bottom-trailing, above the tab bar. For list screens only (not Search or task detail).
+    func criaFab(_ action: @escaping () -> Void) -> some View {
+        overlay(alignment: .bottomTrailing) { CriaFab(action: action) }
+    }
+
+    /// Prominent button: Liquid Glass on iOS 26, filled primary capsule before.
+    @ViewBuilder
+    func criaProminent() -> some View {
+        if #available(iOS 26, *) {
+            buttonStyle(.glassProminent).controlSize(.large)
+        } else {
+            buttonStyle(CriaPrimaryButtonStyle())
+        }
     }
 }

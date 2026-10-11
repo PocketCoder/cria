@@ -24,15 +24,32 @@ extension Color {
     }
 }
 
-/// Type scale from `globals.css`. Onest is requested by name; until the font files are bundled and listed in
-/// `UIAppFonts`, SwiftUI falls back to the system font.
+/// Native type: SF Pro through Dynamic Type text styles everywhere. Onest is used only for navigation large
+/// titles (see `applyNavigationAppearance()`) and the login wordmark.
 enum Theme {
-    static let fontName = "Onest"
-    static let rowTitle = Font.custom(fontName, size: 15, relativeTo: .body)
-    static let headline = Font.custom(fontName, size: 17, relativeTo: .headline).weight(.semibold)
-    static let title = Font.custom(fontName, size: 20, relativeTo: .title3).weight(.semibold)
-    static let largeTitle = Font.custom(fontName, size: 34, relativeTo: .largeTitle).weight(.bold)
-    static let caption = Font.custom(fontName, size: 11, relativeTo: .caption)
-    static let footnote = Font.custom(fontName, size: 10, relativeTo: .caption2)
-    static let radius: CGFloat = 10
+    static let brandFont = "Onest-Bold"
+
+    static let rowTitle = Font.body
+    static let rowSubtitle = Font.subheadline
+    static let headline = Font.headline
+    static let title = Font.title2.weight(.semibold)
+    static let chip = Font.caption.weight(.medium)
+    static let caption = Font.footnote
+    static let footnote = Font.caption2
+    static let wordmark = Font.custom(brandFont, size: 34, relativeTo: .largeTitle)
+
+    /// Custom cards only (Kanban); inset-grouped sections are drawn by the system.
+    static let radius: CGFloat = 12
+    static let cardRadius: CGFloat = 20
+    static let chipHeight: CGFloat = 22
+    static let checkSize: CGFloat = 24
+
+    /// Onest Bold for large titles; inline titles stay SF Pro semibold. Does nothing until `Onest-Bold.ttf` is
+    /// bundled and listed under `UIAppFonts`, so the system font stands in.
+    @MainActor
+    static func applyNavigationAppearance() {
+        guard let onest = UIFont(name: brandFont, size: 34) else { return }
+        let scaled = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: onest)
+        UINavigationBar.appearance().largeTitleTextAttributes = [.font: scaled, .kern: -0.6]
+    }
 }
