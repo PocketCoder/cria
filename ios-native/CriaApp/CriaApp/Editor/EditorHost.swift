@@ -27,12 +27,12 @@ struct EditorHost: View {
                 if mentionFromTyping, !mentionPicked { controller.insertLiteral("@") }
                 mentionPicked = false
                 mentionFromTyping = false
-            }) {
+            }, content: {
                 MentionPickerSheet(services: services) {
                     mentionPicked = true
                     controller.insertMention(username: $0)
                 }
-            }
+            })
             .alert("Add link", isPresented: $showLink) {
                 TextField("https://", text: $linkText).textInputAutocapitalization(.never).keyboardType(.URL)
                 Button("Add") { addLink() }
