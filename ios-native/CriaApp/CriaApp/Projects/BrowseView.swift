@@ -17,7 +17,7 @@ struct BrowseView: View {
     @State private var sharing: ProjectShareTarget?
     @State private var showRamble = false
     @State private var showPhoto = false
-    private var ai: AIStatus { AIStatus.shared }
+    private var aiStatus: AIStatus { AIStatus.shared }
     @State var filterEditor: FilterEditorTarget?
     @AppStorage("cria.projectTree.collapsed") private var collapsedJSON = "[]"
 
@@ -67,9 +67,9 @@ struct BrowseView: View {
                         filterEditor = FilterEditorTarget(record: nil)
                     }
                     Button("List from photo", systemImage: "camera.viewfinder") { showPhoto = true }
-                    if ai.isOfferable {
+                    if aiStatus.isOfferable {
                         Button("Ramble to tasks", systemImage: "sparkles") { showRamble = true }
-                            .disabled(ai.notReadyMessage != nil)
+                            .disabled(aiStatus.notReadyMessage != nil)
                     }
                 }
             }
@@ -77,7 +77,7 @@ struct BrowseView: View {
         .sheet(item: $filterEditor) { target in
             FilterEditorSheet(services: services, existing: target.record)
         }
-        .task { await ai.refresh() }
+        .task { await aiStatus.refresh() }
         .sheet(isPresented: $showRamble) { RambleSheet(services: services) }
         .sheet(isPresented: $showPhoto) { ShoppingPhotoSheet(services: services) }
         .sheet(item: $sharing) { target in

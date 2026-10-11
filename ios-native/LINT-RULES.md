@@ -6,3 +6,4 @@
 - identifier_name also flags a 2-letter internal parameter name even when its label is fine (func f(from: String, to: String)). Write 'to toISO: String' style so the internal name has 3 or more characters.
 - Do not name app-visible CriaKit types after SwiftUI types (TableColumn clashed with SwiftUI.TableColumn: 'ambiguous for type lookup'). Check SwiftUI/Foundation names before adding a public type.
 - A public struct the app target constructs needs an explicit public init (GanttData failed with 'initializer is inaccessible due to internal protection level'). SPM tests use @testable and do not catch this; only the app build does.
+- identifier_name also flags a private computed property such as 'ai' on a View (BrowseView). Name view helpers with 3 or more characters (aiStatus). The pre-push grep must include 'private var' declarations.
