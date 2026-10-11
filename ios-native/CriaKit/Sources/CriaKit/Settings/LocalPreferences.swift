@@ -52,7 +52,7 @@ public struct PreferencesCodec: Sendable {
     let version: Int
     let migrations: [PreferenceMigration]
 
-    public init(version: Int = Self.currentVersion, migrations: [PreferenceMigration] = Self.migrations) {
+    public init(version: Int = PreferencesCodec.currentVersion, migrations: [PreferenceMigration] = PreferencesCodec.migrations) {
         self.version = version
         self.migrations = migrations
     }
