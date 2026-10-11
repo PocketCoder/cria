@@ -5,25 +5,28 @@ struct BrowseData: Equatable, Sendable {
     var projects: [ProjectRecord] = []
     var openCounts: [String: Int] = [:]
     var favouriteCount = 0
+    var savedFilters: [SavedFilterRecord] = []
 }
 
 /// Browse tab: Favourites, then the project tree with colours, task counts, create and edit.
 struct BrowseView: View {
     let services: AppServices
-    @State private var live: LiveValue<BrowseData>
+    @State var live: LiveValue<BrowseData>
     @State private var editor: ProjectEditorTarget?
     @State private var pendingDelete: ProjectRecord?
+    @State var filterEditor: FilterEditorTarget?
     @AppStorage("cria.projectTree.collapsed") private var collapsedJSON = "[]"
 
     init(services: AppServices) {
         self.services = services
         let store = services.store
         _live = State(initialValue: LiveValue(initial: BrowseData()) {
-            observeStore(store, kinds: [.projects, .tasks]) { reading in
+            observeStore(store, kinds: [.projects, .tasks, .savedFilters]) { reading in
                 BrowseData(
                     projects: ProjectTree.visible(try reading.projects()),
                     openCounts: try reading.openTaskCounts(),
-                    favouriteCount: try reading.favouriteTaskCount()
+                    favouriteCount: try reading.favouriteTaskCount(),
+                    savedFilters: try reading.savedFilters()
                 )
             }
         })
@@ -42,7 +45,11 @@ struct BrowseView: View {
                     Label("Favourites", systemImage: "star.fill")
                         .badge(live.value.favouriteCount)
                 }
+                NavigationLink(value: Route.inbox) {
+                    Label("Inbox", systemImage: "tray")
+                }
             }
+            filtersSection
             Section("Projects") {
                 ForEach(ProjectTree.rows(live.value.projects, collapsed: collapsed), id: \.project.localId) { row in
                     ProjectRowView(
@@ -67,8 +74,16 @@ struct BrowseView: View {
         .refreshable { await services.refresh() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("New project", systemImage: "plus") { editor = .create }
+                Menu("Add", systemImage: "plus") {
+                    Button("New project", systemImage: "folder.badge.plus") { editor = .create }
+                    Button("New filter", systemImage: "line.3.horizontal.decrease.circle") {
+                        filterEditor = FilterEditorTarget(record: nil)
+                    }
+                }
             }
+        }
+        .sheet(item: $filterEditor) { target in
+            FilterEditorSheet(services: services, existing: target.record)
         }
         .sheet(item: $editor) { target in
             ProjectEditorSheet(services: services, target: target, projects: live.value.projects)
@@ -85,6 +100,31 @@ struct BrowseView: View {
         }
         .task { await live.run() }
     }
+}
+
+extension BrowseView {
+    @ViewBuilder var filtersSection: some View {
+        if !live.value.savedFilters.isEmpty {
+            Section("Filters") {
+                ForEach(live.value.savedFilters, id: \.serverId) { filter in
+                    NavigationLink(value: Route.savedFilter(filter.serverId)) {
+                        Label(filter.title, systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button("Delete", role: .destructive) {
+                            Task { try? await services.deleteSavedFilter(serverId: filter.serverId) }
+                        }
+                        Button("Edit") { filterEditor = FilterEditorTarget(record: filter) }.tint(Color(.info))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct FilterEditorTarget: Identifiable {
+    let record: SavedFilterRecord?
+    var id: Int { record?.serverId ?? 0 }
 }
 
 struct ProjectRowView: View {

@@ -37,4 +37,39 @@ public final class AppServices: Sendable {
         await coordinator.forceSync()
         announcePull()
     }
+
+    /// The user's default (inbox) project server id, or nil when offline or unset.
+    public func defaultProjectServerId() async -> Int? {
+        guard let id = (try? await api.currentUser())?.settings?.defaultProjectId, id > 0 else { return nil }
+        return id
+    }
+
+    // MARK: Saved filters (online only, like the web client)
+
+    public func createSavedFilter(title: String, description: String, query: String, includeNulls: Bool) async throws {
+        _ = try await api.createSavedFilter(savedFilterBody(title, description, query, includeNulls))
+        await refresh()
+    }
+
+    public func updateSavedFilter(serverId: Int, title: String, description: String, query: String, includeNulls: Bool) async throws {
+        _ = try await api.updateSavedFilter(id: serverId, savedFilterBody(title, description, query, includeNulls))
+        await refresh()
+    }
+
+    public func deleteSavedFilter(serverId: Int) async throws {
+        try await api.deleteSavedFilter(id: serverId)
+        try store.deleteSavedFilter(serverId: serverId)
+        await refresh()
+    }
+
+    private func savedFilterBody(_ title: String, _ description: String, _ query: String, _ includeNulls: Bool) -> JSONBody {
+        let filters: JSONBody = [
+            "filter": .string(query.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "filter_include_nulls": .bool(includeNulls)
+        ]
+        var body: JSONBody = ["title": .string(title.trimmingCharacters(in: .whitespacesAndNewlines)), "filters": .object(filters)]
+        let note = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !note.isEmpty { body["description"] = .string(note) }
+        return body
+    }
 }

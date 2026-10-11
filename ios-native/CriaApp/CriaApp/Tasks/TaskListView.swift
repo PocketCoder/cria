@@ -28,23 +28,7 @@ struct TaskListView: View {
     var body: some View {
         List {
             ForEach(visible, id: \.task.localId) { item in
-                NavigationLink(value: Route.task(item.task.localId)) {
-                    TaskRowView(item: item, showProject: showsProject) { toggle(item.task) }
-                }
-                .swipeActions(edge: .leading) {
-                    Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle(item.task) }
-                        .tint(Color(.success))
-                }
-                .swipeActions(edge: .trailing) {
-                    Button("Delete", systemImage: "trash", role: .destructive) {
-                        try? services.store.deleteTask(localId: item.task.localId)
-                    }
-                    Button("Star", systemImage: "star") {
-                        let patch = TaskPatch(isFavorite: !item.task.isFavorite)
-                        _ = try? services.store.updateTask(localId: item.task.localId, patch: patch)
-                    }
-                    .tint(Color(.warning))
-                }
+                TaskRowLink(services: services, item: item, showProject: showsProject)
             }
         }
         .overlay {
@@ -83,8 +67,35 @@ struct TaskListView: View {
         if case .project = source { return false }
         return true
     }
+}
 
-    private func toggle(_ task: TaskRecord) {
-        _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+/// A task row that opens the detail screen, with the shared swipe actions: done, star and delete.
+struct TaskRowLink: View {
+    let services: AppServices
+    let item: TaskListItem
+    var showProject = false
+
+    var body: some View {
+        NavigationLink(value: Route.task(item.task.localId)) {
+            TaskRowView(item: item, showProject: showProject) { toggle() }
+        }
+        .swipeActions(edge: .leading) {
+            Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
+                .tint(Color(.success))
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                try? services.store.deleteTask(localId: item.task.localId)
+            }
+            Button("Star", systemImage: "star") {
+                let patch = TaskPatch(isFavorite: !item.task.isFavorite)
+                _ = try? services.store.updateTask(localId: item.task.localId, patch: patch)
+            }
+            .tint(Color(.warning))
+        }
+    }
+
+    private func toggle() {
+        _ = try? services.store.updateTask(localId: item.task.localId, patch: TaskPatch(done: !item.task.done))
     }
 }

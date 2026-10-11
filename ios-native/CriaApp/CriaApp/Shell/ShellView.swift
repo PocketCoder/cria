@@ -34,7 +34,7 @@ struct ShellView: View {
     }
 }
 
-/// Root screen of each tab. Today, Upcoming and Search arrive in S-47 and S-48.
+/// Root screen of each tab. Search arrives in S-48.
 struct TabRoot: View {
     let tab: AppTab
     let services: AppServices
@@ -51,13 +51,17 @@ struct TabRoot: View {
                         }
                     }
                 }
-        default:
-            ContentUnavailableView(tab.rawValue.capitalized, systemImage: "hammer", description: Text("Coming in this phase."))
+        case .today:
+            SmartViewScreen(services: services, view: .today, title: "Today")
+        case .upcoming:
+            SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
+        case .search:
+            ContentUnavailableView("Search", systemImage: "hammer", description: Text("Coming in S-48."))
         }
     }
 }
 
-/// Screens pushed from a tab. Smart views arrive in S-47.
+/// Screens pushed from a tab. 
 struct RouteDestination: View {
     let route: Route
     let services: AppServices
@@ -74,8 +78,10 @@ struct RouteDestination: View {
             TaskListView(services: services, source: .label(localId), title: title)
         case .task(let localId):
             TaskDetailView(services: services, taskLocalId: localId)
-        default:
-            ContentUnavailableView("Not built yet", systemImage: "hammer")
+        case .inbox:
+            InboxScreen(services: services)
+        case .savedFilter(let serverId):
+            SavedFilterScreen(services: services, serverId: serverId)
         }
     }
 }

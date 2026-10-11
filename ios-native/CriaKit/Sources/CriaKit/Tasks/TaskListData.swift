@@ -16,6 +16,11 @@ public struct TaskListItem: Equatable, Sendable {
 }
 
 extension CriaStore {
+    /// `taskColumns` prefixed with the `t` alias, for queries that join other tables.
+    static var qualifiedTaskColumns: String {
+        taskColumns.split(separator: ",").map { "t." + $0.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: ", ")
+    }
+
     /// Tasks for a list, in the app's local order (done last), with labels and project titles attached.
     public func taskItems(_ source: TaskListSource, includeDone: Bool = true) throws -> [TaskListItem] {
         let tasks: [TaskRecord]
@@ -32,10 +37,9 @@ extension CriaStore {
 
     func tasks(withLabel labelLocalId: String, includeDone: Bool) throws -> [TaskRecord] {
         let doneClause = includeDone ? "" : "AND t.done = 0"
-        let columns = CriaStore.taskColumns.split(separator: ",").map { "t." + $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         return try database.writer.read { connection in
             try Row.fetchAll(connection, sql: """
-                SELECT \(columns.joined(separator: ", ")) FROM tasks t
+                SELECT \(CriaStore.qualifiedTaskColumns) FROM tasks t
                   JOIN task_labels tl ON tl.task_local_id = t.local_id
                  WHERE tl.label_local_id = ? AND tl.deleted = 0 AND t.deleted = 0 \(doneClause)
                  ORDER BY \(CriaStore.taskOrder)
