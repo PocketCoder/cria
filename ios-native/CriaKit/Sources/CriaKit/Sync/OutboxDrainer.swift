@@ -13,12 +13,17 @@ public actor OutboxDrainer {
     public static let maxAttempts = 10
     public static let maxOpsPerDrain = 100
     static let maxBackoff: TimeInterval = 60
+    /// A dependency block that lasts this long means the parent is never coming (it was deleted, or its create was
+    /// lost); dead-letter the op so it stops holding up everything behind it.
+    static let maxDependencyWait: TimeInterval = 24 * 3600
 
     private let api: ApiClient
     private let store: CriaStore
     private var executors: [String: any OutboxExecutor]
     private let now: @Sendable () -> Date
-    private var isDraining = false
+    /// The drain in progress, if any. A second caller joins it instead of returning early, so a pull that follows
+    /// `drain()` never overlaps a push that is still mid-request.
+    private var inFlight: Task<Void, Never>?
 
     public init(api: ApiClient, store: CriaStore, executors: [String: any OutboxExecutor] = [:],
                 now: @escaping @Sendable () -> Date = { Date() }) {
@@ -40,10 +45,17 @@ public actor OutboxDrainer {
     /// Takes the oldest op, executes it, deletes it on success, backs off or dead-letters on failure,
     /// and stops at the first failure so FIFO order holds across retries.
     public func drain() async {
-        guard !isDraining else { return }
-        isDraining = true
-        defer { isDraining = false }
+        if let inFlight {
+            await inFlight.value
+            return
+        }
+        let task = Task { await self.runDrain() }
+        inFlight = task
+        await task.value
+    }
 
+    private func runDrain() async {
+        defer { inFlight = nil }
         var processed = 0
         while processed < Self.maxOpsPerDrain {
             guard let head = try? store.outboxHead() else { break }
@@ -70,11 +82,13 @@ public actor OutboxDrainer {
 
     private func handleFailure(_ op: OutboxRow, error: any Error) {
         let isDependency = (error as? ApiError)?.dependency ?? false
-        // A dependency block (an un-synced parent) is not the op's fault, so it does not use up an attempt.
-        let attempts = isDependency ? op.attempts : op.attempts + 1
+        // A dependency block (an un-synced parent) or being signed out is not the op's fault, so it does not use up
+        // an attempt.
+        let attempts = (isDependency || error is AuthRequiredError) ? op.attempts : op.attempts + 1
         let text = String(describing: error)
         let current = now()
-        if !Self.isRetryable(error) || (attempts >= Self.maxAttempts && !isDependency) {
+        let staleDependency = isDependency && op.createdAt < current.addingTimeInterval(-Self.maxDependencyWait).formatted(.iso8601)
+        if !Self.isRetryable(error) || staleDependency || (attempts >= Self.maxAttempts && !isDependency) {
             try? store.deadLetterOutboxRow(op, attempts: attempts, error: text, at: current.formatted(.iso8601))
         } else {
             let next = current.addingTimeInterval(Self.backoff(attempts: attempts)).formatted(.iso8601)

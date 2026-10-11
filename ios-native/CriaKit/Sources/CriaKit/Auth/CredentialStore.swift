@@ -92,10 +92,30 @@ public struct CredentialStore: Sendable {
         self.slot = slot
     }
 
-    /// An unreadable Keychain or a corrupt blob counts as signed out; signing in rewrites the slot.
+    public enum LoadResult: Sendable {
+        case found(Credentials)
+        /// Nothing stored, or a corrupt blob (signing in rewrites the slot).
+        case none
+        /// The Keychain refused to answer (locked device, interaction not allowed). Credentials may still be there.
+        case unavailable
+    }
+
+    public func loadResult() -> LoadResult {
+        let raw: String?
+        do {
+            raw = try slot.read()
+        } catch {
+            return .unavailable
+        }
+        guard let raw, let data = raw.data(using: .utf8),
+              let credentials = try? JSONDecoder().decode(Credentials.self, from: data) else { return .none }
+        return .found(credentials)
+    }
+
+    /// An unreadable Keychain or a corrupt blob counts as no credentials.
     public func load() -> Credentials? {
-        guard let raw = try? slot.read(), let data = raw.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(Credentials.self, from: data)
+        if case .found(let credentials) = loadResult() { return credentials }
+        return nil
     }
 
     public func save(_ credentials: Credentials) throws {

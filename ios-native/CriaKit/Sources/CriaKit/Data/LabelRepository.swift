@@ -105,22 +105,41 @@ extension CriaStore {
         }
     }
 
-    /// Silent: replaces a task's reminders with the server's. Used by the pull.
+    /// Silent: replaces a task's reminders with the server's. Skipped while the task has a pending local edit (a
+    /// reminder added offline would be wiped, and the queued update would then send the server's list). Reminders that
+    /// already fired stay marked as fired, so a pull cannot make them notify again.
     public func replaceRemindersFromServer(taskLocalId: String, _ reminders: [TaskReminderResponse]) throws {
         try database.writer.write { connection in
+            let dirty = try Bool.fetchOne(connection, sql: "SELECT dirty FROM tasks WHERE local_id = ?", arguments: [taskLocalId])
+            guard dirty != true else { return }
+            let fired = try Row.fetchAll(connection, sql: """
+                SELECT reminder_at, relative_period, relative_to FROM task_reminders WHERE task_local_id = ? AND notified = 1
+                """, arguments: [taskLocalId]).map {
+                ReminderKey(at: $0["reminder_at"], period: $0["relative_period"], to: $0["relative_to"])
+            }
             try connection.execute(sql: "DELETE FROM task_reminders WHERE task_local_id = ?", arguments: [taskLocalId])
             for reminder in reminders {
+                let at = normaliseDate(reminder.reminder)
+                let key = ReminderKey(at: at, period: reminder.relativePeriod, to: reminder.relativeTo)
                 try connection.execute(sql: """
                     INSERT OR IGNORE INTO task_reminders (task_local_id, reminder_at, relative_period, relative_to, notified)
-                    VALUES (?, ?, ?, ?, 0)
-                    """, arguments: [taskLocalId, normaliseDate(reminder.reminder), reminder.relativePeriod, reminder.relativeTo])
+                    VALUES (?, ?, ?, ?, ?)
+                    """, arguments: [taskLocalId, at, reminder.relativePeriod, reminder.relativeTo, fired.contains(key) ? 1 : 0])
             }
         }
     }
 
-    /// Silent: replaces a task's relations with the server's. Other tasks resolve to local ids when synced.
+    /// Silent: replaces a task's relations with the server's. Skipped while the task has a pending edit or a queued
+    /// relation change (an optimistic relation would be wiped before its op ran). Other tasks resolve to local ids
+    /// when synced.
     public func replaceRelationsFromServer(taskLocalId: String, _ related: [String: [RelatedTaskResponse]]) throws {
         try database.writer.write { connection in
+            let dirty = try Bool.fetchOne(connection, sql: "SELECT dirty FROM tasks WHERE local_id = ?", arguments: [taskLocalId])
+            let queued = try Bool.fetchOne(connection, sql: """
+                SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task_relation'
+                                 AND (entity_local_id = ?1 OR payload LIKE '%' || ?1 || '%'))
+                """, arguments: [taskLocalId]) ?? false
+            guard dirty != true, !queued else { return }
             try connection.execute(sql: "DELETE FROM task_relations WHERE task_local_id = ?", arguments: [taskLocalId])
             let now = isoNow()
             for (kind, tasks) in related {
@@ -136,4 +155,11 @@ extension CriaStore {
             }
         }
     }
+}
+
+/// Identity of a reminder for carrying its `notified` flag across a pull.
+private struct ReminderKey: Hashable {
+    let at: String?
+    let period: Int?
+    let to: String?
 }

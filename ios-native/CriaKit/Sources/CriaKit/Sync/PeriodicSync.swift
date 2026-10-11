@@ -12,6 +12,9 @@ public actor PeriodicSync {
     private let reconcileInterval: TimeInterval
     private let tick: @Sendable () async -> Void
     private let reconcile: @Sendable () async -> Void
+    /// When the last reconcile finished. Without it every activation restarts the wait, and on iOS (where the timers
+    /// pause in the background) a reconcile would almost never get to run.
+    private let lastReconcile: (@Sendable () -> Date?)?
     private var tickTask: Task<Void, Never>?
     private var reconcileTask: Task<Void, Never>?
     private var started = false
@@ -20,7 +23,9 @@ public actor PeriodicSync {
     public init(interval: TimeInterval = PeriodicSync.defaultInterval,
                 reconcileInterval: TimeInterval = PeriodicSync.defaultReconcileInterval,
                 tick: @escaping @Sendable () async -> Void,
-                reconcile: @escaping @Sendable () async -> Void = {}) {
+                reconcile: @escaping @Sendable () async -> Void = {},
+                lastReconcile: (@Sendable () -> Date?)? = nil) {
+        self.lastReconcile = lastReconcile
         self.interval = interval
         self.reconcileInterval = reconcileInterval
         self.tick = tick
@@ -55,6 +60,7 @@ public actor PeriodicSync {
         let reconcileInterval = reconcileInterval
         let tick = tick
         let reconcile = reconcile
+        let firstReconcileDelay = firstReconcileDelay()
         tickTask = Task {
             await tick()
             while !Task.isCancelled {
@@ -64,12 +70,22 @@ public actor PeriodicSync {
             }
         }
         reconcileTask = Task {
+            var wait = firstReconcileDelay
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(reconcileInterval * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                 if Task.isCancelled { break }
                 await reconcile()
+                wait = reconcileInterval
             }
         }
+    }
+
+    /// A full interval, unless the last reconcile is known: then only what is left of it, or a short wait when none
+    /// has ever run.
+    private func firstReconcileDelay() -> TimeInterval {
+        guard let lastReconcile else { return reconcileInterval }
+        guard let last = lastReconcile() else { return min(30, reconcileInterval) }
+        return max(0, reconcileInterval - Date().timeIntervalSince(last))
     }
 
     private func cancel() {

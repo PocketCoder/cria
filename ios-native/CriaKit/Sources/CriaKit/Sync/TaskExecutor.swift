@@ -38,9 +38,12 @@ public struct TaskExecutor: OutboxExecutor {
             // Zero or negative ids are pseudo-projects (Favorites, saved filters), never a real destination.
             throw ApiError.blocked("Project not yet synced")
         }
-        let created = try await api.createTask(projectId: projectServerId, taskToBody(task.record, projectServerId: projectServerId))
+        let response = try await api.send(
+            .put, "/projects/\(projectServerId)/tasks", body: taskToBody(task.record, projectServerId: projectServerId)
+        )
+        let (created, raw) = try Self.decoded(response)
         try store.cacheCreateResponse(opId: op.id, payload: op.payload, serverId: created.id)
-        try store.markTaskSynced(localId: localId, serverId: created.id, updatedAt: created.updated)
+        try store.markTaskSynced(localId: localId, serverId: created.id, updatedAt: created.updated, lastSynced: raw, opId: op.id)
     }
 
     private func update(_ op: OutboxRow, _ task: PushTask, _ api: ApiClient, _ store: CriaStore) async throws {
@@ -64,10 +67,15 @@ public struct TaskExecutor: OutboxExecutor {
             if diverged { return }
         }
         // A failed GET skips the check: the push itself may fail and retry.
-        let updated = try await api.updateTask(
-            id: serverId, taskToBody(task.record, projectServerId: projectServerId.flatMap { $0 > 0 ? $0 : nil }, reminders: reminders)
-        )
-        try store.markTaskSynced(localId: localId, serverId: nil, updatedAt: updated.updated)
+        let body = taskToBody(task.record, projectServerId: projectServerId.flatMap { $0 > 0 ? $0 : nil }, reminders: reminders)
+        let (updated, raw) = try Self.decoded(try await api.send(.post, "/tasks/\(serverId)", body: body))
+        try store.markTaskSynced(localId: localId, serverId: nil, updatedAt: updated.updated, lastSynced: raw, opId: op.id)
+    }
+
+    /// The decoded task and the server's own JSON, which becomes the new `last_synced` snapshot.
+    private static func decoded(_ response: ApiResponse) throws -> (TaskResponse, String) {
+        let task = try response.decoded(TaskResponse.self)
+        return (task, String(bytes: response.data, encoding: .utf8) ?? "")
     }
 
     private func delete(_ task: PushTask, _ api: ApiClient, _ store: CriaStore) async throws {
@@ -115,19 +123,38 @@ extension CriaStore {
         }
     }
 
-    /// Push path: records the server's answer and announces `tasks`.
-    func markTaskSynced(localId: String, serverId: Int?, updatedAt: String?) throws {
+    /// Push path: records the server's answer and announces `tasks`. The row only becomes clean when no other op is
+    /// queued for it: an edit made while this request was in flight must stay dirty so a pull cannot overwrite it.
+    /// `lastSynced` (the server's reply) becomes the snapshot the next conflict check compares against, so the
+    /// client's own push is never mistaken for someone else's change.
+    func markTaskSynced(localId: String, serverId: Int?, updatedAt: String?, lastSynced: String? = nil, opId: Int? = nil) throws {
         let now = isoNow()
         try userWrite(announcing: [.tasks]) { connection in
-            if let serverId {
-                try connection.execute(sql: """
-                    UPDATE tasks SET server_id = ?, synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?
-                    """, arguments: [serverId, now, updatedAt ?? now, localId])
-            } else {
-                try connection.execute(sql: """
-                    UPDATE tasks SET synced_at = ?, dirty = 0, updated_at = ? WHERE local_id = ?
-                    """, arguments: [now, updatedAt ?? now, localId])
+            var pending = false
+            if let opId {
+                pending = try Bool.fetchOne(connection, sql: """
+                    SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND id <> ?)
+                    """, arguments: [localId, opId]) ?? false
             }
+            var assignments = ["synced_at = ?"]
+            var arguments: [(any DatabaseValueConvertible)?] = [now]
+            if let serverId {
+                assignments.append("server_id = ?")
+                arguments.append(serverId)
+            }
+            if let lastSynced {
+                assignments.append("last_synced = ?")
+                arguments.append(lastSynced)
+            }
+            if !pending {
+                assignments += ["dirty = 0", "updated_at = ?"]
+                arguments.append(updatedAt ?? now)
+            }
+            arguments.append(localId)
+            try connection.execute(
+                sql: "UPDATE tasks SET \(assignments.joined(separator: ", ")) WHERE local_id = ?",
+                arguments: StatementArguments(arguments)
+            )
         }
     }
 

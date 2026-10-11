@@ -14,12 +14,15 @@ public struct TaskLinkExecutor: OutboxExecutor {
         let taskLocalId = payload.string("task_local_id", "taskLocalId") ?? String(op.entityLocalId.split(separator: ":").first ?? "")
 
         guard let taskServerId = try store.pushTaskServerId(localId: taskLocalId) else {
+            // The task was deleted before this op ran (a never-synced task is dropped with its create): nothing to do.
+            if try !store.pushRowExists(table: "tasks", localId: taskLocalId) { return }
             throw ApiError.blocked("\(op.entityType): task has no server id")
         }
         switch op.entityType {
         case "task_label":
             let labelLocalId = payload.string("label_local_id", "labelLocalId") ?? ""
             guard let labelServerId = try store.pushLabelServerId(localId: labelLocalId) else {
+                if try !store.pushRowExists(table: "labels", localId: labelLocalId) { return }
                 throw ApiError.blocked("task_label: label has no server id")
             }
             if adding {

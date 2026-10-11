@@ -18,6 +18,7 @@ public struct CommentExecutor: OutboxExecutor {
         // Never send an inline-image placeholder whose upload has already landed.
         let comment = try store.resolveUploadedPendingRefs(storedComment, serverBase: await api.serverBase() ?? "") ?? storedComment
         guard let taskServerId = try store.pushTaskServerId(localId: taskLocalId) else {
+            if try !store.pushRowExists(table: "tasks", localId: taskLocalId) { return }
             throw ApiError.blocked("task_comment: parent task not synced yet")
         }
 

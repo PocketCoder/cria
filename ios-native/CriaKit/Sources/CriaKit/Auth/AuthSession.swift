@@ -29,12 +29,29 @@ public actor AuthSession: SessionProviding {
         self.onSignOut = onSignOut
     }
 
-    public func hydrate() {
-        if let credentials = store.load() {
-            status = .authenticated(credentials)
-        } else {
-            status = .unauthenticated
+    /// True when the Keychain could not be read at launch (for example before the first unlock), as opposed to
+    /// holding no credentials. The app calls `hydrate()` again when it becomes active.
+    public private(set) var credentialsUnavailable = false
+
+    /// Reads the stored credentials, retrying briefly when the Keychain is not readable yet. An unreadable Keychain
+    /// is not the same as signed out: it does not clear anything, and `credentialsUnavailable` lets the app retry.
+    public func hydrate() async {
+        for attempt in 0..<3 {
+            switch store.loadResult() {
+            case .found(let credentials):
+                credentialsUnavailable = false
+                status = .authenticated(credentials)
+                return
+            case .none:
+                credentialsUnavailable = false
+                status = .unauthenticated
+                return
+            case .unavailable:
+                if attempt < 2 { try? await Task.sleep(nanoseconds: UInt64(400_000_000 << attempt)) }
+            }
         }
+        credentialsUnavailable = true
+        status = .unauthenticated
     }
 
     /// Persists first so a Keychain failure leaves the app signed out instead of half signed in.
@@ -119,6 +136,10 @@ public actor AuthSession: SessionProviding {
             guard response.isSuccess,
                   let body = try? JSONDecoder().decode(RefreshBody.self, from: response.data),
                   let token = body.token, !token.isEmpty else { return nil }
+            // The user may have signed out, or into another server, while the request was in flight: the new tokens
+            // belong to the old session and must not be written into the new one.
+            guard case .authenticated(let current) = status, current.serverURL == credentials.serverURL,
+                  current.refreshToken == refreshToken else { return nil }
             updateSession(token: token, refreshToken: response.refreshCookie ?? refreshToken)
             return token
         } catch {

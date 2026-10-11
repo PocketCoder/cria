@@ -116,6 +116,11 @@ public final class HTTPCore: Sendable {
         } catch let error as NetworkError {
             breaker.recordFailure()
             throw error
+        } catch is CancellationError {
+            // The caller went away (a view disappeared); that says nothing about the server's health.
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch {
             breaker.recordFailure()
             throw NetworkError(error.localizedDescription)

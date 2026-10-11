@@ -11,6 +11,16 @@ extension CriaStore {
         try database.writer.read { try Int.fetchOne($0, sql: sql, arguments: [localId]) }
     }
 
+    /// Whether a local row still exists. A queued op whose parent is gone can never succeed, so it must finish as a
+    /// no-op rather than block the queue.
+    func pushRowExists(table: String, localId: String) throws -> Bool {
+        try database.writer.read { connection in
+            try Bool.fetchOne(
+                connection, sql: "SELECT EXISTS(SELECT 1 FROM \(table) WHERE local_id = ?)", arguments: [localId]
+            ) ?? false
+        }
+    }
+
     /// Hard-deletes one row (and any extra statements) and announces.
     func dropRow(table: String, localId: String, announcing kinds: [ChangeKind], also extra: [(String, [String])] = []) throws {
         try userWrite(announcing: kinds) { connection in
@@ -21,14 +31,19 @@ extension CriaStore {
         }
     }
 
-    /// Create succeeded (or its id was cached). `onlyIfUnchangedSince` keeps `dirty` when the user edited the row
-    /// while the request was in flight, so that edit still pushes.
+    /// Create succeeded (or its id was cached). The server id is always recorded: losing it would make the next pull
+    /// insert a duplicate. `onlyIfUnchangedSince` keeps `dirty` (and the local `updated_at`) when the user edited the
+    /// row while the request was in flight, so that edit still pushes.
     func markCreated(table: String, localId: String, serverId: Int?, updatedAt: String?, onlyIfUnchangedSince: String?,
                      announcing kind: ChangeKind) throws {
         let now = isoNow()
         try userWrite(announcing: [kind]) { connection in
-            var sql = "UPDATE \(table) SET server_id = ?, synced_at = ?, dirty = 0"
-            var arguments: [(any DatabaseValueConvertible)?] = [serverId, now]
+            try connection.execute(
+                sql: "UPDATE \(table) SET server_id = ?, synced_at = ? WHERE local_id = ?",
+                arguments: [serverId, now, localId]
+            )
+            var sql = "UPDATE \(table) SET dirty = 0"
+            var arguments: [(any DatabaseValueConvertible)?] = []
             if let updatedAt {
                 sql += ", updated_at = ?"
                 arguments.append(updatedAt)

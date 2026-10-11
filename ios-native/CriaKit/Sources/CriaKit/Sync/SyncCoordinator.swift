@@ -60,6 +60,8 @@ public actor SyncCoordinator {
     private var periodic: PeriodicSync?
     private var outboxObserver: Task<Void, Never>?
     private var isTicking = false
+    /// Callers of `forceSync` that arrived while a cycle was running; they resume when it ends.
+    private var idleWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(puller: Puller, drainer: OutboxDrainer, store: CriaStore) {
         self.puller = puller
@@ -76,7 +78,8 @@ public actor SyncCoordinator {
         let sync = PeriodicSync(
             interval: interval, reconcileInterval: reconcileInterval,
             tick: { [weak self] in await self?.tick() },
-            reconcile: { [weak self] in await self?.reconcile() }
+            reconcile: { [weak self] in await self?.reconcile() },
+            lastReconcile: { SyncCoordinator.lastReconcile() }
         )
         periodic = sync
         let drainer = drainer
@@ -109,24 +112,49 @@ public actor SyncCoordinator {
     public func tick() async {
         guard !isTicking else { return }
         isTicking = true
-        defer { isTicking = false }
+        defer { endCycle() }
         await runCycle(track: false)
     }
 
-    /// Manual refresh with per-step progress and collected errors.
+    /// Manual refresh with per-step progress and collected errors. When a cycle is already running, this waits for it
+    /// to finish instead of returning at once, so a caller that announces "done" afterwards is not early.
     public func forceSync() async {
-        guard !isTicking else { return }
+        if isTicking {
+            await withCheckedContinuation { idleWaiters.append($0) }
+            return
+        }
         isTicking = true
-        defer { isTicking = false }
+        defer { endCycle() }
         await runCycle(track: true)
     }
 
+    private func endCycle() {
+        isTicking = false
+        let waiting = idleWaiters
+        idleWaiters = []
+        for waiter in waiting { waiter.resume() }
+    }
+
+    /// Deletes local rows the server no longer has. Runs under the same guard as a sync cycle, so a pull and a
+    /// reconcile never overlap; if a cycle is running, this one is skipped and the next interval tries again.
     public func reconcile() async {
+        guard !isTicking else { return }
+        isTicking = true
+        defer { endCycle() }
         do {
             try await puller.reconcileDeletions()
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastReconcileKey)
         } catch {
             status.update { $0.errors.append(.init(step: "Reconcile", message: String(describing: error))) }
         }
+    }
+
+    static let lastReconcileKey = "cria.lastReconcileAt"
+
+    /// When the last successful reconcile finished, so a launch does not restart the wait from zero.
+    static func lastReconcile() -> Date? {
+        let stamp = UserDefaults.standard.double(forKey: lastReconcileKey)
+        return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
     }
 
     private func runCycle(track: Bool) async {

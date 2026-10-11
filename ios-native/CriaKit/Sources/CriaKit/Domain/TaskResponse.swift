@@ -75,12 +75,35 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
         repeatAfter = try container.decodeIfPresent(Int.self, forKey: .repeatAfter)
         repeatMode = try container.decodeIfPresent(Int.self, forKey: .repeatMode)
         identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
-        labels = try container.decodeIfPresent([LabelResponse].self, forKey: .labels)
-        assignees = try container.decodeIfPresent([AssigneeResponse].self, forKey: .assignees)
-        attachments = try container.decodeIfPresent([TaskAttachmentResponse].self, forKey: .attachments)
-        reminders = try container.decodeIfPresent([TaskReminderResponse].self, forKey: .reminders)
-        comments = try container.decodeIfPresent([CommentResponse].self, forKey: .comments)
-        relatedTasks = try container.decodeIfPresent([String: [RelatedTaskResponse]].self, forKey: .relatedTasks)
+        labels = try container.lossyArray(LabelResponse.self, forKey: .labels)
+        assignees = try container.lossyArray(AssigneeResponse.self, forKey: .assignees)
+        attachments = try container.lossyArray(TaskAttachmentResponse.self, forKey: .attachments)
+        reminders = try container.lossyArray(TaskReminderResponse.self, forKey: .reminders)
+        comments = try container.lossyArray(CommentResponse.self, forKey: .comments)
+        relatedTasks = container.lossyRelated(forKey: .relatedTasks)
+    }
+}
+
+/// One malformed nested item (a comment with a null id, a relation with an odd kind) must not drop the whole task from
+/// a pull, so nested lists decode item by item and skip what does not fit. The TypeScript validates each item with
+/// `safeParse` for the same reason.
+private struct Lossy<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: any Decoder) throws {
+        value = try? Value(from: decoder)
+    }
+}
+
+extension KeyedDecodingContainer {
+    func lossyArray<Value: Decodable>(_ type: Value.Type, forKey key: Key) throws -> [Value]? {
+        guard let boxes = try? decodeIfPresent([Lossy<Value>].self, forKey: key) else { return nil }
+        return boxes.compactMap(\.value)
+    }
+
+    func lossyRelated(forKey key: Key) -> [String: [RelatedTaskResponse]]? {
+        guard let boxes = try? decodeIfPresent([String: [Lossy<RelatedTaskResponse>]].self, forKey: key) else { return nil }
+        return boxes.mapValues { $0.compactMap(\.value) }
     }
 }
 
