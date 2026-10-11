@@ -96,6 +96,9 @@ public struct TaskPatch: Sendable {
     public var percentDone: Double?
     /// Moves the task to another project.
     public var projectLocalId: String?
+    /// Recurrence: interval in seconds, and mode (1 = monthly).
+    public var repeatAfter: Int?
+    public var repeatMode: Int?
 
     public init(title: String? = nil, done: Bool? = nil, dueDate: String? = nil,
                 priority: Int? = nil, isFavorite: Bool? = nil) {
@@ -124,7 +127,8 @@ extension TaskPatch {
         let optionalFields: [(String, (any DatabaseValueConvertible)?)] = [
             ("due_date", dueDate), ("start_date", startDate), ("end_date", endDate),
             ("description", description), ("project_local_id", projectLocalId),
-            ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone)
+            ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone),
+            ("repeat_after", repeatAfter), ("repeat_mode", repeatMode)
         ]
         for (column, value) in optionalFields where value != nil {
             add(column, value)

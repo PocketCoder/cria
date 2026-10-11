@@ -29,6 +29,7 @@ struct RootView: View {
         case .authenticated:
             if let services = model.services {
                 ShellView(services: services) { Task { await model.signOut() } }
+                    .task { await ReminderScheduler.run(store: services.store) }
             } else if let error = model.startupError {
                 Text(error).padding()
             } else {

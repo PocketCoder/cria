@@ -84,6 +84,7 @@ struct TaskDetailView: View {
                 FlowLabels(labels: live.value.labels)
                 Button("Edit labels", systemImage: "tag") { showLabels = true }
             }
+            ReminderSection(services: services, task: task)
             RelationsSection(services: services, taskLocalId: taskLocalId)
             CommentsSection(services: services, taskLocalId: taskLocalId)
             Section {
