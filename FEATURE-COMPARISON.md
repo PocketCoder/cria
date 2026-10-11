@@ -268,6 +268,7 @@ Everything here is client-side and writes ordinary Vikunja tasks.
 | Offline-first outbox + conflict modal | Includes offline attachment uploads |
 | Local FTS5 search | Works offline |
 | iOS app | OS-scheduled reminders, native tab bar |
+| Native SwiftUI iOS app (`ios-native/`) | iOS 26 design refresh: Liquid Glass tabs with a Search tab, large Onest titles, priority-ring completion with burst, floating add button, inset-grouped screens, week strip on Upcoming, Kanban cards, redesigned Ramble and List from photo sheets. Settings parity with the desktop app: General (default project, week start, Quick Add Magic, show completed, discoverability, language, timezone, date and time format), Appearance (colour scheme, completion sound), Notifications (morning summary, weekly round-up, email reminders, overdue digest), Photo capture defaults, Account (display name, avatar), Security (password, email, two-factor), Sessions, API tokens, Teams, Data export and account deletion. Language is sent to the server only (the UI is not translated); deleting an account signs the device out because Vikunja confirms deletion by email. Desktop-only settings (tray, autostart, shortcuts, updater) do not apply. 🟡 not yet checked on a device |
 | Desktop shell | Tray, global shortcut, autostart, Dock badge |
 | Multi-select `SelectionBar` | Bulk complete, schedule, move, priority, delete |
 

@@ -19,6 +19,8 @@ struct QuickAddSheet: View {
     @State private var line = ""
     @State private var projects: [ProjectRecord] = []
     @State private var projectId = ""
+    /// The server's default (inbox) project, read once the sheet opens; nil offline or when unset.
+    @State private var defaultServerId: Int?
     @State private var priority = 0
     @State private var dueISO = ""
     @State private var labelTitles: [String] = []
@@ -30,7 +32,7 @@ struct QuickAddSheet: View {
     private var aiStatus: AIStatus { AIStatus.shared }
 
     private var baseProjectId: String {
-        pickFallbackProjectId(projects: projects, selectedLocalId: contextProjectId, defaultServerProjectId: nil) ?? ""
+        pickFallbackProjectId(projects: projects, selectedLocalId: contextProjectId, defaultServerProjectId: defaultServerId) ?? ""
     }
 
     var body: some View {
@@ -68,6 +70,7 @@ struct QuickAddSheet: View {
         }
         .presentationDetents([.medium, .large])
         .task { await aiStatus.refresh() }
+        .task { await adoptServerDefault() }
     }
 
     private var hint: some View {
@@ -164,6 +167,14 @@ struct QuickAddSheet: View {
                 }
             }
         }
+    }
+
+    /// Starts on the server's default project, unless the user or a parsed `+project` has already picked another.
+    private func adoptServerDefault() async {
+        guard let serverId = await services.defaultProjectServerId() else { return }
+        let before = baseProjectId
+        defaultServerId = serverId
+        if projectId == before || projectId.isEmpty { projectId = baseProjectId }
     }
 
     private func load() {

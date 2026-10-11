@@ -41,10 +41,9 @@ struct SettingsView: View {
                     Button("Done", systemImage: "checkmark") { dismiss() }.modifier(CriaProminentToolbarButton())
                 }
             }
-            .task {
-                projects = ProjectTree.visible((try? services.store.projects()) ?? [])
-                await model.load()
-            }
+            .task { projects = ProjectTree.visible((try? services.store.projects()) ?? []) }
+            // Also runs when a pushed screen (Account, ...) pops back, so the account card shows the saved name.
+            .onAppear { Task { await model.load() } }
         }
     }
 

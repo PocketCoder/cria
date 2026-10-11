@@ -37,6 +37,11 @@ public final class AppServices: Sendable {
         await applyAccountDefaults()
     }
 
+    /// Tells the extensions and intents the default project changed in Settings, without waiting for the next launch.
+    public func rememberDefaultProject(serverId: Int) {
+        try? store.rememberCaptureProject(serverId: serverId > 0 ? serverId : nil)
+    }
+
     /// One read of the user, applied where it is needed: the default project (extensions and intents file new tasks
     /// there without asking the server), the Quick Add Magic mode, week start and timezone (so they apply from the
     /// first launch, not only after Settings is opened). A failed read (offline) changes nothing.

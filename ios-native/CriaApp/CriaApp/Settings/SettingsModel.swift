@@ -82,6 +82,7 @@ final class SettingsModel {
 
     func setDefaultProject(_ serverId: Int) async {
         await save(GeneralSettings.changeDefaultProject(serverId)) { $0.defaultProjectId = serverId }
+        services.rememberDefaultProject(serverId: serverId)
     }
 
     func clearBackgrounds() {
