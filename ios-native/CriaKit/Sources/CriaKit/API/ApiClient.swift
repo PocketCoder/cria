@@ -126,6 +126,15 @@ public final class ApiClient: Sendable {
         return request
     }
 
+    /// JSON merge-patch (RFC 7386), as Vikunja v2 takes for partial updates. Non-2xx is returned, not thrown.
+    public func mergePatch(_ path: String, body: JSONBody) async throws -> ApiResponse {
+        try await sendAuthorized { base, token in
+            var request = try self.buildRequest(.patch, url: base + path, query: [:], body: body, token: token)
+            request.setValue("application/merge-patch+json", forHTTPHeaderField: "Content-Type")
+            return request
+        }
+    }
+
     // MARK: Typed helpers (the `callApi` equivalent)
 
     public func get<T: Decodable>(_ path: String, query: [String: String] = [:], as type: T.Type = T.self) async throws -> T {

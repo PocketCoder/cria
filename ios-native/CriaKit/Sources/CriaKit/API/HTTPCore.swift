@@ -35,6 +35,8 @@ public struct ApiResponse: Sendable {
     let refreshCookie: String?
     /// `x-pagination-total-pages` header; 1 when absent.
     public let totalPages: Int
+    /// `Content-Type` header, if any.
+    public let contentType: String?
 
     public var isSuccess: Bool { (200..<300).contains(status) }
 
@@ -81,7 +83,7 @@ public func normalizeBase(_ url: String) -> String {
 }
 
 public enum HTTPMethod: String, Sendable {
-    case get = "GET", put = "PUT", post = "POST", delete = "DELETE"
+    case get = "GET", put = "PUT", post = "POST", delete = "DELETE", patch = "PATCH"
 }
 
 /// Raw single-shot network call: circuit breaker, timeout and error mapping. No auth logic, so the
@@ -109,7 +111,8 @@ public final class HTTPCore: Sendable {
             let setCookie = http.value(forHTTPHeaderField: "Set-Cookie")
             let pages = http.value(forHTTPHeaderField: "x-pagination-total-pages").flatMap { Int($0) } ?? 1
             return ApiResponse(status: http.statusCode, data: data,
-                               refreshCookie: readRefreshCookie(setCookie: setCookie), totalPages: pages)
+                               refreshCookie: readRefreshCookie(setCookie: setCookie), totalPages: pages,
+                               contentType: http.value(forHTTPHeaderField: "Content-Type"))
         } catch let error as NetworkError {
             breaker.recordFailure()
             throw error
