@@ -9,7 +9,10 @@ final class ProjectMutationTests: XCTestCase {
 
         XCTAssertNil(created.serverId)
         XCTAssertEqual(created.hexColor, "ff0000")
-        XCTAssertEqual(try store.projects().map(\.title), ["First", "Second"])
+        // Unpositioned (synced) projects sort after positioned ones, so the new project lists first.
+        let stored = try XCTUnwrap(try store.project(localId: created.localId))
+        XCTAssertEqual(stored.position, 1024)
+        XCTAssertEqual(Set(try store.projects().map(\.title)), ["First", "Second"])
         let entries = try outboxEntries(store, entity: "project")
         XCTAssertEqual(entries.map(\.operation), ["create"])
         XCTAssertEqual(try payloadObject(entries[0])["title"] as? String, "Second")
