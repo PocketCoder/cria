@@ -45,14 +45,20 @@ public final class ApiClient: Sendable {
     /// use `ApiResponse.decoded()` or the typed helpers below to throw `ApiError`.
     public func send(_ method: HTTPMethod, _ path: String, query: [String: String] = [:],
                      body: (any Encodable & Sendable)? = nil) async throws -> ApiResponse {
+        try await sendAuthorized { base, token in
+            try self.buildRequest(method, url: base + path, query: query, body: body, token: token)
+        }
+    }
+
+    /// Shared send path: auth, plaintext guard, refresh-and-retry-once. `build` gets the API base and token.
+    func sendAuthorized(_ build: (_ base: String, _ token: String) throws -> URLRequest) async throws -> ApiResponse {
         let snapshot = await session?.snapshot()
         if session != nil && snapshot == nil { throw AuthRequiredError() }
         let base = "\(fixedBase ?? normalizeBase(snapshot?.serverURL ?? ""))/api/\(version.rawValue)"
         let token = snapshot?.token ?? fixedToken ?? ""
         if !token.isEmpty { try guardDestination(base) }
 
-        let request = try buildRequest(method, url: base + path, query: query, body: body, token: token)
-        let first = try await core.fetchOnce(request)
+        let first = try await core.fetchOnce(try build(base, token))
         guard let session else { return first }
         if first.isSuccess {
             await session.noteAuthorized()
@@ -61,14 +67,43 @@ public final class ApiClient: Sendable {
         guard first.status == 401 else { return first }
         // Refresh only for authenticated password sessions, never for the refresh call itself.
         if await session.canRefresh(), let fresh = await session.refreshSession() {
-            let retry = try await core.fetchOnce(
-                try buildRequest(method, url: base + path, query: query, body: body, token: fresh))
+            let retry = try await core.fetchOnce(try build(base, fresh))
             if retry.isSuccess { await session.noteAuthorized() }
             if retry.status == 401 { await session.noteUnauthorized() }
             return retry
         }
         await session.noteUnauthorized()
         return first
+    }
+
+    /// Uploads one file as multipart form data (Vikunja's attachment endpoint reads the plural `files` field)
+    /// and returns the raw JSON of the first created attachment.
+    public func uploadAttachment(taskId: Int, fileName: String, mime: String, bytes: Data) async throws -> Data {
+        let boundary = "cria-\(UUID().uuidString)"
+        var form = Data()
+        let safeName = fileName.replacingOccurrences(of: "\"", with: "_")
+        form.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"files\"; filename=\"\(safeName)\"\r\n".utf8))
+        form.append(Data("Content-Type: \(mime)\r\n\r\n".utf8))
+        form.append(bytes)
+        form.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        let response = try await sendAuthorized { base, token in
+            var request = try self.buildRequest(.put, url: base + "/tasks/\(taskId)/attachments", query: [:], body: nil, token: token)
+            request.httpBody = form
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            return request
+        }
+        try response.requireSuccess()
+        // Vikunja reports a rejected file (too large, say) as a 200 with an `errors` entry: a permanent failure.
+        let object = (try? JSONSerialization.jsonObject(with: response.data)) as? [String: Any]
+        if let first = (object?["success"] as? [Any])?.first,
+           let data = try? JSONSerialization.data(withJSONObject: first) {
+            return data
+        }
+        let rejected = (object?["errors"] as? [[String: Any]])?.first
+        throw ApiError(
+            status: response.status, code: rejected?["code"] as? Int,
+            message: "upload rejected: \(rejected?["message"] as? String ?? "no attachment in the response")", retryable: false
+        )
     }
 
     func buildRequest(_ method: HTTPMethod, url urlString: String, query: [String: String],
