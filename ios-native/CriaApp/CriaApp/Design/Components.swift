@@ -194,4 +194,3 @@ struct CriaProminentToolbarButton: ViewModifier {
         }
     }
 }
-

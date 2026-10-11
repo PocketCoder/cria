@@ -94,7 +94,7 @@ public enum ThemeToken: String, CaseIterable, Sendable {
         .priorityCritical: ThemePair(light: .oklch(58, 0.22, 27), dark: .oklch(66, 0.19, 25)),
         .priorityForeground: ThemePair(light: .oklch(17, 0.045, 300), dark: .oklch(17, 0.045, 300)),
         .grouped: ThemePair(light: .oklch(96.4, 0.006, 95), dark: .oklch(11, 0.01, 285)),
-        .cell: ThemePair(light: .oklch(100, 0, 0), dark: .oklch(19.5, 0.012, 285)),
+        .cell: ThemePair(light: .oklch(100, 0, 0), dark: .oklch(22.3, 0.0138, 298)),
         .sky500: ThemePair(light: .oklch(62, 0.12, 240), dark: .oklch(62, 0.12, 240)),
         .sky700: ThemePair(light: .oklch(47, 0.12, 240), dark: .oklch(47, 0.12, 240)),
         .coral500: ThemePair(light: .oklch(58, 0.22, 27), dark: .oklch(58, 0.22, 27)),

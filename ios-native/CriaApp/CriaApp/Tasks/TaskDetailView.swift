@@ -186,7 +186,8 @@ struct TaskDetailView: View {
                 ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
             } label: {
                 Label { Text("Priority") } icon: {
-                    Image(systemName: "flag").foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
+                    Image(systemName: "flag")
+                        .foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
                 }
             }
             VStack(alignment: .leading) {
