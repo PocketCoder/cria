@@ -68,7 +68,7 @@ public enum Summaries {
     public static let identifiers = [morningIdentifier, weeklyIdentifier]
 
     /// The next moment strictly after `now` at `time` ("HH:mm"), on `weekday` (0 = Sunday) when given.
-    public static func nextFire(after now: Date, time: String, weekday: Int? = nil, calendar: Calendar = .current) -> Date? {
+    public static func nextFire(after now: Date, time: String, weekday: Int? = nil, calendar: Calendar = .cria) -> Date? {
         let clock = parseTime(time)
         var parts = DateComponents(hour: clock.hour, minute: clock.minute, second: 0)
         if let weekday, (0...6).contains(weekday) { parts.weekday = weekday + 1 }
@@ -82,7 +82,7 @@ public enum Summaries {
         return (parts[0], parts[1])
     }
 
-    public static func morning(_ tasks: [SummaryTask], now: Date, calendar: Calendar = .current) -> SummaryMessage {
+    public static func morning(_ tasks: [SummaryTask], now: Date, calendar: Calendar = .cria) -> SummaryMessage {
         let buckets = bucket(tasks, now: now, calendar: calendar)
         if buckets.today.isEmpty && buckets.overdue.isEmpty {
             return SummaryMessage(title: "Good morning", body: "Nothing due today.")
@@ -94,7 +94,7 @@ public enum Summaries {
         return SummaryMessage(title: "Today", body: "\(parts.joined(separator: ", ")).\(first.isEmpty ? "" : " Start with: \(first)")")
     }
 
-    public static func weekly(_ tasks: [SummaryTask], now: Date, calendar: Calendar = .current) -> SummaryMessage {
+    public static func weekly(_ tasks: [SummaryTask], now: Date, calendar: Calendar = .cria) -> SummaryMessage {
         let start = calendar.startOfDay(for: now)
         let horizon = calendar.date(byAdding: .day, value: 7, to: start) ?? start
         let lastWeek = calendar.date(byAdding: .day, value: -7, to: now) ?? now
@@ -115,7 +115,7 @@ public enum Summaries {
 
     /// The notifications that should be pending: none when notifications are off, else one per enabled summary, at its
     /// next fire time with the content as it reads then.
-    public static func plan(_ config: SummaryConfig, tasks: [SummaryTask], now: Date, calendar: Calendar = .current) -> [PlannedSummary] {
+    public static func plan(_ config: SummaryConfig, tasks: [SummaryTask], now: Date, calendar: Calendar = .cria) -> [PlannedSummary] {
         guard config.notificationsEnabled else { return [] }
         var planned: [PlannedSummary] = []
         if config.morningEnabled, let fire = nextFire(after: now, time: config.morningTime, calendar: calendar) {

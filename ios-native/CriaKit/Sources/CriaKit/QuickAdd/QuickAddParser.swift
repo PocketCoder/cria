@@ -56,7 +56,7 @@ public func parseQuickAdd(
     _ input: String,
     now: Date = Date(),
     mode: QuickAddMagicMode = .default,
-    calendar: Calendar = .current
+    calendar: Calendar = .cria
 ) -> QuickAddResult {
     if let literal = unquoteLiteral(input) { return plainTitle(input, title: literal) }
     guard let prefixes = mode.prefixes else { return plainTitle(input) }
@@ -78,7 +78,7 @@ public func parseQuickAddTask(
     _ input: String,
     now: Date = Date(),
     mode: QuickAddMagicMode = .default,
-    calendar: Calendar = .current
+    calendar: Calendar = .cria
 ) -> QuickAddResult {
     let parsed = parseQuickAdd(input, now: now, mode: mode, calendar: calendar)
     let blank = input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

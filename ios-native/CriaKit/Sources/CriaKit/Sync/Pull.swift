@@ -93,7 +93,7 @@ public final class Puller: Sendable {
 
     @discardableResult
     public func pullTasks(projectServerId: Int) async throws -> Int {
-        try await flights.run("pullTasksForProject") { [self] in
+        try await flights.run("pullTasksForProject:\(projectServerId)") { [self] in
             let delta = try tasksDeltaFilter()
             let filter = delta.map { "project_id = \(projectServerId) && \($0)" } ?? "project_id = \(projectServerId)"
             return try await pullTaskPages(filter: filter, stamp: false)

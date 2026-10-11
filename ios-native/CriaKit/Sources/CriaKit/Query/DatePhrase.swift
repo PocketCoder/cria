@@ -14,7 +14,7 @@ struct DatePhraseMatch {
 private let datePhrasePattern = [
     #"\b(?:(?:this|next)\s+(?:week|wk)"#,
     "|today|tonight|tomorrow|tmrw|yesterday",
-    #"|(?:(?:next|this|on)\s+)?(?:monday|tuesday|tues|tue|wednesday|wed|thursday|thurs|thur|thu|friday|fri|saturday|sunday)"#,
+    #"|(?:(?:next|this|on)\s+)?(?:monday|mon|tuesday|tues|tue|wednesday|wed|thursday|thurs|thur|thu|friday|fri|saturday|sat|sunday|sun)"#,
     #"|in\s+\d+\s+(?:days?|weeks?|months?)"#,
     #"|\d{4}-\d{2}-\d{2})\b"#
 ].joined()
@@ -103,9 +103,7 @@ private func isoDateBounds(_ text: String, calendar: Calendar) -> DateBounds? {
 private func weekdayBounds(_ words: [String], now: Date, calendar: Calendar) -> DateBounds? {
     guard let name = words.last, let target = weekdayNumbers[String(name.prefix(3))] else { return nil }
     let current = calendar.component(.weekday, from: now)
-    var diff = (target - current + 7) % 7
-    if words.first == "next", diff == 0 {
-        diff = 7
-    }
+    // "next friday" is the Friday of the following Monday-based week, as in quick add and chrono-node.
+    let diff = words.first == "next" ? nextWeekdayOffset(target, from: current) : (target - current + 7) % 7
     return dayBounds(offsetDays: diff, now: now, calendar: calendar)
 }

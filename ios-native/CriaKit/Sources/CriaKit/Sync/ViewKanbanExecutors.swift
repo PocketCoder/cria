@@ -91,6 +91,25 @@ struct ViewContext {
 
 extension CriaStore {
     /// Server ids of a view and its project. Either is nil while unsynced.
+    /// True when any of the named rows no longer exists locally (an empty id is not checked).
+    func anyRowMissing(task: String, bucket: String = "", view: String) throws -> Bool {
+        for (table, localId) in [("tasks", task), ("buckets", bucket), ("project_views", view)] where !localId.isEmpty {
+            if try !pushRowExists(table: table, localId: localId) { return true }
+        }
+        return false
+    }
+
+    /// Silent: clears `dirty` on a task with no task op left in the outbox.
+    func clearTaskDirtyIfIdle(localId: String) throws {
+        try database.writer.write { connection in
+            try connection.execute(sql: """
+                UPDATE tasks SET dirty = 0
+                 WHERE local_id = ? AND deleted = 0
+                   AND NOT EXISTS (SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = ?)
+                """, arguments: [localId, localId])
+        }
+    }
+
     func viewContext(viewLocalId: String) throws -> ViewContext {
         try database.writer.read { connection in
             let row = try Row.fetchOne(connection, sql: """
@@ -169,10 +188,16 @@ public struct TaskBucketExecutor: OutboxExecutor {
     public func execute(_ op: OutboxRow, api: ApiClient, store: CriaStore) async throws {
         let payload = op.payloadObject
         let context = try store.viewContext(viewLocalId: payload.string("view_local_id") ?? "")
+        let bucketLocalId = payload.string("bucket_local_id") ?? ""
         let taskId = try store.pushTaskServerId(localId: op.entityLocalId)
-        let bucketId = try store.pushInt("SELECT server_id FROM buckets WHERE local_id = ?", payload.string("bucket_local_id") ?? "")
+        let bucketId = try store.pushInt("SELECT server_id FROM buckets WHERE local_id = ?", bucketLocalId)
         // FIFO keeps the create ops of the task and bucket ahead of this one.
         guard let taskId, let bucketId, let viewId = context.viewServerId, let projectId = context.projectServerId else {
+            // A task, bucket or view deleted before it synced is never coming: finish as a no-op rather than hold the
+            // queue for a day.
+            if try store.anyRowMissing(task: op.entityLocalId, bucket: bucketLocalId, view: payload.string("view_local_id") ?? "") {
+                return
+            }
             throw ApiError.blocked("task_bucket: task/bucket not synced yet")
         }
         try await api.moveTaskToBucket(projectId: projectId, viewId: viewId, bucketId: bucketId, [
@@ -191,7 +216,9 @@ public struct TaskPositionExecutor: OutboxExecutor {
         let payload = op.payloadObject
         let context = try store.viewContext(viewLocalId: payload.string("view_local_id") ?? "")
         let taskId = try store.pushTaskServerId(localId: op.entityLocalId)
-        guard let taskId, let viewId = context.viewServerId, let position = payload["position"] as? Double else {
+        guard let position = payload["position"] as? Double else { return }
+        guard let taskId, let viewId = context.viewServerId else {
+            if try store.anyRowMissing(task: op.entityLocalId, view: payload.string("view_local_id") ?? "") { return }
             throw ApiError.blocked("task_position: task/view not synced yet")
         }
         try await api.setTaskPosition(id: taskId, [
@@ -199,5 +226,8 @@ public struct TaskPositionExecutor: OutboxExecutor {
             "project_view_id": .number(Double(viewId)),
             "task_id": .number(Double(taskId))
         ])
+        // A reorder marks the task dirty so a pull cannot undo it before this push; clear that once nothing else for
+        // the task is queued, or pulls would skip the task for good.
+        try store.clearTaskDirtyIfIdle(localId: op.entityLocalId)
     }
 }

@@ -299,7 +299,7 @@ struct DateFieldRow: View {
     }
 
     private func setTimed(current: Date) {
-        let nine = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: current) ?? current
+        let nine = Calendar.cria.date(bySettingHour: 9, minute: 0, second: 0, of: current) ?? current
         write(nine, timed: true)
     }
 }

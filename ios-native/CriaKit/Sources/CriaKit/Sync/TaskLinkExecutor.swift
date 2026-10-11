@@ -66,7 +66,11 @@ public struct TaskLinkExecutor: OutboxExecutor {
         if otherServerId == nil, let otherLocal = payload.string("other_task_local_id", "otherTaskLocalId") {
             otherServerId = try store.pushTaskServerId(localId: otherLocal)
         }
-        guard let otherServerId else { throw ApiError.blocked("task_relation: peer task has no server id") }
+        guard let otherServerId else {
+            if let otherLocal = payload.string("other_task_local_id", "otherTaskLocalId"),
+               try !store.pushRowExists(table: "tasks", localId: otherLocal) { return }
+            throw ApiError.blocked("task_relation: peer task has no server id")
+        }
         if adding {
             try await api.addRelation(taskId: taskServerId, [
                 "task_id": .number(Double(taskServerId)),

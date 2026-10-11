@@ -79,11 +79,26 @@ extension CriaStore {
         }
     }
 
-    /// Keep mine: the local row is already dirty with an op queued, so only the conflict record is cleared and the
-    /// push loop then sends the edit.
+    /// Keep mine: the server's copy becomes the new baseline (`last_synced`), so the push's divergence check passes
+    /// instead of recording the same conflict again, and an update is queued if none is, so the edit is sent.
     public func resolveConflictKeepMine(id: Int) throws {
-        try userWrite(announcing: [.conflicts]) { connection in
-            try connection.execute(sql: "UPDATE conflicts SET resolved_at = ? WHERE id = ?", arguments: [isoNow(), id])
+        try userWrite(announcing: [.conflicts, .outbox]) { connection in
+            let now = isoNow()
+            if let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]),
+               case let conflict = ConflictRecord(row: row), conflict.entityType == "task" {
+                try connection.execute(
+                    sql: "UPDATE tasks SET last_synced = ? WHERE local_id = ?",
+                    arguments: [conflict.remoteSnapshot, conflict.entityLocalId]
+                )
+                let queued = try Bool.fetchOne(connection, sql: """
+                    SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND op = 'update')
+                    """, arguments: [conflict.entityLocalId]) ?? false
+                if !queued, let record = try CriaStore.fetchTask(connection, localId: conflict.entityLocalId) {
+                    try connection.enqueue(.task, localId: record.localId, operation: .update,
+                                           payload: CriaStore.taskPayload(record), at: now)
+                }
+            }
+            try connection.execute(sql: "UPDATE conflicts SET resolved_at = ? WHERE id = ?", arguments: [now, id])
         }
     }
 

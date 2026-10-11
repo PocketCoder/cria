@@ -96,7 +96,7 @@ public enum AIPrompts {
 
     /// "feb 28": the last day of `now`'s month, written the way the date parser reads it.
     static func endOfMonth(_ now: Date) -> String {
-        let calendar = Calendar.current
+        let calendar = Calendar.cria
         let range = calendar.range(of: .day, in: .month, for: now)
         let month = calendar.component(.month, from: now)
         return "\(months[month - 1]) \(range?.count ?? 28)"

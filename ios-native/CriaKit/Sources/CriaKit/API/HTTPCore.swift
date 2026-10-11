@@ -33,7 +33,7 @@ public struct ApiResponse: Sendable {
     public let status: Int
     public let data: Data
     let refreshCookie: String?
-    /// `x-pagination-total-pages` header; 1 when absent.
+    /// `x-pagination-total-pages` header; 0 when absent (unknown).
     public let totalPages: Int
     /// `Content-Type` header, if any.
     public let contentType: String?
@@ -109,7 +109,7 @@ public final class HTTPCore: Sendable {
             // A 5xx means the server is unhealthy; 2xx and 4xx mean it is responding.
             if http.statusCode >= 500 { breaker.recordFailure() } else { breaker.recordSuccess() }
             let setCookie = http.value(forHTTPHeaderField: "Set-Cookie")
-            let pages = http.value(forHTTPHeaderField: "x-pagination-total-pages").flatMap { Int($0) } ?? 1
+            let pages = http.value(forHTTPHeaderField: "x-pagination-total-pages").flatMap { Int($0) } ?? 0
             return ApiResponse(status: http.statusCode, data: data,
                                refreshCookie: readRefreshCookie(setCookie: setCookie), totalPages: pages,
                                contentType: http.value(forHTTPHeaderField: "Content-Type"))

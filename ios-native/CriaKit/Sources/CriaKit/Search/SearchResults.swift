@@ -16,7 +16,7 @@ public struct SearchResults: Equatable, Sendable {
 extension CriaStore {
     /// Offline search. Filters and dates typed in the line (`#label`, `!3`, `tomorrow`, `soon`) narrow the tasks;
     /// the remaining text also matches titles of projects, labels and saved filters. Blank input finds nothing.
-    public func search(_ input: String, now: Date = Date(), calendar: Calendar = .current) throws -> SearchResults {
+    public func search(_ input: String, now: Date = Date(), calendar: Calendar = .cria) throws -> SearchResults {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return SearchResults() }
         let query = parseSearchQuery(trimmed, now: now, calendar: calendar)

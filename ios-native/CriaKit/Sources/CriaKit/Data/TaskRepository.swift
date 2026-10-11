@@ -85,6 +85,7 @@ public struct TaskInput: Sendable {
 public struct TaskPatch: Sendable {
     public var title: String?
     public var done: Bool?
+    /// An empty string clears the date (as for `startDate` and `endDate`); the push then sends null.
     public var dueDate: String?
     public var priority: Int?
     public var isFavorite: Bool?
@@ -92,7 +93,7 @@ public struct TaskPatch: Sendable {
     public var description: String?
     public var startDate: String?
     public var endDate: String?
-    /// 0 to 1, as stored locally (the push body scales it to 0 to 100).
+    /// 0 to 1, as stored locally and on the server.
     public var percentDone: Double?
     /// Moves the task to another project.
     public var projectLocalId: String?
@@ -124,8 +125,11 @@ extension TaskPatch {
             add("done", done)
             add("done_at", done ? now : nil)
         }
+        for (column, value) in [("due_date", dueDate), ("start_date", startDate), ("end_date", endDate)] {
+            guard let value else { continue }
+            add(column, value.isEmpty ? nil : value)
+        }
         let optionalFields: [(String, (any DatabaseValueConvertible)?)] = [
-            ("due_date", dueDate), ("start_date", startDate), ("end_date", endDate),
             ("description", description), ("project_local_id", projectLocalId),
             ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone),
             ("repeat_after", repeatAfter), ("repeat_mode", repeatMode)

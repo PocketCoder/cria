@@ -23,13 +23,13 @@ final class PreferencesModel: ObservableObject {
 
 /// "HH:mm" text and `Date` conversions for time pickers.
 enum ClockTime {
-    static func date(_ text: String, calendar: Calendar = .current) -> Date {
+    static func date(_ text: String, calendar: Calendar = .cria) -> Date {
         let parts = text.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return Date() }
         return calendar.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: Date()) ?? Date()
     }
 
-    static func text(_ date: Date, calendar: Calendar = .current) -> String {
+    static func text(_ date: Date, calendar: Calendar = .cria) -> String {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }

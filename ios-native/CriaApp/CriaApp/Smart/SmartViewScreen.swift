@@ -7,7 +7,7 @@ struct SmartViewScreen: View {
     let title: String
     let view: SmartView
     @State private var live: LiveValue<[TaskGroup]>
-    @State private var selectedDay = Calendar.current.startOfDay(for: Date())
+    @State private var selectedDay = Calendar.cria.startOfDay(for: Date())
     @State private var addPresented = false
 
     init(services: AppServices, view: SmartView, title: String) {
@@ -141,7 +141,7 @@ struct WeekStrip: View {
     @AppStorage(GeneralSettings.weekStartDefaultsKey) private var weekStart = GeneralSettings.defaultWeekStart
 
     private var days: [Date] {
-        var calendar = Calendar.current
+        var calendar = Calendar.cria
         calendar.firstWeekday = weekStart + 1
         let start = calendar.dateInterval(of: .weekOfYear, for: selected)?.start ?? selected
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
@@ -154,7 +154,7 @@ struct WeekStrip: View {
     }
 
     private func dayButton(_ day: Date) -> some View {
-        let calendar = Calendar.current
+        let calendar = Calendar.cria
         let isSelected = calendar.isDate(day, inSameDayAs: selected)
         let isToday = calendar.isDateInToday(day)
         let busy = busyDays.contains(DueDates.dayKey(DueDates.allDayISO(for: day)) ?? "")

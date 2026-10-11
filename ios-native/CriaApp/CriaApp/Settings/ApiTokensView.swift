@@ -66,7 +66,7 @@ private struct NewApiTokenSheet: View {
     let onCreated: (ApiToken?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
-    @State private var expiry = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    @State private var expiry = Calendar.cria.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var groups: [PermissionGroup] = []
     @State private var selected = Set<String>()
     @State private var errorMessage: String?

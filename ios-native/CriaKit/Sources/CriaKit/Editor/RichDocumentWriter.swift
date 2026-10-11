@@ -42,13 +42,16 @@ struct RichDocumentWriter {
         var previous = -1
         for (position, block) in document.blocks.enumerated() {
             if block.kind.isListItem {
+                // A list inside a different blockquote level is a new list: it starts at depth 0.
+                if position > 0, resolved[position - 1] != block.effectiveQuoteLevel { previous = -1 }
                 previous = min(max(block.depth, 0), previous + 1)
                 normalised.append(previous)
                 joined.append(false)
                 resolved.append(block.effectiveQuoteLevel)
             } else if block.context.joinsItem, previous >= 0, position > 0 {
                 // More content of the item above: same depth (never deeper than the item) and same quotes.
-                normalised.append(min(max(block.depth, 0), previous))
+                previous = min(max(block.depth, 0), previous)
+                normalised.append(previous)
                 joined.append(true)
                 resolved.append(resolved[position - 1])
             } else {
@@ -79,7 +82,13 @@ struct RichDocumentWriter {
                 writeSequence(level: level + 1)
                 output += "</blockquote>"
             } else if blocks[index].kind.isListItem {
+                let start = index
                 writeList(depth: 0, level: level)
+                // Never loop on a block the list writer could not take: write it as a paragraph instead.
+                if index == start {
+                    output += Self.simple(blocks[index], joined: false)
+                    index += 1
+                }
             } else {
                 output += Self.simple(blocks[index], joined: false)
                 index += 1
@@ -88,7 +97,7 @@ struct RichDocumentWriter {
     }
 
     private mutating func writeList(depth: Int, level: Int) {
-        guard let tag = ListTag(blocks[index].kind) else { return }
+        guard let tag = ListTag(blocks[index].kind), depths[index] == depth else { return }
         output += tag.open
         while index < blocks.count, levels[index] == level, let kind = ListTag(blocks[index].kind), kind == tag,
               depths[index] == depth {
@@ -108,7 +117,9 @@ struct RichDocumentWriter {
                 output += Self.simple(blocks[index], joined: true)
                 index += 1
             } else if blocks[index].kind.isListItem, depths[index] > depth {
+                let start = index
                 writeList(depth: depth + 1, level: level)
+                if index == start { break }
             } else {
                 break
             }

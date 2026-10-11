@@ -48,18 +48,23 @@ extension CriaStore {
     }
 
     /// Unfired reminders of open tasks that trigger after `date`, soonest first. The OS scheduler is fed from this.
+    ///
+    /// Compared as dates, not text: server reminders keep the server's offset (`…T05:30:00-04:00`) while local ones
+    /// are UTC, so a string comparison dropped future reminders and let past ones take up the OS's slots.
     public func upcomingReminders(after date: Date, limit: Int) throws -> [UpcomingReminder] {
-        let cutoff = ISO8601DateFormatter().string(from: date)
-        return try database.writer.read { connection in
+        let rows = try database.writer.read { connection in
             try Row.fetchAll(connection, sql: """
                 SELECT r.task_local_id, t.title, r.reminder_at
                   FROM task_reminders r JOIN tasks t ON t.local_id = r.task_local_id
-                 WHERE r.notified = 0 AND r.reminder_at IS NOT NULL AND r.reminder_at > ? AND t.done = 0 AND t.deleted = 0
-                 ORDER BY r.reminder_at ASC LIMIT ?
-                """, arguments: [cutoff, limit]).map { row in
-                UpcomingReminder(taskLocalId: row["task_local_id"], title: row["title"], reminderAt: row["reminder_at"])
-            }
+                 WHERE r.notified = 0 AND r.reminder_at IS NOT NULL AND t.done = 0 AND t.deleted = 0
+                """)
         }
+        let upcoming = rows.compactMap { row -> (Date, UpcomingReminder)? in
+            let reminderAt: String = row["reminder_at"]
+            guard let fires = DueDates.parse(reminderAt), fires > date else { return nil }
+            return (fires, UpcomingReminder(taskLocalId: row["task_local_id"], title: row["title"], reminderAt: reminderAt))
+        }
+        return upcoming.sorted { $0.0 < $1.0 }.prefix(max(limit, 0)).map(\.1)
     }
 
     /// User mutation: adds a reminder and queues a task update (the task body carries the full reminder set).

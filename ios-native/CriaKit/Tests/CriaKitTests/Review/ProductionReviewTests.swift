@@ -71,4 +71,54 @@ final class ProductionReviewTests: XCTestCase {
         XCTAssertNil(try store.upsertTaskFromServer(try decodeFixture(TaskResponse.self, json), rawJSON: json))
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE deleted = 1"), 1)
     }
+
+    // MARK: Editor
+
+    func testListInsideAQuoteAfterAListDoesNotHang() {
+        let html = "<ul><li><p>A</p></li></ul><blockquote><ul><li><p>x</p><ul><li><p>B</p></li></ul></li></ul></blockquote>"
+        let out = RichDocument(html: html).html()
+        XCTAssertTrue(out.contains("A"))
+        XCTAssertTrue(out.contains("B"))
+        XCTAssertTrue(out.contains("<blockquote>"))
+    }
+
+    func testDeepNestedQuoteListAfterShallowListDoesNotHang() {
+        let html = "<ul><li><p>A</p></li></ul><blockquote><ul><li><ul><li><p>B</p></li></ul></li></ul></blockquote>"
+        let out = RichDocument(html: html).html()
+        XCTAssertTrue(out.contains("A"))
+        XCTAssertTrue(out.contains("B"))
+    }
+
+    // MARK: Dates
+
+    func testGregorianMathsOnABuddhistDevice() throws {
+        var buddhist = Calendar(identifier: .buddhist)
+        buddhist.timeZone = TimeZone(identifier: "Asia/Bangkok")!
+        let now = try XCTUnwrap(DueDates.parse("2026-10-11T03:00:00Z"))
+        // Writing through a Buddhist calendar must still give the Gregorian day.
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = buddhist.timeZone
+        XCTAssertEqual(DueDates.allDayISO(for: now, calendar: gregorian), "2026-10-11T00:00:00Z")
+        XCTAssertEqual(Calendar.cria.identifier, .gregorian)
+    }
+
+    func testSearchNextWeekdayMatchesQuickAdd() {
+        // Monday 2026-05-25: "next friday" is 5 June in both parsers (chrono-node's reading).
+        XCTAssertEqual(nextWeekdayOffset(6, from: 2), 11)
+        // Sunday: next Friday is 5 days on, next Sunday 7.
+        XCTAssertEqual(nextWeekdayOffset(6, from: 1), 5)
+        XCTAssertEqual(nextWeekdayOffset(1, from: 1), 7)
+    }
+
+    func testUpcomingRemindersCompareInstantsNotText() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let task = try seedSyncedTask(store, serverId: 5)
+        // 09:30Z written with a -04:00 offset, and a past reminder written with +02:00.
+        try runSQL(store, "INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, '2026-10-11T05:30:00-04:00', 0)", [task])
+        try runSQL(store, "INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, '2026-10-11T10:30:00+02:00', 0)", [task])
+        let now = try XCTUnwrap(DueDates.parse("2026-10-11T09:00:00Z"))
+        let upcoming = try store.upcomingReminders(after: now, limit: 60)
+        XCTAssertEqual(upcoming.map(\.reminderAt), ["2026-10-11T05:30:00-04:00"])
+    }
 }

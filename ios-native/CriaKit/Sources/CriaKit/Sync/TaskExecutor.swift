@@ -67,9 +67,20 @@ public struct TaskExecutor: OutboxExecutor {
             if diverged { return }
         }
         // A failed GET skips the check: the push itself may fail and retry.
-        let body = taskToBody(task.record, projectServerId: projectServerId.flatMap { $0 > 0 ? $0 : nil }, reminders: reminders)
+        var body = taskToBody(task.record, projectServerId: projectServerId.flatMap { $0 > 0 ? $0 : nil }, reminders: reminders)
+        // Vikunja's task update resets the cover image when the body leaves it out, and Cria has no UI for it: send
+        // back whatever the server last held, so an edit here keeps a cover set in Vikunja-web.
+        if let cover = Self.coverImageId(lastSynced: task.lastSynced) {
+            body["cover_image_attachment_id"] = .number(Double(cover))
+        }
         let (updated, raw) = try Self.decoded(try await api.send(.post, "/tasks/\(serverId)", body: body))
         try store.markTaskSynced(localId: localId, serverId: nil, updatedAt: updated.updated, lastSynced: raw, opId: op.id)
+    }
+
+    static func coverImageId(lastSynced: String?) -> Int? {
+        guard let lastSynced, let object = try? CriaStore.jsonObject(lastSynced),
+              let id = (object["cover_image_attachment_id"] as? NSNumber)?.intValue, id > 0 else { return nil }
+        return id
     }
 
     /// The decoded task and the server's own JSON, which becomes the new `last_synced` snapshot.

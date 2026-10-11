@@ -18,7 +18,7 @@ public struct TaskGroup: Equatable, Sendable {
 
 public enum SmartViewGrouping {
     /// Overdue (only when there are any, shown first) then due today. Ported from `groupToday`.
-    public static func today(_ items: [TaskListItem], now: Date, calendar: Calendar = .current) -> [TaskGroup] {
+    public static func today(_ items: [TaskListItem], now: Date, calendar: Calendar = .cria) -> [TaskGroup] {
         let start = calendar.startOfDay(for: now)
         var overdue: [TaskListItem] = []
         var due: [TaskListItem] = []
@@ -33,7 +33,7 @@ public enum SmartViewGrouping {
     }
 
     /// Tasks due today or later, one section per day in date order. Ported from `upcomingFrom` plus the sectioning.
-    public static func upcoming(_ items: [TaskListItem], now: Date, calendar: Calendar = .current) -> [TaskGroup] {
+    public static func upcoming(_ items: [TaskListItem], now: Date, calendar: Calendar = .cria) -> [TaskGroup] {
         let start = calendar.startOfDay(for: now)
         var order: [String] = []
         var byDay: [String: [TaskListItem]] = [:]
@@ -62,7 +62,7 @@ func filterMentionsDone(_ node: FilterNode?) -> Bool {
 }
 
 extension CriaStore {
-    public func smartGroups(_ view: SmartView, now: Date = Date(), calendar: Calendar = .current) throws -> [TaskGroup] {
+    public func smartGroups(_ view: SmartView, now: Date = Date(), calendar: Calendar = .cria) throws -> [TaskGroup] {
         switch view {
         case .today: return SmartViewGrouping.today(try datedOpenTasks(), now: now, calendar: calendar)
         case .upcoming: return SmartViewGrouping.upcoming(try datedOpenTasks(), now: now, calendar: calendar)

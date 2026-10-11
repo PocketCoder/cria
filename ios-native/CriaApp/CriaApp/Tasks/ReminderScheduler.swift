@@ -36,7 +36,7 @@ enum ReminderScheduler {
             let content = UNMutableNotificationContent()
             content.title = item.title
             content.sound = .default
-            let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: item.fireDate)
+            let parts = Calendar.cria.dateComponents([.year, .month, .day, .hour, .minute, .second], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
             try? await center.add(UNNotificationRequest(identifier: item.identifier, content: content, trigger: trigger))
         }

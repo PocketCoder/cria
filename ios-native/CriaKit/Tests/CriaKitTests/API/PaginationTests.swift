@@ -25,6 +25,20 @@ final class PaginationTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 1)
     }
 
+    func testKeepsReadingFullPagesWhenHeaderMissing() async throws {
+        let transport = StubTransport { request, _ in
+            let page = Int(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "page" }?.value ?? "1") ?? 1
+            let count = page < 3 ? 2 : 1
+            let items = (0..<count).map { #"{"id": \#(page * 10 + $0)}"# }.joined(separator: ",")
+            return (200, "[\(items)]", [:])
+        }
+        let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
+        let items = try await api.fetchAllPages("/tasks", perPage: 2)
+        XCTAssertEqual(items.count, 5)
+        XCTAssertEqual(transport.requests.count, 3)
+    }
+
     func testNullBodyIsEmpty() async throws {
         let transport = StubTransport { _, _ in (200, "null", [:]) }
         let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))

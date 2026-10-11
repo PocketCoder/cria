@@ -93,14 +93,14 @@ public enum GanttTree {
     /// ISO timestamp to UTC day number, nil for empty or invalid input.
     /// All-day values (UTC midnight) keep the day that was picked; timed values fall on the local day, so a task due at
     /// 22:00 in New York is not drawn on the next day.
-    public static func day(fromISO iso: String?, calendar: Calendar = .current) -> Int? {
+    public static func day(fromISO iso: String?, calendar: Calendar = .cria) -> Int? {
         guard let iso, let date = DueDates.parse(iso) else { return nil }
         if DueDates.hasTimeOfDay(iso) { return localDay(of: date, calendar: calendar) }
         return Int((date.timeIntervalSince1970 / 86_400).rounded(.down))
     }
 
     /// The calendar day `date` falls on in the user's time zone, as a UTC day number like the rest of the Gantt maths.
-    public static func localDay(of date: Date, calendar: Calendar = .current) -> Int {
+    public static func localDay(of date: Date, calendar: Calendar = .cria) -> Int {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt

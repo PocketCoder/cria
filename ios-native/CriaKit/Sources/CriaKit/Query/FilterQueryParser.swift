@@ -54,7 +54,7 @@ public struct FilterParseError: Error, Equatable, Sendable, CustomStringConverti
 /// Parses Vikunja filter syntax (`done = false && priority >= 3`). Empty input gives a nil AST.
 /// Date math (`now+1d`) resolves against `now` in `calendar`'s time zone. Like the TypeScript parser,
 /// tokens after a complete expression are ignored.
-public func parseFilterQuery(_ input: String, now: Date = Date(), calendar: Calendar = .current) throws -> FilterQuery {
+public func parseFilterQuery(_ input: String, now: Date = Date(), calendar: Calendar = .cria) throws -> FilterQuery {
     let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return FilterQuery(ast: nil, includeNulls: false) }
     var tokenizer = FilterTokenizer(chars: Array(trimmed))

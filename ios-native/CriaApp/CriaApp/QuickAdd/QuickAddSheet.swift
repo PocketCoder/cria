@@ -186,7 +186,7 @@ struct QuickAddSheet: View {
     }
 
     private func setDue(daysFromNow: Int) {
-        let day = Calendar.current.date(byAdding: .day, value: daysFromNow, to: Date()) ?? Date()
+        let day = Calendar.cria.date(byAdding: .day, value: daysFromNow, to: Date()) ?? Date()
         dueISO = DueDates.allDayISO(for: day)
     }
 

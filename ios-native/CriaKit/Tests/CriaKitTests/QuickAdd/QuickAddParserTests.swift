@@ -92,9 +92,36 @@ final class QuickAddParserTests: XCTestCase {
     func testDatePhraseIsRemovedFromTitle() {
         let result = parse("Submit invoice next friday")
         XCTAssertEqual(result.title.lowercased(), "submit invoice")
-        // Friday after Wed 2026-05-27 is 2026-05-29.
+        // chrono-node reads "next friday" as the Friday of the following Monday-based week: from Wed 2026-05-27
+        // that is 2026-06-05, not the coming Friday (29 May).
         XCTAssertEqual(utcParts(result.dueDate)?.weekday, 6)
-        XCTAssertEqual(utcParts(result.dueDate)?.day, 29)
+        XCTAssertEqual(utcParts(result.dueDate)?.month, 6)
+        XCTAssertEqual(utcParts(result.dueDate)?.day, 5)
+    }
+
+    func testTimeBeforeDateSetsTheDay() {
+        let result = parse("Call mum at 5pm tomorrow")
+        XCTAssertEqual(result.title, "Call mum")
+        XCTAssertEqual(utcParts(result.dueDate)?.day, 28)
+        XCTAssertEqual(utcParts(result.dueDate)?.hour, 17)
+        let friday = parse("Dentist at 3pm on friday")
+        XCTAssertEqual(friday.title, "Dentist")
+        XCTAssertEqual(utcParts(friday.dueDate)?.day, 29)
+        XCTAssertEqual(utcParts(friday.dueDate)?.hour, 15)
+    }
+
+    func testTonightHourIsEvening() {
+        let result = parse("Call back tonight at 8")
+        XCTAssertEqual(result.title, "Call back")
+        XCTAssertEqual(utcParts(result.dueDate)?.day, 27)
+        XCTAssertEqual(utcParts(result.dueDate)?.hour, 20)
+    }
+
+    func testWeekendIsTheComingSaturday() {
+        let result = parse("Clean the car this weekend")
+        XCTAssertEqual(result.title, "Clean the car")
+        XCTAssertEqual(utcParts(result.dueDate)?.weekday, 7)
+        XCTAssertEqual(utcParts(result.dueDate)?.day, 30)
     }
 
     func testFirstDateWins() {

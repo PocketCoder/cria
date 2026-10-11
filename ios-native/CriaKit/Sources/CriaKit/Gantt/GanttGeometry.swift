@@ -72,7 +72,7 @@ public enum GanttGeometry {
     }
 
     /// Visible range, tolerant of swapped from and to dates. `now` is a Unix time in seconds.
-    public static func dayRange(from fromISO: String, to toISO: String, now: Double, calendar: Calendar = .current) -> GanttDayRange? {
+    public static func dayRange(from fromISO: String, to toISO: String, now: Double, calendar: Calendar = .cria) -> GanttDayRange? {
         guard let rawFrom = GanttTree.day(fromISO: fromISO), let rawTo = GanttTree.day(fromISO: toISO) else { return nil }
         let today = GanttTree.localDay(of: Date(timeIntervalSince1970: now), calendar: calendar)
         return GanttDayRange(today: today, low: min(rawFrom, rawTo), high: max(rawFrom, rawTo))

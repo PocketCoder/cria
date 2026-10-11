@@ -147,7 +147,7 @@ private func tokenList(raw: String, claimed: [ClaimedToken]) -> [SearchToken] {
 
 /// Splits a search string into FTS text plus structured filters (`#label`, `!1`-`!5`, one date phrase, `soon`).
 /// Dates resolve against `now` in `calendar`'s time zone and are emitted as UTC day bounds.
-public func parseSearchQuery(_ input: String, now: Date = Date(), calendar: Calendar = .current) -> SearchQuery {
+public func parseSearchQuery(_ input: String, now: Date = Date(), calendar: Calendar = .cria) -> SearchQuery {
     var claimed = symbolTokens(in: input)
     claimed += dateTokens(in: input, claimed: claimed, now: now, calendar: calendar)
     claimed.sort { $0.start < $1.start }

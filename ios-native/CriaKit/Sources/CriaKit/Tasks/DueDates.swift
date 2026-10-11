@@ -23,7 +23,7 @@ public enum DueDates {
     }
 
     /// The local calendar day (local midnight) a due date falls on.
-    public static func calendarDate(_ iso: String, calendar: Calendar = .current) -> Date? {
+    public static func calendarDate(_ iso: String, calendar: Calendar = .cria) -> Date? {
         guard let date = parse(iso) else { return nil }
         if hasTimeOfDay(iso) { return calendar.startOfDay(for: date) }
         var utc = Calendar(identifier: .gregorian)
@@ -33,14 +33,14 @@ public enum DueDates {
     }
 
     /// `yyyy-MM-dd` key for day bucketing (Upcoming agenda).
-    public static func dayKey(_ iso: String, calendar: Calendar = .current) -> String? {
+    public static func dayKey(_ iso: String, calendar: Calendar = .cria) -> String? {
         guard let day = calendarDate(iso, calendar: calendar) else { return nil }
         let parts = calendar.dateComponents([.year, .month, .day], from: day)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     /// Overdue: a timed value is past when its instant is; an all-day value when its day is before today.
-    public static func isOverdue(_ iso: String, now: Date, calendar: Calendar = .current) -> Bool {
+    public static func isOverdue(_ iso: String, now: Date, calendar: Calendar = .cria) -> Bool {
         guard let date = parse(iso) else { return false }
         if hasTimeOfDay(iso) { return date < now }
         guard let day = calendarDate(iso, calendar: calendar) else { return false }
@@ -50,7 +50,7 @@ public enum DueDates {
     /// Compact row label: Today, Tomorrow, Yesterday, a weekday within the coming week, else "d MMM",
     /// with the time appended when one was set.
     /// Far dates and times follow `display` (Settings > General); "Today" and the weekday names stay words.
-    public static func label(_ iso: String, now: Date, calendar: Calendar = .current, display: DateDisplay = .standard) -> String {
+    public static func label(_ iso: String, now: Date, calendar: Calendar = .cria, display: DateDisplay = .standard) -> String {
         guard let day = calendarDate(iso, calendar: calendar), let date = parse(iso) else { return "" }
         let today = calendar.startOfDay(for: now)
         let offset = calendar.dateComponents([.day], from: today, to: day).day ?? 0
@@ -70,7 +70,7 @@ public enum DueDates {
     }
 
     /// Full date and time of an instant (reminders, timestamps): "2026-10-11 14:30", "11 Oct 2026 2:30 PM".
-    public static func fullLabel(_ date: Date, calendar: Calendar = .current, display: DateDisplay = .standard) -> String {
+    public static func fullLabel(_ date: Date, calendar: Calendar = .cria, display: DateDisplay = .standard) -> String {
         let locale = calendar.locale ?? .current
         let day = display.dateFormat == .automatic ? "d MMM yyyy" : display.datePattern
         let time = format(date, display.timePattern, calendar: calendar, locale: locale)
@@ -80,7 +80,7 @@ public enum DueDates {
     // MARK: Writing
 
     /// All-day value for the calendar day `date` falls on locally: UTC midnight of that day.
-    public static func allDayISO(for date: Date, calendar: Calendar = .current) -> String {
+    public static func allDayISO(for date: Date, calendar: Calendar = .cria) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
@@ -98,7 +98,7 @@ public enum DueDates {
 
     /// The `Date` a picker should show for a stored value: local midnight of the day for all-day values,
     /// the instant for timed ones.
-    public static func pickerDate(_ iso: String, calendar: Calendar = .current) -> Date? {
+    public static func pickerDate(_ iso: String, calendar: Calendar = .cria) -> Date? {
         hasTimeOfDay(iso) ? parse(iso) : calendarDate(iso, calendar: calendar)
     }
 
@@ -136,5 +136,21 @@ public struct DateDisplay: Equatable, Sendable {
 
     var timePattern: String {
         timeFormat == .h12 ? "h:mm a" : "HH:mm"
+    }
+}
+
+extension Calendar {
+    /// The calendar for all date maths: Gregorian, in the device's time zone, locale and first weekday. Stored and
+    /// server dates are Gregorian, so moving components through the device calendar (Buddhist in Thailand, Japanese
+    /// imperial, Hebrew) put dates hundreds of years out and could index past twelve months.
+    public static var cria: Calendar {
+        let device = Calendar.current
+        guard device.identifier != .gregorian else { return device }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = device.timeZone
+        calendar.locale = device.locale
+        calendar.firstWeekday = device.firstWeekday
+        calendar.minimumDaysInFirstWeek = device.minimumDaysInFirstWeek
+        return calendar
     }
 }

@@ -155,7 +155,7 @@ struct TaskRowLink: View {
     }
 
     private func dueTomorrow() {
-        let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        let day = Calendar.cria.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         _ = try? services.store.updateTask(localId: item.task.localId, patch: TaskPatch(dueDate: DueDates.allDayISO(for: day)))
     }
 

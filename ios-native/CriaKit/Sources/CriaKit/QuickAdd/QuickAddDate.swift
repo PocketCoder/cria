@@ -14,13 +14,14 @@ private let monthWord = "(?:january|jan|february|feb|march|mar|april|apr|may|jun
 private let ordinal = "(?:st|nd|rd|th)?"
 
 /// The Swift stand-in for chrono-node: a small deterministic set of phrases, resolved against `now`.
-/// Supported: today, tonight, tomorrow, tmrw, yesterday; weekdays with optional this, next or on; next week;
+/// Supported: today, tonight, tomorrow, tmrw, yesterday; weekdays with optional this, next or on; (this) weekend;
+/// next week;
 /// in N minutes, hours, days, weeks, months or years; yyyy-mm-dd; "May 30th", "30 May 2026"; and a time of day
 /// ("at 5pm", "17:30", "5pm") after a date or on its own.
 private let datePattern = [
     #"\b(?:"#,
     #"(?:(?:next|this|on)\s+)?"#, weekdayWord,
-    #"|next\s+week|today|tonight|tomorrow|tmrw|yesterday"#,
+    #"|next\s+week|(?:this\s+)?weekend|today|tonight|tomorrow|tmrw|yesterday"#,
     #"|in\s+\d+\s+(?:minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?)"#,
     #"|\d{4}-\d{2}-\d{2}"#,
     "|", monthWord, #"\.?\s+\d{1,2}"#, ordinal, #"(?:,?\s+\d{4})?"#,
@@ -62,7 +63,9 @@ private func dateCandidates(_ text: NSString, now: Date, calendar: Calendar) -> 
         guard let resolved = resolve(phrase, now: now, calendar: calendar) else { continue }
         var end = match.range.location + match.range.length
         var value = resolved
-        if case .day(let day) = resolved, let merged = trailingTime(text, from: end, day: day, calendar: calendar) {
+        let evening = phrase.lowercased().hasPrefix("tonight")
+        if case .day(let day) = resolved,
+           let merged = trailingTime(text, from: end, day: day, evening: evening, calendar: calendar) {
             value = .instant(merged.date)
             end = merged.end
         }
@@ -80,15 +83,37 @@ private func standaloneTimeCandidates(_ text: NSString, now: Date, calendar: Cal
     for match in regex.matches(in: text as String, range: NSRange(location: 0, length: text.length)) {
         let phrase = text.substring(with: match.range)
         guard let time = parseTime(phrase) else { continue }
+        var end = match.range.location + match.range.length
+        // "at 5pm tomorrow", "at 3pm on friday": a date right after the time sets the day, as chrono does.
+        if let following = leadingDate(text, from: end, now: now, calendar: calendar),
+           let instant = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: following.day) {
+            end = following.end
+            let span = NSRange(location: match.range.location, length: end - match.range.location)
+            found.append(QuickAddDateMatch(start: span.location, end: end, text: text.substring(with: span),
+                                           iso: DueDates.timedISO(instant)))
+            continue
+        }
         let today = calendar.startOfDay(for: now)
         guard var instant = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: today) else { continue }
         if instant < now, let tomorrow = calendar.date(byAdding: .day, value: 1, to: instant) { instant = tomorrow }
         found.append(QuickAddDateMatch(
-            start: match.range.location, end: match.range.location + match.range.length, text: phrase,
-            iso: DueDates.timedISO(instant)
+            start: match.range.location, end: end, text: phrase, iso: DueDates.timedISO(instant)
         ))
     }
     return found
+}
+
+/// A day phrase starting right after `offset` (after spaces and an optional "on").
+private func leadingDate(_ text: NSString, from offset: Int, now: Date, calendar: Calendar) -> (day: Date, end: Int)? {
+    guard let regex = RegexCache.regex(#"^\s+(?:on\s+)?"# + datePattern, options: [.caseInsensitive]) else { return nil }
+    let range = NSRange(location: offset, length: text.length - offset)
+    guard let match = regex.firstMatch(in: text as String, range: range) else { return nil }
+    let phrase = text.substring(with: match.range).trimmingCharacters(in: .whitespaces)
+    let datePhrase = phrase.lowercased().hasPrefix("on ") ? String(phrase.dropFirst(3)) : phrase
+    guard case .day(let day)? = resolve(datePhrase.trimmingCharacters(in: .whitespaces), now: now, calendar: calendar) else {
+        return nil
+    }
+    return (day, match.range.location + match.range.length)
 }
 
 private func iso(for value: ResolvedDate, calendar: Calendar) -> String {
@@ -113,7 +138,9 @@ private func parseTime(_ phrase: String) -> TimeOfDay? {
 }
 
 /// A time of day right after a date phrase. Needs am or pm, minutes, or "at", so "tomorrow 5 apples" stays text.
-private func trailingTime(_ text: NSString, from offset: Int, day: Date, calendar: Calendar) -> (date: Date, end: Int)? {
+/// After "tonight" an hour without am or pm is in the evening ("tonight at 8" is 20:00).
+private func trailingTime(_ text: NSString, from offset: Int, day: Date, evening: Bool = false,
+                          calendar: Calendar) -> (date: Date, end: Int)? {
     guard let regex = RegexCache.regex(trailingTimePattern, options: [.caseInsensitive]) else { return nil }
     let range = NSRange(location: offset, length: text.length - offset)
     guard let match = regex.firstMatch(in: text as String, range: range) else { return nil }
@@ -122,9 +149,9 @@ private func trailingTime(_ text: NSString, from offset: Int, day: Date, calenda
     let hasMeridiem = match.range(at: 4).location != NSNotFound
     guard hasAt || hasMinutes || hasMeridiem else { return nil }
     let phrase = text.substring(with: match.range)
-    guard let time = parseTime(phrase), let date = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: day) else {
-        return nil
-    }
+    guard var time = parseTime(phrase) else { return nil }
+    if evening && !hasMeridiem && time.hour < 12 { time = TimeOfDay(hour: time.hour + 12, minute: time.minute) }
+    guard let date = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: day) else { return nil }
     return (date, match.range.location + match.range.length)
 }
 
@@ -134,12 +161,14 @@ private func resolve(_ phrase: String, now: Date, calendar: Calendar) -> Resolve
     let today = calendar.startOfDay(for: now)
     switch first {
     case "today", "tonight": return .day(today)
+    case "weekend": return weekdayDate(7, isNext: false, today: today, calendar: calendar)
     case "tomorrow", "tmrw": return shifted(today, days: 1, calendar: calendar)
     case "yesterday": return shifted(today, days: -1, calendar: calendar)
     case "in": return relative(words, now: now, calendar: calendar)
     default: break
     }
     if words == ["next", "week"] { return shifted(today, days: 7, calendar: calendar) }
+    if words == ["this", "weekend"] { return weekdayDate(7, isNext: false, today: today, calendar: calendar) }
     if let weekday = weekdayNumber(words.last ?? ""), words.count <= 2 {
         return weekdayDate(weekday, isNext: first == "next", today: today, calendar: calendar)
     }
@@ -173,12 +202,18 @@ private func weekdayNumber(_ word: String) -> Int? {
     return names[String(word.prefix(3))]
 }
 
-/// A bare or "this" weekday is today or the next one coming. "next" skips today, so it is always 1 to 7 days away.
+/// A bare or "this" weekday is today or the next one coming. "next" means that weekday in the following
+/// Monday-to-Sunday week, as chrono-node (and so the desktop app) reads it: on a Monday "next friday" is 11 days on.
 private func weekdayDate(_ weekday: Int, isNext: Bool, today: Date, calendar: Calendar) -> ResolvedDate? {
     let current = calendar.component(.weekday, from: today)
-    var delta = (weekday - current + 7) % 7
-    if isNext && delta == 0 { delta = 7 }
-    return shifted(today, days: delta, calendar: calendar)
+    guard isNext else { return shifted(today, days: (weekday - current + 7) % 7, calendar: calendar) }
+    return shifted(today, days: nextWeekdayOffset(weekday, from: current), calendar: calendar)
+}
+
+/// Days from `current` to `weekday` (both `Calendar` numbering, 1 is Sunday) in the following Monday-based week.
+func nextWeekdayOffset(_ weekday: Int, from current: Int) -> Int {
+    let toNextMonday = 7 - (current + 5) % 7
+    return toNextMonday + (weekday + 5) % 7
 }
 
 /// ISO dates and month-day phrases. Without a year, a date already past rolls to next year (forward dates).

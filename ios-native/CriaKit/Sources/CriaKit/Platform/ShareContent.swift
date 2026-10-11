@@ -107,7 +107,7 @@ public struct TodaySnapshot: Equatable, Sendable {
 
     /// Reads only the three columns it shows (no labels, assignees or project titles), so a widget refresh stays cheap.
     public static func load(
-        store: CriaStore, limit: Int, now: Date = Date(), calendar: Calendar = .current
+        store: CriaStore, limit: Int, now: Date = Date(), calendar: Calendar = .cria
     ) throws -> TodaySnapshot {
         let rows = try store.database.writer.read { connection in
             try Row.fetchAll(connection, sql: """
