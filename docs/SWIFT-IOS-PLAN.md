@@ -227,6 +227,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Model: `sonnet`
 - Decide: `WKWebView` hosting TipTap (reuse HTML and `sanitizeHtml`) vs native `AttributedString` editor. Build a 1-day spike of the web route first; pick by feel and bridge reliability.
 - Done when: decision recorded in this file with evidence.
+- **Update:** native editor preferred by the owner. Options and a recommended four-step route (own block model plus `UITextView`) are in `docs/SWIFT-IOS-EDITOR.md`; awaiting approval. The TipTap decision below is the fallback.
 - **Decision (provisional, nightly run, no Xcode):** `WKWebView` hosting TipTap. Reasons: Vikunja stores TipTap HTML (task lists via `data-type`/`data-checked`, `<mention-user>`, inline images via `data-src`), so the web editor round-trips it exactly, and the existing frontend deps and sanitiser allow-list already cover it. A native `AttributedString` editor would need a custom HTML mapper for task lists, mentions and images. Not yet verified on a device: confirm bridge reliability and keyboard behaviour before S-51 is signed off. Read-only rendering (S-52) already uses a JS-disabled `WKWebView` over `HTMLSanitizer`.
 
 **S-51 Editor implementation**
@@ -261,29 +262,31 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 
 ## Phase 6: Views
 
+Already in CriaKit from earlier phases: views and buckets repositories with mutations (`ViewRepository`, `BucketRepository`, `ViewKanbanExecutors`), task bucket assignments, and the project view list. This phase is mostly app-side UI plus three small ports: `lib/position.ts`, `lib/sortEngine.ts`, `lib/viewManagement.ts`. Port their tests first (`tests/unit/position.test.ts`, `sortEngine.test.ts`, `viewManagement.test.ts`, `viewMutations.test.ts`).
+
 **S-60 Kanban**
 - Model: `sonnet`
-- Buckets, card DnD within and across buckets, bucket limits, bucket mutations, `position` math (`lib/position.ts` port).
+- Steps: (1) port `calculatePosition`, `canMidpoint`, `planReorder` to `CriaKit/Tasks/Position.swift` with the ported tests; (2) `KanbanData` observer: buckets for the view, tasks grouped by `bucketAssignments`, ordered by position; (3) SwiftUI board: horizontal paging `ScrollView` of columns, card `draggable`/`dropDestination` within and across buckets, calling the existing bucket move mutation with the planned position; (4) bucket header: rename, limit (block drops past limit, show count), add and delete bucket, add task to bucket.
 - Done when: reorder persists and syncs.
 
 **S-61 Table view**
 - Model: `sonnet`
-- Column config, sort engine (`sortEngine`), per-view display config.
+- Steps: (1) port `SortField`, `SortRule`, `SORT_OPTIONS` and a Swift comparator (`TaskSort`) instead of SQL `ORDER BY` string, tests from `sortEngine.test.ts`; (2) per-view display config (visible columns, sort rule) stored in `frontendSettings` the way the desktop does; (3) horizontally scrolling `Grid` or `Table` (iPad) and a compact list on iPhone; column picker sheet; tap header to sort.
 - Done when: matches web for sorting.
 
 **S-62 Gantt**
 - Model: `sonnet`
-- Custom timeline layout (`Canvas` or `Layout`), drag to change dates.
+- Steps: (1) port geometry, tree and relation edges (`ganttGeometry`, `ganttTree`, `ganttRelations` tests are the spec) to `CriaKit/Gantt/`; (2) `Canvas` timeline with day/week zoom, task bars, today marker, relation arrows; (3) drag bar edges and body to change start and end, written through `updateTask` with date snapping; no-date tasks listed in a tray.
 - Done when: date edits push correctly.
 
 **S-63 Drag to reorder in lists**
 - Model: `sonnet`
-- `useOptimisticOrder` equivalent, position writes.
+- Steps: (1) `OptimisticOrder` helper (local order override that clears when the store catches up); (2) `onMove` on the list view calling the position write (`task_position` outbox op, planned by `planReorder`); (3) disable reorder when a non-position sort or filter is active.
 - Done when: order survives a sync cycle.
 
 **S-64 View management**
 - Model: `sonnet`
-- Create, edit, delete project views, `viewManagement` rules.
+- Steps: (1) port `viewManagement.ts` (labels, `newViewTitle`, `viewDeleteBlocker`, `viewAfterDelete`, `planViewReorder`) to `CriaKit/Projects/ViewManagement.swift` with tests; (2) view switcher in the project header (segmented on iPad, menu on iPhone); (3) manage-views sheet: create with kind picker, rename, delete with blockers, reorder via `reindexViews`.
 - Done when: parity with web.
 
 ## Phase 7: Settings and account features
