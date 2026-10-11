@@ -92,6 +92,6 @@ public extension CriaStore {
         if let priority = parsed.priority, priority > 0 { input.priority = priority }
         input.repeatAfter = parsed.repeatAfter ?? 0
         input.repeatMode = parsed.repeatMode ?? 0
-        return try persistQuickAdd(input, labelTitles: parsed.labelTitles)
+        return try persistQuickAdd(input, labelTitles: parsed.labelTitles, assigneeUsernames: parsed.assigneeUsernames)
     }
 }

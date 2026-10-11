@@ -118,6 +118,7 @@ enum OutboxEntity: String, Sendable {
     case taskComment = "task_comment"
     case taskAttachment = "task_attachment"
     case taskRelation = "task_relation"
+    case taskAssignee = "task_assignee"
 }
 
 enum OutboxOp: String, Sendable {

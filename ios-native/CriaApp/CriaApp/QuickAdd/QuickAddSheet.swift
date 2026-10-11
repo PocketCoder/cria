@@ -138,7 +138,9 @@ struct QuickAddSheet: View {
             return
         }
         do {
-            try services.store.persistQuickAdd(input, labelTitles: labelTitles)
+            try services.store.persistQuickAdd(
+                input, labelTitles: labelTitles, assigneeUsernames: parsed.assigneeUsernames
+            )
             dismiss()
         } catch {
             errorMessage = String(describing: error)

@@ -31,7 +31,13 @@ public struct TaskLinkExecutor: OutboxExecutor {
                 try await api.performIgnoring404(.delete, "/tasks/\(taskServerId)/labels/\(labelServerId)")
             }
         case "task_assignee":
-            guard let userId = payload.int("user_server_id", "userServerId") else { return }
+            // A quick-add `@name` has no id yet: look the user up now, when there is a connection. An unknown name, or
+            // one that matches nobody exactly, is dropped rather than retried forever.
+            var resolved = payload.int("user_server_id", "userServerId")
+            if resolved == nil, let name = payload.string("username") {
+                resolved = try await Self.userId(forUsername: name, api: api)
+            }
+            guard let userId = resolved else { return }
             if adding {
                 try await api.addAssignee(taskId: taskServerId, userId: userId)
             } else if removing {
@@ -42,6 +48,14 @@ public struct TaskLinkExecutor: OutboxExecutor {
         default:
             return
         }
+    }
+
+    /// The id of the user whose username is exactly `name` (any case), or nil.
+    static func userId(forUsername name: String, api: ApiClient) async throws -> Int? {
+        let wanted = name.trimmingCharacters(in: CharacterSet(charactersIn: "@ ")).lowercased()
+        guard !wanted.isEmpty else { return nil }
+        let matches = try await api.searchUsers(wanted)
+        return matches.first { $0.username.lowercased() == wanted }?.id
     }
 
     private func relation(_ op: OutboxRow, _ payload: [String: Any], _ taskServerId: Int, _ adding: Bool, _ removing: Bool,

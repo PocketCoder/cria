@@ -108,13 +108,33 @@ public func followParsedLabels(_ current: [String], before: [String], after: [St
 
 extension CriaStore {
     /// Creates the task, then applies typed labels (best effort: a bad label never fails the create).
-    /// `+assignee` tokens are parsed but not applied, as on the web client (no local users table).
+    /// Typed `@name` assignees are queued by username and resolved when the op is pushed (the user's id is not known
+    /// offline), so they are never lost; a name that matches nobody is dropped at that point.
     @discardableResult
-    public func persistQuickAdd(_ input: TaskInput, labelTitles: [String]) throws -> TaskRecord {
+    public func persistQuickAdd(_ input: TaskInput, labelTitles: [String], assigneeUsernames: [String] = []) throws -> TaskRecord {
         let created = try createTask(input)
         if !labelTitles.isEmpty {
             try? applyLabels(byTitle: labelTitles, toTask: created.localId)
         }
+        try? queueAssignees(assigneeUsernames, toTask: created.localId)
         return created
+    }
+
+    /// Queues one assign op per distinct username (case-insensitive).
+    func queueAssignees(_ usernames: [String], toTask taskLocalId: String) throws {
+        var seen = Set<String>()
+        let names = usernames
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "@ ")) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+        guard !names.isEmpty else { return }
+        try userWrite(announcing: [.outbox]) { connection in
+            let now = isoNow()
+            for name in names {
+                try connection.enqueue(
+                    .taskAssignee, localId: taskLocalId, operation: .add,
+                    payload: ["task_local_id": taskLocalId, "username": name], at: now
+                )
+            }
+        }
     }
 }
