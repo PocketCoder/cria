@@ -14,6 +14,7 @@ Cria for iOS is installed by sideloading an unsigned `.ipa` with [SideStore](htt
 3. Open the source and tap **Free** on the app you want:
    - **Cria**: the stable release (`io.cria.app`).
    - **Cria (Nightly)**: every push to `dev` (`io.cria.app.nightly`). Unstable.
+   - **Cria (Swift Alpha)**: the native Swift app, built on pushes to `ios-native/` (`io.cria.app.swift`). Alpha, expect breakage.
 4. To update, pull to refresh the source and tap **Update**. It installs over the existing app and keeps your data.
 
 Both apps install side by side. Free Apple IDs allow 3 active sideloaded apps and certificates last 7 days; SideStore auto-refreshes them while the VPN is on.
@@ -34,6 +35,7 @@ Both workflows write into one `sidestore.json` on the `gh-pages` branch, each re
 
 - [`nightly.yml`](.github/workflows/nightly.yml) publishes the nightly entry on every `dev` push. The `.ipa` keeps the plain `package.json` version (iOS rejects prerelease suffixes), so the run number is set as `CFBundleVersion` and listed as `buildVersion`.
 - [`release.yml`](.github/workflows/release.yml) publishes the stable entry on every `v*` tag.
+- [`ci-swift.yml`](.github/workflows/ci-swift.yml) (`publish-ipa` job) publishes the Swift alpha entry on pushes that pass its checks. Its `.ipa` lives on the rolling `swift-alpha` prerelease.
 
 SideStore refuses an install if `version` or `buildVersion` differs from the `.ipa`'s `Info.plist`, so keep the two in step if you change either workflow.
 
