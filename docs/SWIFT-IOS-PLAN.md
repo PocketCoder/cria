@@ -388,7 +388,7 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 |---|---|---|
 | 0 Foundations | S-00 to S-02 | done (S-02 CI green on ca9e3ee) |
 | 1 Data | S-10 to S-19 | done (CI green on cdc59cb) |
-| 2 API and auth | S-20 to S-23 | not started |
+| 2 API and auth | S-20 to S-23 | done, awaiting CI (KeychainSlot has no unit test: the SPM test host lacks Keychain entitlements; exercise it in the simulator. Sign-in does not yet cache a user row: Data layer has no user table. Link-share login is out of scope for this phase) |
 | 3 Sync | S-30 to S-39 | not started |
 | 4 Core screens | S-40 to S-48 | not started |
 | 5 Rich content | S-50 to S-56 | not started |
