@@ -15,7 +15,9 @@ final class SettingsOptionsTests: XCTestCase {
     }
 
     func testTimezonesGroupByRegion() {
-        let groups = SettingsOptions.groupTimezones(["Europe/London", "America/New_York", "UTC", "Europe/Berlin", "America/Argentina/Buenos_Aires"])
+        let groups = SettingsOptions.groupTimezones([
+            "Europe/London", "America/New_York", "UTC", "Europe/Berlin", "America/Argentina/Buenos_Aires"
+        ])
         XCTAssertEqual(groups.map(\.label), ["America", "Europe", "Other"])
         XCTAssertEqual(groups[0].items.map(\.label), ["Argentina/Buenos Aires", "New York"])
         XCTAssertEqual(groups[1].items.map(\.value), ["Europe/Berlin", "Europe/London"])

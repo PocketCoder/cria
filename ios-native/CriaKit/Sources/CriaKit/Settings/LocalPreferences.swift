@@ -12,7 +12,7 @@ public enum ColorSchemePreference: String, CaseIterable, Sendable {
 public enum DateFormatPreference: String, CaseIterable, Sendable {
     case automatic = "auto"
     case iso = "YYYY-MM-DD"
-    case us = "MM/DD/YYYY"
+    case american = "MM/DD/YYYY"
     case european = "DD/MM/YYYY"
 }
 

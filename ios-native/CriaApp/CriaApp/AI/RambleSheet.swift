@@ -115,7 +115,7 @@ struct RambleSheet: View {
                 .foregroundStyle(Color(.primaryForeground))
                 .frame(width: 64, height: 64)
                 .background(Color(.primary), in: Circle())
-                .phaseAnimator([1.0, 1.08], trigger: speech.isListening) { view, scale in
+                .phaseAnimator([1.0, 1.08]) { view, scale in
                     view.scaleEffect(speech.isListening && !reduceMotion ? scale : 1)
                 } animation: { _ in .easeInOut(duration: 0.7) }
         }

@@ -85,7 +85,7 @@ final class DueDatesDisplayTests: XCTestCase {
         let iso = "2026-07-04T00:00:00Z"
         XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar), "4 Jul")
         XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .iso)), "2026-07-04")
-        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .us)), "07/04/2026")
+        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .american)), "07/04/2026")
         XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .european)), "04/07/2026")
     }
 

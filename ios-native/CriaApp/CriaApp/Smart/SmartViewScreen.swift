@@ -83,7 +83,8 @@ struct SmartViewScreen: View {
         .navigationTitle(title)
         .refreshable { await services.refresh() }
         .quickAdd(services: services)
-        .sheet(isPresented: $addPresented) { QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: selectedDay)
+        .sheet(isPresented: $addPresented) {
+            QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: selectedDay)
         }
         .task { await live.run() }
     }

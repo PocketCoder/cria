@@ -45,7 +45,7 @@ struct GeneralSettingsSection: View {
             Picker(selection: $prefs.value.dateFormat) {
                 Text("Automatic").tag(DateFormatPreference.automatic)
                 Text("2026-12-31").tag(DateFormatPreference.iso)
-                Text("12/31/2026").tag(DateFormatPreference.us)
+                Text("12/31/2026").tag(DateFormatPreference.american)
                 Text("31/12/2026").tag(DateFormatPreference.european)
             } label: {
                 SettingsLabel("Date format", symbol: "calendar.badge.clock", token: .coral500)

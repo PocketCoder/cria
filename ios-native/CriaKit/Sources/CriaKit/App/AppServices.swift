@@ -38,13 +38,20 @@ public final class AppServices: Sendable {
     }
 
     /// One read of the user, applied where it is needed: the default project (extensions and intents file new tasks
-    /// there without asking the server) and the Quick Add Magic mode (so Ramble and quick add follow it from the
+    /// there without asking the server), the Quick Add Magic mode, week start and timezone (so they apply from the
     /// first launch, not only after Settings is opened). A failed read (offline) changes nothing.
     func applyAccountDefaults() async {
         guard let user: JSONValue = try? await api.get("/user") else { return }
         let projectId = user["settings"]?["default_project_id"]?.intValue
         try? store.rememberCaptureProject(serverId: projectId.flatMap { $0 > 0 ? $0 : nil })
-        UserDefaults.standard.set(GeneralSettings(user: user).quickAddMagicMode, forKey: GeneralSettings.quickAddDefaultsKey)
+        let general = GeneralSettings(user: user)
+        UserDefaults.standard.set(general.quickAddMagicMode, forKey: GeneralSettings.quickAddDefaultsKey)
+        // The Upcoming week strip, the weekly round-up and pushed all-day dates read these without opening Settings.
+        UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
+        // Only a zone the server really holds; an unset one keeps the device's.
+        if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
+            UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
+        }
     }
 
     public func stop() async {

@@ -31,7 +31,8 @@ final class UserSessionsTests: XCTestCase {
         let token = jwt(payload: #"{"sid":"a"}"#)
         let transport = StubTransport { _, _ in (200, json, ["Content-Type": "application/json"]) }
         let api = ApiClient(session: FakeSession(token: token), core: HTTPCore(transport: transport))
-        let listing = try await XCTUnwrap(api.sessions())
+        let fetched = try await api.sessions()
+        let listing = try XCTUnwrap(fetched)
         XCTAssertEqual(listing.sessions.map(\.id), ["b", "a", "c"])
         XCTAssertEqual(listing.currentId, "a")
         XCTAssertEqual(SessionRules.currentFirst(listing.sessions, currentId: "a").map(\.id), ["a", "b", "c"])

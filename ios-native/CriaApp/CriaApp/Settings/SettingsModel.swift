@@ -26,7 +26,10 @@ final class SettingsModel {
             username = user["username"]?.stringValue ?? ""
             UserDefaults.standard.set(general.quickAddMagicMode, forKey: QuickAddStorage.key)
             UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
-            UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
+            // Only a zone the server really holds; an unset one keeps the device's.
+            if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
+                UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
+            }
             server = await services.api.serverBase() ?? ""
             NotificationCenter.default.post(name: .criaPreferencesChanged, object: nil)
             loaded = true

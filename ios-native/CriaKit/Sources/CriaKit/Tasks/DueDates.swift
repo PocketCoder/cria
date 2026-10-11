@@ -73,7 +73,8 @@ public enum DueDates {
     public static func fullLabel(_ date: Date, calendar: Calendar = .current, display: DateDisplay = .standard) -> String {
         let locale = calendar.locale ?? .current
         let day = display.dateFormat == .automatic ? "d MMM yyyy" : display.datePattern
-        return format(date, day, calendar: calendar, locale: locale) + " " + format(date, display.timePattern, calendar: calendar, locale: locale)
+        let time = format(date, display.timePattern, calendar: calendar, locale: locale)
+        return format(date, day, calendar: calendar, locale: locale) + " " + time
     }
 
     // MARK: Writing
@@ -128,7 +129,7 @@ public struct DateDisplay: Equatable, Sendable {
         switch dateFormat {
         case .automatic: "d MMM"
         case .iso: "yyyy-MM-dd"
-        case .us: "MM/dd/yyyy"
+        case .american: "MM/dd/yyyy"
         case .european: "dd/MM/yyyy"
         }
     }

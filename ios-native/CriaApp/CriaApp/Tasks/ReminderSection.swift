@@ -52,12 +52,11 @@ struct ReminderSection: View {
                 Label("Add reminder", systemImage: "bell.badge").foregroundStyle(Color(.primary))
             }
             DatePicker(selection: $custom) { Label("Custom", systemImage: "clock") }
+            // The observer and the alert hang off one row, not the Section: modifiers on a Section inside a Form can
+            // be applied once per row.
             Button { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) } label: {
                 Label("Add custom reminder", systemImage: "plus").foregroundStyle(Color(.primary))
             }
-            // The observer and the alert hang off one row, not the Section: modifiers on a Section inside a Form can
-            // be applied once per row.
-            Color.clear.frame(height: 0).listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
                 .task { await live.run() }
                 .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                     Button("OK", role: .cancel) {}

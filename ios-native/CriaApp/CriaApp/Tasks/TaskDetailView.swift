@@ -271,6 +271,10 @@ struct DateFieldRow: View {
                     DatePicker("\(title) time", selection: Binding(get: { current }, set: { write($0, timed: true) }),
                                displayedComponents: [.hourAndMinute])
                         .labelsHidden()
+                    Button("Remove time", systemImage: "xmark.circle.fill") { write(current, timed: false) }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(Color(.mutedForeground))
+                        .buttonStyle(.plain)
                 } else {
                     Button("Add time") { setTimed(current: current) }
                         .font(Theme.chip)
