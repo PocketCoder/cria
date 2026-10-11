@@ -7,6 +7,8 @@ public extension NSAttributedString.Key {
     static let criaDepth = NSAttributedString.Key("cria.depth")
     /// Comma-joined `InlineStyle` raw values.
     static let criaStyles = NSAttributedString.Key("cria.styles")
+    /// Link target (String). The app maps it to the system link style, which lives in UIKit.
+    static let criaLink = NSAttributedString.Key("cria.link")
     /// Mention user id (String).
     static let criaMention = NSAttributedString.Key("cria.mention")
     /// JSON of a `RichImage`, set on image paragraphs.
@@ -109,7 +111,7 @@ public enum RichDocumentText {
     private static func runAttributes(_ run: InlineRun) -> [NSAttributedString.Key: Any] {
         var attributes: [NSAttributedString.Key: Any] = [:]
         if !run.styles.isEmpty { attributes[.criaStyles] = run.styles.map(\.rawValue).sorted().joined(separator: ",") }
-        if let link = run.link { attributes[.link] = link }
+        if let link = run.link { attributes[.criaLink] = link }
         if let mention = run.mentionId { attributes[.criaMention] = mention }
         return attributes
     }
@@ -141,7 +143,7 @@ public enum RichDocumentText {
             let run = InlineRun(
                 text: raw.replacingOccurrences(of: lineSeparator, with: "\n"),
                 styles: plain ? [] : styles(attributes[.criaStyles] as? String),
-                link: plain ? nil : link(attributes[.link]),
+                link: plain ? nil : attributes[.criaLink] as? String,
                 mentionId: plain ? nil : attributes[.criaMention] as? String
             )
             append(run, to: &result)
@@ -160,10 +162,5 @@ public enum RichDocumentText {
 
     private static func styles(_ encoded: String?) -> Set<InlineStyle> {
         Set((encoded ?? "").split(separator: ",").compactMap { InlineStyle(rawValue: String($0)) })
-    }
-
-    private static func link(_ value: Any?) -> String? {
-        if let text = value as? String { return text }
-        return (value as? URL)?.absoluteString
     }
 }

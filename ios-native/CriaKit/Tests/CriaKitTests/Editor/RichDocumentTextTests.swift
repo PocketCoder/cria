@@ -59,9 +59,8 @@ final class RichDocumentTextTests: XCTestCase {
         XCTAssertEqual(RichDocumentText.document(from: text).blocks.first?.runs, [InlineRun(text: "x")])
     }
 
-    func testURLValuedLinkIsAccepted() throws {
-        let url = try XCTUnwrap(URL(string: "https://x.test/a"))
-        let text = NSAttributedString(string: "go", attributes: [.link: url])
+    func testLinkAttributeRoundTrips() {
+        let text = NSAttributedString(string: "go", attributes: [.criaLink: "https://x.test/a"])
         XCTAssertEqual(RichDocumentText.document(from: text).blocks.first?.runs.first?.link, "https://x.test/a")
     }
 }
