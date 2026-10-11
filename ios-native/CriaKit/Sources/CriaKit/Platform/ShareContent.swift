@@ -39,7 +39,10 @@ public extension CriaStore {
     /// The app records its default (inbox) project here so extensions and intents, which cannot ask the server, know
     /// where to file a new task.
     func rememberCaptureProject(serverId: Int?, defaults: UserDefaults = CriaPaths.sharedDefaults()) throws {
-        let local = try serverId.flatMap { try projects().first { $0.serverId == serverId }?.localId }
+        var local: String?
+        if let serverId {
+            local = try projects().first { $0.serverId == serverId }?.localId
+        }
         defaults.set(local, forKey: Self.capturePrefKey)
     }
 
