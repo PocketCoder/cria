@@ -13,29 +13,29 @@ public struct SignInResult: Equatable, Sendable {
     public let user: UserResponse
 }
 
+private struct LoginBody: Encodable, Sendable {
+    let username: String
+    let password: String
+    let longToken: Bool
+    let totpPasscode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case username, password
+        case longToken = "long_token"
+        case totpPasscode = "totp_passcode"
+    }
+}
+
+private struct LoginResponse: Decodable {
+    let token: String?
+}
+
 /// Unauthenticated login calls. Ported from `src/api/login.ts` and `LoginScreen.tsx`.
 public struct LoginService: Sendable {
     private let core: HTTPCore
 
     public init(core: HTTPCore = HTTPCore()) {
         self.core = core
-    }
-
-    private struct LoginBody: Encodable, Sendable {
-        let username: String
-        let password: String
-        let longToken: Bool
-        let totpPasscode: String?
-
-        enum CodingKeys: String, CodingKey {
-            case username, password
-            case longToken = "long_token"
-            case totpPasscode = "totp_passcode"
-        }
-    }
-
-    private struct LoginResponse: Decodable {
-        let token: String?
     }
 
     /// Light healthcheck of `/info` (no auth). Confirms the URL is a reachable Vikunja instance.

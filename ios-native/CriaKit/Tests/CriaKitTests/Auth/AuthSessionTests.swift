@@ -1,7 +1,10 @@
+// swiftlint:disable large_tuple
 import XCTest
 @testable import CriaKit
 
-private func refreshReply(token: String = "new", cookie: String? = "vikunja_refresh_token=ref2; Path=/; HttpOnly") -> (Int, String, [String: String]) {
+private let rotatedCookie = "vikunja_refresh_token=ref2; Path=/; HttpOnly"
+
+private func refreshReply(token: String = "new", cookie: String? = rotatedCookie) -> (Int, String, [String: String]) {
     (200, #"{"token": "\#(token)"}"#, cookie.map { ["Set-Cookie": $0] } ?? [:])
 }
 

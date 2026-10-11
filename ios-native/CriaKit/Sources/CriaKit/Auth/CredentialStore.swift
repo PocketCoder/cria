@@ -31,7 +31,7 @@ public struct KeychainSlot: SecretSlot {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
+            kSecAttrAccount as String: account
         ]
         if let accessGroup { query[kSecAttrAccessGroup as String] = accessGroup }
         return query
@@ -100,7 +100,7 @@ public struct CredentialStore: Sendable {
 
     public func save(_ credentials: Credentials) throws {
         let data = try JSONEncoder().encode(credentials)
-        try slot.write(String(decoding: data, as: UTF8.self))
+        try slot.write(String(bytes: data, encoding: .utf8) ?? "")
     }
 
     /// Sign-out must not fail because the Keychain is unhappy, so errors are swallowed.

@@ -38,7 +38,7 @@ final class ApiClientTests: XCTestCase {
         XCTAssertEqual(transport.requests.map { "\($0.httpMethod ?? "") \($0.url?.path ?? "")" }, [
             "PUT /api/v1/tasks/4/labels",
             "DELETE /api/v1/tasks/4/assignees/2",
-            "DELETE /api/v1/tasks/4/relations/subtask/5",
+            "DELETE /api/v1/tasks/4/relations/subtask/5"
         ])
     }
 

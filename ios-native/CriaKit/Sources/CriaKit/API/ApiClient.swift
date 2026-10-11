@@ -1,7 +1,8 @@
 import Foundation
 
 public enum ApiVersion: String, Sendable {
-    case v1, v2
+    case apiV1 = "v1"
+    case apiV2 = "v2"
 }
 
 /// Authenticated Vikunja client. Ported from `src/api/client.ts`: bearer auth, a transparent
@@ -15,7 +16,7 @@ public final class ApiClient: Sendable {
 
     /// Session-bound client: server URL and token come from `session` on every request, so token
     /// rotation takes effect immediately.
-    public init(session: any SessionProviding, core: HTTPCore = HTTPCore(), version: ApiVersion = .v1) {
+    public init(session: any SessionProviding, core: HTTPCore = HTTPCore(), version: ApiVersion = .apiV1) {
         self.session = session
         self.core = core
         self.fixedBase = nil
@@ -25,7 +26,7 @@ public final class ApiClient: Sendable {
 
     /// Client for a fixed server with an optional fixed token (login, `/info`, verifying a pasted token).
     /// No refresh logic: there is no session behind it.
-    public init(serverURL: String, token: String? = nil, core: HTTPCore = HTTPCore(), version: ApiVersion = .v1) {
+    public init(serverURL: String, token: String? = nil, core: HTTPCore = HTTPCore(), version: ApiVersion = .apiV1) {
         self.session = nil
         self.core = core
         self.fixedBase = normalizeBase(serverURL)
@@ -43,7 +44,7 @@ public final class ApiClient: Sendable {
         let token = snapshot?.token ?? fixedToken ?? ""
         if !token.isEmpty { try guardDestination(base) }
 
-        let request = try buildRequest(method, base: base, path: path, query: query, body: body, token: token)
+        let request = try buildRequest(method, url: base + path, query: query, body: body, token: token)
         let first = try await core.fetchOnce(request)
         guard let session else { return first }
         if first.isSuccess {
@@ -54,7 +55,7 @@ public final class ApiClient: Sendable {
         // Refresh only for authenticated password sessions, never for the refresh call itself.
         if await session.canRefresh(), let fresh = await session.refreshSession() {
             let retry = try await core.fetchOnce(
-                try buildRequest(method, base: base, path: path, query: query, body: body, token: fresh))
+                try buildRequest(method, url: base + path, query: query, body: body, token: fresh))
             if retry.isSuccess { await session.noteAuthorized() }
             if retry.status == 401 { await session.noteUnauthorized() }
             return retry
@@ -63,15 +64,15 @@ public final class ApiClient: Sendable {
         return first
     }
 
-    func buildRequest(_ method: HTTPMethod, base: String, path: String, query: [String: String],
+    func buildRequest(_ method: HTTPMethod, url urlString: String, query: [String: String],
                       body: (any Encodable & Sendable)?, token: String) throws -> URLRequest {
-        guard var components = URLComponents(string: base + path) else {
-            throw NetworkError("Invalid URL: \(base)\(path)")
+        guard var components = URLComponents(string: urlString) else {
+            throw NetworkError("Invalid URL: \(urlString)")
         }
         if !query.isEmpty {
             components.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
-        guard let url = components.url else { throw NetworkError("Invalid URL: \(base)\(path)") }
+        guard let url = components.url else { throw NetworkError("Invalid URL: \(urlString)") }
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Accept")

@@ -65,7 +65,8 @@ final class LoginServiceTests: XCTestCase {
                 : (200, #"{"id": 3, "username": "ada"}"#, [:])
         }
         let result = try await service(transport).signInWithPassword(serverURL: "https://vk.example/", username: "ada", password: "pw")
-        XCTAssertEqual(result.credentials, Credentials(serverURL: "https://vk.example", token: "jwt", authMethod: .password, refreshToken: "r1"))
+        let expected = Credentials(serverURL: "https://vk.example", token: "jwt", authMethod: .password, refreshToken: "r1")
+        XCTAssertEqual(result.credentials, expected)
         XCTAssertEqual(result.user.username, "ada")
         XCTAssertEqual(header(transport.requests[1], "Authorization"), "Bearer jwt")
     }

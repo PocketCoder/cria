@@ -1,3 +1,4 @@
+// swiftlint:disable large_tuple
 import Foundation
 @testable import CriaKit
 
