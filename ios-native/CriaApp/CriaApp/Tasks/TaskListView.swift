@@ -8,6 +8,8 @@ struct TaskListView: View {
     let title: String
     @State private var live: LiveValue<[TaskListItem]>
     @AppStorage("cria.taskList.showDone") private var showDone = true
+    @AppStorage("cria.taskList.sort") private var sortIndex = 0
+    @State private var optimistic = OptimisticOrder()
 
     init(services: AppServices, source: TaskListSource, title: String) {
         self.services = services
@@ -21,8 +23,41 @@ struct TaskListView: View {
         })
     }
 
+    private var sortRule: SortRule? {
+        TaskSort.options.indices.contains(sortIndex) ? TaskSort.options[sortIndex].rule : nil
+    }
+
+    /// Rows in display order: sorted by the chosen rule, then any pending drag order on top.
     private var visible: [TaskListItem] {
-        showDone ? live.value : live.value.filter { !$0.task.done }
+        let shown = showDone ? live.value : live.value.filter { !$0.task.done }
+        let manual = ListReorder.isEnabled(sort: sortRule, hasFilter: false)
+        guard !manual else { return applyOptimistic(shown) }
+        let byId = Dictionary(shown.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
+        return TaskSort.sorted(shown.map(\.task), by: sortRule).compactMap { byId[$0.localId] }
+    }
+
+    private func applyOptimistic(_ items: [TaskListItem]) -> [TaskListItem] {
+        let byId = Dictionary(items.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
+        return optimistic.resolve(items.map(\.task.localId)).compactMap { byId[$0] }
+    }
+
+    private var canReorder: Bool {
+        guard case .project = source else { return false }
+        return ListReorder.isEnabled(sort: sortRule, hasFilter: false)
+    }
+
+    /// Moves a row, then writes the position. Done tasks stay put: only the open order is persisted.
+    private func move(_ indices: IndexSet, _ destination: Int) {
+        var rows = visible
+        guard let first = indices.first, case .project(let projectId) = source else { return }
+        let moved = rows[first].task
+        guard !moved.done else { return }
+        let stored = live.value.map(\.task.localId)
+        rows.move(fromOffsets: indices, toOffset: destination)
+        optimistic.set(rows.map(\.task.localId), over: showDone ? stored : live.value.filter { !$0.task.done }.map(\.task.localId))
+        let openIds = rows.filter { !$0.task.done }.map(\.task.localId)
+        guard let viewId = try? services.store.listViewLocalId(projectLocalId: projectId) else { return }
+        try? services.store.applyListReorder(orderedIds: openIds, movedId: moved.localId, viewLocalId: viewId)
     }
 
     var body: some View {
@@ -30,6 +65,7 @@ struct TaskListView: View {
             ForEach(visible, id: \.task.localId) { item in
                 TaskRowLink(services: services, item: item, showProject: showsProject)
             }
+            .onMove(perform: canReorder ? { move($0, $1) } : nil)
         }
         .overlay {
             if visible.isEmpty {
@@ -39,9 +75,15 @@ struct TaskListView: View {
         .navigationTitle(title)
         .refreshable { await services.refresh() }
         .toolbar {
+            if canReorder {
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("Options", systemImage: "ellipsis.circle") {
                     Toggle("Show completed", isOn: $showDone)
+                    Picker("Sort", selection: $sortIndex) {
+                        ForEach(TaskSort.options.indices, id: \.self) { Text(TaskSort.options[$0].label).tag($0) }
+                    }
                 }
             }
         }
