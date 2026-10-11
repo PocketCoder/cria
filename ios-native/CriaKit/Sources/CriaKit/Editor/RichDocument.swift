@@ -21,7 +21,7 @@ public struct InlineRun: Equatable, Sendable {
 }
 
 /// An inline image. `dataSrc` is the real URL when `src` is a placeholder (the web editor writes both).
-public struct RichImage: Equatable, Sendable {
+public struct RichImage: Equatable, Sendable, Codable {
     public var src: String
     public var alt: String?
     public var dataSrc: String?
