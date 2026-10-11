@@ -32,7 +32,7 @@ struct CommentsSection: View {
             CommentComposerSheet(
                 services: services, taskLocalId: taskLocalId, title: "New comment", initialHTML: ""
             ) { html in
-                try? services.store.createComment(taskLocalId: taskLocalId, comment: html)
+                _ = try? services.store.createComment(taskLocalId: taskLocalId, comment: html)
             }
         }
         .sheet(item: $editing) { comment in

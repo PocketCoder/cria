@@ -103,9 +103,17 @@ struct AttachmentsSection: View {
     private func pasteImage(_ providers: [NSItemProvider]) {
         guard let provider = providers.first else { return }
         Task {
-            guard let data = try? await provider.loadDataRepresentation(for: .image),
+            guard let data = await Self.loadImageData(from: provider),
                   let png = UIImage(data: data)?.pngData() else { return }
             queue(name: "pasted-\(Int(Date().timeIntervalSince1970)).png", mime: "image/png", data: png)
+        }
+    }
+
+    private static func loadImageData(from provider: NSItemProvider) async -> Data? {
+        await withCheckedContinuation { continuation in
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                continuation.resume(returning: data)
+            }
         }
     }
 
