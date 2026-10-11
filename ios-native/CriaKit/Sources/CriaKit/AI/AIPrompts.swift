@@ -5,7 +5,7 @@ import Foundation
 /// quick-add parser resolves them.
 public enum AIPrompts {
     /// On-device context is about 4K tokens; roughly 6K characters is safe.
-    static let maxInputChars = 6000
+    public static let maxInputChars = 6000
     static let maxNames = 50
 
     public static func clip(_ text: String, max: Int = maxInputChars) -> String {
