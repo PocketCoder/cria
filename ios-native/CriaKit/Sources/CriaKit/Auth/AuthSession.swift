@@ -86,6 +86,11 @@ public actor AuthSession: SessionProviding {
         }
     }
 
+    public func refreshSession(ifTokenIs used: String) async -> String? {
+        if let current = snapshot()?.token, current != used { return current }
+        return await refreshSession()
+    }
+
     /// Single-flight: concurrent callers (a sync hits several endpoints at once) share one request.
     /// A second refresh would reuse the already-rotated refresh token and kill the session.
     public func refreshSession() async -> String? {

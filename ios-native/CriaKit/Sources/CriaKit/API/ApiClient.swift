@@ -66,7 +66,7 @@ public final class ApiClient: Sendable {
         }
         guard first.status == 401 else { return first }
         // Refresh only for authenticated password sessions, never for the refresh call itself.
-        if await session.canRefresh(), let fresh = await freshToken(after: token, session: session) {
+        if await session.canRefresh(), let fresh = await session.refreshSession(ifTokenIs: token) {
             let retry = try await core.fetchOnce(try build(base, fresh))
             if retry.isSuccess { await session.noteAuthorized() }
             if retry.status == 401 { await session.noteUnauthorized() }
@@ -74,13 +74,6 @@ public final class ApiClient: Sendable {
         }
         await session.noteUnauthorized()
         return first
-    }
-
-    /// A 401 can arrive after a concurrent request already refreshed. Then the stored token differs from the one
-    /// this request used, so retry with it instead of rotating the refresh token a second time.
-    private func freshToken(after used: String, session: any SessionProviding) async -> String? {
-        if let current = await session.snapshot()?.token, current != used { return current }
-        return await session.refreshSession()
     }
 
     /// Uploads one file as multipart form data (Vikunja's attachment endpoint reads the plural `files` field)
