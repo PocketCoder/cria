@@ -32,6 +32,7 @@ struct SmartViewScreen: View {
                 }
             }
         }
+            .criaSurface()
         .overlay {
             if isEmpty { ContentUnavailableView("Nothing here", systemImage: "checkmark.circle") }
         }

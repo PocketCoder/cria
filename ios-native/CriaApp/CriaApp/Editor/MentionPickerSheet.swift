@@ -18,10 +18,11 @@ struct MentionPickerSheet: View {
                 } label: {
                     VStack(alignment: .leading) {
                         Text(user.name?.isEmpty == false ? (user.name ?? user.username) : user.username)
-                        Text("@\(user.username)").font(.caption).foregroundStyle(.secondary)
+                        Text("@\(user.username)").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                     }
                 }
             }
+                .criaSurface()
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always))
             .navigationTitle("Mention")
             .navigationBarTitleDisplayMode(.inline)

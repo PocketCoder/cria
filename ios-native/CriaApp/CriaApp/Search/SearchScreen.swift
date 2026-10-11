@@ -41,6 +41,7 @@ struct SearchScreen: View {
                 }
             }
         }
+            .criaSurface()
         .overlay { overlay }
         .navigationTitle("Search")
         .searchable(text: $text, prompt: "Tasks, projects, labels")

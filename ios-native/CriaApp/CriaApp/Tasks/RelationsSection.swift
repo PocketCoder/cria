@@ -32,7 +32,7 @@ struct RelationsSection: View {
                     Image(systemName: relation.otherDone ? "checkmark.circle.fill" : "circle")
                     VStack(alignment: .leading) {
                         Text(relation.otherTitle)
-                        Text(kindTitles[relation.kind] ?? relation.kind).font(.caption).foregroundStyle(.secondary)
+                        Text(kindTitles[relation.kind] ?? relation.kind).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                     }
                 }
                 .swipeActions {
@@ -77,6 +77,7 @@ struct RelationPickerSheet: View {
                     }
                 }
             }
+                .criaSurface()
             .searchable(text: $search)
             .navigationTitle("Add relation")
             .navigationBarTitleDisplayMode(.inline)

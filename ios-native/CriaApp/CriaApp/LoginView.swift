@@ -23,7 +23,7 @@ struct LoginView: View {
                 Text("Server")
             } footer: {
                 if let error = model.serverURLError {
-                    Text(error).foregroundStyle(.red)
+                    Text(error).foregroundStyle(Color(.destructive))
                 }
             }
 
@@ -65,7 +65,7 @@ struct LoginView: View {
             }
 
             if let error = model.submitError {
-                Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("login.error") }
+                Section { Text(error).foregroundStyle(Color(.destructive)).accessibilityIdentifier("login.error") }
             }
 
             Section {
@@ -82,6 +82,7 @@ struct LoginView: View {
                 .accessibilityIdentifier("login.submit")
             }
         }
+            .criaSurface()
         .navigationTitle("Cria")
     }
 }

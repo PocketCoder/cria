@@ -46,7 +46,7 @@ struct CommentsSection: View {
 
     private func row(_ comment: CommentRecord) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(comment.authorName ?? "You").font(.caption).foregroundStyle(.secondary)
+            Text(comment.authorName ?? "You").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             RichTextView(html: comment.comment).frame(minHeight: 28)
             reactionBar(comment)
         }

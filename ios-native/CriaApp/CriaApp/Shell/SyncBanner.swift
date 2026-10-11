@@ -12,10 +12,10 @@ struct SyncBanner: View {
                 Label(step, systemImage: "arrow.triangle.2.circlepath")
             } else if let error = status.errors.first {
                 Label("\(error.step): \(error.message)", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color(.warningText))
             }
         }
-        .font(.footnote)
+        .font(Theme.caption)
         .lineLimit(2)
         .padding(.horizontal)
         .task {

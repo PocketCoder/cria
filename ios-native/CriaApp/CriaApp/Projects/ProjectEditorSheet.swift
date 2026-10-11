@@ -72,6 +72,7 @@ struct ProjectEditorSheet: View {
                     Section { Text(errorMessage).foregroundStyle(Color(.destructive)) }
                 }
             }
+                .criaSurface()
             .navigationTitle(editing == nil ? "New project" : "Edit project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -93,7 +94,7 @@ struct ProjectEditorSheet: View {
                 .fill(Color(hexString: hex) ?? Color(.muted))
                 .frame(width: 28, height: 28)
                 .overlay(Circle().stroke(Color(.primary), lineWidth: colour == hex ? 3 : 0))
-                .overlay { if hex == nil { Image(systemName: "slash.circle").font(.caption) } }
+                .overlay { if hex == nil { Image(systemName: "slash.circle").font(Theme.caption) } }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(hex ?? "No colour")

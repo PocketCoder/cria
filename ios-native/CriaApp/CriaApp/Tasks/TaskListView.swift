@@ -67,6 +67,7 @@ struct TaskListView: View {
             }
             .onMove(perform: canReorder ? { move($0, $1) } : nil)
         }
+            .criaSurface()
         .overlay {
             if visible.isEmpty {
                 ContentUnavailableView("No tasks", systemImage: "checklist", description: Text(emptyMessage))

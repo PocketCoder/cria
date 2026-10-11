@@ -212,6 +212,7 @@ struct BucketEditSheet: View {
                     dismiss()
                 }
             }
+                .criaSurface()
             .navigationTitle("Edit column")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

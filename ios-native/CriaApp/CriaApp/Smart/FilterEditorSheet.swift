@@ -51,6 +51,7 @@ struct FilterEditorSheet: View {
                     Section { Text(errorMessage).foregroundStyle(Color(.destructive)) }
                 }
             }
+                .criaSurface()
             .navigationTitle(existing == nil ? "New filter" : "Edit filter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

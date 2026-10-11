@@ -20,7 +20,7 @@ struct TaskRowView: View {
                         .strikethrough(task.done)
                         .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
                     if task.isFavorite {
-                        Image(systemName: "star.fill").font(.caption2).foregroundStyle(Color(.warning))
+                        Image(systemName: "star.fill").font(Theme.footnote).foregroundStyle(Color(.warning))
                     }
                 }
                 metadata

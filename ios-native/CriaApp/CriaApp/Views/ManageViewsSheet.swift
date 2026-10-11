@@ -25,6 +25,7 @@ struct ManageViewsSheet: View {
                 }
                 addSection
             }
+                .criaSurface()
             .environment(\.editMode, .constant(ViewManagement.canReorder(slots) ? .active : .inactive))
             .navigationTitle("Manage views")
             .navigationBarTitleDisplayMode(.inline)

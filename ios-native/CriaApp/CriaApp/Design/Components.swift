@@ -132,3 +132,14 @@ struct ComponentCatalogue: View {
 #Preview("Catalogue dark") {
     ComponentCatalogue().preferredColorScheme(.dark)
 }
+
+extension View {
+    /// Cria's warm background behind a `List` or `Form`, with rows on the card colour and hairlines in the
+    /// border colour. Scrolling, swipe actions and edit mode stay native.
+    func criaSurface() -> some View {
+        scrollContentBackground(.hidden)
+            .background(Color(.background))
+            .listRowBackground(Color(.card))
+            .listRowSeparatorTint(Color(.border))
+    }
+}

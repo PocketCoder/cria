@@ -57,6 +57,7 @@ struct TableViewScreen: View {
         List(rows, id: \.task.localId) { item in
             TaskRowLink(services: services, item: item)
         }
+            .criaSurface()
     }
 
     private var grid: some View {
@@ -98,7 +99,7 @@ struct TableViewScreen: View {
             HStack(spacing: 4) {
                 Text(column.label).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                 if let key {
-                    Image(systemName: key.direction == .asc ? "arrow.up" : "arrow.down").font(.caption2)
+                    Image(systemName: key.direction == .asc ? "arrow.up" : "arrow.down").font(Theme.footnote)
                 }
             }
         }
@@ -167,6 +168,7 @@ struct TableViewScreen: View {
                     set: { isOn in toggle(column, isOn: isOn) }
                 ))
             }
+                .criaSurface()
             .navigationTitle("Columns")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -55,6 +55,7 @@ public enum ThemeToken: String, CaseIterable, Sendable {
     case background, card, foreground, muted, mutedForeground, border, input
     case primary, primaryForeground, primarySoft
     case destructive, success, warning, info, ring
+    case destructiveForeground, successText, warningText, warningForeground
     case priorityLow, priorityMedium, priorityHigh, priorityUrgent, priorityCritical, priorityForeground
 
     public var pair: ThemePair { Self.table[self] ?? Self.fallback }
@@ -73,6 +74,10 @@ public enum ThemeToken: String, CaseIterable, Sendable {
         .primaryForeground: ThemePair(light: .oklch(99, 0, 0), dark: .oklch(17, 0.045, 300)),
         .primarySoft: ThemePair(light: .oklch(97.6, 0.014, 300), dark: .oklch(30, 0.07, 300)),
         .destructive: ThemePair(light: .oklch(55, 0.22, 27), dark: .oklch(70, 0.16, 25)),
+        .destructiveForeground: ThemePair(light: .oklch(99, 0, 0), dark: .oklch(17, 0.045, 300)),
+        .successText: ThemePair(light: .oklch(50, 0.14, 150), dark: .oklch(72, 0.13, 150)),
+        .warningText: ThemePair(light: .oklch(50, 0.11, 70), dark: .oklch(80, 0.12, 85)),
+        .warningForeground: ThemePair(light: .oklch(24, 0.015, 285), dark: .oklch(17, 0.045, 300)),
         .success: ThemePair(light: .oklch(62, 0.16, 150), dark: .oklch(72, 0.13, 150)),
         .warning: ThemePair(light: .oklch(75, 0.16, 80), dark: .oklch(80, 0.12, 85)),
         .info: ThemePair(light: .oklch(62, 0.12, 240), dark: .oklch(62, 0.12, 240)),

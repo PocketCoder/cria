@@ -52,6 +52,7 @@ struct BrowseView: View {
             filtersSection
             projectsSection
         }
+            .criaSurface()
         .navigationTitle("Browse")
         .refreshable { await services.refresh() }
         .toolbar {
@@ -141,7 +142,7 @@ struct ProjectRowView: View {
             if row.hasChildren {
                 Button(action: onToggle) {
                     Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
+                        .font(Theme.caption)
                         .frame(width: 20)
                 }
                 .buttonStyle(.plain)
@@ -156,7 +157,7 @@ struct ProjectRowView: View {
                         .frame(width: 10, height: 10)
                     Text(row.project.title).font(Theme.rowTitle)
                     if row.project.isFavorite {
-                        Image(systemName: "star.fill").font(.caption2).foregroundStyle(Color(.warning))
+                        Image(systemName: "star.fill").font(Theme.footnote).foregroundStyle(Color(.warning))
                     }
                     Spacer()
                     if openCount > 0 {

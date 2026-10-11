@@ -89,6 +89,7 @@ struct TaskDetailView: View {
                 }
             }
         }
+            .criaSurface()
     }
 
     private func descriptionLink(_ task: TaskRecord) -> some View {
@@ -258,6 +259,7 @@ struct LabelPickerSheet: View {
                     }
                 }
             }
+                .criaSurface()
             .navigationTitle("Labels")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

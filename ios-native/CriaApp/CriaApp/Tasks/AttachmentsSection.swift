@@ -37,7 +37,7 @@ struct AttachmentsSection: View {
                 Button("Take photo", systemImage: "camera") { showCamera = true }
             }
             PasteButton(supportedContentTypes: [.image]) { providers in pasteImage(providers) }
-            if let errorText { Text(errorText).font(.caption).foregroundStyle(.red) }
+            if let errorText { Text(errorText).font(Theme.caption).foregroundStyle(Color(.destructive)) }
         }
         .task { await live.run() }
         .onChange(of: photo) { _, item in
@@ -62,8 +62,10 @@ struct AttachmentsSection: View {
                 Image(systemName: attachment.pending ? "arrow.up.circle" : "doc")
                 Text(attachment.fileName)
                 Spacer()
-                if attachment.uploadFailed { Text("Failed").font(.caption).foregroundStyle(.red) }
-                if attachment.pending, !attachment.uploadFailed { Text("Queued").font(.caption).foregroundStyle(.secondary) }
+                if attachment.uploadFailed { Text("Failed").font(Theme.caption).foregroundStyle(Color(.destructive)) }
+                if attachment.pending, !attachment.uploadFailed {
+                    Text("Queued").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                }
             }
         }
         .swipeActions {
