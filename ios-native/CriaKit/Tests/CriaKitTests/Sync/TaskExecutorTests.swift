@@ -57,7 +57,9 @@ final class TaskExecutorTests: XCTestCase {
     func testUpdatePostsFullBodyWithReminders() async throws {
         let (store, server, api, _) = try setUpStore()
         let local = try seedSyncedTask(store, serverId: 9, title: "Old")
-        try runSQL(store, "INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, '2026-06-10T09:00:00Z', 0)", [local])
+        try runSQL(store, """
+            INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, '2026-06-10T09:00:00Z', 0)
+            """, [local])
         server.json("POST /tasks/9", #"{"id": 9, "project_id": 1, "title": "Renamed", "updated": "2026-06-11T10:00:00Z"}"#)
         try store.updateTask(localId: local, patch: TaskPatch(title: "Renamed"))
         await drain(store, api)
@@ -117,7 +119,9 @@ final class TaskExecutorTests: XCTestCase {
         let (store, server, api, _) = try setUpStore()
         let task = try seedSyncedTask(store, serverId: 9)
         let label = UUID().uuidString
-        try runSQL(store, "INSERT INTO labels (local_id, title, updated_at, dirty, deleted) VALUES (?, 'New', '2026-01-01T00:00:00Z', 1, 0)", [label])
+        try runSQL(store, """
+            INSERT INTO labels (local_id, title, updated_at, dirty, deleted) VALUES (?, 'New', '2026-01-01T00:00:00Z', 1, 0)
+            """, [label])
         try store.toggleTaskLabel(taskLocalId: task, labelLocalId: label)
         await drain(store, api)
         XCTAssertTrue(server.requests.isEmpty)

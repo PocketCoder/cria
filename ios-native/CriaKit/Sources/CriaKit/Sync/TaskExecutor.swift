@@ -141,7 +141,9 @@ extension CriaStore {
                 SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND op = 'create')
                 """, arguments: [record.localId]) ?? false
             if !pending {
-                try connection.enqueue(.task, localId: record.localId, operation: .create, payload: CriaStore.taskPayload(record), at: isoNow())
+                try connection.enqueue(
+                    .task, localId: record.localId, operation: .create, payload: CriaStore.taskPayload(record), at: isoNow()
+                )
             }
         }
     }

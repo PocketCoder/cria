@@ -67,7 +67,7 @@ private func renderConflictValue(_ value: Any?) -> String {
         return number.stringValue
     default:
         guard let value, let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]) else { return "—" }
-        return String(decoding: data, as: UTF8.self)
+        return String(bytes: data, encoding: .utf8) ?? ""
     }
 }
 

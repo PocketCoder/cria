@@ -24,7 +24,7 @@ public final class Puller: Sendable {
             for data in raws {
                 guard let payload = try? JSONDecoder().decode(ProjectResponse.self, from: data) else { continue }
                 if payload.id == -1 { continue }  // the Favorites pseudo-project
-                collected.append((payload, String(decoding: data, as: UTF8.self)))
+                collected.append((payload, String(bytes: data, encoding: .utf8) ?? ""))
             }
             for item in collected {
                 try store.upsertProjectFromServer(item.payload, rawJSON: item.raw)
@@ -45,7 +45,7 @@ public final class Puller: Sendable {
             var count = 0
             for data in raws {
                 guard let payload = try? JSONDecoder().decode(LabelResponse.self, from: data) else { continue }
-                try store.upsertLabelFromServer(payload, rawJSON: String(decoding: data, as: UTF8.self))
+                try store.upsertLabelFromServer(payload, rawJSON: String(bytes: data, encoding: .utf8) ?? "")
                 count += 1
             }
             try store.stampSync(.labels)
@@ -140,12 +140,12 @@ public final class Puller: Sendable {
     }
 
     func upsertTaskWithRelations(_ task: TaskResponse, raw: Data, clearMissingRelations: Bool = false) throws {
-        guard let taskLocalId = try store.upsertTaskFromServer(task, rawJSON: String(decoding: raw, as: UTF8.self)) else { return }
+        guard let taskLocalId = try store.upsertTaskFromServer(task, rawJSON: String(bytes: raw, encoding: .utf8) ?? "") else { return }
         if task.labels != nil {
             let rawLabels = rawElements(raw, key: "labels")
             let items: [(payload: LabelResponse, rawJSON: String)] = rawLabels.compactMap { data in
                 guard let payload = try? JSONDecoder().decode(LabelResponse.self, from: data) else { return nil }
-                return (payload, String(decoding: data, as: UTF8.self))
+                return (payload, String(bytes: data, encoding: .utf8) ?? "")
             }
             try store.replaceTaskLabelsFromServer(taskLocalId: taskLocalId, items)
         }
@@ -204,7 +204,7 @@ public final class Puller: Sendable {
         let raws = try await api.fetchAllPages("/projects/\(projectServerId)/views")
         let items: [(payload: ViewResponse, rawJSON: String)] = raws.compactMap { data in
             guard let payload = try? JSONDecoder().decode(ViewResponse.self, from: data) else { return nil }
-            return (payload, String(decoding: data, as: UTF8.self))
+            return (payload, String(bytes: data, encoding: .utf8) ?? "")
         }
         try store.replaceViewsForProjectFromServer(projectLocalId: projectLocalId, items)
         return items.count
@@ -228,7 +228,7 @@ public final class Puller: Sendable {
         let raws = try await api.fetchAllPages("/projects/\(projectServerId)/views/\(viewServerId)/buckets")
         let items: [(payload: BucketResponse, rawJSON: String)] = raws.compactMap { data in
             guard let payload = try? JSONDecoder().decode(BucketResponse.self, from: data) else { return nil }
-            return (payload, String(decoding: data, as: UTF8.self))
+            return (payload, String(bytes: data, encoding: .utf8) ?? "")
         }
         try store.replaceBucketsForViewFromServer(viewLocalId: viewLocalId, items)
         return items.count

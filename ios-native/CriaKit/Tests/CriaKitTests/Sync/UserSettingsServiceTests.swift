@@ -46,7 +46,7 @@ private final class SettingsServer: @unchecked Sendable {
         case "GET /api/v1/user":
             if failUserRead { return (500, #"{"message": "boom"}"#, json) }
             let data = (try? JSONSerialization.data(withJSONObject: ["id": 1, "username": "j", "settings": settings])) ?? Data()
-            return (200, String(decoding: data, as: UTF8.self), json)
+            return (200, String(bytes: data, encoding: .utf8) ?? "", json)
         case "POST /api/v1/user/settings/general":
             if let body { lock.withLock { _settings = body } }
             return (200, "{}", json)

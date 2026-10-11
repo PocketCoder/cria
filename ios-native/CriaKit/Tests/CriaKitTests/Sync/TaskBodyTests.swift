@@ -6,7 +6,8 @@ final class TaskBodyTests: XCTestCase {
     private func record(_ patch: (inout TaskRecord) -> Void = { _ in }) throws -> TaskRecord {
         let store = try makeStore()
         try seedProject(store)
-        var task = try XCTUnwrap(try store.createTask(TaskInput(title: "A task", projectLocalId: try XCTUnwrap(try store.projects().first).localId)))
+        let project = try XCTUnwrap(try store.projects().first).localId
+        var task = try store.createTask(TaskInput(title: "A task", projectLocalId: project))
         patch(&task)
         return task
     }
@@ -66,8 +67,10 @@ final class TaskBodyTests: XCTestCase {
         XCTAssertEqual(string(taskToBody(try record { $0.dueDate = full }, timeZone: utc), "due_date"), full)
         XCTAssertEqual(string(taskToBody(try record { $0.dueDate = "2026-06-09" }, timeZone: utc), "due_date"), "2026-06-09T00:00:00+00:00")
         let london = TimeZone(identifier: "Europe/London")!
-        XCTAssertEqual(string(taskToBody(try record { $0.startDate = "2026-07-04" }, timeZone: london), "start_date"), "2026-07-04T00:00:00+01:00")
-        XCTAssertEqual(string(taskToBody(try record { $0.endDate = "2026-01-15" }, timeZone: london), "end_date"), "2026-01-15T00:00:00+00:00")
+        let start = taskToBody(try record { $0.startDate = "2026-07-04" }, timeZone: london)
+        XCTAssertEqual(string(start, "start_date"), "2026-07-04T00:00:00+01:00")
+        let end = taskToBody(try record { $0.endDate = "2026-01-15" }, timeZone: london)
+        XCTAssertEqual(string(end, "end_date"), "2026-01-15T00:00:00+00:00")
         XCTAssertNil(taskToBody(try record(), timeZone: utc)["start_date"])
     }
 

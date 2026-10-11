@@ -12,3 +12,16 @@ disabled_rules:
 line_length:
   warning: 140
   error: 200
+identifier_name:
+  min_length:
+    warning: 3
+  excluded: [op, id, t, r]
+large_tuple:
+  warning: 4
+  error: 6
+cyclomatic_complexity:
+  warning: 20
+  error: 30
+function_parameter_count:
+  warning: 8
+  error: 10

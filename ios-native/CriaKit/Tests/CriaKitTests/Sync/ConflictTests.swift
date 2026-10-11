@@ -8,7 +8,10 @@ final class ConflictTests: XCTestCase {
         try seedProject(store)
         let local = try seedSyncedTask(store, serverId: 10, title: "base")
         try store.updateTask(localId: local, patch: TaskPatch(title: "mine", priority: 1))
-        let remote = #"{"id": 10, "project_id": 1, "title": "theirs", "priority": 4, "done": true, "due_date": "0001-01-01T00:00:00Z", "updated": "2026-02-01T00:00:00Z"}"#
+        let remote = #"""
+            {"id": 10, "project_id": 1, "title": "theirs", "priority": 4, "done": true,
+             "due_date": "0001-01-01T00:00:00Z", "updated": "2026-02-01T00:00:00Z"}
+            """#
         try store.upsertTaskFromServer(try decodeFixture(TaskResponse.self, remote), rawJSON: remote)
         let conflict = try XCTUnwrap(try store.unresolvedConflicts().first)
         return (store, local, conflict.id)

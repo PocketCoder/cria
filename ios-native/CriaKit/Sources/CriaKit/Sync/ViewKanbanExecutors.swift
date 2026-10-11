@@ -66,7 +66,8 @@ public struct ViewExecutor: OutboxExecutor {
                     SELECT id FROM outbox WHERE entity_type = 'view' AND entity_local_id = ? AND op = 'create' LIMIT 1
                     """, localId) != nil
                 if !hasCreate {
-                    throw ApiError(status: 0, code: nil, message: "view: never synced, so this edit has nothing to update", retryable: false)
+                    throw ApiError(status: 0, code: nil,
+                                   message: "view: never synced, so this edit has nothing to update", retryable: false)
                 }
             }
             guard let serverId = view.serverId, let projectServerId else { throw ApiError.blocked("view: not synced yet") }

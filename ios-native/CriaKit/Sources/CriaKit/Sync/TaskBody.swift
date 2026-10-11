@@ -63,5 +63,6 @@ public func normaliseDateForServer(_ date: String?, timeZone: TimeZone = .curren
     let sign = offset >= 0 ? "+" : "-"
     let absolute = abs(offset)
     let pad = { (value: Int) in String(format: "%02d", value) }
-    return "\(String(format: "%04d", parts[0]))-\(pad(parts[1]))-\(pad(parts[2]))T00:00:00\(sign)\(pad(absolute / 60)):\(pad(absolute % 60))"
+    let day = "\(String(format: "%04d", parts[0]))-\(pad(parts[1]))-\(pad(parts[2]))"
+    return "\(day)T00:00:00\(sign)\(pad(absolute / 60)):\(pad(absolute % 60))"
 }

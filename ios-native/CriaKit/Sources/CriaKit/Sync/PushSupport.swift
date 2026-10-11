@@ -53,12 +53,13 @@ extension CriaStore {
               let after = try? JSONSerialization.jsonObject(with: serverPayload) as? [String: Any] else { return false }
         let diverged = fields.filter { !jsonValuesEqual(before[$0], after[$0]) }
         guard !diverged.isEmpty else { return false }
-        let fieldsJSON = String(decoding: try JSONSerialization.data(withJSONObject: diverged), as: UTF8.self)
+        let fieldsJSON = String(bytes: try JSONSerialization.data(withJSONObject: diverged), encoding: .utf8) ?? ""
+        let remoteText = String(bytes: serverPayload, encoding: .utf8) ?? ""
         try userWrite(announcing: [.conflicts]) { connection in
             try connection.execute(sql: """
                 INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-                """, arguments: [entityType, localId, fieldsJSON, lastSynced, String(decoding: serverPayload, as: UTF8.self), isoNow()])
+                """, arguments: [entityType, localId, fieldsJSON, lastSynced, remoteText, isoNow()])
         }
         return true
     }

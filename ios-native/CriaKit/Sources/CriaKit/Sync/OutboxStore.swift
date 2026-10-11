@@ -103,7 +103,7 @@ extension CriaStore {
         object["_cachedServerId"] = serverId
         let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         try database.writer.write {
-            try $0.execute(sql: "UPDATE outbox SET payload = ? WHERE id = ?", arguments: [String(decoding: data, as: UTF8.self), opId])
+            try $0.execute(sql: "UPDATE outbox SET payload = ? WHERE id = ?", arguments: [String(bytes: data, encoding: .utf8) ?? "", opId])
         }
     }
 

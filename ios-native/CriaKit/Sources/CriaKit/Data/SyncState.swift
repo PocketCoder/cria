@@ -10,6 +10,13 @@ public enum SyncColumn: String, Sendable {
     case buckets = "buckets_synced_at"
 }
 
+/// A synced kanban view with its project's server id.
+public struct KanbanViewRef: Equatable, Sendable {
+    public let viewLocalId: String
+    public let viewServerId: Int
+    public let projectServerId: Int
+}
+
 extension CriaStore {
     public func syncStamp(_ column: SyncColumn) throws -> String? {
         try database.writer.read { connection in
@@ -53,7 +60,7 @@ extension CriaStore {
     }
 
     /// Live kanban views that have a server id, with their project's server id.
-    public func syncedKanbanViews(projectLocalId: String? = nil) throws -> [(viewLocalId: String, viewServerId: Int, projectServerId: Int)] {
+    public func syncedKanbanViews(projectLocalId: String? = nil) throws -> [KanbanViewRef] {
         try database.writer.read { connection in
             var sql = """
                 SELECT pv.local_id AS vl, pv.server_id AS vs, p.server_id AS ps
@@ -67,7 +74,7 @@ extension CriaStore {
                 arguments = [projectLocalId]
             }
             return try Row.fetchAll(connection, sql: sql, arguments: arguments).map {
-                (viewLocalId: $0["vl"], viewServerId: $0["vs"], projectServerId: $0["ps"])
+                KanbanViewRef(viewLocalId: $0["vl"], viewServerId: $0["vs"], projectServerId: $0["ps"])
             }
         }
     }

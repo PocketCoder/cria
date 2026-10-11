@@ -76,7 +76,8 @@ final class AttachmentUploadTests2: XCTestCase {
     }
 
     private let uploadReply = #"""
-        {"success": [{"id": 7, "file": {"id": 70, "name": "photo.png", "size": 3, "mime": "image/png"}, "created": "2026-07-01T00:00:00Z"}], "errors": null}
+        {"success": [{"id": 7, "file": {"id": 70, "name": "photo.png", "size": 3, "mime": "image/png"},
+          "created": "2026-07-01T00:00:00Z"}], "errors": null}
         """#
 
     func testUploadSendsMultipartFinalisesRewritesAndDeletesBytes() async throws {
@@ -89,12 +90,14 @@ final class AttachmentUploadTests2: XCTestCase {
 
         let request = try XCTUnwrap(server.requests.first)
         XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true)
-        let form = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
+        let form = String(bytes: try XCTUnwrap(request.httpBody), encoding: .utf8) ?? ""
         XCTAssertTrue(form.contains(#"name="files"; filename="photo.png""#))
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM task_attachments WHERE pending = 0 AND server_id = 7"), 1)
         XCTAssertFalse(blobs.has("att1"))
         XCTAssertEqual(try store.outboxRows().filter { $0.entityType == "task_attachment" }.count, 0)
-        let description = try store.database.writer.read { try String.fetchOne($0, sql: "SELECT description FROM tasks WHERE local_id = 'task1'") }
+        let description = try store.database.writer.read {
+            try String.fetchOne($0, sql: "SELECT description FROM tasks WHERE local_id = 'task1'")
+        }
         XCTAssertTrue(description?.contains("/api/v1/tasks/42/attachments/7") == true)
         XCTAssertFalse(description?.contains("cria://pending") == true)
     }
