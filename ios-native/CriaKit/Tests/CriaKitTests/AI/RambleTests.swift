@@ -94,7 +94,8 @@ final class RambleTests: XCTestCase {
     }
 
     func testAvailabilityGate() async {
-        XCTAssertNil(await AIFeatures(model: StubModel()).unavailableReason())
+        let ready = await AIFeatures(model: StubModel()).unavailableReason()
+        XCTAssertNil(ready)
         let reason = await AIFeatures(model: StubModel(status: "unsupportedOS")).unavailableReason()
         XCTAssertEqual(reason, "unsupportedOS")
         XCTAssertFalse(AIFeatures.isOfferable(reason: "unavailable: deviceNotEligible"))
