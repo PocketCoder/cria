@@ -26,23 +26,24 @@ final class PeriodicSyncTests: XCTestCase {
 
     func testScenePhaseInactivePausesAndActiveResumesWithAnImmediatePull() async {
         let counter = TickCounter()
-        let sync = PeriodicSync(interval: 0.05, reconcileInterval: 100, tick: { await counter.increment() })
+        // A long interval keeps timer ticks out of the way, so only the immediate pull on resume adds one.
+        let sync = PeriodicSync(interval: 0.3, reconcileInterval: 100, tick: { await counter.increment() })
         await sync.start()
-        await settle(120)
+        await settle(100)
         await sync.setActive(false)
         let running = await sync.isRunning
         XCTAssertFalse(running)
-        await settle(20)
         let paused = await counter.value
-        await settle(250)
+        XCTAssertEqual(paused, 1)
+        await settle(500)
         let stillPaused = await counter.value
         XCTAssertEqual(stillPaused, paused, "no ticks while inactive")
 
         await sync.setActive(true)
-        await settle(20)
+        await settle(100)
         let resumed = await counter.value
         XCTAssertEqual(resumed, paused + 1, "foreground pulls straight away")
-        await settle(150)
+        await settle(500)
         let ticking = await counter.value
         XCTAssertGreaterThan(ticking, resumed)
         await sync.stop()
@@ -69,17 +70,21 @@ final class PeriodicSyncTests: XCTestCase {
         let sync = PeriodicSync(interval: 0.03, reconcileInterval: 0.03,
                                 tick: { await ticks.increment() }, reconcile: { await reconciles.increment() })
         await sync.start()
-        await settle(100)
+        for _ in 0..<100 {
+            let both = await ticks.value > 1 && reconciles.value > 0
+            if both { break }
+            await settle(20)
+        }
         await sync.stop()
-        await settle(30)
-        let t = await ticks.value
-        let r = await reconciles.value
-        await settle(150)
-        let tAfter = await ticks.value
-        let rAfter = await reconciles.value
-        XCTAssertEqual(t, tAfter)
-        XCTAssertEqual(r, rAfter)
-        XCTAssertGreaterThan(r, 0)
+        await settle(50)
+        let tickCount = await ticks.value
+        let reconcileCount = await reconciles.value
+        XCTAssertGreaterThan(reconcileCount, 0)
+        await settle(200)
+        let tickAfter = await ticks.value
+        let reconcileAfter = await reconciles.value
+        XCTAssertEqual(tickCount, tickAfter)
+        XCTAssertEqual(reconcileCount, reconcileAfter)
     }
 
     func testSetActiveBeforeStartDoesNotStartTheLoop() async {

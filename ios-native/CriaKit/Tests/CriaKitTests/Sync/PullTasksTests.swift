@@ -59,8 +59,7 @@ final class PullTasksTests: XCTestCase {
 
         try runSQL(store, "UPDATE sync_state SET tasks_synced_at = '2026-06-09T10:05:00Z' WHERE id = 1")
         XCTAssertEqual(try puller.tasksDeltaFilter(), "updated > '2026-06-09T10:00:00Z'")
-        try runSQL(store, "DELETE FROM task_relations")
-        try runSQL(store, "DELETE FROM tasks")
+        try runSQL(store, "UPDATE tasks SET deleted = 1")
         XCTAssertNil(try puller.tasksDeltaFilter())
     }
 
