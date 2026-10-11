@@ -13,6 +13,8 @@ public struct SyncStatus: Equatable, Sendable {
     public var errors: [StepError] = []
     public var lastSyncAt: Date?
 
+    public init() {}
+
     public var isSyncing: Bool { step != nil }
 }
 

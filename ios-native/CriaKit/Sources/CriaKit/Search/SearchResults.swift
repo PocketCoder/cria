@@ -8,6 +8,8 @@ public struct SearchResults: Equatable, Sendable {
     public var labels: [LabelRecord] = []
     public var filters: [SavedFilterRecord] = []
 
+    public init() {}
+
     public var isEmpty: Bool { tasks.isEmpty && projects.isEmpty && labels.isEmpty && filters.isEmpty }
 }
 
