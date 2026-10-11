@@ -9,6 +9,8 @@ struct RambleSheet: View {
     @State private var text = ""
     @State private var drafts: [RambleDraft] = []
     @State private var working = false
+    @State private var speech = SpeechCapture()
+    @State private var typedBefore = ""
     @State private var errorMessage: String?
 
     private var mode: QuickAddMagicMode {
@@ -30,6 +32,11 @@ struct RambleSheet: View {
                 }
             }
             .criaSurface()
+            .onChange(of: speech.transcript) { _, spoken in
+                guard speech.isCapturing else { return }
+                text = typedBefore + spoken
+            }
+            .onDisappear { speech.stop() }
             .navigationTitle("Ramble")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -46,11 +53,34 @@ struct RambleSheet: View {
     private var inputSection: some View {
         Section {
             TextEditor(text: $text).frame(minHeight: 160)
-            Button(working ? "Organising…" : "Make a task list") { Task { await generate() } }
-                .disabled(working || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            micButton
+            if let problem = speech.problem {
+                Text(problem).font(Theme.caption).foregroundStyle(Color(.destructive))
+            }
+            Button(working ? "Organising…" : "Make a task list") {
+                speech.stop()
+                Task { await generate() }
+            }
+            .disabled(working || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         } footer: {
-            Text("Type or dictate everything on your mind. Dates stay in words and are resolved when the tasks are added.")
+            Text("Talk or type everything on your mind. Dates stay in words and are resolved when the tasks are added.")
         }
+    }
+
+    private var micButton: some View {
+        Button {
+            Task {
+                if !speech.isListening {
+                    let spaced = text.isEmpty || text.hasSuffix(" ") || text.hasSuffix("\n") ? text : text + " "
+                    typedBefore = spaced
+                }
+                await speech.toggle()
+            }
+        } label: {
+            Label(speech.isListening ? "Stop listening" : "Speak", systemImage: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
+                .symbolEffect(.pulse, isActive: speech.isListening)
+        }
+        .tint(speech.isListening ? Color(.destructive) : Color(.primary))
     }
 
     private var reviewSection: some View {

@@ -32,6 +32,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSCameraUsageDescription: Take photos to attach to your tasks.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Listen while you speak a list of tasks.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Turn what you say into text for your tasks.
         CODE_SIGN_ENTITLEMENTS: CriaApp/CriaApp.entitlements
   CriaShare:
     type: app-extension
