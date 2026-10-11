@@ -8,6 +8,8 @@ struct CommentsSection: View {
     @State private var live: LiveValue<[CommentRecord]>
     @State private var composing = false
     @State private var editing: CommentRecord?
+    @State private var summary: String?
+    @State private var summarising = false
 
     init(services: AppServices, taskLocalId: String) {
         self.services = services
@@ -26,8 +28,10 @@ struct CommentsSection: View {
                 row(comment)
             }
             Button("Add a comment", systemImage: "text.bubble") { composing = true }
+            summarySection
         }
         .task { await live.run() }
+        .task { await AIStatus.shared.refresh() }
         .sheet(isPresented: $composing) {
             CommentComposerSheet(
                 services: services, taskLocalId: taskLocalId, title: "New comment", initialHTML: ""
@@ -41,6 +45,32 @@ struct CommentsSection: View {
             ) { html in
                 try? services.store.updateComment(localId: comment.localId, comment: html)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var summarySection: some View {
+        if AIStatus.shared.isOfferable && live.value.count >= 2 {
+            Button(summarising ? "Summarising…" : "Summarise thread", systemImage: "sparkles") {
+                Task { await summarise() }
+            }
+            .disabled(summarising || AIStatus.shared.notReadyMessage != nil)
+            if let summary {
+                Text(summary).font(Theme.rowTitle).textSelection(.enabled)
+            }
+        }
+    }
+
+    private func summarise() async {
+        summarising = true
+        defer { summarising = false }
+        let thread = live.value.map {
+            AIPrompts.ThreadComment(authorName: $0.authorName, comment: $0.comment, createdAt: $0.createdAt)
+        }
+        do {
+            summary = try await AIStatus.shared.features.summary(of: thread)
+        } catch {
+            summary = AIPrompts.errorMessage(String(describing: error))
         }
     }
 
