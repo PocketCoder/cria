@@ -44,6 +44,25 @@ public final class AppServices: Sendable {
         return id
     }
 
+    // MARK: Comment reactions
+
+    /// Toggles the current user's reaction: optimistic local write, then a fire-and-forget API call.
+    /// Like the web client, a failure is corrected by the next pull. Needs a server user and a pushed comment.
+    public func toggleCommentReaction(commentLocalId: String, emoji: String) async {
+        guard let user = try? await api.currentUser(),
+              let comment = try? store.comment(localId: commentLocalId), comment.serverId != 0,
+              let added = try? store.toggleCommentReaction(
+                  commentLocalId: commentLocalId,
+                  emoji: emoji,
+                  user: ReactionUserRecord(id: user.id, name: user.name, username: user.username)
+              ) else { return }
+        if added {
+            try? await api.addCommentReaction(commentId: comment.serverId, emoji: emoji)
+        } else {
+            try? await api.removeCommentReaction(commentId: comment.serverId, emoji: emoji)
+        }
+    }
+
     // MARK: Saved filters (online only, like the web client)
 
     public func createSavedFilter(title: String, description: String, query: String, includeNulls: Bool) async throws {

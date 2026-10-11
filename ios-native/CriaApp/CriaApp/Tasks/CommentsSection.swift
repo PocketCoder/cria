@@ -49,6 +49,7 @@ struct CommentsSection: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(comment.authorName ?? "You").font(.caption).foregroundStyle(.secondary)
             RichTextView(html: comment.comment).frame(minHeight: 28)
+            reactionBar(comment)
         }
         .swipeActions {
             Button("Delete", role: .destructive) {
@@ -59,6 +60,30 @@ struct CommentsSection: View {
                 editing = comment
             }
         }
+    }
+
+    private func reactionBar(_ comment: CommentRecord) -> some View {
+        HStack {
+            ForEach((comment.reactions ?? [:]).keys.sorted(), id: \.self) { emoji in
+                let count = comment.reactions?[emoji]?.count ?? 0
+                Button("\(emoji) \(count)") { react(comment, emoji) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            Menu("React", systemImage: "face.smiling") {
+                ForEach(Self.quickEmojis, id: \.self) { emoji in
+                    Button(emoji) { react(comment, emoji) }
+                }
+            }
+            .labelStyle(.iconOnly)
+        }
+    }
+
+    private static let quickEmojis = ["👍", "❤️", "😂", "🎉", "👀", "🙏"]
+
+    private func react(_ comment: CommentRecord, _ emoji: String) {
+        let services = services
+        Task { await services.toggleCommentReaction(commentLocalId: comment.localId, emoji: emoji) }
     }
 
     private func send() {

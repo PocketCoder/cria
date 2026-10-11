@@ -98,6 +98,12 @@ public extension ApiClient {
         try await post("/tasks/\(taskId)/comments/\(id)", body: body)
     }
     func deleteComment(taskId: Int, id: Int) async throws { try await perform(.delete, "/tasks/\(taskId)/comments/\(id)") }
+    func addCommentReaction(commentId: Int, emoji: String) async throws {
+        try await perform(.put, "/comments/\(commentId)/reactions", body: ["value": JSONValue.string(emoji)])
+    }
+    func removeCommentReaction(commentId: Int, emoji: String) async throws {
+        try await perform(.post, "/comments/\(commentId)/reactions/delete", body: ["value": JSONValue.string(emoji)])
+    }
 
     // Subscriptions
     func subscribe(entity: String, id: Int) async throws { try await perform(.put, "/subscriptions/\(entity)/\(id)") }

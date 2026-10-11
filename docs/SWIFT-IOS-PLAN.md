@@ -392,7 +392,7 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 | 2 API and auth | S-20 to S-23 | done (CI green on 78e49de; KeychainSlot has no unit test: the SPM test host lacks Keychain entitlements; exercise it in the simulator. Sign-in does not yet cache a user row: Data layer has no user table. Link-share login is out of scope for this phase) |
 | 3 Sync | S-30 to S-39 | done (CI test-and-build green on 0c39417; the app does not yet start the coordinator: S-40 wires it; no network-reachability trigger, a tick plus the outbox bus cover reconnects) |
 | 4 Core screens | S-40 to S-48 | done (CI green on 9da4998 incl. app build; Onest font files not yet bundled, system font fallback; saved-filter and project edits need manual device check) |
-| 5 Rich content | S-50 to S-56 | in progress: S-50 (provisional), S-52 done; S-53 partly done (thread UI, add, edit, delete; reactions and @mentions still to do); next S-51 (editor), then S-53 remainder and S-54 to S-56 |
+| 5 Rich content | S-50 to S-56 | in progress: S-50 (provisional), S-52 done; S-53 partly done (thread UI, add, edit, delete, reactions via AppServices.toggleCommentReaction; @mentions wait for the S-51 editor); next S-51 (editor), then S-53 remainder and S-54 to S-56 |
 | 6 Views | S-60 to S-64 | not started |
 | 7 Settings | S-70 to S-75 | not started |
 | 8 Native extras | S-80 to S-84 | not started |
