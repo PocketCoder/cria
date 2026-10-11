@@ -74,7 +74,7 @@ public extension ApiClient {
         let body: JSONBody = [
             "title": .string(title),
             "expires_at": .string(expiresAt),
-            "permissions": .object(permissions.mapValues { .array($0.map { JSONValue.string($0) }) })
+            "permissions": .object(permissions.mapValues { JSONValue.array($0.map { JSONValue.string($0) }) })
         ]
         let row: JSONValue = try await put("/tokens", body: body)
         return ApiToken(row)
