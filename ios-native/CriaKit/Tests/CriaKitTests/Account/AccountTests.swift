@@ -32,7 +32,8 @@ final class AccountTests: XCTestCase {
     }
 
     func testCreateTokenSendsPermissionsAndReadsSecret() async throws {
-        let transport = StubTransport { _, _ in (200, #"{"id": 5, "title": "CI", "token": "tk_abc"}"#, ["Content-Type": "application/json"]) }
+        let json = #"{"id": 5, "title": "CI", "token": "tk_abc"}"#
+        let transport = StubTransport { _, _ in (200, json, ["Content-Type": "application/json"]) }
         let client = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
         let token = try await client.createApiToken(
             title: "CI", expiresAt: "2027-01-01T00:00:00Z", permissions: ["tasks": ["read_all"]]

@@ -14,6 +14,7 @@ struct BrowseView: View {
     @State var live: LiveValue<BrowseData>
     @State private var editor: ProjectEditorTarget?
     @State private var pendingDelete: ProjectRecord?
+    @State private var sharing: ProjectShareTarget?
     @State var filterEditor: FilterEditorTarget?
     @AppStorage("cria.projectTree.collapsed") private var collapsedJSON = "[]"
 
@@ -68,6 +69,9 @@ struct BrowseView: View {
         .sheet(item: $filterEditor) { target in
             FilterEditorSheet(services: services, existing: target.record)
         }
+        .sheet(item: $sharing) { target in
+            ProjectSharingSheet(services: services, project: target.project)
+        }
         .sheet(item: $editor) { target in
             ProjectEditorSheet(services: services, target: target, projects: live.value.projects)
         }
@@ -97,6 +101,7 @@ extension BrowseView {
                 .swipeActions(edge: .trailing) {
                     Button("Delete", role: .destructive) { pendingDelete = row.project }
                     Button("Edit") { editor = .edit(row.project) }.tint(Color(.info))
+                    Button("Share") { sharing = ProjectShareTarget(project: row.project) }.tint(Color(.primary))
                 }
                 .swipeActions(edge: .leading) {
                     Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {

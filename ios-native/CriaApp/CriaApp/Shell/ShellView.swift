@@ -5,7 +5,7 @@ import SwiftUI
 /// bar for a plain `TabView`; older versions get the standard bar.
 struct ShellView: View {
     let services: AppServices
-    let onSignOut: () -> Void
+    let onSignOut: (_ wipeLocalData: Bool) -> Void
     @State private var navigation = NavigationModel()
 
     var body: some View {
@@ -38,7 +38,8 @@ struct ShellView: View {
 struct TabRoot: View {
     let tab: AppTab
     let services: AppServices
-    let onSignOut: () -> Void
+    let onSignOut: (_ wipeLocalData: Bool) -> Void
+    @State private var showingSettings = false
 
     var body: some View {
         switch tab {
@@ -46,10 +47,11 @@ struct TabRoot: View {
             BrowseView(services: services)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Menu("Account", systemImage: "person.circle") {
-                            Button("Sign out", role: .destructive, action: onSignOut)
-                        }
+                        Button("Settings", systemImage: "gearshape") { showingSettings = true }
                     }
+                }
+                .sheet(isPresented: $showingSettings) {
+                    SettingsView(services: services, onSignOut: onSignOut)
                 }
         case .today:
             SmartViewScreen(services: services, view: .today, title: "Today")

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Lenient readers for loosely typed server payloads (notifications, shares, tokens). Wrong types read as nil.
-extension JSONValue {
+public extension JSONValue {
     var stringValue: String? {
         if case .string(let value) = self { return value }
         return nil

@@ -6,13 +6,18 @@ public final class AppServices: Sendable {
     public let store: CriaStore
     public let coordinator: SyncCoordinator
     public let api: ApiClient
+    /// Saves general settings (S-70). Nil in tests that do not exercise settings.
+    public let settings: UserSettingsService?
+    public let backgrounds: ProjectBackgroundCache
     let blobs: FileBlobStore
 
-    public init(api: ApiClient, store: CriaStore, blobDirectory: URL) async {
+    public init(api: ApiClient, store: CriaStore, blobDirectory: URL, settings: UserSettingsService? = nil) async {
         self.api = api
         self.store = store
+        self.settings = settings
         let fileBlobs = FileBlobStore(directory: blobDirectory)
         blobs = fileBlobs
+        backgrounds = ProjectBackgroundCache(blobs: fileBlobs)
         let drainer = OutboxDrainer(api: api, store: store)
         await drainer.registerStandardExecutors()
         await drainer.registerAttachmentExecutor(blobs: fileBlobs)

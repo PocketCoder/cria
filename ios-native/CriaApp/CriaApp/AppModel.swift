@@ -11,11 +11,13 @@ final class AppModel {
     let session: AuthSession
     let api: ApiClient
     private let loginService: LoginService
+    private let core: HTTPCore
 
     private static let appGroup = "group.io.cria.app"
 
     init() {
         let core = HTTPCore()
+        self.core = core
         let session = AuthSession(core: core)
         self.session = session
         self.api = ApiClient(session: session, core: core)
@@ -34,11 +36,15 @@ final class AppModel {
         await startServicesIfNeeded()
     }
 
-    func signOut() async {
+    /// `wipeLocalData` also deletes the database, queued blobs and cached backgrounds.
+    func signOut(wipeLocalData: Bool = false) async {
         await services?.stop()
         services = nil
         await session.signOut()
         status = await session.status
+        if wipeLocalData {
+            try? LocalDataWipe.wipe(root: Self.dataDirectory())
+        }
     }
 
     func setSyncActive(_ isActive: Bool) async {
@@ -59,7 +65,8 @@ final class AppModel {
             let built = await AppServices(
                 api: api,
                 store: CriaStore(database: database),
-                blobDirectory: root.appendingPathComponent("blobs", isDirectory: true)
+                blobDirectory: root.appendingPathComponent("blobs", isDirectory: true),
+                settings: UserSettingsService(session: session, core: core)
             )
             services = built
             startupError = nil
