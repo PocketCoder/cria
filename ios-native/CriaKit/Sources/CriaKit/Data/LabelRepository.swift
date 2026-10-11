@@ -115,16 +115,16 @@ extension CriaStore {
             let fired = try Row.fetchAll(connection, sql: """
                 SELECT reminder_at, relative_period, relative_to FROM task_reminders WHERE task_local_id = ? AND notified = 1
                 """, arguments: [taskLocalId]).map {
-                ReminderKey(at: $0["reminder_at"], period: $0["relative_period"], to: $0["relative_to"])
+                ReminderKey(reminderAt: $0["reminder_at"], relativePeriod: $0["relative_period"], relativeTo: $0["relative_to"])
             }
             try connection.execute(sql: "DELETE FROM task_reminders WHERE task_local_id = ?", arguments: [taskLocalId])
             for reminder in reminders {
-                let at = normaliseDate(reminder.reminder)
-                let key = ReminderKey(at: at, period: reminder.relativePeriod, to: reminder.relativeTo)
+                let triggerAt = normaliseDate(reminder.reminder)
+                let key = ReminderKey(reminderAt: triggerAt, relativePeriod: reminder.relativePeriod, relativeTo: reminder.relativeTo)
                 try connection.execute(sql: """
                     INSERT OR IGNORE INTO task_reminders (task_local_id, reminder_at, relative_period, relative_to, notified)
                     VALUES (?, ?, ?, ?, ?)
-                    """, arguments: [taskLocalId, at, reminder.relativePeriod, reminder.relativeTo, fired.contains(key) ? 1 : 0])
+                    """, arguments: [taskLocalId, triggerAt, reminder.relativePeriod, reminder.relativeTo, fired.contains(key) ? 1 : 0])
             }
         }
     }
@@ -159,7 +159,7 @@ extension CriaStore {
 
 /// Identity of a reminder for carrying its `notified` flag across a pull.
 private struct ReminderKey: Hashable {
-    let at: String?
-    let period: Int?
-    let to: String?
+    let reminderAt: String?
+    let relativePeriod: Int?
+    let relativeTo: String?
 }

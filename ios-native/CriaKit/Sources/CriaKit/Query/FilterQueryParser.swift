@@ -265,7 +265,6 @@ private func resolveDateMath(_ value: String, now: Date, calendar: Calendar) -> 
         return fallback
     }
     let digits = rest.dropFirst().dropLast()
-    // Capped so the day and week arithmetic below cannot overflow.
     guard !digits.isEmpty, digits.allSatisfy({ isDigit($0) }), let magnitude = Int(digits), magnitude <= 100_000 else {
         return fallback
     }
