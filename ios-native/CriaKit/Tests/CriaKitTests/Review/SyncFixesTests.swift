@@ -124,7 +124,7 @@ final class SyncFixesTests: XCTestCase {
 
     func testLinkOpForADeletedTaskFinishesAsANoOp() async throws {
         let store = try makeStore()
-        try store.database.writer.write { connection in
+        try await store.database.writer.write { connection in
             try connection.enqueue(
                 .taskLabel, localId: "gone:label", operation: .create,
                 payload: ["task_local_id": "gone", "label_local_id": "label"], at: isoNow()
@@ -137,7 +137,7 @@ final class SyncFixesTests: XCTestCase {
 
     func testOverlappingDrainsShareOneRun() async throws {
         let store = try makeStore()
-        try store.database.writer.write { connection in
+        try await store.database.writer.write { connection in
             try connection.enqueue(.task, localId: "t1", operation: .create, payload: [:], at: isoNow())
         }
         let executor = CountingExecutor()
