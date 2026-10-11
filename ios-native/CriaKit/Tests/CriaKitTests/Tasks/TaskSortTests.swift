@@ -86,7 +86,7 @@ final class TaskSortTests: XCTestCase {
 
     func testTableIndexDescendingUsesServerId() throws {
         let tasks = try seed(sample)
-        let sorted = TableSort.sorted(tasks, keys: TableSort.defaultKeys, visible: TableColumn.defaultVisible)
+        let sorted = TableSort.sorted(tasks, keys: TableSort.defaultKeys, visible: TableViewColumn.defaultVisible)
         XCTAssertEqual(sorted.compactMap(\.serverId), [4, 3, 2, 1])
     }
 }
@@ -99,7 +99,7 @@ final class TableConfigCodecTests: XCTestCase {
     }
 
     func testEmptyColumnsFallBackToDefaultsAndUnknownNamesDrop() {
-        XCTAssertEqual(TableConfigCodec.decodeColumns(""), TableColumn.defaultVisible)
+        XCTAssertEqual(TableConfigCodec.decodeColumns(""), TableViewColumn.defaultVisible)
         XCTAssertEqual(TableConfigCodec.decodeColumns("title,bogus"), [.title])
     }
 

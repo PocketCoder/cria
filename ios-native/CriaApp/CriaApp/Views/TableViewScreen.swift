@@ -23,7 +23,7 @@ struct TableViewScreen: View {
         })
     }
 
-    private var visible: Set<TableColumn> { TableConfigCodec.decodeColumns(columnsText) }
+    private var visible: Set<TableViewColumn> { TableConfigCodec.decodeColumns(columnsText) }
     private var sortKeys: [TableSortKey] { TableConfigCodec.decodeSort(sortText) }
 
     private var rows: [TaskListItem] {
@@ -78,11 +78,11 @@ struct TableViewScreen: View {
         }
     }
 
-    private var shownColumns: [TableColumn] {
-        TableColumn.allCases.filter { visible.contains($0) }
+    private var shownColumns: [TableViewColumn] {
+        TableViewColumn.allCases.filter { visible.contains($0) }
     }
 
-    private func width(_ column: TableColumn) -> CGFloat {
+    private func width(_ column: TableViewColumn) -> CGFloat {
         switch column {
         case .title: return 240
         case .index, .done, .priority: return 40
@@ -90,7 +90,7 @@ struct TableViewScreen: View {
         }
     }
 
-    private func header(_ column: TableColumn) -> some View {
+    private func header(_ column: TableViewColumn) -> some View {
         let key = sortKeys.first { $0.column == column }
         return Button {
             cycle(column)
@@ -107,7 +107,7 @@ struct TableViewScreen: View {
         .frame(minWidth: width(column), alignment: .leading)
     }
 
-    @ViewBuilder private func cell(_ item: TaskListItem, _ column: TableColumn) -> some View {
+    @ViewBuilder private func cell(_ item: TaskListItem, _ column: TableViewColumn) -> some View {
         let task = item.task
         switch column {
         case .title:
@@ -124,7 +124,7 @@ struct TableViewScreen: View {
         }
     }
 
-    private func text(for task: TaskRecord, _ column: TableColumn, projectTitle: String?) -> String {
+    private func text(for task: TaskRecord, _ column: TableViewColumn, projectTitle: String?) -> String {
         switch column {
         case .index: return task.serverId.map { "#\($0)" } ?? "\u{2014}"
         case .project: return projectTitle ?? ""
@@ -146,13 +146,13 @@ struct TableViewScreen: View {
         return DueDates.label(iso, now: Date())
     }
 
-    private func cycle(_ column: TableColumn) {
+    private func cycle(_ column: TableViewColumn) {
         sortText = TableConfigCodec.encodeSort(TableSort.cycle(sortKeys, column: column, additive: false))
     }
 
     @ViewBuilder private var sortMenu: some View {
         Menu("Sort by", systemImage: "arrow.up.arrow.down") {
-            ForEach(TableColumn.allCases.filter(\.sortable), id: \.self) { column in
+            ForEach(TableViewColumn.allCases.filter(\.sortable), id: \.self) { column in
                 Button(column.label) { cycle(column) }
             }
             Button("Clear sort", role: .destructive) { sortText = TableConfigCodec.encodeSort([]) }
@@ -161,7 +161,7 @@ struct TableViewScreen: View {
 
     private var columnPicker: some View {
         NavigationStack {
-            List(TableColumn.allCases, id: \.self) { column in
+            List(TableViewColumn.allCases, id: \.self) { column in
                 Toggle(column.label, isOn: Binding(
                     get: { visible.contains(column) },
                     set: { isOn in toggle(column, isOn: isOn) }
@@ -176,7 +176,7 @@ struct TableViewScreen: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func toggle(_ column: TableColumn, isOn: Bool) {
+    private func toggle(_ column: TableViewColumn, isOn: Bool) {
         var next = visible
         if isOn { next.insert(column) } else { next.remove(column) }
         columnsText = TableConfigCodec.encodeColumns(next)

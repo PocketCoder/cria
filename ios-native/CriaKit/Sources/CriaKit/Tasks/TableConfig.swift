@@ -2,7 +2,7 @@ import Foundation
 
 /// Table view columns, in Vikunja's fixed render order. Ported from `useTableConfig.ts`. Comments and
 /// created-by have no local data, so those columns are omitted.
-public enum TableColumn: String, CaseIterable, Sendable {
+public enum TableViewColumn: String, CaseIterable, Sendable {
     case index, done, project, title, priority, labels, assignees
     case dueDate, startDate, endDate, percentDone, updated, created, doneAt
 
@@ -29,15 +29,15 @@ public enum TableColumn: String, CaseIterable, Sendable {
     public var sortable: Bool { self != .labels && self != .assignees }
 
     /// Vikunja's default visible set.
-    public static let defaultVisible: Set<TableColumn> = [.index, .done, .title, .labels, .assignees, .dueDate]
+    public static let defaultVisible: Set<TableViewColumn> = [.index, .done, .title, .labels, .assignees, .dueDate]
 }
 
 /// One active sort key. Order in the array is priority order.
 public struct TableSortKey: Equatable, Sendable {
-    public let column: TableColumn
+    public let column: TableViewColumn
     public let direction: SortDirection
 
-    public init(column: TableColumn, direction: SortDirection) {
+    public init(column: TableViewColumn, direction: SortDirection) {
         self.column = column
         self.direction = direction
     }
@@ -49,7 +49,7 @@ public enum TableSort {
 
     /// Advances a column one step: none, then descending, then ascending, then none. `additive` keeps the other
     /// keys and their priority; otherwise the column becomes the only key.
-    public static func cycle(_ keys: [TableSortKey], column: TableColumn, additive: Bool) -> [TableSortKey] {
+    public static func cycle(_ keys: [TableSortKey], column: TableViewColumn, additive: Bool) -> [TableSortKey] {
         let current = keys.first { $0.column == column }?.direction
         let next: SortDirection?
         switch current {
@@ -72,7 +72,7 @@ public enum TableSort {
 
     /// Stable multi-column sort over sortable, visible columns. Nil values sort last in either direction.
     public static func sorted(
-        _ tasks: [TaskRecord], keys: [TableSortKey], visible: Set<TableColumn>, projectTitle: (String) -> String = { _ in "" }
+        _ tasks: [TaskRecord], keys: [TableSortKey], visible: Set<TableViewColumn>, projectTitle: (String) -> String = { _ in "" }
     ) -> [TaskRecord] {
         let active = keys.filter { $0.column.sortable && visible.contains($0.column) }
         guard !active.isEmpty else { return tasks }
@@ -90,7 +90,7 @@ public enum TableSort {
         return ordered.map(\.task)
     }
 
-    private static func value(_ task: TaskRecord, _ column: TableColumn, _ projectTitle: (String) -> String) -> SortValue? {
+    private static func value(_ task: TaskRecord, _ column: TableViewColumn, _ projectTitle: (String) -> String) -> SortValue? {
         switch column {
         case .index: return task.serverId.map { .number(Double($0)) }
         case .done: return .number(task.done ? 1 : 0)
@@ -111,13 +111,13 @@ public enum TableSort {
 
 /// Text forms of the table config, for `UserDefaults`. Unknown names are dropped so an old value never breaks a launch.
 public enum TableConfigCodec {
-    public static func encodeColumns(_ columns: Set<TableColumn>) -> String {
-        TableColumn.allCases.filter { columns.contains($0) }.map(\.rawValue).joined(separator: ",")
+    public static func encodeColumns(_ columns: Set<TableViewColumn>) -> String {
+        TableViewColumn.allCases.filter { columns.contains($0) }.map(\.rawValue).joined(separator: ",")
     }
 
-    public static func decodeColumns(_ text: String) -> Set<TableColumn> {
-        guard !text.isEmpty else { return TableColumn.defaultVisible }
-        return Set(text.split(separator: ",").compactMap { TableColumn(rawValue: String($0)) })
+    public static func decodeColumns(_ text: String) -> Set<TableViewColumn> {
+        guard !text.isEmpty else { return TableViewColumn.defaultVisible }
+        return Set(text.split(separator: ",").compactMap { TableViewColumn(rawValue: String($0)) })
     }
 
     public static func encodeSort(_ keys: [TableSortKey]) -> String {
@@ -131,7 +131,7 @@ public enum TableConfigCodec {
         if text == "none" { return [] }
         return text.split(separator: ",").compactMap { part in
             let pieces = part.split(separator: ":")
-            guard pieces.count == 2, let column = TableColumn(rawValue: String(pieces[0])),
+            guard pieces.count == 2, let column = TableViewColumn(rawValue: String(pieces[0])),
                   let direction = SortDirection(rawValue: String(pieces[1])) else { return nil }
             return TableSortKey(column: column, direction: direction)
         }
