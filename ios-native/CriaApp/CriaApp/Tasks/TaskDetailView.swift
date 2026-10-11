@@ -74,6 +74,9 @@ struct TaskDetailView: View {
                 TextField("Notes", text: $notes, axis: .vertical)
                     .lineLimit(3...12)
                     .focused($focus, equals: .notes)
+                if focus != .notes, !notes.isEmpty {
+                    RichTextView(html: notes).frame(minHeight: 44)
+                }
             }
             datesSection(task)
             detailsSection(task)

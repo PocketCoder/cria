@@ -227,6 +227,7 @@ Goal: a native SwiftUI iOS app with feature parity to the Tauri iOS build, shari
 - Model: `sonnet`
 - Decide: `WKWebView` hosting TipTap (reuse HTML and `sanitizeHtml`) vs native `AttributedString` editor. Build a 1-day spike of the web route first; pick by feel and bridge reliability.
 - Done when: decision recorded in this file with evidence.
+- **Decision (provisional, nightly run, no Xcode):** `WKWebView` hosting TipTap. Reasons: Vikunja stores TipTap HTML (task lists via `data-type`/`data-checked`, `<mention-user>`, inline images via `data-src`), so the web editor round-trips it exactly, and the existing frontend deps and sanitiser allow-list already cover it. A native `AttributedString` editor would need a custom HTML mapper for task lists, mentions and images. Not yet verified on a device: confirm bridge reliability and keyboard behaviour before S-51 is signed off. Read-only rendering (S-52) already uses a JS-disabled `WKWebView` over `HTMLSanitizer`.
 
 **S-51 Editor implementation**
 - Model: `sonnet`
@@ -391,7 +392,7 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 | 2 API and auth | S-20 to S-23 | done (CI green on 78e49de; KeychainSlot has no unit test: the SPM test host lacks Keychain entitlements; exercise it in the simulator. Sign-in does not yet cache a user row: Data layer has no user table. Link-share login is out of scope for this phase) |
 | 3 Sync | S-30 to S-39 | done (CI test-and-build green on 0c39417; the app does not yet start the coordinator: S-40 wires it; no network-reachability trigger, a tick plus the outbox bus cover reconnects) |
 | 4 Core screens | S-40 to S-48 | done (CI green on 9da4998 incl. app build; Onest font files not yet bundled, system font fallback; saved-filter and project edits need manual device check) |
-| 5 Rich content | S-50 to S-56 | not started |
+| 5 Rich content | S-50 to S-56 | in progress: S-50 (provisional), S-52 done; next S-51 (editor), then S-53 to S-56 |
 | 6 Views | S-60 to S-64 | not started |
 | 7 Settings | S-70 to S-75 | not started |
 | 8 Native extras | S-80 to S-84 | not started |
