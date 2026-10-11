@@ -55,7 +55,7 @@ func firstQuickAddDate(in raw: String, avoiding claimed: [Range<Int>], now: Date
 }
 
 private func dateCandidates(_ text: NSString, now: Date, calendar: Calendar) -> [QuickAddDateMatch] {
-    guard let regex = try? NSRegularExpression(pattern: datePattern, options: [.caseInsensitive]) else { return [] }
+    guard let regex = RegexCache.regex(datePattern, options: [.caseInsensitive]) else { return [] }
     var found: [QuickAddDateMatch] = []
     for match in regex.matches(in: text as String, range: NSRange(location: 0, length: text.length)) {
         let phrase = text.substring(with: match.range)
@@ -75,7 +75,7 @@ private func dateCandidates(_ text: NSString, now: Date, calendar: Calendar) -> 
 }
 
 private func standaloneTimeCandidates(_ text: NSString, now: Date, calendar: Calendar) -> [QuickAddDateMatch] {
-    guard let regex = try? NSRegularExpression(pattern: standaloneTimePattern, options: [.caseInsensitive]) else { return [] }
+    guard let regex = RegexCache.regex(standaloneTimePattern, options: [.caseInsensitive]) else { return [] }
     var found: [QuickAddDateMatch] = []
     for match in regex.matches(in: text as String, range: NSRange(location: 0, length: text.length)) {
         let phrase = text.substring(with: match.range)
@@ -114,7 +114,7 @@ private func parseTime(_ phrase: String) -> TimeOfDay? {
 
 /// A time of day right after a date phrase. Needs am or pm, minutes, or "at", so "tomorrow 5 apples" stays text.
 private func trailingTime(_ text: NSString, from offset: Int, day: Date, calendar: Calendar) -> (date: Date, end: Int)? {
-    guard let regex = try? NSRegularExpression(pattern: trailingTimePattern, options: [.caseInsensitive]) else { return nil }
+    guard let regex = RegexCache.regex(trailingTimePattern, options: [.caseInsensitive]) else { return nil }
     let range = NSRange(location: offset, length: text.length - offset)
     guard let match = regex.firstMatch(in: text as String, range: range) else { return nil }
     let hasAt = match.range(at: 1).location != NSNotFound
@@ -217,6 +217,7 @@ private func monthNumber(_ word: String) -> Int? {
 
 private func dateFrom(year: Int, month: Int, day: Int, calendar: Calendar) -> Date? {
     guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)),
+          calendar.component(.month, from: date) == month,
           calendar.component(.day, from: date) == day else { return nil }
     return date
 }

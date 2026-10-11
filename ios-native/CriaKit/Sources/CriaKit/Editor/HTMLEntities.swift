@@ -1,30 +1,46 @@
 import Foundation
 
-/// The few character references TipTap output uses, plus numeric ones.
+/// The character references TipTap and Vikunja output use, plus numeric ones. Decoding is one left-to-right pass, so
+/// `&#38;lt;` becomes the text `&lt;` and is not decoded a second time.
 enum HTMLEntities {
-    private static let named = [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&apos;", "'"), ("&nbsp;", "\u{00A0}")]
+    private static let named: [String: String] = [
+        "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "amp": "&", "nbsp": "\u{00A0}",
+        "mdash": "\u{2014}", "ndash": "\u{2013}", "hellip": "\u{2026}", "copy": "\u{00A9}",
+        "lsquo": "\u{2018}", "rsquo": "\u{2019}", "ldquo": "\u{201C}", "rdquo": "\u{201D}",
+        "laquo": "\u{00AB}", "raquo": "\u{00BB}", "middot": "\u{00B7}", "bull": "\u{2022}"
+    ]
+    private static let longestReference = 10
 
     static func decode(_ text: String) -> String {
         guard text.contains("&") else { return text }
-        var result = decodeNumeric(text)
-        for (entity, value) in named {
-            result = result.replacingOccurrences(of: entity, with: value)
-        }
-        return result.replacingOccurrences(of: "&amp;", with: "&")
-    }
-
-    private static func decodeNumeric(_ text: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: "&#(x?[0-9a-fA-F]+);") else { return text }
-        var result = text
-        let range = NSRange(text.startIndex..., in: text)
-        for match in regex.matches(in: text, range: range).reversed() {
-            guard let whole = Range(match.range, in: result), let digits = Range(match.range(at: 1), in: result) else { continue }
-            let code = String(result[digits])
-            let value = code.hasPrefix("x") ? UInt32(code.dropFirst(), radix: 16) : UInt32(code)
-            guard let value, let scalar = Unicode.Scalar(value) else { continue }
-            result.replaceSubrange(whole, with: String(Character(scalar)))
+        var result = ""
+        var index = text.startIndex
+        while index < text.endIndex {
+            let character = text[index]
+            guard character == "&", let (value, next) = reference(in: text, at: index) else {
+                result.append(character)
+                index = text.index(after: index)
+                continue
+            }
+            result += value
+            index = next
         }
         return result
+    }
+
+    /// The decoded value and the index after the `;`, or nil when `&` does not start a known reference.
+    private static func reference(in text: String, at start: String.Index) -> (String, String.Index)? {
+        let body = text[text.index(after: start)...].prefix(longestReference + 1)
+        guard let semicolon = body.firstIndex(of: ";") else { return nil }
+        let name = String(body[..<semicolon])
+        let next = text.index(after: semicolon)
+        if let value = named[name] { return (value, next) }
+        guard name.hasPrefix("#") else { return nil }
+        let digits = name.dropFirst()
+        let hex = digits.hasPrefix("x") || digits.hasPrefix("X")
+        let number = hex ? UInt32(digits.dropFirst(), radix: 16) : UInt32(digits, radix: 10)
+        guard let number, number != 0, let scalar = Unicode.Scalar(number) else { return nil }
+        return (String(Character(scalar)), next)
     }
 
     static func encode(_ text: String) -> String {

@@ -81,7 +81,7 @@ private func dayBounds(offsetDays: Int, now: Date, calendar: Calendar) -> DateBo
 }
 
 private func relativeBounds(_ words: [String], now: Date, calendar: Calendar) -> DateBounds? {
-    guard let amount = Int(words[1]) else { return nil }
+    guard let amount = Int(words[1]), abs(amount) <= 100_000 else { return nil }
     if words[2].hasPrefix("month") {
         guard let shifted = calendar.date(byAdding: .month, value: amount, to: now) else { return nil }
         return dayBounds(offsetDays: 0, now: shifted, calendar: calendar)
@@ -93,7 +93,8 @@ private func relativeBounds(_ words: [String], now: Date, calendar: Calendar) ->
 private func isoDateBounds(_ text: String, calendar: Calendar) -> DateBounds? {
     let parts = text.split(separator: "-").compactMap { Int($0) }
     guard parts.count == 3,
-          let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else {
+          let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)),
+          calendar.component(.month, from: date) == parts[1], calendar.component(.day, from: date) == parts[2] else {
         return nil
     }
     return dayBounds(offsetDays: 0, now: date, calendar: calendar)

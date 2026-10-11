@@ -43,13 +43,16 @@ struct RichDocumentParser {
 
     private mutating func addText(_ text: String) {
         if !inCodeBlock, runs.isEmpty, text.allSatisfy(\.isWhitespace) { return }
-        appendRun(text)
+        // Line breaks in the source are ordinary whitespace outside <pre>; only <br> makes a hard break.
+        let collapsed = inCodeBlock ? text : text.replacingOccurrences(of: "[ \\t\\r\\n]+", with: " ", options: .regularExpression)
+        appendRun(collapsed)
     }
 
     private mutating func appendRun(_ text: String) {
         let styles = Set(styleCounts.filter { $0.value > 0 }.keys)
         let run = InlineRun(text: text, styles: styles, link: links.last, mentionId: mention)
-        if var last = runs.last, last.styles == run.styles, last.link == run.link, last.mentionId == run.mentionId {
+        // Two mentions side by side stay two runs, or they would merge into one `@sam@sam` mention.
+        if var last = runs.last, mention == nil, last.styles == run.styles, last.link == run.link, last.mentionId == nil {
             last.text += text
             runs[runs.count - 1] = last
         } else {

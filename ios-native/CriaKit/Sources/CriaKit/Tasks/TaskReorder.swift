@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// A local drag order that wins over the stored order until the stored order changes. Ported from
 /// `useOptimisticOrder.ts`: once the store re-emits a different list (the write landed or a sync arrived),
@@ -73,14 +74,30 @@ extension CriaStore {
 
     /// Persists a list drag: one midpoint write when the neighbours allow it, else a full re-index.
     public func applyListReorder(orderedIds: [String], movedId: String, viewLocalId: String) throws {
-        let positions = try tasks(matching: TaskQuery(includeDone: true)).reduce(into: [String: Double]()) { result, task in
-            if let position = task.position { result[task.localId] = position }
-        }
+        let positions = try taskPositions(for: orderedIds)
         switch Position.planReorder(orderedIds: orderedIds, movedId: movedId, positionOf: { positions[$0] }) {
         case .midpoint(let position):
             try reorderTask(taskLocalId: movedId, viewLocalId: viewLocalId, position: position)
         case .reindex:
             try reindexTasks(orderedLocalIds: orderedIds, viewLocalId: viewLocalId)
         }
+    }
+
+    /// Positions of just these tasks (ids with no position are left out), in chunks under SQLite's variable limit.
+    func taskPositions(for localIds: [String]) throws -> [String: Double] {
+        var result: [String: Double] = [:]
+        for start in stride(from: 0, to: localIds.count, by: 500) {
+            let chunk = Array(localIds[start..<min(start + 500, localIds.count)])
+            let marks = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+            let rows = try database.writer.read { connection in
+                try Row.fetchAll(
+                    connection,
+                    sql: "SELECT local_id, position FROM tasks WHERE position IS NOT NULL AND local_id IN (\(marks))",
+                    arguments: StatementArguments(chunk)
+                )
+            }
+            for row in rows { result[row["local_id"]] = row["position"] }
+        }
+        return result
     }
 }

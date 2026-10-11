@@ -162,7 +162,7 @@ public enum RichDocumentText {
     }
 
     private static func append(_ run: InlineRun, to runs: inout [InlineRun]) {
-        if var last = runs.last, last.styles == run.styles, last.link == run.link, last.mentionId == run.mentionId {
+        if var last = runs.last, run.mentionId == nil, last.styles == run.styles, last.link == run.link, last.mentionId == nil {
             last.text += run.text
             runs[runs.count - 1] = last
         } else {

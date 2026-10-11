@@ -71,7 +71,7 @@ extension CriaStore {
         }
     }
 
-    /// Open, non-deleted tasks with a due date across live projects, soonest first (at most 500).
+    /// Open, non-deleted tasks with a due date across live projects, soonest first (at most 5000, so a long overdue list cannot push today out).
     func datedOpenTasks() throws -> [TaskListItem] {
         let tasks = try database.writer.read { connection in
             try Row.fetchAll(connection, sql: """
@@ -79,7 +79,7 @@ extension CriaStore {
                   JOIN projects p ON p.local_id = t.project_local_id
                  WHERE t.deleted = 0 AND t.done = 0 AND t.due_date IS NOT NULL AND p.deleted = 0
                  ORDER BY t.due_date ASC, t.priority DESC
-                 LIMIT 500
+                 LIMIT 5000
                 """).map(TaskRecord.init(row:))
         }
         return try attachRowData(tasks)

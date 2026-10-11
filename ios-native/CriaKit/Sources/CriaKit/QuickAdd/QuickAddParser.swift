@@ -121,7 +121,7 @@ private func overlaps(_ token: QuickAddToken, _ others: [QuickAddToken]) -> Bool
 /// Every match of `pattern`, as the text and offsets of capture group 1.
 private func groupMatches(_ pattern: String, in raw: NSString, caseInsensitive: Bool = false) -> [(text: String, range: NSRange)] {
     let options: NSRegularExpression.Options = caseInsensitive ? [.caseInsensitive] : []
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
+    guard let regex = RegexCache.regex(pattern, options: options) else { return [] }
     return regex.matches(in: raw as String, range: NSRange(location: 0, length: raw.length)).map { match in
         (raw.substring(with: match.range(at: 1)), match.range(at: 1))
     }
@@ -178,7 +178,7 @@ private func recurrenceTokens(_ raw: NSString, avoiding claimed: [QuickAddToken]
 /// While typing `*"two words` with no closing quote yet, show the chip so the preview does not flicker.
 private func openQuoteToken(_ raw: NSString, prefixes: QuickAddPrefixes) -> QuickAddToken? {
     let pattern = "(?:^|\\s)(\(escaped(prefixes.label))|\(escaped(prefixes.project)))(\(quoteClass))(\(notQuote)*)$"
-    guard let regex = try? NSRegularExpression(pattern: pattern),
+    guard let regex = RegexCache.regex(pattern),
           let match = regex.firstMatch(in: raw as String, range: NSRange(location: 0, length: raw.length)) else { return nil }
     let prefix = raw.substring(with: match.range(at: 1))
     let name = raw.substring(with: match.range(at: 3)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -206,7 +206,11 @@ private func parseRecurrence(_ text: String) -> Recurrence? {
     if words.count == 3, let amount = Int(words[1]) {
         let unit = words[2].hasSuffix("s") ? String(words[2].dropLast()) : words[2]
         if unit == "month", amount == 1 { return Recurrence(after: nil, mode: 1) }
-        return secondsPerUnit[unit].map { Recurrence(after: amount * $0, mode: 0) }
+        // A huge number must not trap the multiplication: this runs on every keystroke.
+        return secondsPerUnit[unit].flatMap { seconds in
+            let (product, overflow) = amount.multipliedReportingOverflow(by: seconds)
+            return overflow ? nil : Recurrence(after: product, mode: 0)
+        }
     }
     if words.count == 2, words[0] == "every" {
         return weekdayNames.contains(words[1]) ? Recurrence(after: 604_800, mode: 0) : unitRecurrence(words[1])

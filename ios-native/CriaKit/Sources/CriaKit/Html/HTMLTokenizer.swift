@@ -16,11 +16,21 @@ enum HTMLToken: Equatable {
 struct HTMLTokenizer {
     private static let rawTextElements: Set<String> = ["script", "style", "textarea", "title"]
 
-    private let chars: [Character]
+    /// Unicode scalars, not `Character`s: a grapheme cluster can swallow a `<` (U+0600 followed by `<` is one
+    /// `Character`), which would hide markup from the tokenizer and let it through unescaped.
+    private let chars: [Unicode.Scalar]
     private var pos = 0
 
     init(_ html: String) {
-        chars = Array(html)
+        chars = Array(html.unicodeScalars)
+    }
+
+    private static func isLetter(_ scalar: Unicode.Scalar) -> Bool {
+        (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
+    }
+
+    private static func isSpace(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.properties.isWhitespace
     }
 
     mutating func tokens() -> [HTMLToken] {
@@ -36,12 +46,12 @@ struct HTMLTokenizer {
     }
 
     private mutating func readText() -> String {
-        var out = ""
+        var out = String.UnicodeScalarView()
         while pos < chars.count, chars[pos] != "<" {
             out.append(chars[pos])
             pos += 1
         }
-        return out
+        return String(out)
     }
 
     private mutating func readMarkup() -> HTMLToken? {
@@ -54,10 +64,10 @@ struct HTMLTokenizer {
             skipDeclaration()
             return nil
         }
-        if next == "/", pos + 2 < chars.count, chars[pos + 2].isLetter {
+        if next == "/", pos + 2 < chars.count, Self.isLetter(chars[pos + 2]) {
             return readEndTag()
         }
-        if next.isLetter { return readStartTag() }
+        if Self.isLetter(next) { return readStartTag() }
         pos += 1
         return .text("&lt;")
     }
@@ -90,7 +100,7 @@ struct HTMLTokenizer {
             if chars[pos] == "/" {
                 selfClosing = true
                 pos += 1
-            } else if chars[pos].isWhitespace {
+            } else if Self.isSpace(chars[pos]) {
                 pos += 1
             } else {
                 selfClosing = false
@@ -103,32 +113,33 @@ struct HTMLTokenizer {
     }
 
     private mutating func readName() -> String {
-        var name = ""
-        while pos < chars.count, !chars[pos].isWhitespace, chars[pos] != "/", chars[pos] != ">" {
+        var name = String.UnicodeScalarView()
+        while pos < chars.count, !Self.isSpace(chars[pos]), chars[pos] != "/", chars[pos] != ">" {
             name.append(chars[pos])
             pos += 1
         }
-        return name.lowercased()
+        return String(name).lowercased()
     }
 
     private mutating func readAttribute() -> HTMLAttribute {
-        var name = ""
-        while pos < chars.count, !chars[pos].isWhitespace, chars[pos] != "=", chars[pos] != ">", chars[pos] != "/" {
+        var name = String.UnicodeScalarView()
+        while pos < chars.count, !Self.isSpace(chars[pos]), chars[pos] != "=", chars[pos] != ">", chars[pos] != "/" {
             name.append(chars[pos])
             pos += 1
         }
+        let lowered = String(name).lowercased()
         skipSpaces()
         guard pos < chars.count, chars[pos] == "=" else {
-            return HTMLAttribute(name: name.lowercased(), value: nil)
+            return HTMLAttribute(name: lowered, value: nil)
         }
         pos += 1
         skipSpaces()
-        return HTMLAttribute(name: name.lowercased(), value: readAttributeValue())
+        return HTMLAttribute(name: lowered, value: readAttributeValue())
     }
 
     private mutating func readAttributeValue() -> String {
-        var value = ""
-        guard pos < chars.count else { return value }
+        var value = String.UnicodeScalarView()
+        guard pos < chars.count else { return "" }
         let quote = chars[pos]
         if quote == "\"" || quote == "'" {
             pos += 1
@@ -137,17 +148,17 @@ struct HTMLTokenizer {
                 pos += 1
             }
             pos = min(pos + 1, chars.count)
-            return value
+            return String(value)
         }
-        while pos < chars.count, !chars[pos].isWhitespace, chars[pos] != ">" {
+        while pos < chars.count, !Self.isSpace(chars[pos]), chars[pos] != ">" {
             value.append(chars[pos])
             pos += 1
         }
-        return value
+        return String(value)
     }
 
     private mutating func skipSpaces() {
-        while pos < chars.count, chars[pos].isWhitespace { pos += 1 }
+        while pos < chars.count, Self.isSpace(chars[pos]) { pos += 1 }
     }
 
     private mutating func skipRawText(of name: String) {
@@ -156,12 +167,15 @@ struct HTMLTokenizer {
     }
 
     private func matches(_ literal: String, at index: Int) -> Bool {
-        let wanted = Array(literal)
+        let wanted = Array(literal.unicodeScalars)
         guard index + wanted.count <= chars.count else { return false }
-        for offset in 0..<wanted.count
-        where chars[index + offset].lowercased() != String(wanted[offset]) {
+        for offset in 0..<wanted.count where lowerASCII(chars[index + offset]) != wanted[offset] {
             return false
         }
         return true
+    }
+
+    private func lowerASCII(_ scalar: Unicode.Scalar) -> Unicode.Scalar {
+        (65...90).contains(scalar.value) ? Unicode.Scalar(scalar.value + 32) ?? scalar : scalar
     }
 }

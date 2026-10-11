@@ -27,21 +27,28 @@ public enum HTMLSanitizer {
     }
 
     /// The `ALLOWED_URI_REGEXP` from the TypeScript config, applied to a lowercased value.
-    private static let uriPattern = "^(?:(?:https?|mailto):|cria://pending/|#|/|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))"
-    private static let linkPattern = "^(?:https?:|mailto:|#|/)"
+    private nonisolated(unsafe) static let uriRegex = try? NSRegularExpression(
+        pattern: "^(?:(?:https?|mailto):|cria://pending/|#|/|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))"
+    )
+    private nonisolated(unsafe) static let linkRegex = try? NSRegularExpression(pattern: "^(?:https?:|mailto:|#|/)")
 
+    /// Attributes DOMPurify never runs the URI check on (plain text, not addresses).
+    static let uriExemptAttributes: Set<String> = ["alt", "class", "title"]
+
+    /// Checked on the decoded value, as a browser would read it: `javascript&#58;x` must not pass.
     static func isSafeValue(_ value: String) -> Bool {
-        let stripped = String(String.UnicodeScalarView(value.unicodeScalars.filter { !isStrippable($0) }))
+        let decoded = HTMLEntities.decode(value)
+        let stripped = String(String.UnicodeScalarView(decoded.unicodeScalars.filter { !isStrippable($0) }))
         if stripped.isEmpty { return true }
-        return matches(uriPattern, stripped.lowercased())
+        return matches(uriRegex, stripped.lowercased())
     }
 
     static func isSafeLink(_ href: String) -> Bool {
-        matches(linkPattern, href.lowercased())
+        matches(linkRegex, href.lowercased())
     }
 
-    private static func matches(_ pattern: String, _ text: String) -> Bool {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+    private static func matches(_ regex: NSRegularExpression?, _ text: String) -> Bool {
+        guard let regex else { return false }
         let range = NSRange(text.startIndex..., in: text)
         return regex.firstMatch(in: text, range: range) != nil
     }
@@ -57,8 +64,9 @@ public enum HTMLSanitizer {
         for attribute in attributes {
             guard allowedAttributes.contains(attribute.name) else { continue }
             if tag == mentionTag, attribute.name != "data-id" { continue }
-            guard isSafeValue(attribute.value ?? "") else { continue }
-            if tag == "a", attribute.name == "href", !isSafeLink((attribute.value ?? "").trimmingCharacters(in: .whitespaces)) {
+            let value = attribute.value ?? ""
+            if !uriExemptAttributes.contains(attribute.name), !isSafeValue(value) { continue }
+            if tag == "a", attribute.name == "href", !isSafeLink(HTMLEntities.decode(value).trimmingCharacters(in: .whitespaces)) {
                 continue
             }
             kept.append(attribute)

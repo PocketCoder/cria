@@ -3,12 +3,17 @@ import Foundation
 /// Due-date rules from `src/lib/dateFormat.ts`. All-day values are stored at exactly UTC midnight and keep the
 /// day that was picked whatever the timezone; timed values use the local day.
 public enum DueDates {
+    /// Shared formatters: `ISO8601DateFormatter` is thread-safe, and building one per call made sorting by due date
+    /// allocate two per comparison.
+    private nonisolated(unsafe) static let plainFormatter = ISO8601DateFormatter()
+    private nonisolated(unsafe) static let fractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
     public static func parse(_ iso: String) -> Date? {
-        let plain = ISO8601DateFormatter()
-        if let date = plain.date(from: iso) { return date }
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: iso)
+        plainFormatter.date(from: iso) ?? fractionalFormatter.date(from: iso)
     }
 
     /// True when the value carries a real time of day (anything but exactly UTC midnight).
@@ -71,14 +76,15 @@ public enum DueDates {
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         let midnight = utc.date(from: parts) ?? date
-        return ISO8601DateFormatter().string(from: midnight)
+        return plainFormatter.string(from: midnight)
     }
 
-    /// Timed value. An instant that lands exactly on UTC midnight would read back as all-day, so it moves one second.
+    /// Timed value, written to the second. An instant that lands on UTC midnight (to the second, since the fraction is
+    /// dropped) would read back as all-day, so it moves one second.
     public static func timedISO(_ date: Date) -> String {
-        let millis = Int((date.timeIntervalSince1970 * 1000).rounded())
-        let safe = millis % 86_400_000 == 0 ? date.addingTimeInterval(1) : date
-        return ISO8601DateFormatter().string(from: safe)
+        let seconds = Int(date.timeIntervalSince1970.rounded(.down))
+        let safe = seconds % 86_400 == 0 ? seconds + 1 : seconds
+        return plainFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(safe)))
     }
 
     /// The `Date` a picker should show for a stored value: local midnight of the day for all-day values,

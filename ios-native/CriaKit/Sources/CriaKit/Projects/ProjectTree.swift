@@ -18,38 +18,53 @@ public enum ProjectTree {
         }
     }
 
-    /// Direct children of `parentLocalId` (nil = roots). A project whose parent is not visible surfaces as a root,
-    /// so nothing is hidden. Order follows the input. Ported from `childProjectsOf`.
-    public static func children(of parentLocalId: String?, in projects: [ProjectRecord]) -> [ProjectRecord] {
+    /// Children grouped by effective parent (nil = roots), built once so the tree walk is linear. A project whose
+    /// parent is not in the list counts as a root, so nothing is hidden. Order follows the input.
+    private static func childIndex(_ projects: [ProjectRecord]) -> [String?: [ProjectRecord]] {
         let ids = Set(projects.map(\.localId))
-        return projects.filter { project in
+        var index: [String?: [ProjectRecord]] = [:]
+        for project in projects {
             let effective = project.parentLocalId.flatMap { ids.contains($0) ? $0 : nil }
-            return effective == parentLocalId
+            index[effective, default: []].append(project)
         }
+        return index
     }
 
-    /// The tree flattened depth-first. Collapsed projects hide their descendants; the default is open.
+    /// Direct children of `parentLocalId` (nil = roots). Ported from `childProjectsOf`.
+    public static func children(of parentLocalId: String?, in projects: [ProjectRecord]) -> [ProjectRecord] {
+        childIndex(projects)[parentLocalId] ?? []
+    }
+
+    /// The tree flattened depth-first. Collapsed projects hide their descendants; the default is open. Projects whose
+    /// parents form a cycle have no root above them, so they are shown as roots after the rest.
     public static func rows(_ projects: [ProjectRecord], collapsed: Set<String> = []) -> [ProjectTreeRow] {
+        let index = childIndex(projects)
         var result: [ProjectTreeRow] = []
         var seen = Set<String>()
-        func walk(_ parent: String?, depth: Int) {
-            for project in children(of: parent, in: projects) where seen.insert(project.localId).inserted {
-                let kids = children(of: project.localId, in: projects)
-                let expanded = !collapsed.contains(project.localId)
-                result.append(ProjectTreeRow(project: project, depth: depth, hasChildren: !kids.isEmpty, isExpanded: expanded))
-                if expanded { walk(project.localId, depth: depth + 1) }
-            }
+        func visit(_ project: ProjectRecord, depth: Int) {
+            guard seen.insert(project.localId).inserted else { return }
+            let kids = index[project.localId] ?? []
+            let expanded = !collapsed.contains(project.localId)
+            result.append(ProjectTreeRow(project: project, depth: depth, hasChildren: !kids.isEmpty, isExpanded: expanded))
+            if expanded { for kid in kids { visit(kid, depth: depth + 1) } }
         }
-        walk(nil, depth: 0)
+        var reachable = Set<String>()
+        var pending = index[nil] ?? []
+        while let next = pending.popLast() {
+            if reachable.insert(next.localId).inserted { pending += index[next.localId] ?? [] }
+        }
+        for root in index[nil] ?? [] { visit(root, depth: 0) }
+        for orphan in projects where !reachable.contains(orphan.localId) { visit(orphan, depth: 0) }
         return result
     }
 
     /// Every id under `localId`, used to stop a project becoming its own ancestor.
     public static func descendantIds(of localId: String, in projects: [ProjectRecord]) -> Set<String> {
+        let index = childIndex(projects)
         var found = Set<String>()
         var queue = [localId]
         while let next = queue.popLast() {
-            for child in children(of: next, in: projects) where found.insert(child.localId).inserted {
+            for child in index[next] ?? [] where found.insert(child.localId).inserted {
                 queue.append(child.localId)
             }
         }
