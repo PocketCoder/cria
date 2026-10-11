@@ -83,7 +83,8 @@ struct SmartViewScreen: View {
         .navigationTitle(title)
         .refreshable { await services.refresh() }
         .quickAdd(services: services)
-        .sheet(isPresented: $addPresented) { QuickAddSheet(services: services, contextProjectId: nil) }
+        .sheet(isPresented: $addPresented) { QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: selectedDay)
+        }
         .task { await live.run() }
     }
 
@@ -136,8 +137,11 @@ struct WeekStrip: View {
     @Binding var selected: Date
     let busyDays: Set<String>
 
+    @AppStorage(GeneralSettings.weekStartDefaultsKey) private var weekStart = GeneralSettings.defaultWeekStart
+
     private var days: [Date] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = weekStart + 1
         let start = calendar.dateInterval(of: .weekOfYear, for: selected)?.start ?? selected
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }

@@ -105,8 +105,8 @@ struct TaskDetailView: View {
                 }
                 descriptionLink(task)
             }
-            datesSection(task)
             detailsSection(task)
+            datesSection(task)
             Section {
                 FlowLabels(labels: live.value.labels)
             } header: {
@@ -158,10 +158,7 @@ struct TaskDetailView: View {
     }
 
     private func datesSection(_ task: TaskRecord) -> some View {
-        Section("Dates") {
-            DateFieldRow(title: "Due", iso: task.dueDate) { value in
-                apply(TaskPatch(dueDate: value))
-            }
+        Section("Schedule") {
             DateFieldRow(title: "Start", iso: task.startDate) { value in
                 var patch = TaskPatch()
                 patch.startDate = value
@@ -176,11 +173,14 @@ struct TaskDetailView: View {
     }
 
     private func detailsSection(_ task: TaskRecord) -> some View {
-        Section("Details") {
+        Section {
             Picker(selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
                 ForEach(live.value.projects, id: \.localId) { Text($0.title).tag($0.localId) }
             } label: {
                 Label("Project", systemImage: "folder")
+            }
+            DateFieldRow(title: "Due", iso: task.dueDate) { value in
+                apply(TaskPatch(dueDate: value))
             }
             Picker(selection: Binding(get: { task.priority }, set: { apply(TaskPatch(priority: $0)) })) {
                 ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
@@ -190,6 +190,7 @@ struct TaskDetailView: View {
                         .foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
                 }
             }
+            RepeatRow(services: services, task: task)
             VStack(alignment: .leading) {
                 Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
                 // One write when the finger lifts, not one (and one outbox op) per 0.1 step while dragging.
@@ -249,36 +250,51 @@ struct TaskDetailView: View {
     }
 }
 
-/// A date row: shows "Add" until a date is set, then a picker with an optional time. The server cannot clear a
-/// date through the task update (same as the web client), so there is no remove action.
+/// A date row: calendar icon, then the date and time as separate pills (a compact picker draws each). "Add" until a
+/// date is set. The server cannot clear a date through the task update (same as the web client), so there is no
+/// remove action.
 struct DateFieldRow: View {
     let title: String
     let iso: String?
     let onChange: (String) -> Void
 
     var body: some View {
-        if let iso, let current = DueDates.pickerDate(iso) {
-            let timed = DueDates.hasTimeOfDay(iso)
-            DatePicker(
-                selection: Binding(get: { current }, set: { write($0, timed: timed) }),
-                displayedComponents: timed ? [.date, .hourAndMinute] : [.date]
-            ) {
-                Label(title, systemImage: "calendar")
-            }
-            Toggle("\(title) time", isOn: Binding(get: { timed }, set: { setTimed($0, current: current) }))
-        } else {
-            Button("Add \(title.lowercased()) date", systemImage: "calendar.badge.plus") {
-                onChange(DueDates.allDayISO(for: Date()))
+        HStack(spacing: 8) {
+            Label(title, systemImage: "calendar")
+            Spacer(minLength: 8)
+            if let iso, let current = DueDates.pickerDate(iso) {
+                let timed = DueDates.hasTimeOfDay(iso)
+                DatePicker("\(title) date", selection: Binding(get: { current }, set: { write($0, timed: timed) }),
+                           displayedComponents: [.date])
+                    .labelsHidden()
+                if timed {
+                    DatePicker("\(title) time", selection: Binding(get: { current }, set: { write($0, timed: true) }),
+                               displayedComponents: [.hourAndMinute])
+                        .labelsHidden()
+                } else {
+                    Button("Add time") { setTimed(current: current) }
+                        .font(Theme.chip)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                }
+            } else {
+                Button("Add") { onChange(DueDates.allDayISO(for: Date())) }
+                    .font(Theme.chip)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+                    .tint(Color(.primary))
             }
         }
+        .frame(minHeight: 56)
     }
 
     private func write(_ date: Date, timed: Bool) {
         onChange(timed ? DueDates.timedISO(date) : DueDates.allDayISO(for: date))
     }
 
-    private func setTimed(_ timed: Bool, current: Date) {
-        guard timed else { return write(current, timed: false) }
+    private func setTimed(current: Date) {
         let nine = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: current) ?? current
         write(nine, timed: true)
     }

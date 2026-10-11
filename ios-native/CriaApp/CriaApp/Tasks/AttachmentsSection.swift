@@ -31,7 +31,9 @@ struct AttachmentsSection: View {
             ForEach(live.value, id: \.localId) { attachment in
                 row(attachment)
             }
-            PhotosPicker("Add photo", selection: $photo, matching: .images)
+            PhotosPicker(selection: $photo, matching: .images) {
+                Label("Add photo", systemImage: "photo").foregroundStyle(Color(.primary))
+            }
             addFileButton
             if CameraPicker.isAvailable {
                 Button("Take photo", systemImage: "camera") { showCamera = true }
@@ -44,7 +46,9 @@ struct AttachmentsSection: View {
     /// Everything that presents something, and the observer, hangs off this one row rather than the Section: modifiers
     /// on a Section inside a Form can be applied once per row.
     private var addFileButton: some View {
-        Button("Add file", systemImage: "paperclip") { showFiles = true }
+        Button { showFiles = true } label: {
+            Label("Add file", systemImage: "paperclip").foregroundStyle(Color(.primary))
+        }
             .task { await live.run() }
             .onChange(of: photo) { _, item in
                 guard let item else { return }

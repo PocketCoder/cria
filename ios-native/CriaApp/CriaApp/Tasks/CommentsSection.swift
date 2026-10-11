@@ -36,7 +36,9 @@ struct CommentsSection: View {
     }
 
     private var addButton: some View {
-        Button("Add a comment", systemImage: "text.bubble") { composing = true }
+        Button { composing = true } label: {
+            Label("Add a comment", systemImage: "bubble.left").foregroundStyle(Color(.mutedForeground))
+        }
             .task { await live.run() }
             .task { await AIStatus.shared.refresh() }
             .sheet(isPresented: $composing) {
@@ -95,10 +97,18 @@ struct CommentsSection: View {
     }
 
     private func row(_ comment: CommentRecord) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(comment.authorName ?? "You").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-            RichTextView(html: comment.comment).frame(minHeight: 28)
-            reactionBar(comment)
+        HStack(alignment: .top, spacing: 12) {
+            Text(initials(comment.authorName ?? "You"))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(.heather600))
+                .frame(width: 30, height: 30)
+                .background(Color(.heather600).opacity(0.15), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(comment.authorName ?? "You").font(Theme.rowTitle)
+                RichTextView(html: comment.comment).frame(minHeight: 28)
+                reactionBar(comment)
+            }
         }
         .swipeActions {
             Button("Delete", role: .destructive) {
@@ -108,12 +118,18 @@ struct CommentsSection: View {
         }
     }
 
+    private func initials(_ name: String) -> String {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first)
+        return letters.isEmpty ? "?" : String(letters).uppercased()
+    }
+
     private func reactionBar(_ comment: CommentRecord) -> some View {
         HStack {
             ForEach((comment.reactions ?? [:]).keys.sorted(), id: \.self) { emoji in
                 let count = comment.reactions?[emoji]?.count ?? 0
                 Button("\(emoji) \(count)") { react(comment, emoji) }
                     .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.small)
             }
             Menu("React", systemImage: "face.smiling") {

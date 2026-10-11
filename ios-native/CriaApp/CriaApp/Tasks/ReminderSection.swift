@@ -29,7 +29,7 @@ struct ReminderSection: View {
         Section("Reminders") {
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
             ForEach(Array(live.value.enumerated()), id: \.offset) { _, reminder in
-                Label(reminder.summary, systemImage: "bell")
+                Label { Text(reminder.summary) } icon: { Image(systemName: "bell").foregroundStyle(Color(.coral500)) }
                     .swipeActions {
                         Button("Delete", role: .destructive) {
                             do {
@@ -40,19 +40,23 @@ struct ReminderSection: View {
                         }
                     }
             }
-            Menu("Add reminder", systemImage: "bell.badge") {
+            Menu {
                 if task.dueDate != nil {
                     ForEach(presets, id: \.period) { preset in
                         Button(preset.title) { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) }
                     }
                 }
                 Button("In one hour") { add(ReminderInput(triggerAt: DueDates.timedISO(Date().addingTimeInterval(3600)))) }
+            } label: {
+                Label("Add reminder", systemImage: "bell.badge").foregroundStyle(Color(.primary))
             }
-            DatePicker("Custom", selection: $custom)
-            Button("Add custom reminder") { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) }
+            DatePicker(selection: $custom) { Label("Custom", systemImage: "clock") }
+            Button { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) } label: {
+                Label("Add custom reminder", systemImage: "plus").foregroundStyle(Color(.primary))
+            }
             // The observer and the alert hang off one row, not the Section: modifiers on a Section inside a Form can
             // be applied once per row.
-            repeatRow
+            Color.clear.frame(height: 0).listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
                 .task { await live.run() }
                 .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                     Button("OK", role: .cancel) {}
@@ -62,14 +66,30 @@ struct ReminderSection: View {
         }
     }
 
-    private var repeatRow: some View {
-        Picker("Repeat", selection: Binding<RepeatChoice>(
+    private func add(_ input: ReminderInput) {
+        do {
+            try services.store.addReminder(taskLocalId: task.localId, input)
+        } catch {
+            failure = String(describing: error)
+        }
+    }
+}
+
+/// The Repeat row of task details: `repeat` icon, current value, menu.
+struct RepeatRow: View {
+    let services: AppServices
+    let task: TaskRecord
+
+    var body: some View {
+        Picker(selection: Binding<RepeatChoice>(
             get: { RepeatChoice(repeatAfter: task.repeatAfter, repeatMode: task.repeatMode) },
             set: { choice in setRepeat(choice) }
         )) {
             ForEach(RepeatChoice.allCases) { choice in
                 Text(choice.title).tag(choice)
             }
+        } label: {
+            Label("Repeat", systemImage: "repeat")
         }
     }
 
@@ -79,14 +99,6 @@ struct ReminderSection: View {
         patch.repeatAfter = choice.repeatAfter
         patch.repeatMode = choice.repeatMode
         _ = try? services.store.updateTask(localId: task.localId, patch: patch)
-    }
-
-    private func add(_ input: ReminderInput) {
-        do {
-            try services.store.addReminder(taskLocalId: task.localId, input)
-        } catch {
-            failure = String(describing: error)
-        }
     }
 }
 

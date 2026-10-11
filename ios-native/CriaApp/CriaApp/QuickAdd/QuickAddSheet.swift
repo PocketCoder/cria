@@ -8,6 +8,8 @@ struct QuickAddSheet: View {
     let contextProjectId: String?
     /// Text to start with, e.g. from a `cria://add?title=` link.
     var initialLine = ""
+    /// Day to start with as the due date, e.g. from "Nothing planned" on Upcoming.
+    var initialDueDate: Date?
     /// Hand off to the Ramble or photo sheet. The parent dismisses this sheet and presents the other.
     var onRamble: (() -> Void)?
     var onPhoto: (() -> Void)?
@@ -164,6 +166,7 @@ struct QuickAddSheet: View {
         projects = ProjectTree.visible((try? services.store.projects()) ?? [])
         projectId = baseProjectId
         if line.isEmpty { line = initialLine }
+        if dueISO.isEmpty, let initialDueDate { dueISO = DueDates.allDayISO(for: initialDueDate) }
         focused = true
     }
 

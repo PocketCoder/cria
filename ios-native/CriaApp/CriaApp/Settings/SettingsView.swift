@@ -10,6 +10,8 @@ struct SettingsView: View {
     @State private var overdueTime = Date()
     @State private var confirmingWipe = false
     @State private var preferences = PreferencesStore().load()
+    @State private var projects: [ProjectRecord] = []
+    @AppStorage("cria.taskList.showDone") private var showDone = true
     @Environment(\.dismiss) private var dismiss
 
     init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
@@ -22,8 +24,8 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 profileSection
+                generalSection
                 appearanceSection
-                quickAddSection
                 remindersSection
                 collaborationSection
                 accountSection
@@ -41,6 +43,7 @@ struct SettingsView: View {
                 }
             }
             .task {
+                projects = ProjectTree.visible((try? services.store.projects()) ?? [])
                 await model.load()
                 name = model.general.name
                 overdueTime = Self.time(model.general.overdueRemindersTime)
@@ -91,8 +94,27 @@ struct SettingsView: View {
         }
     }
 
-    private var quickAddSection: some View {
-        Section("Quick Add Magic") {
+    private static let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+    private var generalSection: some View {
+        Section("General") {
+            Picker(selection: Binding(
+                get: { model.general.defaultProjectId },
+                set: { id in Task { await model.setDefaultProject(id) } }
+            )) {
+                Text("Inbox").tag(0)
+                ForEach(projects.filter { $0.serverId != 0 }, id: \.localId) { Text($0.title).tag($0.serverId) }
+            } label: {
+                SettingsLabel("Default project", symbol: "tray", token: .sky500)
+            }
+            Picker(selection: Binding(
+                get: { model.general.weekStart },
+                set: { day in Task { await model.setWeekStart(day) } }
+            )) {
+                ForEach(Self.weekdays.indices, id: \.self) { Text(Self.weekdays[$0]).tag($0) }
+            } label: {
+                SettingsLabel("Week starts on", symbol: "calendar", token: .coral500)
+            }
             Picker(selection: Binding(
                 get: { model.general.quickAddMagicMode },
                 set: { mode in Task { await model.setQuickAddMode(mode) } }
@@ -101,7 +123,22 @@ struct SettingsView: View {
                 Text("Todoist (@label #project p1)").tag("todoist")
                 Text("Off").tag("disabled")
             } label: {
-                SettingsLabel("Mode", symbol: "sparkles", token: .llama500)
+                SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
+            }
+            Toggle(isOn: $showDone) {
+                SettingsLabel("Show completed", symbol: "checkmark.circle", token: .meadow500)
+            }
+            Toggle(isOn: Binding(
+                get: { model.general.discoverableByEmail },
+                set: { value in Task { await model.save(GeneralSettings.changeDiscoverableByEmail(value)) { $0.discoverableByEmail = value } } }
+            )) {
+                SettingsLabel("Discoverable by email", symbol: "envelope", token: .sky700)
+            }
+            Toggle(isOn: Binding(
+                get: { model.general.discoverableByName },
+                set: { value in Task { await model.save(GeneralSettings.changeDiscoverableByName(value)) { $0.discoverableByName = value } } }
+            )) {
+                SettingsLabel("Discoverable by name", symbol: "person.text.rectangle", token: .sky700)
             }
         }
     }

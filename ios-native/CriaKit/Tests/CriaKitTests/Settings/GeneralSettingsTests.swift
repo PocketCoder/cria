@@ -58,4 +58,31 @@ final class GeneralSettingsTests: XCTestCase {
         XCTAssertTrue(change?.settings.isEmpty ?? false)
         XCTAssertNil(GeneralSettings.changeQuickAddMode("other"))
     }
+
+    func testReadsWeekStartDefaultProjectAndDiscoverability() throws {
+        let value = try user("""
+        {"settings": {"week_start": 0, "default_project_id": 7,
+         "discoverable_by_email": true, "discoverable_by_name": true}}
+        """)
+        let general = GeneralSettings(user: value)
+        XCTAssertEqual(general.weekStart, 0)
+        XCTAssertEqual(general.defaultProjectId, 7)
+        XCTAssertTrue(general.discoverableByEmail)
+        XCTAssertTrue(general.discoverableByName)
+    }
+
+    func testWeekStartAndDefaultProjectFallBack() throws {
+        let general = GeneralSettings(user: try user(#"{"settings": {"week_start": 9}}"#))
+        XCTAssertEqual(general.weekStart, 1)
+        XCTAssertEqual(general.defaultProjectId, 0)
+    }
+
+    func testNewChangesNameOnlyTheirField() {
+        XCTAssertEqual(GeneralSettings.changeWeekStart(0)?.settings, ["week_start": .number(0)])
+        XCTAssertNil(GeneralSettings.changeWeekStart(7))
+        XCTAssertEqual(GeneralSettings.changeDefaultProject(5)?.settings, ["default_project_id": .number(5)])
+        XCTAssertNil(GeneralSettings.changeDefaultProject(-1))
+        XCTAssertEqual(GeneralSettings.changeDiscoverableByName(true).settings, ["discoverable_by_name": .bool(true)])
+        XCTAssertEqual(GeneralSettings.changeDiscoverableByEmail(false).settings, ["discoverable_by_email": .bool(false)])
+    }
 }

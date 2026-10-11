@@ -17,20 +17,27 @@ struct ShoppingPhotoSheet: View {
     @State private var label = "shopping"
     @State private var working = false
     @State private var errorMessage: String?
+    @State private var captured: UIImage?
+    @State private var libraryRequested = false
 
     var body: some View {
         NavigationStack {
-            Form {
-                if items.isEmpty {
-                    sourceSection
-                } else {
-                    reviewSection
+            ScrollView {
+                VStack(spacing: 16) {
+                    viewport
+                    if items.isEmpty {
+                        libraryRow
+                    } else {
+                        reviewSection
+                    }
+                    if let errorMessage {
+                        Text(errorMessage).font(Theme.caption).foregroundStyle(Color(.destructive))
+                    }
                 }
-                if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(Color(.destructive)) }
-                }
+                .padding(16)
+                .animation(.snappy(duration: 0.36), value: items.isEmpty)
             }
-            .criaSurface()
+            .background(Color(.grouped))
             .navigationTitle("List from photo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -56,34 +63,90 @@ struct ShoppingPhotoSheet: View {
                 projectId = remembered ?? projects.first?.localId ?? ""
             }
         }
+        .presentationDetents([.large])
     }
 
-    private var sourceSection: some View {
-        Section {
-            PhotosPicker(selection: $picked, matching: .images) { Label("Choose a photo", systemImage: "photo") }
-            if CameraPicker.isAvailable {
-                Button("Take a photo", systemImage: "camera") { showCamera = true }
+    /// Dark viewport with white corner guides and a shutter. The shutter opens the system camera (or the photo
+    /// library where there is no camera). After a capture it shrinks to 180pt and shows the photo.
+    private var viewport: some View {
+        let compact = !items.isEmpty
+        return ZStack {
+            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.black)
+            if let captured, compact {
+                Image(uiImage: captured).resizable().scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            } else {
+                CornerGuides().padding(18)
+                VStack {
+                    Spacer()
+                    Text("Point at a handwritten or printed list")
+                        .font(Theme.rowSubtitle).foregroundStyle(.white.opacity(0.8))
+                    shutter.padding(.top, 8).padding(.bottom, 20)
+                }
+                if working { ProgressView().tint(.white) }
             }
-            if working { ProgressView("Reading the list…") }
-        } footer: {
-            Text("Works best on a flat, well lit list with one item per line.")
+        }
+        .frame(height: compact ? 180 : 440)
+    }
+
+    private var shutter: some View {
+        Button {
+            if CameraPicker.isAvailable { showCamera = true } else { libraryRequested = true }
+        } label: {
+            Circle().fill(.white).frame(width: 56, height: 56)
+                .padding(4)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 4))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Take a photo")
+        .photosPicker(isPresented: $libraryRequested, selection: $picked, matching: .images)
+    }
+
+    private var libraryRow: some View {
+        PhotosPicker(selection: $picked, matching: .images) {
+            Label("Choose from library", systemImage: "photo")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .foregroundStyle(Color(.primary))
+                .background(Color(.primarySoft), in: Capsule())
         }
     }
 
     private var reviewSection: some View {
-        Group {
-            Section(ShoppingItems.selectedLabel(ShoppingItems.selected(items).count)) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(ShoppingItems.selectedLabel(ShoppingItems.selected(items).count))
+                .font(Theme.headline).padding(.horizontal, 6)
+            VStack(spacing: 0) {
                 ForEach($items) { $item in
-                    Toggle(isOn: $item.include) { TextField("Item", text: $item.text) }
+                    HStack(spacing: 12) {
+                        Button {
+                            item.include.toggle()
+                        } label: {
+                            Image(systemName: item.include ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 22))
+                                .foregroundStyle(item.include ? Color(.primary) : Color(.mutedForeground))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(item.include ? "Included" : "Excluded")
+                        TextField("Item", text: $item.text)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
                 }
             }
-            Section {
+            .background(Color(.cell), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            VStack(spacing: 0) {
                 Picker("Project", selection: $projectId) {
                     ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
                 }
-                TextField("Label (optional)", text: $label)
-                Button("Start over", role: .destructive) { items = [] }
+                .padding(.horizontal, 14).frame(minHeight: 48)
+                Divider().padding(.leading, 14)
+                TextField("Label (optional)", text: $label).padding(.horizontal, 14).frame(minHeight: 48)
             }
+            .background(Color(.cell), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            Button("Start over", role: .destructive) { items = []; captured = nil }
+                .font(Theme.rowSubtitle).frame(maxWidth: .infinity)
         }
     }
 
@@ -99,6 +162,7 @@ struct ShoppingPhotoSheet: View {
     private func recognise(_ data: Data) async {
         working = true
         defer { working = false }
+        captured = UIImage(data: data)
         let lines = await TextRecogniser.lines(in: data)
         var parsed = ShoppingItems.parse(lines)
         if AIStatus.shared.isOfferable, !parsed.isEmpty,
@@ -117,6 +181,28 @@ struct ShoppingPhotoSheet: View {
             dismiss()
         } catch {
             errorMessage = String(describing: error)
+        }
+    }
+}
+
+/// Four white L-shaped corner marks, 26pt long with a 3pt stroke.
+private struct CornerGuides: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Path { path in
+                let size = proxy.size
+                let arm: CGFloat = 26
+                for corner in 0..<4 {
+                    let dx: CGFloat = corner.isMultiple(of: 2) ? 1 : -1
+                    let dy: CGFloat = corner < 2 ? 1 : -1
+                    let x = corner.isMultiple(of: 2) ? 0 : size.width
+                    let y = corner < 2 ? 0 : size.height
+                    path.move(to: CGPoint(x: x + dx * arm, y: y))
+                    path.addLine(to: CGPoint(x: x, y: y))
+                    path.addLine(to: CGPoint(x: x, y: y + dy * arm))
+                }
+            }
+            .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
         }
     }
 }

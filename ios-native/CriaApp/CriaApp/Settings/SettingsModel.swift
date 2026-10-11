@@ -23,6 +23,7 @@ final class SettingsModel {
             general = GeneralSettings(user: user)
             username = user["username"]?.stringValue ?? ""
             UserDefaults.standard.set(general.quickAddMagicMode, forKey: QuickAddStorage.key)
+            UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
             loaded = true
         } catch {
             errorMessage = String(describing: error)
@@ -45,6 +46,15 @@ final class SettingsModel {
     func setQuickAddMode(_ mode: String) async {
         UserDefaults.standard.set(mode, forKey: QuickAddStorage.key)
         await save(GeneralSettings.changeQuickAddMode(mode)) { $0.quickAddMagicMode = mode }
+    }
+
+    func setWeekStart(_ day: Int) async {
+        UserDefaults.standard.set(day, forKey: GeneralSettings.weekStartDefaultsKey)
+        await save(GeneralSettings.changeWeekStart(day)) { $0.weekStart = day }
+    }
+
+    func setDefaultProject(_ serverId: Int) async {
+        await save(GeneralSettings.changeDefaultProject(serverId)) { $0.defaultProjectId = serverId }
     }
 
     func clearBackgrounds() {
