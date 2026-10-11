@@ -20,7 +20,3 @@ final class LiveValue<Value: Sendable> {
         }
     }
 }
-
-extension EnvironmentValues {
-    @Entry var services: AppServices? = nil
-}

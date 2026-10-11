@@ -18,16 +18,15 @@ struct ShellView: View {
                 tab(.search, title: "Search", symbol: "magnifyingglass")
             }
         }
-        .environment(\.services, services)
         .environment(navigation)
         .tint(Color(.primary))
     }
 
     private func tab(_ tab: AppTab, title: String, symbol: String) -> some View {
         NavigationStack(path: navigation.pathBinding(for: tab)) {
-            TabRoot(tab: tab, onSignOut: onSignOut)
+            TabRoot(tab: tab, services: services, onSignOut: onSignOut)
                 .navigationDestination(for: Route.self) { route in
-                    RouteDestination(route: route)
+                    RouteDestination(route: route, services: services)
                 }
         }
         .tabItem { Label(title, systemImage: symbol) }
@@ -35,21 +34,33 @@ struct ShellView: View {
     }
 }
 
-/// Root screen of each tab. Replaced screen by screen in S-43, S-47 and S-48.
+/// Root screen of each tab. Today, Upcoming and Search arrive in S-47 and S-48.
 struct TabRoot: View {
     let tab: AppTab
+    let services: AppServices
     let onSignOut: () -> Void
 
     var body: some View {
-        ContentUnavailableView(tab.rawValue.capitalized, systemImage: "hammer", description: Text("Coming in this phase."))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("Sign out", action: onSignOut) }
-            }
+        switch tab {
+        case .browse:
+            BrowseView(services: services)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu("Account", systemImage: "person.circle") {
+                            Button("Sign out", role: .destructive, action: onSignOut)
+                        }
+                    }
+                }
+        default:
+            ContentUnavailableView(tab.rawValue.capitalized, systemImage: "hammer", description: Text("Coming in this phase."))
+        }
     }
 }
 
+/// Screens pushed from a tab. Task list and detail arrive in S-44 and S-45.
 struct RouteDestination: View {
     let route: Route
+    let services: AppServices
 
     var body: some View {
         ContentUnavailableView("Not built yet", systemImage: "hammer")
