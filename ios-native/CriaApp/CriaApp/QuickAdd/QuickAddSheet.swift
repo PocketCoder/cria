@@ -146,7 +146,10 @@ struct QuickAddSheet: View {
                 Button("Next week") { setDue(daysFromNow: 7) }
                 Button("No date", role: .destructive) { dueISO = "" }
             } label: {
-                CriaChip(text: dueISO.isEmpty ? "Due" : DueDates.label(dueISO, now: Date(), display: dateDisplay), systemImage: "calendar", tint: Color(.sky700))
+                CriaChip(
+                    text: dueISO.isEmpty ? "Due" : DueDates.label(dueISO, now: Date(), display: dateDisplay),
+                    systemImage: "calendar", tint: Color(.sky700)
+                )
             }
         }
         }

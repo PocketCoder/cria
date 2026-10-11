@@ -98,13 +98,17 @@ struct GeneralSettingsSection: View {
         Group {
             Toggle(isOn: Binding(
                 get: { model.general.discoverableByEmail },
-                set: { value in Task { await model.save(GeneralSettings.changeDiscoverableByEmail(value)) { $0.discoverableByEmail = value } } }
+                set: { value in
+                    Task { await model.save(GeneralSettings.changeDiscoverableByEmail(value)) { $0.discoverableByEmail = value } }
+                }
             )) {
                 SettingsLabel("Discoverable by email", symbol: "envelope", token: .sky700)
             }
             Toggle(isOn: Binding(
                 get: { model.general.discoverableByName },
-                set: { value in Task { await model.save(GeneralSettings.changeDiscoverableByName(value)) { $0.discoverableByName = value } } }
+                set: { value in
+                    Task { await model.save(GeneralSettings.changeDiscoverableByName(value)) { $0.discoverableByName = value } }
+                }
             )) {
                 SettingsLabel("Discoverable by name", symbol: "person.text.rectangle", token: .sky700)
             }

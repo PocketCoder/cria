@@ -13,7 +13,7 @@ struct NotificationSettingsSection: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var denied: Bool { status == .denied }
-    private var masterOn: Bool { prefs.value.notificationsEnabled && !denied }
+    private var notificationsOn: Bool { prefs.value.notificationsEnabled && !denied }
 
     var body: some View {
         Group {
@@ -25,7 +25,7 @@ struct NotificationSettingsSection: View {
 
     private var localSection: some View {
         Section {
-            Toggle(isOn: Binding(get: { masterOn }, set: { enabled in setMaster(enabled) })) {
+            Toggle(isOn: Binding(get: { notificationsOn }, set: { enabled in setNotifications(enabled) })) {
                 SettingsLabel("Notifications", symbol: "bell.badge", token: .coral500)
             }
             summaryRows
@@ -44,15 +44,15 @@ struct NotificationSettingsSection: View {
         Toggle(isOn: $prefs.value.morningSummaryEnabled) {
             SettingsLabel("Morning summary", symbol: "sun.max", token: .marigold500)
         }
-        .disabled(!masterOn)
-        if prefs.value.morningSummaryEnabled && masterOn {
+        .disabled(!notificationsOn)
+        if prefs.value.morningSummaryEnabled && notificationsOn {
             DatePicker("Morning summary time", selection: timeBinding(\.morningSummaryTime), displayedComponents: .hourAndMinute)
         }
         Toggle(isOn: $prefs.value.weeklyRoundupEnabled) {
             SettingsLabel("Weekly round-up", symbol: "calendar.badge.checkmark", token: .meadow500)
         }
-        .disabled(!masterOn)
-        if prefs.value.weeklyRoundupEnabled && masterOn {
+        .disabled(!notificationsOn)
+        if prefs.value.weeklyRoundupEnabled && notificationsOn {
             DatePicker("Weekly round-up time", selection: timeBinding(\.weeklyRoundupTime), displayedComponents: .hourAndMinute)
         }
     }
@@ -73,13 +73,17 @@ struct NotificationSettingsSection: View {
         Section("Email") {
             Toggle(isOn: Binding(
                 get: { model.general.emailRemindersEnabled },
-                set: { value in Task { await model.save(GeneralSettings.changeEmailReminders(value)) { $0.emailRemindersEnabled = value } } }
+                set: { value in
+                    Task { await model.save(GeneralSettings.changeEmailReminders(value)) { $0.emailRemindersEnabled = value } }
+                }
             )) {
                 SettingsLabel("Email reminders", symbol: "envelope.badge", token: .coral500)
             }
             Toggle(isOn: Binding(
                 get: { model.general.overdueRemindersEnabled },
-                set: { value in Task { await model.save(GeneralSettings.changeOverdueReminders(value)) { $0.overdueRemindersEnabled = value } } }
+                set: { value in
+                    Task { await model.save(GeneralSettings.changeOverdueReminders(value)) { $0.overdueRemindersEnabled = value } }
+                }
             )) {
                 SettingsLabel("Overdue task digest", symbol: "exclamationmark.circle", token: .marigold500)
             }
@@ -102,7 +106,7 @@ struct NotificationSettingsSection: View {
         )
     }
 
-    private func setMaster(_ enabled: Bool) {
+    private func setNotifications(_ enabled: Bool) {
         guard enabled else {
             prefs.value.notificationsEnabled = false
             return

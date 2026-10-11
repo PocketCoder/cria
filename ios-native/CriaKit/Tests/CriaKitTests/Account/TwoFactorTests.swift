@@ -39,7 +39,9 @@ final class TwoFactorTests: XCTestCase {
         let paths = transport.requests.map { $0.url?.path ?? "" }
         XCTAssertEqual(paths, ["/api/v1/user/settings/totp/enroll", "/api/v1/user/settings/totp/enable",
                                "/api/v1/user/settings/totp/disable"])
-        let enable = try XCTUnwrap(transport.requests[1].httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] })
+        let enable = try XCTUnwrap(transport.requests[1].httpBody.flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [String: String]
+        })
         XCTAssertEqual(enable, ["passcode": "123456"])
     }
 }

@@ -43,7 +43,7 @@ final class AccountEndpointsTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "PUT")
         XCTAssertEqual(request.url?.path, "/api/v1/user/settings/avatar/upload")
         XCTAssertTrue(header(request, "Content-Type")?.hasPrefix("multipart/form-data; boundary=") ?? false)
-        let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+        let body = String(bytes: request.httpBody ?? Data(), encoding: .utf8) ?? ""
         XCTAssertTrue(body.contains(#"name="avatar"; filename="me.png""#))
     }
 
