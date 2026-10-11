@@ -12,6 +12,9 @@ public struct ProjectRecord: Equatable, Sendable {
     public let isFavorite: Bool
     public let position: Double?
     public let updatedAt: String
+    /// Short code that prefixes task identifiers (`PROJ-12`). Kept so a push sends it back: Vikunja's project update
+    /// writes the column from the body, so leaving it out blanks it for every client.
+    public let identifier: String?
 
     init(row: Row) {
         localId = row["local_id"]
@@ -24,13 +27,14 @@ public struct ProjectRecord: Equatable, Sendable {
         isFavorite = row["is_favorite"]
         position = row["position"]
         updatedAt = row["updated_at"]
+        identifier = row["identifier"]
     }
 }
 
 extension CriaStore {
     static let projectColumns = """
         local_id, server_id, title, description, parent_local_id, hex_color, \
-        is_archived, is_favorite, position, updated_at
+        is_archived, is_favorite, position, updated_at, identifier
         """
 
     public func projects() throws -> [ProjectRecord] {
@@ -64,27 +68,29 @@ extension CriaStore {
                 if dirty {
                     return deleted ? nil : localId
                 }
+                // A local delete still on its way to the server: do not bring the project back.
+                if deleted { return nil }
                 try connection.execute(sql: """
                     UPDATE projects SET title = ?, description = ?, parent_local_id = ?, hex_color = ?,
                            is_archived = ?, is_favorite = ?, position = ?, updated_at = ?,
-                           synced_at = ?, last_synced = ?, dirty = 0, deleted = 0
+                           synced_at = ?, last_synced = ?, identifier = ?, dirty = 0, deleted = 0
                      WHERE local_id = ?
                     """, arguments: [
                         payload.title, payload.description, parentLocalId, payload.hexColor,
                         payload.isArchived ?? false, payload.isFavorite ?? false, payload.position,
-                        payload.updated ?? now, now, rawJSON, localId
+                        payload.updated ?? now, now, rawJSON, payload.identifier, localId
                     ])
                 return localId
             }
             let localId = UUID().uuidString
             try connection.execute(sql: """
                 INSERT INTO projects (local_id, server_id, title, description, parent_local_id, hex_color,
-                       is_archived, is_favorite, position, updated_at, synced_at, last_synced, dirty, deleted)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+                       is_archived, is_favorite, position, updated_at, synced_at, last_synced, identifier, dirty, deleted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
                 """, arguments: [
                     localId, payload.id, payload.title, payload.description, parentLocalId, payload.hexColor,
                     payload.isArchived ?? false, payload.isFavorite ?? false, payload.position,
-                    payload.updated ?? now, now, rawJSON
+                    payload.updated ?? now, now, rawJSON, payload.identifier
                 ])
             return localId
         }

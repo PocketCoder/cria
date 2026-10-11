@@ -6,6 +6,11 @@ extension ApiError {
     static func blocked(_ message: String) -> ApiError {
         ApiError(status: 408, code: nil, message: message, retryable: true, dependency: true)
     }
+
+    /// Held back until the user resolves a conflict. Waits however long that takes: it is never dead-lettered as stale.
+    static let conflictBlocked = blocked("task has unresolved conflict")
+
+    var isConflictBlock: Bool { self == ApiError.conflictBlocked }
 }
 
 extension ApiClient {

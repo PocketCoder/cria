@@ -67,7 +67,8 @@ public extension ApiClient {
     // Labels
     func label(id: Int) async throws -> LabelResponse { try await get("/labels/\(id)") }
     func createLabel(_ body: JSONBody) async throws -> LabelResponse { try await put("/labels", body: body) }
-    func updateLabel(id: Int, _ body: JSONBody) async throws -> LabelResponse { try await put("/labels/\(id)", body: body) }
+    // Upstream routes label updates as POST; its swagger annotation saying PUT is wrong (pkg/routes/routes.go).
+    func updateLabel(id: Int, _ body: JSONBody) async throws -> LabelResponse { try await post("/labels/\(id)", body: body) }
     func deleteLabel(id: Int) async throws { try await perform(.delete, "/labels/\(id)") }
 
     // Views and buckets

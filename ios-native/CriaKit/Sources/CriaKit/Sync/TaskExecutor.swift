@@ -56,7 +56,7 @@ public struct TaskExecutor: OutboxExecutor {
         }
         // Never push while the user is deciding how to resolve a conflict.
         if try store.hasUnresolvedConflict(entityType: "task", localId: localId) {
-            throw ApiError.blocked("task has unresolved conflict")
+            throw ApiError.conflictBlocked
         }
         let projectServerId = try store.pushProjectServerId(localId: task.record.projectLocalId)
         let reminders = try store.pushReminders(taskLocalId: localId)

@@ -32,10 +32,10 @@ final class TaskBodyTests: XCTestCase {
         XCTAssertNil(taskToBody(try record { $0.hexColor = "" })["hex_color"])
     }
 
-    func testScalesPercentDoneToHundred() throws {
-        XCTAssertEqual(number(taskToBody(try record { $0.percentDone = 0.5 }), "percent_done"), 50)
-        XCTAssertEqual(number(taskToBody(try record { $0.percentDone = 0.33 }), "percent_done"), 33)
-        XCTAssertEqual(number(taskToBody(try record { $0.percentDone = 1 }), "percent_done"), 100)
+    func testSendsPercentDoneUnscaled() throws {
+        XCTAssertEqual(number(taskToBody(try record { $0.percentDone = 0.5 }), "percent_done"), 0.5)
+        XCTAssertEqual(number(taskToBody(try record { $0.percentDone = 0.33 }), "percent_done"), 0.33)
+        XCTAssertEqual(number(taskToBody(try record { $0.percentDone = 1 }), "percent_done"), 1)
     }
 
     func testSendsFavouriteExplicitlyBothWays() throws {

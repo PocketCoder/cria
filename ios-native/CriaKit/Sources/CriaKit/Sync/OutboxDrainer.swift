@@ -82,12 +82,17 @@ public actor OutboxDrainer {
 
     private func handleFailure(_ op: OutboxRow, error: any Error) {
         let isDependency = (error as? ApiError)?.dependency ?? false
-        // A dependency block (an un-synced parent) or being signed out is not the op's fault, so it does not use up
-        // an attempt.
-        let attempts = (isDependency || error is AuthRequiredError) ? op.attempts : op.attempts + 1
+        // A dependency block (an un-synced parent), being signed out or being offline is not the op's fault, so it
+        // does not use up an attempt. Counting offline failures would dead-letter an edit after ~10 minutes without
+        // a connection.
+        let notTheOpsFault = isDependency || error is AuthRequiredError || isOfflineError(error)
+        let attempts = notTheOpsFault ? op.attempts : op.attempts + 1
         let text = String(describing: error)
         let current = now()
-        let staleDependency = isDependency && op.createdAt < current.addingTimeInterval(-Self.maxDependencyWait).formatted(.iso8601)
+        // A conflict waits for the user, however long that takes.
+        let isConflict = (error as? ApiError)?.isConflictBlock ?? false
+        let staleDependency = isDependency && !isConflict
+            && op.createdAt < current.addingTimeInterval(-Self.maxDependencyWait).formatted(.iso8601)
         if !Self.isRetryable(error) || staleDependency || (attempts >= Self.maxAttempts && !isDependency) {
             try? store.deadLetterOutboxRow(op, attempts: attempts, error: text, at: current.formatted(.iso8601))
         } else {

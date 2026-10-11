@@ -63,7 +63,7 @@ final class OutboxDrainerTests: XCTestCase {
         let store = try makeStore()
         try enqueue(store, 2)
         let clock = Clock()
-        let executor = ScriptedExecutor(failures: [1: NetworkError("offline")])
+        let executor = ScriptedExecutor(failures: [1: ApiError(status: 503, code: nil, message: "down", retryable: true)])
         let drainer = makeDrainer(store, executor, clock: clock)
 
         await drainer.drain()
@@ -108,10 +108,29 @@ final class OutboxDrainerTests: XCTestCase {
         let store = try makeStore()
         try enqueue(store, 1)
         try runSQL(store, "UPDATE outbox SET attempts = 9")
-        let executor = ScriptedExecutor(failures: [1: NetworkError("offline")])
+        let executor = ScriptedExecutor(failures: [1: ApiError(status: 503, code: nil, message: "down", retryable: true)])
         await makeDrainer(store, executor).drain()
         XCTAssertEqual(try store.deadLetters().count, 1)
         XCTAssertEqual(try store.outboxRows().count, 0)
+    }
+
+    func testOfflineFailureDoesNotUseAnAttempt() async throws {
+        let store = try makeStore()
+        try enqueue(store, 1)
+        try runSQL(store, "UPDATE outbox SET attempts = 9")
+        await makeDrainer(store, ScriptedExecutor(failures: [1: NetworkError("offline")])).drain()
+        let head = try XCTUnwrap(try store.outboxHead(), "an hour on a train must not dead-letter the edit")
+        XCTAssertEqual(head.attempts, 9)
+        XCTAssertEqual(try store.deadLetters().count, 0)
+    }
+
+    func testConflictBlockIsNeverDeadLetteredAsStale() async throws {
+        let store = try makeStore()
+        try enqueue(store, 1)
+        try runSQL(store, "UPDATE outbox SET created_at = '2000-01-01T00:00:00Z'")
+        await makeDrainer(store, ScriptedExecutor(failures: [1: ApiError.conflictBlocked])).drain()
+        XCTAssertNotNil(try store.outboxHead())
+        XCTAssertEqual(try store.deadLetters().count, 0)
     }
 
     func testDependencyBlockDoesNotUseAnAttempt() async throws {

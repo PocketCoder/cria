@@ -32,13 +32,22 @@ extension Puller {
 
 extension CriaStore {
     static func deleteTaskCascade(_ connection: Database, localId: String) throws {
-        for table in ["task_labels", "task_buckets", "task_reminders", "task_assignees"] {
+        // task_comments references tasks with no ON DELETE clause (migration 013), so its rows must go first or the
+        // task delete fails the foreign key check.
+        for table in ["task_labels", "task_buckets", "task_reminders", "task_assignees", "task_comments"] {
             try connection.execute(sql: "DELETE FROM \(table) WHERE task_local_id = ?", arguments: [localId])
         }
         try connection.execute(
             sql: "DELETE FROM task_relations WHERE task_local_id = ? OR other_task_local_id = ?", arguments: [localId, localId]
         )
         try connection.execute(sql: "DELETE FROM tasks WHERE local_id = ?", arguments: [localId])
+    }
+
+    /// Comments of every task in a project, before the project (and through ON DELETE CASCADE, its tasks) goes.
+    static func deleteCommentsOfProject(_ connection: Database, projectLocalId: String) throws {
+        try connection.execute(sql: """
+            DELETE FROM task_comments WHERE task_local_id IN (SELECT local_id FROM tasks WHERE project_local_id = ?)
+            """, arguments: [projectLocalId])
     }
 
     func removeTasksMissingOnServer(serverIds: Set<Int>, fetchedSince: String? = nil) throws {
@@ -86,6 +95,7 @@ extension CriaStore {
                 for child in children {
                     try CriaStore.deleteTaskCascade(connection, localId: child)
                 }
+                try CriaStore.deleteCommentsOfProject(connection, projectLocalId: localId)
                 try connection.execute(sql: "DELETE FROM projects WHERE local_id = ?", arguments: [localId])
             }
         }

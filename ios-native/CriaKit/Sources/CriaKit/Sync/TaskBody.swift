@@ -1,8 +1,8 @@
 import Foundation
 
 /// Wire body for a task create or update. Ported from `taskToBody` in `src/sync/push/task.ts`.
-/// Every quirk here fixed a real server error: `hex_color` goes raw (a `#` causes a 500), `percent_done` is
-/// 0 to 100 (the DB stores 0 to 1), `is_favorite` is always sent (omitting it breaks un-favouriting),
+/// Every quirk here fixed a real server error: `hex_color` goes raw (a `#` causes a 500), `is_favorite` is always
+/// sent (omitting it breaks un-favouriting),
 /// `repeat_after` and `repeat_mode` are sent even when 0, and `project_id` is included on a move.
 public struct ReminderBody: Equatable, Sendable {
     public var reminder: String?
@@ -30,7 +30,9 @@ public func taskToBody(_ task: TaskRecord, projectServerId: Int? = nil, reminder
         "title": .string(task.title),
         "done": .bool(task.done),
         "priority": .number(Double(task.priority)),
-        "percent_done": .number((task.percentDone * 100).rounded()),
+        // 0 to 1, as stored and as pulled. Vikunja keeps the number as sent (`PercentDone` in pkg/models/tasks.go:
+        // "between 0 and 1"), so scaling it here would grow it 100-fold on every edit and pull.
+        "percent_done": .number(task.percentDone),
         "is_favorite": .bool(task.isFavorite),
         "repeat_after": .number(Double(task.repeatAfter)),
         "repeat_mode": .number(Double(task.repeatMode))

@@ -19,6 +19,7 @@ public struct ProjectExecutor: OutboxExecutor {
         if let description = project.description { body["description"] = .string(description) }
         if let color = stripHash(project.hexColor) { body["hex_color"] = .string(color) }
         if let position = project.position { body["position"] = .number(position) }
+        if let identifier = project.identifier { body["identifier"] = .string(identifier) }
         if let parent = project.parentLocalId, let parentServerId = try store.pushInt(
             "SELECT server_id FROM projects WHERE local_id = ?", parent
         ) {
@@ -37,7 +38,7 @@ public struct ProjectExecutor: OutboxExecutor {
         switch op.op {
         case "create":
             if deleted {
-                try store.dropRow(table: "projects", localId: localId, announcing: [.projects])
+                try store.removeProjectLocally(localId: localId)
                 return
             }
             if project.serverId != nil { return }
@@ -81,6 +82,7 @@ extension CriaStore {
                  WHERE task_local_id IN (SELECT local_id FROM tasks WHERE project_local_id = ?)
                     OR other_task_local_id IN (SELECT local_id FROM tasks WHERE project_local_id = ?)
                 """, arguments: [localId, localId])
+            try CriaStore.deleteCommentsOfProject(connection, projectLocalId: localId)
             try connection.execute(sql: "DELETE FROM tasks WHERE project_local_id = ?", arguments: [localId])
             try connection.execute(sql: "DELETE FROM projects WHERE local_id = ?", arguments: [localId])
         }

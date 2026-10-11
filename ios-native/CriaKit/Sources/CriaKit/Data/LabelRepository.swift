@@ -49,12 +49,13 @@ extension CriaStore {
         try inWrite(held) { connection -> String in
             let now = isoNow()
             let existing = try Row.fetchOne(
-                connection, sql: "SELECT local_id, dirty FROM labels WHERE server_id = ?", arguments: [payload.id]
+                connection, sql: "SELECT local_id, dirty, deleted FROM labels WHERE server_id = ?", arguments: [payload.id]
             )
             if let existing {
                 let localId: String = existing["local_id"]
                 let dirty: Bool = existing["dirty"]
-                if !dirty {
+                let deleted: Bool = existing["deleted"]
+                if !dirty && !deleted {
                     try connection.execute(sql: """
                         UPDATE labels SET title = ?, description = ?, hex_color = ?, updated_at = ?,
                                synced_at = ?, last_synced = ?, dirty = 0, deleted = 0

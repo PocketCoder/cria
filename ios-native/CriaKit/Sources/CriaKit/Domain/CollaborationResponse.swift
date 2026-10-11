@@ -56,6 +56,32 @@ public struct ViewResponse: Decodable, Equatable, Sendable {
         case defaultBucketId = "default_bucket_id"
         case doneBucketId = "done_bucket_id"
     }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        projectId = try container.decode(Int.self, forKey: .projectId)
+        viewKind = try container.decode(ViewKind.self, forKey: .viewKind)
+        position = try container.decodeIfPresent(Double.self, forKey: .position)
+        // Vikunja sends a TaskCollection object (`{"filter": "done = false", ...}`); older servers a plain string.
+        // Decoding it as a string failed every view with a filter, the default List view included.
+        switch try container.decodeIfPresent(JSONValue.self, forKey: .filter) {
+        case .string(let text)?:
+            filter = text
+        case .object(let object)?:
+            let data = try JSONEncoder().encode(JSONValue.object(object))
+            filter = String(bytes: data, encoding: .utf8)
+        default:
+            filter = nil
+        }
+        bucketConfigurationMode = try container.decodeIfPresent(BucketConfigMode.self, forKey: .bucketConfigurationMode)
+        bucketConfiguration = try container.decodeIfPresent([JSONValue].self, forKey: .bucketConfiguration)
+        defaultBucketId = try container.decodeIfPresent(Int.self, forKey: .defaultBucketId)
+        doneBucketId = try container.decodeIfPresent(Int.self, forKey: .doneBucketId)
+        created = try container.decodeIfPresent(String.self, forKey: .created)
+        updated = try container.decodeIfPresent(String.self, forKey: .updated)
+    }
 }
 
 /// Server shape for one kanban bucket. Mirrors `bucketResponseSchema` in `src/domain/bucket.ts`.
