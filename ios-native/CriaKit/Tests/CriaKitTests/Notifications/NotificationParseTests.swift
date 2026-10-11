@@ -72,5 +72,7 @@ final class NotificationParseTests: XCTestCase {
         try await client.markAllNotificationsRead()
         XCTAssertEqual(transport.requests.map { "\($0.httpMethod ?? "") \($0.url?.path ?? "")" },
                        ["POST /api/v1/notifications/9", "POST /api/v1/notifications"])
+        let body = transport.requests.first?.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Bool] }
+        XCTAssertEqual(body, ["read": true])
     }
 }

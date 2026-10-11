@@ -38,17 +38,16 @@ public extension CriaStore {
 
     /// The app records its default (inbox) project here so extensions and intents, which cannot ask the server, know
     /// where to file a new task.
+    /// Does nothing without a server id (offline, or the lookup failed), so a bad launch never forgets the choice.
     func rememberCaptureProject(serverId: Int?, defaults: UserDefaults = CriaPaths.sharedDefaults()) throws {
-        var local: String?
-        if let serverId {
-            local = try projects().first { $0.serverId == serverId }?.localId
-        }
+        guard let serverId, let local = try projects().first(where: { $0.serverId == serverId })?.localId else { return }
         defaults.set(local, forKey: Self.capturePrefKey)
     }
 
-    /// The remembered capture project if it still exists, else the first live project. Nil with no projects.
+    /// The remembered capture project if it still exists, else the first real project (never Favourites, a saved
+    /// filter or an archived project, which the server would reject). Nil with no projects.
     func captureProjectId(defaults: UserDefaults = CriaPaths.sharedDefaults()) throws -> String? {
-        let all = try projects()
+        let all = ProjectTree.visible(try projects())
         if let saved = defaults.string(forKey: Self.capturePrefKey), all.contains(where: { $0.localId == saved }) { return saved }
         return all.first?.localId
     }
@@ -106,14 +105,28 @@ public struct TodaySnapshot: Equatable, Sendable {
         self.total = total
     }
 
-    public static func load(store: CriaStore, limit: Int, now: Date = Date()) throws -> TodaySnapshot {
-        let groups = try store.smartGroups(.today, now: now)
-        var all: [Entry] = []
-        for group in groups {
-            for item in group.items {
-                all.append(Entry(id: item.task.localId, title: item.task.title, isOverdue: group.key == "overdue"))
-            }
+    /// Reads only the three columns it shows (no labels, assignees or project titles), so a widget refresh stays cheap.
+    public static func load(
+        store: CriaStore, limit: Int, now: Date = Date(), calendar: Calendar = .current
+    ) throws -> TodaySnapshot {
+        let rows = try store.database.writer.read { connection in
+            try Row.fetchAll(connection, sql: """
+                SELECT t.local_id, t.title, t.due_date FROM tasks t
+                  JOIN projects p ON p.local_id = t.project_local_id
+                 WHERE t.deleted = 0 AND t.done = 0 AND t.due_date IS NOT NULL AND p.deleted = 0
+                 ORDER BY t.due_date ASC LIMIT 5000
+                """)
         }
+        let start = calendar.startOfDay(for: now)
+        var overdue: [Entry] = []
+        var today: [Entry] = []
+        for row in rows {
+            let due: String = row["due_date"]
+            guard let day = DueDates.calendarDate(due, calendar: calendar), day <= start else { continue }
+            let entry = Entry(id: row["local_id"], title: row["title"], isOverdue: day < start)
+            if entry.isOverdue { overdue.append(entry) } else { today.append(entry) }
+        }
+        let all = overdue + today
         return TodaySnapshot(entries: Array(all.prefix(limit)), total: all.count)
     }
 }

@@ -16,12 +16,15 @@ struct AddTaskIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        let title = String(taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).prefix(250))
+        if title.isEmpty { return .result(dialog: "A task needs a title.") }
         let store = CriaStore(database: try CriaPaths.openDatabase())
-        let created = try store.captureTask(title: taskTitle.trimmingCharacters(in: .whitespacesAndNewlines))
-        WidgetCenter.shared.reloadAllTimelines()
-        if created == nil {
+        guard try store.captureTask(title: title) != nil else {
             return .result(dialog: "Open Cria and sign in first.")
         }
+        // The running app hears this and pushes the task; the widget shows it at once.
+        CrossProcessSignal.post()
+        WidgetCenter.shared.reloadAllTimelines()
         return .result(dialog: "Added.")
     }
 }

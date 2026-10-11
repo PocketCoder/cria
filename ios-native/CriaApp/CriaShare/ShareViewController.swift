@@ -28,7 +28,8 @@ final class ShareViewController: UIViewController {
     private func save() async {
         let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
         let providers = items.flatMap { $0.attachments ?? [] }
-        let pageTitle = items.compactMap { $0.attributedTitle?.string ?? $0.attributedContentText?.string }.first
+        // Only a real title counts: for shared plain text `attributedContentText` is the whole text.
+        let pageTitle = items.compactMap { $0.attributedTitle?.string }.first
         var url: URL?
         var text: String?
         for provider in providers {
@@ -46,6 +47,7 @@ final class ShareViewController: UIViewController {
             if try store.captureTask(title: content.title, descriptionHtml: content.descriptionHtml) == nil {
                 return finish("Open Cria and sign in first.", success: false)
             }
+            CrossProcessSignal.post()
             finish("Added to Cria.", success: true)
         } catch {
             finish("Could not save: \(error.localizedDescription)", success: false)

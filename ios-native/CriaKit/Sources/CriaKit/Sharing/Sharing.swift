@@ -71,12 +71,14 @@ public struct Team: Equatable, Sendable, Identifiable {
     public let serverId: Int
     public let name: String
     public let description: String?
+    public let isPublic: Bool
     public let members: [TeamMember]
     public var id: Int { serverId }
 
     init?(_ row: JSONValue) {
         guard let serverId = row["id"]?.intValue else { return nil }
         self.serverId = serverId
+        isPublic = row["is_public"]?.boolValue ?? false
         name = row["name"]?.stringValue ?? ""
         description = row["description"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
         members = (row["members"]?.arrayValue ?? []).compactMap(TeamMember.init)

@@ -14,6 +14,8 @@ public struct GeneralSettings: Equatable, Sendable {
     public var quickAddMagicMode: String
 
     public static let defaultQuickAddMode = "vikunja"
+    /// The UserDefaults key the quick add and Ramble screens read the mode from.
+    public static let quickAddDefaultsKey = "cria.quickAddMagicMode"
 
     public init(user: JSONValue) {
         let settings = user["settings"]

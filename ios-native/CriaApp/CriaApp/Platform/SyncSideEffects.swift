@@ -45,10 +45,23 @@ enum SyncSideEffects {
 enum SpotlightIndexer {
     static let domain = "io.cria.app.tasks"
     private static let limit = 500
+    /// What was last indexed. Syncs and task changes both ask for a re-index; when nothing differs, skip the delete
+    /// and re-add of up to 500 items.
+    private nonisolated(unsafe) static var lastFingerprint: Int?
+
+    /// Removes every indexed task, e.g. on sign-out.
+    static func clear() async {
+        guard CSSearchableIndex.isIndexingAvailable() else { return }
+        lastFingerprint = nil
+        try? await CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain])
+    }
 
     static func reindex(store: CriaStore) async {
         guard CSSearchableIndex.isIndexingAvailable(),
               let tasks = try? store.tasks(matching: TaskQuery(includeDone: false)) else { return }
+        let fingerprint = tasks.prefix(limit).map { "\($0.localId)|\($0.title)|\($0.dueDate ?? "")" }.joined().hashValue
+        if fingerprint == lastFingerprint { return }
+        lastFingerprint = fingerprint
         let items = tasks.prefix(limit).map { task -> CSSearchableItem in
             let attributes = CSSearchableItemAttributeSet(contentType: .text)
             attributes.title = task.title

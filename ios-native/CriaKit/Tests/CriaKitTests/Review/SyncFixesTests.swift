@@ -202,4 +202,24 @@ final class SyncFixesTests: XCTestCase {
         let response = try await core.fetchOnce(request)
         XCTAssertEqual(response.status, 200)
     }
+
+    // MARK: Shared database
+
+    func testSecondProcessCanOpenTheFileReadOnlyWithoutMigrating() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cria-\(UUID().uuidString).sqlite")
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + suffix) } }
+        let app = CriaStore(database: try CriaDatabase.open(at: url))
+        try seedProject(app)
+        let widget = CriaStore(database: try CriaDatabase.open(at: url, migrate: false, readOnly: true))
+        XCTAssertEqual(try widget.projects().count, 1)
+    }
+
+    func testCrossProcessSignalIsHeard() {
+        let heard = expectation(description: "signal")
+        heard.assertForOverFulfill = false
+        let signal = CrossProcessSignal { heard.fulfill() }
+        CrossProcessSignal.post()
+        wait(for: [heard], timeout: 5)
+        withExtendedLifetime(signal) {}
+    }
 }

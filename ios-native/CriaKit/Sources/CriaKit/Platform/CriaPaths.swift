@@ -28,8 +28,8 @@ public enum CriaPaths {
         UserDefaults(suiteName: appGroup) ?? .standard
     }
 
-    /// Opens the shared database for an extension or intent.
-    public static func openDatabase() throws -> CriaDatabase {
-        try CriaDatabase.open(at: databaseURL())
+    /// Opens the shared database for an extension or intent. It never migrates: only the app owns the schema.
+    public static func openDatabase(readOnly: Bool = false) throws -> CriaDatabase {
+        try CriaDatabase.open(at: databaseURL(), migrate: false, readOnly: readOnly)
     }
 }

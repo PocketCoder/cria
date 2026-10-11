@@ -61,6 +61,8 @@ final class SpeechCapture {
     /// Everything recognised since `start()`.
     private(set) var transcript = ""
     private let engine = SpeechEngine()
+    /// Identifies the running session, so a late callback from an earlier one cannot touch a new one.
+    private var session = UUID()
     /// After `stop()` the recogniser still delivers its last words; they are kept until it says it is final.
     private var awaitingFinal = false
 
@@ -83,6 +85,7 @@ final class SpeechCapture {
     func start() async {
         guard !isListening else { return }
         awaitingFinal = false
+        session = UUID()
         transcript = ""
         guard await Self.authorised() else {
             state = .denied
@@ -93,8 +96,9 @@ final class SpeechCapture {
             return
         }
         do {
+            let current = session
             try engine.start(recognizer: recognizer) { [weak self] text, finished in
-                Task { @MainActor in self?.receive(text, finished: finished) }
+                Task { @MainActor in self?.receive(text, finished: finished, session: current) }
             }
             state = .listening
         } catch {
@@ -110,8 +114,8 @@ final class SpeechCapture {
         awaitingFinal = true
     }
 
-    private func receive(_ text: String?, finished: Bool) {
-        guard isCapturing else { return }
+    private func receive(_ text: String?, finished: Bool, session sender: UUID) {
+        guard sender == session, isCapturing else { return }
         if let text { transcript = text }
         if finished {
             awaitingFinal = false
@@ -119,7 +123,9 @@ final class SpeechCapture {
         }
     }
 
-    private static func authorised() async -> Bool {
+    /// Not main-actor: the framework calls the completion handler on another queue, which would trip Swift 6's
+    /// isolation check if the closure inherited the main actor.
+    private nonisolated static func authorised() async -> Bool {
         let speech = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0 == .authorized) }
         }

@@ -83,8 +83,10 @@ public extension ApiClient {
         return (rows ?? []).compactMap(AppNotification.init)
     }
 
+    /// The server marks it read only when the body says `read: true` (an empty body means "unread").
     func markNotificationRead(id: Int) async throws {
-        try await perform(.post, "/notifications/\(id)")
+        let body: JSONBody = ["read": .bool(true)]
+        try await perform(.post, "/notifications/\(id)", body: body)
     }
 
     func markAllNotificationsRead() async throws {

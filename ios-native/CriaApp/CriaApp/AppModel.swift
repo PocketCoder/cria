@@ -1,6 +1,7 @@
 import CriaKit
 import Foundation
 import Observation
+import WidgetKit
 
 /// Top-level app state: owns the auth session, and once signed in the local store and sync services.
 @MainActor @Observable
@@ -14,6 +15,12 @@ final class AppModel {
     let api: ApiClient
     private let loginService: LoginService
     private let core: HTTPCore
+    /// Set while `start()` or `startServicesIfNeeded()` is running, so overlapping calls (a second scene, a sign-in
+    /// racing the launch) cannot open the database twice.
+    private var isStarting = false
+    private var isStartingServices = false
+    /// Why "delete local data" did not finish, for an alert. The account is signed out either way.
+    private(set) var wipeError: String?
 
     init() {
         let core = HTTPCore()
@@ -25,6 +32,9 @@ final class AppModel {
     }
 
     func start() async {
+        guard !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         await session.hydrate()
         status = await session.status
         await startServicesIfNeeded()
@@ -42,12 +52,31 @@ final class AppModel {
         services = nil
         await session.signOut()
         status = await session.status
-        if wipeLocalData {
-            try? LocalDataWipe.wipe(root: CriaPaths.dataDirectory())
+        // The previous account's task titles must not stay in system search or on the Home Screen.
+        await SpotlightIndexer.clear()
+        WidgetCenter.shared.reloadAllTimelines()
+        if wipeLocalData { await wipeLocalFiles() }
+    }
+
+    /// Gives the views that still hold the store a moment to go away before the files are deleted, so the database is
+    /// not unlinked while open. A failure is reported, not hidden.
+    private func wipeLocalFiles() async {
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        do {
+            try LocalDataWipe.wipe(root: CriaPaths.dataDirectory())
+            wipeError = nil
+        } catch {
+            wipeError = String(describing: error)
         }
     }
 
+    func dismissWipeError() {
+        wipeError = nil
+    }
+
     func setSyncActive(_ isActive: Bool) async {
+        // The Keychain was not readable at launch (before first unlock): try again now the user is here.
+        if isActive, case .unauthenticated = status, await session.credentialsUnavailable { await start() }
         await services?.coordinator.setActive(isActive)
     }
 
@@ -58,10 +87,12 @@ final class AppModel {
     }
 
     private func startServicesIfNeeded() async {
-        guard case .authenticated = status, services == nil else { return }
+        guard case .authenticated = status, services == nil, !isStartingServices else { return }
+        isStartingServices = true
+        defer { isStartingServices = false }
         do {
             let root = CriaPaths.dataDirectory()
-            let database = try CriaDatabase.open(at: root.appendingPathComponent("cria.sqlite"))
+            let database = try CriaDatabase.open(at: CriaPaths.databaseURL(root: root))
             let built = await AppServices(
                 api: api,
                 store: CriaStore(database: database),

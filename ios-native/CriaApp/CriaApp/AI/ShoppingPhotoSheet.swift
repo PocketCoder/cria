@@ -50,8 +50,9 @@ struct ShoppingPhotoSheet: View {
                 CameraPicker { data in Task { await recognise(data) } }.ignoresSafeArea()
             }
             .task {
-                projects = (try? services.store.projects()) ?? []
-                projectId = projects.first?.localId ?? ""
+                projects = ProjectTree.visible((try? services.store.projects()) ?? [])
+                let remembered = try? services.store.captureProjectId()
+                projectId = remembered ?? projects.first?.localId ?? ""
             }
         }
     }
@@ -122,11 +123,11 @@ struct ShoppingPhotoSheet: View {
 /// Vision text recognition, top to bottom.
 enum TextRecogniser {
     static func lines(in data: Data) async -> [String] {
-        guard let image = UIImage(data: data)?.cgImage else { return [] }
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
-        let handler = VNImageRequestHandler(cgImage: image)
+        // From the data, not a CGImage: that keeps the EXIF orientation, so portrait photos are read upright.
+        let handler = VNImageRequestHandler(data: data, options: [:])
         guard (try? handler.perform([request])) != nil else { return [] }
         let ordered = (request.results ?? []).sorted { $0.boundingBox.midY > $1.boundingBox.midY }
         return ordered.compactMap { $0.topCandidates(1).first?.string }

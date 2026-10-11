@@ -6,20 +6,40 @@ import GRDB
 public final class CriaDatabase: Sendable {
     let writer: any DatabaseWriter
 
-    public init(writer: any DatabaseWriter) throws {
+    /// `migrate: false` is for the share extension, widget and intents: only the app changes the schema, so a second
+    /// process never takes the write lock just to open the file.
+    public init(writer: any DatabaseWriter, migrate: Bool = true) throws {
         self.writer = writer
-        try CriaMigrations.migrate(writer)
+        if migrate { try CriaMigrations.migrate(writer) }
     }
 
     public static func inMemory() throws -> CriaDatabase {
         try CriaDatabase(writer: DatabaseQueue())
     }
 
-    /// Opens (creating if needed) the on-disk database, in WAL mode so reads never block the writer.
-    public static func open(at url: URL) throws -> CriaDatabase {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        return try CriaDatabase(writer: DatabasePool(path: url.path))
+    /// How long a process waits for another's write lock before giving up. The app, the share extension, the widget
+    /// and the intents all use one file in the App Group, and the default is to fail at once with "database is locked".
+    static let busyTimeout: TimeInterval = 5
+
+    /// Opens (creating if needed) the on-disk database, in WAL mode so reads never block the writer. Extensions pass
+    /// `migrate: false`; the widget also passes `readOnly: true`.
+    public static func open(at url: URL, migrate: Bool = true, readOnly: Bool = false) throws -> CriaDatabase {
+        var configuration = Configuration()
+        configuration.busyMode = .timeout(busyTimeout)
+        configuration.readonly = readOnly
+        // Lets `suspend()` release the file before iOS suspends the app: a suspended process holding a lock in a
+        // shared container is killed (0xdead10cc).
+        configuration.observesSuspensionNotifications = true
+        if !readOnly {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
+        return try CriaDatabase(writer: DatabasePool(path: url.path, configuration: configuration), migrate: migrate)
     }
+
+    /// Call when the app enters the background and again when it returns. While suspended, database access fails
+    /// fast instead of holding the shared file.
+    public static func suspend() { NotificationCenter.default.post(name: Database.suspendNotification, object: nil) }
+    public static func resume() { NotificationCenter.default.post(name: Database.resumeNotification, object: nil) }
 }
 
 /// Kinds of change announced to observers. Only user mutations publish these.

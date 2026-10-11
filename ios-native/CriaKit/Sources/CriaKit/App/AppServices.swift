@@ -9,6 +9,8 @@ public final class AppServices: Sendable {
     /// Saves general settings (S-70). Nil in tests that do not exercise settings.
     public let settings: UserSettingsService?
     public let backgrounds: ProjectBackgroundCache
+    /// Hears the share extension and App Intents, which write to the shared database from other processes.
+    private let signal: CrossProcessSignal
     let blobs: FileBlobStore
 
     public init(api: ApiClient, store: CriaStore, blobDirectory: URL, settings: UserSettingsService? = nil) async {
@@ -22,14 +24,27 @@ public final class AppServices: Sendable {
         await drainer.registerStandardExecutors()
         await drainer.registerAttachmentExecutor(blobs: fileBlobs)
         coordinator = SyncCoordinator(puller: Puller(api: api, store: store), drainer: drainer, store: store)
+        signal = CrossProcessSignal { [store] in
+            // New rows came from another process: refresh the screens and push them.
+            for kind in [ChangeKind.tasks, .projects, .outbox] { store.bus.notify(kind) }
+        }
     }
 
     public func start() async {
         await coordinator.start()
         await coordinator.forceSync()
         announcePull()
-        // Extensions and intents file new tasks into this project without asking the server.
-        try? store.rememberCaptureProject(serverId: await defaultProjectServerId())
+        await applyAccountDefaults()
+    }
+
+    /// One read of the user, applied where it is needed: the default project (extensions and intents file new tasks
+    /// there without asking the server) and the Quick Add Magic mode (so Ramble and quick add follow it from the
+    /// first launch, not only after Settings is opened). A failed read (offline) changes nothing.
+    func applyAccountDefaults() async {
+        guard let user: JSONValue = try? await api.get("/user") else { return }
+        let projectId = user["settings"]?["default_project_id"]?.intValue
+        try? store.rememberCaptureProject(serverId: projectId.flatMap { $0 > 0 ? $0 : nil })
+        UserDefaults.standard.set(GeneralSettings(user: user).quickAddMagicMode, forKey: GeneralSettings.quickAddDefaultsKey)
     }
 
     public func stop() async {

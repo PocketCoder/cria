@@ -120,8 +120,8 @@ struct RambleSheet: View {
     private func save() {
         do {
             let store = services.store
-            let projects = try store.projects()
-            guard let fallback = projects.first?.localId else {
+            let projects = ProjectTree.visible(try store.projects())
+            guard let fallback = try store.captureProjectId() else {
                 errorMessage = "Create a project first."
                 return
             }

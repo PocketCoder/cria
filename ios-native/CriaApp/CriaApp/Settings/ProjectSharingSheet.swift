@@ -46,11 +46,11 @@ struct ProjectSharingSheet: View {
         Section("People") {
             ForEach(users) { share in
                 permissionRow(share.name ?? share.username, share.permission) { level in
-                    act { try await services.api.updateProjectUser(projectId: projectId, userId: share.serverId, permission: level) }
+                    act { try await services.api.updateProjectUser(projectId: projectId, username: share.username, permission: level) }
                 }
                 .swipeActions {
                     Button("Remove", role: .destructive) {
-                        act { try await services.api.removeProjectUser(projectId: projectId, userId: share.serverId) }
+                        act { try await services.api.removeProjectUser(projectId: projectId, username: share.username) }
                     }
                 }
             }
@@ -137,20 +137,23 @@ struct ProjectSharingSheet: View {
             allTeams = try await services.api.teams()
             frontendURL = try? await services.api.info().frontendURL
             serverURL = await services.api.serverBase() ?? ""
-            errorMessage = nil
         } catch {
             errorMessage = String(describing: error)
         }
     }
 
+    /// Runs a server action and reloads. The error is set after the reload, which would otherwise clear it.
     private func act(_ action: @escaping @MainActor () async throws -> Void) {
         Task {
+            errorMessage = nil
+            var failure: String?
             do {
                 try await action()
             } catch {
-                errorMessage = String(describing: error)
+                failure = String(describing: error)
             }
             await load()
+            if let failure { errorMessage = failure }
         }
     }
 }

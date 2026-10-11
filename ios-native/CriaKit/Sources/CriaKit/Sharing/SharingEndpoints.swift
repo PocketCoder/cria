@@ -2,6 +2,13 @@ import Foundation
 
 private func number(_ value: Int) -> JSONValue { .number(Double(value)) }
 
+/// One path segment, with `/` escaped as well (`.urlPathAllowed` keeps it).
+private func pathSegment(_ text: String) -> String {
+    var allowed = CharacterSet.urlPathAllowed
+    allowed.remove(charactersIn: "/")
+    return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
+}
+
 private func single(_ key: String, _ value: JSONValue) -> JSONBody { [key: value] }
 
 /// Project sharing and teams. Vikunja verbs: GET read, PUT create, POST update, DELETE delete.
@@ -19,12 +26,14 @@ public extension ApiClient {
         try await perform(.put, "/projects/\(projectId)/users", body: body)
     }
 
-    func updateProjectUser(projectId: Int, userId: Int, permission: SharePermission) async throws {
-        try await perform(.post, "/projects/\(projectId)/users/\(userId)", body: single("permission", number(permission.rawValue)))
+    /// The path takes the username, not the numeric id (the server reads `param:"user"`); a numeric id would 404.
+    func updateProjectUser(projectId: Int, username: String, permission: SharePermission) async throws {
+        let path = "/projects/\(projectId)/users/\(pathSegment(username))"
+        try await perform(.post, path, body: single("permission", number(permission.rawValue)))
     }
 
-    func removeProjectUser(projectId: Int, userId: Int) async throws {
-        try await perform(.delete, "/projects/\(projectId)/users/\(userId)")
+    func removeProjectUser(projectId: Int, username: String) async throws {
+        try await perform(.delete, "/projects/\(projectId)/users/\(pathSegment(username))")
     }
 
     // MARK: Teams on a project
@@ -84,8 +93,10 @@ public extension ApiClient {
         return Team(row)
     }
 
-    func renameTeam(id: Int, name: String) async throws {
-        try await perform(.post, "/teams/\(id)", body: single("name", .string(name)))
+    /// The update writes `is_public` whatever the body says, so it must be sent back or a public team goes private.
+    func renameTeam(id: Int, name: String, isPublic: Bool) async throws {
+        let body: JSONBody = ["name": .string(name), "is_public": .bool(isPublic)]
+        try await perform(.post, "/teams/\(id)", body: body)
     }
 
     func deleteTeam(id: Int) async throws {
@@ -97,8 +108,7 @@ public extension ApiClient {
     }
 
     func removeTeamMember(teamId: Int, username: String) async throws {
-        let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
-        try await perform(.delete, "/teams/\(teamId)/members/\(encoded)")
+        try await perform(.delete, "/teams/\(teamId)/members/\(pathSegment(username))")
     }
 
     /// The server flips the member's admin flag.

@@ -11,8 +11,11 @@ struct CriaApp: App {
         WindowGroup {
             RootView(model: model)
                 .task { await model.start() }
-                .onChange(of: scenePhase) { _, phase in
-                    Task { await model.setSyncActive(phase == .active) }
+                // One task per phase change, the previous one cancelled, so "inactive" can never land after "active".
+                .task(id: scenePhase) {
+                    // iOS kills a suspended app that holds a lock on a file in the shared container.
+                    if scenePhase == .background { CriaDatabase.suspend() } else { CriaDatabase.resume() }
+                    await model.setSyncActive(scenePhase == .active)
                 }
         }
     }
@@ -30,6 +33,14 @@ struct RootView: View {
                 if let identifier = activity.userInfo?[key] as? String {
                     model.pendingURL = DeepLink.taskURL(localId: identifier)
                 }
+            }
+            .alert("Could not delete local data", isPresented: Binding(
+                get: { model.wipeError != nil },
+                set: { if !$0 { model.dismissWipeError() } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.wipeError ?? "")
             }
             .preferredColorScheme(Self.scheme(preferences.colorScheme))
             .onReceive(NotificationCenter.default.publisher(for: .criaPreferencesChanged)) { _ in

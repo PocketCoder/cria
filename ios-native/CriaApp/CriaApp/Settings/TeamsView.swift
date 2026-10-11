@@ -114,8 +114,14 @@ struct TeamDetailView: View {
     }
 
     private func rename() async {
-        run { try await services.api.renameTeam(id: teamId, name: name) }
-        onChange()
+        let newName = name.trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty else { return }
+        let isPublic = team?.isPublic ?? false
+        // Tell the list only once the server has the new name, or it reloads the old one.
+        run {
+            try await services.api.renameTeam(id: teamId, name: newName, isPublic: isPublic)
+            onChange()
+        }
     }
 
     private func add() {

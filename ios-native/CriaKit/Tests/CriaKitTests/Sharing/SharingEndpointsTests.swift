@@ -67,6 +67,26 @@ final class SharingEndpointsTests: XCTestCase {
         XCTAssertEqual(transport.requests.first?.url?.absoluteString, "https://vk.example/api/v1/teams/2/members/a%20b")
     }
 
+    func testProjectUserPathsUseTheUsername() async throws {
+        let transport = reply("{}")
+        let api = client(transport)
+        try await api.updateProjectUser(projectId: 7, username: "ann b", permission: .admin)
+        try await api.removeProjectUser(projectId: 7, username: "ann b")
+        XCTAssertEqual(transport.requests.map { "\($0.httpMethod ?? "") \($0.url?.absoluteString ?? "")" }, [
+            "POST https://vk.example/api/v1/projects/7/users/ann%20b",
+            "DELETE https://vk.example/api/v1/projects/7/users/ann%20b"
+        ])
+    }
+
+    func testRenameTeamSendsIsPublicBack() async throws {
+        let transport = reply("{}")
+        try await client(transport).renameTeam(id: 2, name: "Crew", isPublic: true)
+        let sent = try XCTUnwrap(transport.requests.first?.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        XCTAssertEqual(body["is_public"] as? Bool, true)
+        XCTAssertEqual(body["name"] as? String, "Crew")
+    }
+
     func testTeamDecodesMembers() async throws {
         let json = #"{"id": 2, "name": "Crew", "description": "", "members": [{"id": 9, "username": "ann", "admin": true}, {"id": 8}]}"#
         let team = try await client(reply(json)).team(id: 2)

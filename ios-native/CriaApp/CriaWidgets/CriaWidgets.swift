@@ -27,7 +27,7 @@ struct TodayProvider: TimelineProvider {
 
     private func load() -> TodayEntry {
         let now = Date()
-        guard let database = try? CriaPaths.openDatabase(),
+        guard let database = try? CriaPaths.openDatabase(readOnly: true),
               let snapshot = try? TodaySnapshot.load(store: CriaStore(database: database), limit: Self.limit, now: now) else {
             return TodayEntry(date: now, snapshot: TodaySnapshot(entries: [], total: 0))
         }

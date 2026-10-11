@@ -55,5 +55,5 @@ final class SettingsModel {
 
 /// The `@AppStorage` key `QuickAddSheet` reads.
 enum QuickAddStorage {
-    static let key = "cria.quickAddMagicMode"
+    static let key = GeneralSettings.quickAddDefaultsKey
 }
