@@ -18,6 +18,9 @@ private let projectColours = [
     "ef4444", "f97316", "eab308", "22c55e", "06b6d4", "3b82f6", "8b5cf6", "ec4899", "78716c", "000000"
 ]
 
+/// Spoken names for the swatches, in the same order, so VoiceOver does not read out raw hex.
+private let projectColourNames = ["Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink", "Grey", "Black"]
+
 struct ProjectEditorSheet: View {
     let services: AppServices
     let target: ProjectEditorTarget
@@ -97,7 +100,8 @@ struct ProjectEditorSheet: View {
                 .overlay { if hex == nil { Image(systemName: "slash.circle").font(Theme.caption) } }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(hex ?? "No colour")
+        .accessibilityLabel(hex.flatMap { projectColours.firstIndex(of: $0) }.map { projectColourNames[$0] } ?? hex ?? "No colour")
+        .accessibilityAddTraits(colour == hex ? .isSelected : [])
     }
 
     private func load() {

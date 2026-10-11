@@ -11,6 +11,7 @@ struct ReminderSection: View {
     let task: TaskRecord
     @State private var live: LiveValue<[ReminderRecord]>
     @State private var custom = Date().addingTimeInterval(3600)
+    @State private var failure: String?
 
     init(services: AppServices, task: TaskRecord) {
         self.services = services
@@ -26,11 +27,16 @@ struct ReminderSection: View {
 
     var body: some View {
         Section("Reminders") {
-            ForEach(live.value, id: \.summary) { reminder in
+            // Position as identity: two reminders can read the same ("1 day before due date" twice).
+            ForEach(Array(live.value.enumerated()), id: \.offset) { _, reminder in
                 Label(reminder.summary, systemImage: "bell")
                     .swipeActions {
                         Button("Delete", role: .destructive) {
-                            try? services.store.removeReminder(taskLocalId: task.localId, reminder)
+                            do {
+                                try services.store.removeReminder(taskLocalId: task.localId, reminder)
+                            } catch {
+                                failure = String(describing: error)
+                            }
                         }
                     }
             }
@@ -44,9 +50,16 @@ struct ReminderSection: View {
             }
             DatePicker("Custom", selection: $custom)
             Button("Add custom reminder") { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) }
+            // The observer and the alert hang off one row, not the Section: modifiers on a Section inside a Form can
+            // be applied once per row.
             repeatRow
+                .task { await live.run() }
+                .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(failure ?? "")
+                }
         }
-        .task { await live.run() }
     }
 
     private var repeatRow: some View {
@@ -69,16 +82,18 @@ struct ReminderSection: View {
     }
 
     private func add(_ input: ReminderInput) {
-        try? services.store.addReminder(taskLocalId: task.localId, input)
+        do {
+            try services.store.addReminder(taskLocalId: task.localId, input)
+        } catch {
+            failure = String(describing: error)
+        }
     }
 }
 
 extension ReminderRecord {
     var summary: String {
         if let period = relativePeriod, let anchor = relativeTo {
-            let minutes = abs(period) / 60
-            let when = period == 0 ? "at" : "\(minutes) min \(period < 0 ? "before" : "after")"
-            return "\(when) \(anchor.replacingOccurrences(of: "_", with: " "))"
+            return ReminderText.relative(period: period, anchor: anchor)
         }
         guard let reminderAt, let date = DueDates.parse(reminderAt) else { return "Pending" }
         return date.formatted(date: .abbreviated, time: .shortened)

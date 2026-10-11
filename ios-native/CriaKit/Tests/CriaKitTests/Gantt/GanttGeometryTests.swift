@@ -18,8 +18,12 @@ final class GanttGeometryTests: XCTestCase {
 
     func testDayRangeToleratesSwappedDates() throws {
         let now = Double(100 * 86_400 + 5)
-        let forward = try XCTUnwrap(GanttGeometry.dayRange(from: "1970-04-01T00:00:00Z", to: "1970-04-11T00:00:00Z", now: now))
-        let swapped = try XCTUnwrap(GanttGeometry.dayRange(from: "1970-04-11T00:00:00Z", to: "1970-04-01T00:00:00Z", now: now))
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let early = "1970-04-01T00:00:00Z"
+        let late = "1970-04-11T00:00:00Z"
+        let forward = try XCTUnwrap(GanttGeometry.dayRange(from: early, to: late, now: now, calendar: utc))
+        let swapped = try XCTUnwrap(GanttGeometry.dayRange(from: late, to: early, now: now, calendar: utc))
         XCTAssertEqual(forward, swapped)
         XCTAssertEqual(forward.today, 100)
         XCTAssertEqual(forward.totalDays, 11)

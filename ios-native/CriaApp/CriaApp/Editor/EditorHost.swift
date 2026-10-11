@@ -9,15 +9,29 @@ struct EditorHost: View {
     let initialHTML: String
     let controller: EditorController
     @State private var showMention = false
+    @State private var mentionPicked = false
+    /// Opened by typing "@" (as opposed to the toolbar button): cancelling must leave the "@" in the text.
+    @State private var mentionFromTyping = false
     @State private var showLink = false
     @State private var linkText = ""
     @State private var photo: PhotosPickerItem?
+    @State private var showPhotoPicker = false
 
     var body: some View {
         RichTextEditor(controller: controller, initialHTML: initialHTML)
             .toolbar { ToolbarItemGroup(placement: .keyboard) { keyboardBar } }
-            .sheet(isPresented: $showMention) {
-                MentionPickerSheet(services: services) { controller.insertMention(username: $0) }
+            // Presented from here, not from the keyboard toolbar: that toolbar is torn down when the keyboard hides,
+            // which would dismiss the picker with it.
+            .photosPicker(isPresented: $showPhotoPicker, selection: $photo, matching: .images)
+            .sheet(isPresented: $showMention, onDismiss: {
+                if mentionFromTyping, !mentionPicked { controller.insertLiteral("@") }
+                mentionPicked = false
+                mentionFromTyping = false
+            }) {
+                MentionPickerSheet(services: services) {
+                    mentionPicked = true
+                    controller.insertMention(username: $0)
+                }
             }
             .alert("Add link", isPresented: $showLink) {
                 TextField("https://", text: $linkText).textInputAutocapitalization(.never).keyboardType(.URL)
@@ -47,8 +61,7 @@ struct EditorHost: View {
                 barButton("text.quote", "Quote") { controller.setBlock(.quote) }
                 barButton("chevron.left.forwardslash.chevron.right", "Code block") { controller.setBlock(.code) }
                 barButton("link", "Link") { showLink = true }
-                PhotosPicker(selection: $photo, matching: .images) { Image(systemName: "photo") }
-                    .accessibilityLabel("Image")
+                barButton("photo", "Image") { showPhotoPicker = true }
                 barButton("at", "Mention") { showMention = true }
             }
             .padding(.horizontal, 4)
@@ -67,7 +80,10 @@ struct EditorHost: View {
             guard source.hasPrefix(prefix), let data = services.pendingBlobData(String(source.dropFirst(prefix.count))) else { return nil }
             return UIImage(data: data)
         }
-        controller.onMentionTrigger = { showMention = true }
+        controller.onMentionTrigger = {
+            mentionFromTyping = true
+            showMention = true
+        }
     }
 
     private func addLink() {
@@ -93,17 +109,24 @@ struct DescriptionEditorView: View {
     let initialHTML: String
     let onSave: (String) -> Void
     @State private var controller = EditorController()
+    @State private var savedDocument: RichDocument?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         EditorHost(services: services, taskLocalId: taskLocalId, initialHTML: initialHTML, controller: controller)
             .navigationTitle("Description")
             .navigationBarTitleDisplayMode(.inline)
             .onDisappear(perform: save)
+            // An app suspended mid-edit can be killed without ever calling onDisappear.
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { save() }
+            }
     }
 
     private func save() {
         let document = controller.currentDocument()
-        guard document != RichDocument(html: initialHTML) else { return }
+        guard document != (savedDocument ?? RichDocument(html: initialHTML)) else { return }
+        savedDocument = document
         onSave(document.blocks.isEmpty ? "" : document.html())
     }
 }
@@ -117,6 +140,7 @@ struct CommentComposerSheet: View {
     let onSend: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var controller = EditorController()
+    @State private var confirmingDiscard = false
 
     var body: some View {
         NavigationStack {
@@ -124,10 +148,20 @@ struct CommentComposerSheet: View {
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: cancel) }
                     ToolbarItem(placement: .confirmationAction) { Button("Send", action: send) }
                 }
+                .confirmationDialog("Discard this comment?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                    Button("Discard", role: .destructive) { dismiss() }
+                }
         }
+        // A swipe-down would throw the draft away without asking; Cancel asks.
+        .interactiveDismissDisabled(true)
+    }
+
+    private func cancel() {
+        let changed = controller.currentDocument() != RichDocument(html: initialHTML)
+        if changed { confirmingDiscard = true } else { dismiss() }
     }
 
     private func send() {

@@ -32,26 +32,32 @@ struct AttachmentsSection: View {
                 row(attachment)
             }
             PhotosPicker("Add photo", selection: $photo, matching: .images)
-            Button("Add file", systemImage: "paperclip") { showFiles = true }
+            addFileButton
             if CameraPicker.isAvailable {
                 Button("Take photo", systemImage: "camera") { showCamera = true }
             }
             PasteButton(supportedContentTypes: [.image]) { providers in pasteImage(providers) }
             if let errorText { Text(errorText).font(Theme.caption).foregroundStyle(Color(.destructive)) }
         }
-        .task { await live.run() }
-        .onChange(of: photo) { _, item in
-            guard let item else { return }
-            Task { await attachPhoto(item) }
-        }
-        .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in
-            if case .success(let url) = result { attachFile(url) }
-        }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { data in queue(name: "camera-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg", data: data) }
-                .ignoresSafeArea()
-        }
-        .quickLookPreview($preview)
+    }
+
+    /// Everything that presents something, and the observer, hangs off this one row rather than the Section: modifiers
+    /// on a Section inside a Form can be applied once per row.
+    private var addFileButton: some View {
+        Button("Add file", systemImage: "paperclip") { showFiles = true }
+            .task { await live.run() }
+            .onChange(of: photo) { _, item in
+                guard let item else { return }
+                Task { await attachPhoto(item) }
+            }
+            .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in
+                if case .success(let url) = result { attachFile(url) }
+            }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPicker { data in queue(name: "camera-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg", data: data) }
+                    .ignoresSafeArea()
+            }
+            .quickLookPreview($preview)
     }
 
     private func row(_ attachment: AttachmentRecord) -> some View {

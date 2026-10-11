@@ -46,6 +46,12 @@ struct SearchScreen: View {
         .navigationTitle("Search")
         .searchable(text: $text, prompt: "Tasks, projects, labels")
         .task(id: text) { await runSearch() }
+        // A swipe on a result (done, delete) changes the store, so re-run the query rather than keep a stale snapshot.
+        .task {
+            for await kind in services.store.bus.subscribe() where [.tasks, .projects, .labels].contains(kind) {
+                search()
+            }
+        }
     }
 
     @ViewBuilder private var overlay: some View {
@@ -60,8 +66,10 @@ struct SearchScreen: View {
     private func runSearch() async {
         try? await Task.sleep(for: .milliseconds(200))
         if Task.isCancelled { return }
-        let store = services.store
-        let query = text
-        results = (try? store.search(query)) ?? SearchResults()
+        search()
+    }
+
+    private func search() {
+        results = (try? services.store.search(text)) ?? SearchResults()
     }
 }

@@ -21,7 +21,7 @@ struct GanttScreen: View {
     }
 
     private var dayWidth: Double { weekZoom ? GanttMetrics.weekZoomDayWidth : GanttMetrics.dayWidth }
-    private var today: Int { Int((Date().timeIntervalSince1970 / 86_400).rounded(.down)) }
+    private var today: Int { GanttTree.localDay(of: Date()) }
     private var datedNodes: [GanttNode] {
         GanttTree.visible(live.value.nodes, collapsed: [], showDateless: false)
     }
@@ -167,7 +167,15 @@ struct GanttBar: View {
             .frame(width: place.width, height: place.height)
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(dragGesture(.move))
+        // A long press first, so a scroll that starts on a bar scrolls instead of moving it and changing its dates.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.25)
+                .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+                .onChanged { value in
+                    if case .second(true, let moving?) = value { update(.move, translation: moving.translation.width) }
+                }
+                .onEnded { _ in finish() }
+        )
         .overlay(alignment: .leading) { handle(.resizeStart) }
         .overlay(alignment: .trailing) { handle(.resizeEnd) }
         .accessibilityLabel("\(node.title), \(place.label)")
@@ -177,21 +185,27 @@ struct GanttBar: View {
         Color.clear.frame(width: 16, height: place.height).contentShape(Rectangle()).gesture(dragGesture(mode))
     }
 
+    /// Global space: the bar follows the finger, so a gesture measured in the bar's own space would see its
+    /// translation shrink as the bar moves and jitter.
     private func dragGesture(_ mode: GanttDragMode) -> some Gesture {
-        DragGesture(minimumDistance: GanttMetrics.dragThreshold)
-            .onChanged { value in
-                drag = GanttDrag(
-                    taskLocalId: place.taskLocalId, mode: mode, originalStart: place.resolved.start,
-                    originalEnd: place.resolved.end, deltaDays: Int((value.translation.width / dayWidth).rounded())
-                )
-            }
-            .onEnded { _ in
-                defer { drag = nil }
-                guard let finished = drag else { return }
-                let days = GanttGeometry.apply(finished)
-                if days.start != finished.originalStart || days.end != finished.originalEnd {
-                    onCommit(days.start, days.end)
-                }
-            }
+        DragGesture(minimumDistance: GanttMetrics.dragThreshold, coordinateSpace: .global)
+            .onChanged { value in update(mode, translation: value.translation.width) }
+            .onEnded { _ in finish() }
+    }
+
+    private func update(_ mode: GanttDragMode, translation: Double) {
+        drag = GanttDrag(
+            taskLocalId: place.taskLocalId, mode: mode, originalStart: place.resolved.start,
+            originalEnd: place.resolved.end, deltaDays: Int((translation / dayWidth).rounded())
+        )
+    }
+
+    private func finish() {
+        defer { drag = nil }
+        guard let finished = drag else { return }
+        let days = GanttGeometry.apply(finished)
+        if days.start != finished.originalStart || days.end != finished.originalEnd {
+            onCommit(days.start, days.end)
+        }
     }
 }

@@ -52,6 +52,7 @@ final class EditorController {
             return false
         }
         if text == "@", range.length == 0, isMentionPosition(range.location, in: view) {
+            // The picker opens instead of typing the "@"; if it is cancelled the host types the "@" itself.
             onMentionTrigger()
             return false
         }
@@ -84,16 +85,14 @@ final class EditorController {
 
     private func handleReturn(_ range: NSRange) {
         guard let view = textView else { return }
-        var location = range.location
-        if range.length > 0 {
-            view.textStorage.replaceCharacters(in: range, with: "")
-            location = range.location
-        }
-        let current = EditorParagraphs.containing(location, in: view.textStorage)
-        let kind = current?.kind ?? kindFromTyping()
-        let depth = current?.depth ?? 0
-        let action = EditorRules.returnAction(kind: kind, depth: depth, isEmpty: current?.isEmpty ?? true)
+        let location = range.location
+        // Everything happens inside `edit`, selection delete included, so one undo brings the selected text back.
         edit {
+            if range.length > 0 { view.textStorage.replaceCharacters(in: range, with: "") }
+            let current = EditorParagraphs.containing(location, in: view.textStorage)
+            let kind = current?.kind ?? kindFromTyping()
+            let depth = current?.depth ?? 0
+            let action = EditorRules.returnAction(kind: kind, depth: depth, isEmpty: current?.isEmpty ?? true)
             switch action {
             case .continueWith(let next): split(at: location, current: (kind, depth), next: next)
             case .exitToParagraph: convert(current, to: .paragraph, depth: 0)

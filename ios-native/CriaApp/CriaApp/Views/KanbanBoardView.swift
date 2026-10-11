@@ -1,6 +1,17 @@
 import CriaKit
 import SwiftUI
 
+/// What a dragged card carries. The prefix keeps text dragged in from another app from being read as a task id.
+enum KanbanPayload {
+    private static let prefix = "cria-task:"
+
+    static func make(_ taskLocalId: String) -> String { prefix + taskLocalId }
+
+    static func taskId(from text: String) -> String? {
+        text.hasPrefix(prefix) ? String(text.dropFirst(prefix.count)) : nil
+    }
+}
+
 /// A kanban board: a horizontally paging scroll of bucket columns. Cards drag within and across columns.
 struct KanbanBoardView: View {
     let services: AppServices
@@ -10,6 +21,7 @@ struct KanbanBoardView: View {
     @State private var newBucketTitle = ""
     @State private var addingBucket = false
     @State private var limitNotice = false
+    @State private var failure: String?
 
     init(services: AppServices, view: ViewRecord) {
         self.services = services
@@ -48,6 +60,11 @@ struct KanbanBoardView: View {
         } message: {
             Text("This column has reached its limit.")
         }
+        .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failure ?? "")
+        }
         .alert("New column", isPresented: $addingBucket) {
             TextField("Title", text: $newBucketTitle)
             Button("Add") { addBucket() }
@@ -70,7 +87,11 @@ struct KanbanBoardView: View {
         guard !title.isEmpty else { return }
         let last = live.value.last?.bucket.position ?? 0
         let input = BucketInput(title: title, viewLocalId: view.localId, position: last + Position.baseStep)
-        _ = try? services.store.createBucket(input)
+        do {
+            _ = try services.store.createBucket(input)
+        } catch {
+            failure = String(describing: error)
+        }
     }
 
     private func drop(_ taskId: String, into column: KanbanColumn, before beforeId: String?) {
@@ -80,10 +101,14 @@ struct KanbanBoardView: View {
         } else {
             order.append(taskId)
         }
-        let result = try? services.store.moveCard(
-            taskLocalId: taskId, viewLocalId: view.localId, target: column, orderedIds: order
-        )
-        if result == .blockedByLimit { limitNotice = true }
+        do {
+            let result = try services.store.moveCard(
+                taskLocalId: taskId, viewLocalId: view.localId, target: column, orderedIds: order
+            )
+            if result == .blockedByLimit { limitNotice = true }
+        } catch {
+            failure = String(describing: error)
+        }
     }
 }
 
@@ -100,6 +125,7 @@ struct KanbanColumnView: View {
     let onDrop: (String, String?) -> Void
     let onEdit: () -> Void
     @State private var draft = ""
+    @State private var failure: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -108,9 +134,11 @@ struct KanbanColumnView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(column.tasks, id: \.localId) { task in
                         KanbanCardView(services: services, task: task)
-                            .draggable(task.localId)
+                            .draggable(KanbanPayload.make(task.localId))
                             .dropDestination(for: String.self) { items, _ in
-                                guard let taskId = items.first, taskId != task.localId else { return false }
+                                guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)), taskId != task.localId else {
+                                    return false
+                                }
                                 onDrop(taskId, task.localId)
                                 return true
                             }
@@ -126,9 +154,14 @@ struct KanbanColumnView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.muted), in: RoundedRectangle(cornerRadius: Theme.radius))
         .dropDestination(for: String.self) { items, _ in
-            guard let taskId = items.first else { return false }
+            guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
             onDrop(taskId, nil)
             return true
+        }
+        .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failure ?? "")
         }
     }
 
@@ -162,11 +195,20 @@ struct KanbanColumnView: View {
         let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
         guard !title.isEmpty else { return }
-        let input = TaskInput(title: title, projectLocalId: view.projectLocalId)
-        guard let task = try? services.store.createTask(input) else { return }
-        try? services.store.setTaskBucket(
-            taskLocalId: task.localId, viewLocalId: view.localId, bucketLocalId: column.bucket.localId
-        )
+        // A full column takes no more cards (the drag path enforces the same limit).
+        guard !column.atLimit else {
+            failure = "This column has reached its limit."
+            draft = title
+            return
+        }
+        do {
+            let task = try services.store.createTask(TaskInput(title: title, projectLocalId: view.projectLocalId))
+            try services.store.setTaskBucket(
+                taskLocalId: task.localId, viewLocalId: view.localId, bucketLocalId: column.bucket.localId
+            )
+        } catch {
+            failure = String(describing: error)
+        }
     }
 }
 

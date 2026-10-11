@@ -15,6 +15,7 @@ struct BrowseView: View {
     @State private var editor: ProjectEditorTarget?
     @State private var pendingDelete: ProjectRecord?
     @State private var sharing: ProjectShareTarget?
+    @State private var failure: String?
     @State private var showRamble = false
     @State private var showPhoto = false
     private var aiStatus: AIStatus { AIStatus.shared }
@@ -34,6 +35,15 @@ struct BrowseView: View {
                 )
             }
         })
+    }
+
+    /// Saved filters live on the server only, so deleting one needs the network; say so when it fails.
+    private func deleteFilter(_ filter: SavedFilterRecord) async {
+        do {
+            try await services.deleteSavedFilter(serverId: filter.serverId)
+        } catch {
+            failure = String(describing: error)
+        }
     }
 
     private var collapsed: Set<String> { ProjectTree.decodeCollapsed(collapsedJSON) }
@@ -78,6 +88,11 @@ struct BrowseView: View {
             FilterEditorSheet(services: services, existing: target.record)
         }
         .task { await aiStatus.refresh() }
+        .alert("Could not delete", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failure ?? "")
+        }
         .sheet(isPresented: $showRamble) { RambleSheet(services: services) }
         .sheet(isPresented: $showPhoto) { ShoppingPhotoSheet(services: services) }
         .sheet(item: $sharing) { target in
@@ -133,7 +148,7 @@ extension BrowseView {
                     }
                     .swipeActions(edge: .trailing) {
                         Button("Delete", role: .destructive) {
-                            Task { try? await services.deleteSavedFilter(serverId: filter.serverId) }
+                            Task { await deleteFilter(filter) }
                         }
                         Button("Edit") { filterEditor = FilterEditorTarget(record: filter) }.tint(Color(.info))
                     }

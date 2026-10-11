@@ -97,6 +97,11 @@ extension EditorController {
         insertRun(" ", extra: [:])
     }
 
+    /// Types plain text at the caret (the "@" of a cancelled mention picker).
+    func insertLiteral(_ text: String) {
+        insertRun(text, extra: [:])
+    }
+
     /// Inserts an inline image as its own paragraph after the paragraph the caret is in.
     func insertImage(_ image: RichImage) {
         guard let view = textView else { return }

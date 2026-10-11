@@ -17,6 +17,11 @@ struct TaskDetailView: View {
     let taskLocalId: String
     @State private var live: LiveValue<TaskDetailData>
     @State private var title = ""
+    /// The title as last loaded from the store. Only a difference from this is the user's edit, so a title that
+    /// changed elsewhere (another device, a pull) is never written back over.
+    @State private var loadedTitle = ""
+    @State private var percentDraft: Double?
+    @State private var saveError: String?
     @State private var didLoad = false
     @State private var showLabels = false
     @FocusState private var focus: Field?
@@ -53,7 +58,13 @@ struct TaskDetailView: View {
         .task { await live.run() }
         .onChange(of: live.value.task?.localId, initial: true) { _, _ in loadDrafts() }
         .onChange(of: focus) { _, _ in saveText() }
+        .onChange(of: live.value.task?.title) { _, newTitle in followServerTitle(newTitle) }
         .onDisappear(perform: saveText)
+        .alert("Could not save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
+        }
         .sheet(isPresented: $showLabels) {
             LabelPickerSheet(services: services, taskLocalId: taskLocalId, selected: live.value.labels, all: live.value.allLabels)
         }
@@ -69,6 +80,13 @@ struct TaskDetailView: View {
                         .focused($focus, equals: .title)
                         .submitLabel(.done)
                         .onSubmit(saveText)
+                        // A multi-line field inserts a newline on Return; treat that as "done" instead.
+                        .onChange(of: title) { _, text in
+                            guard text.contains("\n") else { return }
+                            title = text.replacingOccurrences(of: "\n", with: "")
+                            saveText()
+                            focus = nil
+                        }
                 }
                 descriptionLink(task)
             }
@@ -84,8 +102,15 @@ struct TaskDetailView: View {
             CommentsSection(services: services, taskLocalId: taskLocalId)
             Section {
                 Button("Delete task", systemImage: "trash", role: .destructive) {
-                    try? services.store.deleteTask(localId: task.localId)
-                    dismiss()
+                    // Nothing may be saved onto a task that is going away.
+                    didLoad = false
+                    do {
+                        try services.store.deleteTask(localId: task.localId)
+                        dismiss()
+                    } catch {
+                        didLoad = true
+                        saveError = String(describing: error)
+                    }
                 }
             }
         }
@@ -139,7 +164,16 @@ struct TaskDetailView: View {
             Toggle("Favourite", isOn: Binding(get: { task.isFavorite }, set: { apply(TaskPatch(isFavorite: $0)) }))
             VStack(alignment: .leading) {
                 Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
-                Slider(value: Binding(get: { task.percentDone }, set: { setPercent($0) }), in: 0...1, step: 0.1)
+                // One write when the finger lifts, not one (and one outbox op) per 0.1 step while dragging.
+                Slider(
+                    value: Binding(get: { percentDraft ?? task.percentDone }, set: { percentDraft = $0 }),
+                    in: 0...1, step: 0.1,
+                    onEditingChanged: { editing in
+                        guard !editing, let value = percentDraft else { return }
+                        percentDraft = nil
+                        setPercent(value)
+                    }
+                )
             }
         }
     }
@@ -147,19 +181,31 @@ struct TaskDetailView: View {
     private func loadDrafts() {
         guard let task = live.value.task, !didLoad else { return }
         title = task.title
+        loadedTitle = task.title
         didLoad = true
+    }
+
+    /// The store's title changed. Follow it unless the user has typed something different.
+    private func followServerTitle(_ newTitle: String?) {
+        guard didLoad, let newTitle else { return }
+        if title == loadedTitle { title = newTitle }
+        loadedTitle = newTitle
     }
 
     private func saveText() {
         guard let task = live.value.task, didLoad else { return }
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         var patch = TaskPatch()
-        if !name.isEmpty, name != task.title { patch.title = name }
+        if !name.isEmpty, name != loadedTitle, name != task.title { patch.title = name }
         if patch.title != nil { apply(patch) }
     }
 
     private func apply(_ patch: TaskPatch) {
-        _ = try? services.store.updateTask(localId: taskLocalId, patch: patch)
+        do {
+            _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
+        } catch {
+            saveError = String(describing: error)
+        }
     }
 
     private func moveTask(to projectLocalId: String) {
@@ -233,6 +279,7 @@ struct LabelPickerSheet: View {
     let all: [LabelRecord]
     @Environment(\.dismiss) private var dismiss
     @State private var newTitle = ""
+    @State private var failure: String?
 
     var body: some View {
         NavigationStack {
@@ -246,7 +293,11 @@ struct LabelPickerSheet: View {
                 Section {
                     ForEach(all, id: \.localId) { label in
                         Button {
-                            try? services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
+                            do {
+                                try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
+                            } catch {
+                                failure = String(describing: error)
+                            }
                         } label: {
                             HStack {
                                 Text(label.title).foregroundStyle(Color(.foreground))
@@ -263,6 +314,11 @@ struct LabelPickerSheet: View {
             .navigationTitle("Labels")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(failure ?? "")
+            }
         }
         .presentationDetents([.medium, .large])
     }
@@ -270,7 +326,11 @@ struct LabelPickerSheet: View {
     private func create() {
         let name = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        try? services.store.applyLabels(byTitle: [name], toTask: taskLocalId)
-        newTitle = ""
+        do {
+            try services.store.applyLabels(byTitle: [name], toTask: taskLocalId)
+            newTitle = ""
+        } catch {
+            failure = String(describing: error)
+        }
     }
 }

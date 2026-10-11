@@ -41,11 +41,12 @@ struct RelationsSection: View {
                     }
                 }
             }
+            // The observer and sheet hang off this one row, not the Section (a Section modifier in a Form can run per row).
             Button("Add relation", systemImage: "link.badge.plus") { showPicker = true }
-        }
-        .task { await live.run() }
-        .sheet(isPresented: $showPicker) {
-            RelationPickerSheet(services: services, taskLocalId: taskLocalId)
+                .task { await live.run() }
+                .sheet(isPresented: $showPicker) {
+                    RelationPickerSheet(services: services, taskLocalId: taskLocalId)
+                }
         }
     }
 }

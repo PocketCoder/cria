@@ -54,11 +54,18 @@ struct ManageViewsSheet: View {
         }
         .swipeActions {
             Button("Delete", systemImage: "trash", role: .destructive) { delete(view) }
-            Button("Rename", systemImage: "pencil") {
-                renameDraft = view.title
-                renaming = view
-            }
+            Button("Rename", systemImage: "pencil") { beginRename(view) }
         }
+        // Swipe actions are off while the list is in reorder mode, so the same two are on a long press.
+        .contextMenu {
+            Button("Rename", systemImage: "pencil") { beginRename(view) }
+            Button("Delete", systemImage: "trash", role: .destructive) { delete(view) }
+        }
+    }
+
+    private func beginRename(_ view: ViewRecord) {
+        renameDraft = view.title
+        renaming = view
     }
 
     private var addSection: some View {

@@ -10,6 +10,7 @@ struct CommentsSection: View {
     @State private var editing: CommentRecord?
     @State private var summary: String?
     @State private var summarising = false
+    @State private var failure: String?
 
     init(services: AppServices, taskLocalId: String) {
         self.services = services
@@ -27,24 +28,43 @@ struct CommentsSection: View {
             ForEach(live.value, id: \.localId) { comment in
                 row(comment)
             }
-            Button("Add a comment", systemImage: "text.bubble") { composing = true }
+            // Observers, sheets and the alert hang off this one row, not the Section: modifiers on a Section inside a
+            // Form can be applied once per row, which would start the observer and present each sheet repeatedly.
+            addButton
             summarySection
         }
-        .task { await live.run() }
-        .task { await AIStatus.shared.refresh() }
-        .sheet(isPresented: $composing) {
-            CommentComposerSheet(
-                services: services, taskLocalId: taskLocalId, title: "New comment", initialHTML: ""
-            ) { html in
-                _ = try? services.store.createComment(taskLocalId: taskLocalId, comment: html)
+    }
+
+    private var addButton: some View {
+        Button("Add a comment", systemImage: "text.bubble") { composing = true }
+            .task { await live.run() }
+            .task { await AIStatus.shared.refresh() }
+            .sheet(isPresented: $composing) {
+                CommentComposerSheet(
+                    services: services, taskLocalId: taskLocalId, title: "New comment", initialHTML: ""
+                ) { html in
+                    attempt { _ = try services.store.createComment(taskLocalId: taskLocalId, comment: html) }
+                }
             }
-        }
-        .sheet(item: $editing) { comment in
-            CommentComposerSheet(
-                services: services, taskLocalId: taskLocalId, title: "Edit comment", initialHTML: comment.comment
-            ) { html in
-                try? services.store.updateComment(localId: comment.localId, comment: html)
+            .sheet(item: $editing) { comment in
+                CommentComposerSheet(
+                    services: services, taskLocalId: taskLocalId, title: "Edit comment", initialHTML: comment.comment
+                ) { html in
+                    attempt { try services.store.updateComment(localId: comment.localId, comment: html) }
+                }
             }
+            .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(failure ?? "")
+            }
+    }
+
+    private func attempt(_ work: () throws -> Void) {
+        do {
+            try work()
+        } catch {
+            failure = String(describing: error)
         }
     }
 
@@ -82,7 +102,7 @@ struct CommentsSection: View {
         }
         .swipeActions {
             Button("Delete", role: .destructive) {
-                try? services.store.deleteComment(localId: comment.localId)
+                attempt { try services.store.deleteComment(localId: comment.localId) }
             }
             Button("Edit") { editing = comment }
         }
