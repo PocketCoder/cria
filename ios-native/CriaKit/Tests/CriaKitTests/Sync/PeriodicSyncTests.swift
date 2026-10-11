@@ -71,8 +71,9 @@ final class PeriodicSyncTests: XCTestCase {
                                 tick: { await ticks.increment() }, reconcile: { await reconciles.increment() })
         await sync.start()
         for _ in 0..<100 {
-            let both = await ticks.value > 1 && reconciles.value > 0
-            if both { break }
+            let tickNow = await ticks.value
+            let reconcileNow = await reconciles.value
+            if tickNow > 1 && reconcileNow > 0 { break }
             await settle(20)
         }
         await sync.stop()
