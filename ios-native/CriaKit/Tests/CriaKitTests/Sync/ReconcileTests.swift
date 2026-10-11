@@ -28,7 +28,8 @@ final class ReconcileTests: XCTestCase {
         try runSQL(store, "UPDATE tasks SET dirty = 1 WHERE server_id = 11")
         try runSQL(store, "UPDATE projects SET dirty = 1 WHERE server_id = 2")
         server.json("GET /tasks", "[]")
-        server.json("GET /projects", "[]")
+        // Project 1 stays on the server: deleting it would cascade to its tasks, dirty or not.
+        server.json("GET /projects", #"[{"id": 1}]"#)
         try await puller.reconcileDeletions()
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE server_id = 11"), 1)
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM projects WHERE server_id = 2"), 1)

@@ -49,6 +49,7 @@ final class PullTasksTests: XCTestCase {
     func testDeltaFilterAppliesOnlyWhenWatermarkAndTasksExist() async throws {
         let (puller, store, server) = try makePuller()
         server.json("GET /tasks", taskBody)
+        try await puller.pullAllTasks()
         let first = try XCTUnwrap(server.requests.last?.url?.query)
         XCTAssertFalse(first.contains("filter="), first)
 
