@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// Server-to-local pull. Ported from `src/sync/pull.ts`. Every write here is a silent upsert: a pull must
 /// never announce changes, or the query that owns it refetches forever (AGENTS.md).
@@ -109,15 +110,25 @@ public final class Puller: Sendable {
     private func pullTaskPages(filter: String?, stamp: Bool) async throws -> Int {
         let query = filter.map { ["filter": $0] } ?? [:]
         let raws = try await api.fetchAllPages("/tasks", query: query)
-        var count = 0
+        var decoded: [(task: TaskResponse, raw: Data)] = []
         for data in raws {
             guard let task = try? JSONDecoder().decode(TaskResponse.self, from: data) else { continue }
-            try upsertTaskWithRelations(task, raw: data)
-            count += 1
+            decoded.append((task, data))
+        }
+        // One transaction per page of tasks instead of about seven per task: far fewer commits and fsyncs on a large
+        // account. A task that fails still stops the step, as before; its page rolls back and is retried next cycle.
+        for start in stride(from: 0, to: decoded.count, by: Self.writeBatchSize) {
+            let batch = Array(decoded[start..<min(start + Self.writeBatchSize, decoded.count)])
+            try await store.database.writer.write { connection in
+                for item in batch { try self.upsertTaskWithRelations(item.task, raw: item.raw, in: connection) }
+            }
         }
         if stamp { try store.stampSync(.tasks) }
-        return count
+        return decoded.count
     }
+
+    /// Tasks written per transaction: the server's page size.
+    static let writeBatchSize = 50
 
     /// Re-reads one task with comments (after a push, or when a detail screen opens). Announces `tasks`:
     /// this is a user-triggered refresh, not part of the pull loop.
@@ -139,32 +150,35 @@ public final class Puller: Sendable {
         try? store.replaceTaskCommentsFromServer(taskLocalId: taskLocalId, comments)
     }
 
-    func upsertTaskWithRelations(_ task: TaskResponse, raw: Data, clearMissingRelations: Bool = false) throws {
-        guard let taskLocalId = try store.upsertTaskFromServer(task, rawJSON: String(bytes: raw, encoding: .utf8) ?? "") else { return }
+    func upsertTaskWithRelations(
+        _ task: TaskResponse, raw: Data, clearMissingRelations: Bool = false, in held: Database? = nil
+    ) throws {
+        let json = String(bytes: raw, encoding: .utf8) ?? ""
+        guard let taskLocalId = try store.upsertTaskFromServer(task, rawJSON: json, in: held) else { return }
         if task.labels != nil {
             let rawLabels = rawElements(raw, key: "labels")
             let items: [(payload: LabelResponse, rawJSON: String)] = rawLabels.compactMap { data in
                 guard let payload = try? JSONDecoder().decode(LabelResponse.self, from: data) else { return nil }
                 return (payload, String(bytes: data, encoding: .utf8) ?? "")
             }
-            try store.replaceTaskLabelsFromServer(taskLocalId: taskLocalId, items)
+            try store.replaceTaskLabelsFromServer(taskLocalId: taskLocalId, items, in: held)
         }
         if let assignees = task.assignees {
-            try store.replaceTaskAssigneesFromServer(taskLocalId: taskLocalId, assignees)
+            try store.replaceTaskAssigneesFromServer(taskLocalId: taskLocalId, assignees, in: held)
         }
         if let attachments = task.attachments {
-            try store.replaceTaskAttachmentsFromServer(taskLocalId: taskLocalId, attachments)
+            try store.replaceTaskAttachmentsFromServer(taskLocalId: taskLocalId, attachments, in: held)
         }
         if let reminders = task.reminders {
-            try store.replaceRemindersFromServer(taskLocalId: taskLocalId, reminders)
+            try store.replaceRemindersFromServer(taskLocalId: taskLocalId, reminders, in: held)
         }
         if let comments = task.comments {
-            try store.replaceTaskCommentsFromServer(taskLocalId: taskLocalId, comments)
+            try store.replaceTaskCommentsFromServer(taskLocalId: taskLocalId, comments, in: held)
         }
         if let related = task.relatedTasks {
             let nonEmpty = related.filter { !$0.value.isEmpty }
             if clearMissingRelations || !nonEmpty.isEmpty {
-                try store.replaceRelationsFromServer(taskLocalId: taskLocalId, nonEmpty)
+                try store.replaceRelationsFromServer(taskLocalId: taskLocalId, nonEmpty, in: held)
             }
         }
     }

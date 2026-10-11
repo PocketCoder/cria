@@ -45,8 +45,8 @@ extension CriaStore {
 
     /// Silent server merge for one label. A dirty row is left alone.
     @discardableResult
-    public func upsertLabelFromServer(_ payload: LabelResponse, rawJSON: String) throws -> String {
-        try database.writer.write { connection -> String in
+    public func upsertLabelFromServer(_ payload: LabelResponse, rawJSON: String, in held: Database? = nil) throws -> String {
+        try inWrite(held) { connection -> String in
             let now = isoNow()
             let existing = try Row.fetchOne(
                 connection, sql: "SELECT local_id, dirty FROM labels WHERE server_id = ?", arguments: [payload.id]
@@ -108,8 +108,10 @@ extension CriaStore {
     /// Silent: replaces a task's reminders with the server's. Skipped while the task has a pending local edit (a
     /// reminder added offline would be wiped, and the queued update would then send the server's list). Reminders that
     /// already fired stay marked as fired, so a pull cannot make them notify again.
-    public func replaceRemindersFromServer(taskLocalId: String, _ reminders: [TaskReminderResponse]) throws {
-        try database.writer.write { connection in
+    public func replaceRemindersFromServer(
+        taskLocalId: String, _ reminders: [TaskReminderResponse], in held: Database? = nil
+    ) throws {
+        try inWrite(held) { connection in
             let dirty = try Bool.fetchOne(connection, sql: "SELECT dirty FROM tasks WHERE local_id = ?", arguments: [taskLocalId])
             guard dirty != true else { return }
             let fired = try Row.fetchAll(connection, sql: """
@@ -132,8 +134,10 @@ extension CriaStore {
     /// Silent: replaces a task's relations with the server's. Skipped while the task has a pending edit or a queued
     /// relation change (an optimistic relation would be wiped before its op ran). Other tasks resolve to local ids
     /// when synced.
-    public func replaceRelationsFromServer(taskLocalId: String, _ related: [String: [RelatedTaskResponse]]) throws {
-        try database.writer.write { connection in
+    public func replaceRelationsFromServer(
+        taskLocalId: String, _ related: [String: [RelatedTaskResponse]], in held: Database? = nil
+    ) throws {
+        try inWrite(held) { connection in
             let dirty = try Bool.fetchOne(connection, sql: "SELECT dirty FROM tasks WHERE local_id = ?", arguments: [taskLocalId])
             let queued = try Bool.fetchOne(connection, sql: """
                 SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task_relation'

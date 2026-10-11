@@ -90,6 +90,14 @@ public final class CriaStore: Sendable {
         self.bus = bus
     }
 
+    /// Runs `body` on `existing` when a caller already holds a write transaction (the pull batches a page of tasks
+    /// into one), else in a transaction of its own. GRDB writes cannot be nested, so the sync upserts take the
+    /// connection instead of opening another.
+    func inWrite<T>(_ existing: Database?, _ body: (Database) throws -> T) throws -> T {
+        if let existing { return try body(existing) }
+        return try database.writer.write(body)
+    }
+
     /// User mutation: one serialised transaction, then announce the listed kinds.
     @discardableResult
     func userWrite<T>(announcing kinds: [ChangeKind], _ body: (Database) throws -> T) throws -> T {

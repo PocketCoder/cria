@@ -260,8 +260,8 @@ extension CriaStore {
     /// Silent server merge for one task. A row with a pending local edit is never overwritten; if the server
     /// also changed a field since the last sync, a conflict is recorded. Returns nil when the project is not synced.
     @discardableResult
-    public func upsertTaskFromServer(_ payload: TaskResponse, rawJSON: String) throws -> String? {
-        try database.writer.write { connection -> String? in
+    public func upsertTaskFromServer(_ payload: TaskResponse, rawJSON: String, in held: Database? = nil) throws -> String? {
+        try inWrite(held) { connection -> String? in
             guard let projectLocalId = try String.fetchOne(
                 connection, sql: "SELECT local_id FROM projects WHERE server_id = ?", arguments: [payload.projectId]
             ) else {

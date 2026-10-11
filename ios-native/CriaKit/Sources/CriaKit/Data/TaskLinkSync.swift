@@ -5,12 +5,14 @@ import GRDB
 /// so a pull cannot wipe a label or assignee the user just changed before the push landed.
 extension CriaStore {
     /// Replaces the task's label links with the server's. Skipped when the task has a pending local edit.
-    public func replaceTaskLabelsFromServer(taskLocalId: String, _ labels: [(payload: LabelResponse, rawJSON: String)]) throws {
+    public func replaceTaskLabelsFromServer(
+        taskLocalId: String, _ labels: [(payload: LabelResponse, rawJSON: String)], in held: Database? = nil
+    ) throws {
         var labelLocalIds: [String] = []
         for item in labels {
-            labelLocalIds.append(try upsertLabelFromServer(item.payload, rawJSON: item.rawJSON))
+            labelLocalIds.append(try upsertLabelFromServer(item.payload, rawJSON: item.rawJSON, in: held))
         }
-        try database.writer.write { connection in
+        try inWrite(held) { connection in
             guard try CriaStore.isClean(connection, taskLocalId: taskLocalId) else { return }
             var preserve = Set<String>()
             var exclude = Set<String>()
@@ -44,8 +46,10 @@ extension CriaStore {
     }
 
     /// Replaces the task's assignees with the server's. Skipped when the task has a pending local edit.
-    public func replaceTaskAssigneesFromServer(taskLocalId: String, _ assignees: [AssigneeResponse]) throws {
-        try database.writer.write { connection in
+    public func replaceTaskAssigneesFromServer(
+        taskLocalId: String, _ assignees: [AssigneeResponse], in held: Database? = nil
+    ) throws {
+        try inWrite(held) { connection in
             guard try CriaStore.isClean(connection, taskLocalId: taskLocalId) else { return }
             var preserve = Set<Int>()
             var exclude = Set<Int>()
