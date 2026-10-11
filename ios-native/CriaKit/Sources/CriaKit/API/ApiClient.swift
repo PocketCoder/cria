@@ -10,6 +10,7 @@ public final class ApiClient: Sendable {
     let core: HTTPCore
     private let session: (any SessionProviding)?
     private let fixedBase: String?
+    private let fixedToken: String?
     private let version: ApiVersion
 
     /// Session-bound client: server URL and token come from `session` on every request, so token
@@ -18,14 +19,17 @@ public final class ApiClient: Sendable {
         self.session = session
         self.core = core
         self.fixedBase = nil
+        self.fixedToken = nil
         self.version = version
     }
 
-    /// Anonymous client for a fixed server (login, `/info`).
-    public init(serverURL: String, core: HTTPCore = HTTPCore(), version: ApiVersion = .v1) {
+    /// Client for a fixed server with an optional fixed token (login, `/info`, verifying a pasted token).
+    /// No refresh logic: there is no session behind it.
+    public init(serverURL: String, token: String? = nil, core: HTTPCore = HTTPCore(), version: ApiVersion = .v1) {
         self.session = nil
         self.core = core
         self.fixedBase = normalizeBase(serverURL)
+        self.fixedToken = token
         self.version = version
     }
 
@@ -36,7 +40,7 @@ public final class ApiClient: Sendable {
         let snapshot = await session?.snapshot()
         if session != nil && snapshot == nil { throw AuthRequiredError() }
         let base = "\(fixedBase ?? normalizeBase(snapshot?.serverURL ?? ""))/api/\(version.rawValue)"
-        let token = snapshot?.token ?? ""
+        let token = snapshot?.token ?? fixedToken ?? ""
         if !token.isEmpty { try guardDestination(base) }
 
         let request = try buildRequest(method, base: base, path: path, query: query, body: body, token: token)
