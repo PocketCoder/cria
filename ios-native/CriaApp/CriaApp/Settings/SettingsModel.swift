@@ -9,6 +9,8 @@ final class SettingsModel {
     var username = ""
     var errorMessage: String?
     var backgroundCount = 0
+    /// Server base URL, for the About section.
+    var server = ""
     private(set) var loaded = false
     private let services: AppServices
 
@@ -24,6 +26,9 @@ final class SettingsModel {
             username = user["username"]?.stringValue ?? ""
             UserDefaults.standard.set(general.quickAddMagicMode, forKey: QuickAddStorage.key)
             UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
+            UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
+            server = await services.api.serverBase() ?? ""
+            NotificationCenter.default.post(name: .criaPreferencesChanged, object: nil)
             loaded = true
         } catch {
             errorMessage = String(describing: error)
@@ -51,6 +56,25 @@ final class SettingsModel {
     func setWeekStart(_ day: Int) async {
         UserDefaults.standard.set(day, forKey: GeneralSettings.weekStartDefaultsKey)
         await save(GeneralSettings.changeWeekStart(day)) { $0.weekStart = day }
+        // The weekly round-up lands on the week start day.
+        NotificationCenter.default.post(name: .criaPreferencesChanged, object: nil)
+    }
+
+    func setLanguage(_ code: String) async {
+        await save(GeneralSettings.changeLanguage(code)) { $0.language = code }
+    }
+
+    /// `TimeZone.criaServerSetting` reads the stored identifier when tasks are pushed.
+    func setTimezone(_ identifier: String) async {
+        guard GeneralSettings.changeTimezone(identifier) != nil else { return }
+        UserDefaults.standard.set(identifier, forKey: GeneralSettings.timezoneDefaultsKey)
+        await save(GeneralSettings.changeTimezone(identifier)) { $0.timezone = identifier }
+    }
+
+    /// The IANA identifiers the server accepts; the device's own list if the request fails.
+    func timezones() async -> [String] {
+        if let zones: [String] = try? await services.api.get("/user/timezones"), !zones.isEmpty { return zones }
+        return TimeZone.knownTimeZoneIdentifiers.sorted()
     }
 
     func setDefaultProject(_ serverId: Int) async {

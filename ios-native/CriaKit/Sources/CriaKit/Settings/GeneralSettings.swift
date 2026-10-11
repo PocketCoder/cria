@@ -3,9 +3,9 @@ import Foundation
 /// The general settings the Settings screen edits, read from a raw `GET /user` payload, plus the `SettingsChange`
 /// each control produces. Saved through `UserSettingsService`, which sends only the changed field.
 ///
-/// Language and timezone are left out on purpose, as in the Tauri build: they sync to the server but nothing in the
-/// client reads them, so a control would mislead. The server values round-trip untouched. Week start is here because
-/// the Upcoming week strip reads it.
+/// Week start is read by the Upcoming week strip and the weekly round-up. Timezone is read by `TimeZone.criaServerSetting`
+/// (the zone date-only values are normalised in when pushed). Language is stored and sent to the server (so
+/// Vikunja-web and emails use it) but the iOS UI is not localised, as in the Tauri build.
 public struct GeneralSettings: Equatable, Sendable {
     public var name: String
     public var emailRemindersEnabled: Bool
@@ -19,6 +19,10 @@ public struct GeneralSettings: Equatable, Sendable {
     public var defaultProjectId: Int
     public var discoverableByEmail: Bool
     public var discoverableByName: Bool
+    /// Vikunja language code, e.g. "en" or "pt_BR".
+    public var language: String
+    /// IANA identifier, e.g. "Europe/London".
+    public var timezone: String
 
     public static let defaultQuickAddMode = "vikunja"
     public static let defaultWeekStart = 1
@@ -26,6 +30,10 @@ public struct GeneralSettings: Equatable, Sendable {
     public static let weekStartDefaultsKey = "cria.weekStart"
     /// The UserDefaults key the quick add and Ramble screens read the mode from.
     public static let quickAddDefaultsKey = "cria.quickAddMagicMode"
+    /// The UserDefaults key `TimeZone.criaServerSetting` reads the timezone from.
+    public static let timezoneDefaultsKey = "cria.timezone"
+    public static let defaultLanguage = "en"
+    public static let defaultTimezone = "UTC"
 
     public init(user: JSONValue) {
         let settings = user["settings"]
@@ -38,6 +46,8 @@ public struct GeneralSettings: Equatable, Sendable {
         defaultProjectId = max(settings?["default_project_id"]?.intValue ?? 0, 0)
         discoverableByEmail = settings?["discoverable_by_email"]?.boolValue ?? false
         discoverableByName = settings?["discoverable_by_name"]?.boolValue ?? false
+        language = settings?["language"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultLanguage
+        timezone = settings?["timezone"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultTimezone
         let frontend = FrontendSettings.frontendSettings(of: settings?.objectValue)
         quickAddMagicMode = FrontendSettings.quickAddMagicMode(of: frontend) ?? Self.defaultQuickAddMode
     }
@@ -87,5 +97,25 @@ public struct GeneralSettings: Equatable, Sendable {
 
     public static func changeDiscoverableByName(_ enabled: Bool) -> SettingsChange {
         SettingsChange(settings: ["discoverable_by_name": .bool(enabled)])
+    }
+
+    /// Nil when `code` is empty.
+    public static func changeLanguage(_ code: String) -> SettingsChange? {
+        guard !code.isEmpty else { return nil }
+        return SettingsChange(settings: ["language": .string(code)])
+    }
+
+    /// Nil when `identifier` is not a timezone this device knows.
+    public static func changeTimezone(_ identifier: String) -> SettingsChange? {
+        guard TimeZone(identifier: identifier) != nil else { return nil }
+        return SettingsChange(settings: ["timezone": .string(identifier)])
+    }
+}
+
+public extension TimeZone {
+    /// The timezone chosen in Settings (kept in UserDefaults by the Settings screen), else the device's.
+    static var criaServerSetting: TimeZone {
+        let stored = UserDefaults.standard.string(forKey: GeneralSettings.timezoneDefaultsKey)
+        return stored.flatMap { TimeZone(identifier: $0) } ?? .current
     }
 }

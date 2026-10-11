@@ -226,6 +226,7 @@ struct KanbanColumnView: View {
 }
 
 struct KanbanCardView: View {
+    @Environment(\.dateDisplay) private var dateDisplay
     let services: AppServices
     let task: TaskRecord
 
@@ -243,7 +244,7 @@ struct KanbanCardView: View {
                         .multilineTextAlignment(.leading)
                     if let due = task.dueDate, !task.done {
                         CriaChip(
-                            text: DueDates.label(due, now: Date()),
+                            text: DueDates.label(due, now: Date(), display: dateDisplay),
                             systemImage: task.repeatAfter > 0 ? "repeat" : "calendar",
                             tint: DueDates.isOverdue(due, now: Date()) ? Color(.destructive) : Color(.mutedForeground)
                         )

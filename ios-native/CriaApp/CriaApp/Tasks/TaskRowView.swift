@@ -3,6 +3,7 @@ import SwiftUI
 
 /// One task row: priority ring, title, optional description, then tinted chips for due date, project and labels.
 struct TaskRowView: View {
+    @Environment(\.dateDisplay) private var dateDisplay
     let item: TaskListItem
     var showProject = false
     let onToggle: () -> Void
@@ -42,7 +43,7 @@ struct TaskRowView: View {
                 if let due {
                     let overdue = DueDates.isOverdue(due, now: Date())
                     CriaChip(
-                        text: DueDates.label(due, now: Date()),
+                        text: DueDates.label(due, now: Date(), display: dateDisplay),
                         systemImage: task.repeatAfter > 0 ? "repeat" : "calendar",
                         tint: overdue ? Color(.destructive) : Color(.mutedForeground)
                     )

@@ -25,7 +25,7 @@ public struct ReminderBody: Equatable, Sendable {
 }
 
 public func taskToBody(_ task: TaskRecord, projectServerId: Int? = nil, reminders: [ReminderBody]? = nil,
-                       timeZone: TimeZone = .current) -> JSONBody {
+                       timeZone: TimeZone = .criaServerSetting) -> JSONBody {
     var body: JSONBody = [
         "title": .string(task.title),
         "done": .bool(task.done),

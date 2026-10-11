@@ -21,6 +21,8 @@ struct CriaApp: App {
                     // iOS kills a suspended app that holds a lock on a file in the shared container.
                     if scenePhase == .background { CriaDatabase.suspend() } else { CriaDatabase.resume() }
                     await model.setSyncActive(scenePhase == .active)
+                    // Sync pulls do not notify the store, so recount the summary notifications on foreground.
+                    if scenePhase == .active { NotificationCenter.default.post(name: .criaRefreshSchedules, object: nil) }
                 }
         }
     }
@@ -48,6 +50,8 @@ struct RootView: View {
                 Text(model.wipeError ?? "")
             }
             .preferredColorScheme(Self.scheme(preferences.colorScheme))
+            .environment(\.dateDisplay, DateDisplay(dateFormat: preferences.dateFormat, timeFormat: preferences.timeFormat))
+            .environment(\.playsCompletionSound, preferences.playSoundWhenDone)
             .onReceive(NotificationCenter.default.publisher(for: .criaPreferencesChanged)) { _ in
                 preferences = PreferencesStore().load()
             }
@@ -76,6 +80,7 @@ struct RootView: View {
                     pendingURL: Binding(get: { model.pendingURL }, set: { model.pendingURL = $0 })
                 )
                 .task { await ReminderScheduler.run(store: services.store) }
+                .task { await SummaryScheduler.run(store: services.store) }
                 .task { await SyncSideEffects.run(services: services) }
             } else if let error = model.startupError {
                 Text(error).padding()

@@ -1,17 +1,14 @@
 import CriaKit
 import SwiftUI
 
-/// Settings sheet: profile, appearance, Quick Add, reminders, account and storage.
+/// Settings sheet: account card, then General, Appearance, Notifications, Photo capture and Account sections, storage,
+/// about, and sign out. The long sections live in their own files.
 struct SettingsView: View {
     let services: AppServices
     let onSignOut: (_ wipeLocalData: Bool) -> Void
     @State private var model: SettingsModel
-    @State private var name = ""
-    @State private var overdueTime = Date()
-    @State private var confirmingWipe = false
-    @State private var preferences = PreferencesStore().load()
+    @StateObject private var prefs = PreferencesModel()
     @State private var projects: [ProjectRecord] = []
-    @AppStorage("cria.taskList.showDone") private var showDone = true
     @Environment(\.dismiss) private var dismiss
 
     init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
@@ -23,16 +20,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                profileSection
-                generalSection
-                appearanceSection
-                remindersSection
-                collaborationSection
+                accountCard
+                GeneralSettingsSection(model: model, prefs: prefs, projects: projects)
+                AppearanceSettingsSection(prefs: prefs)
+                NotificationSettingsSection(services: services, model: model, prefs: prefs)
+                PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
                 accountSection
                 storageSection
+                aboutSection
                 if let message = model.errorMessage {
                     Section { Text(message).foregroundStyle(Color(.destructive)) }
                 }
+                signOutSection
             }
             .criaSurface()
             .navigationTitle("Settings")
@@ -45,151 +44,37 @@ struct SettingsView: View {
             .task {
                 projects = ProjectTree.visible((try? services.store.projects()) ?? [])
                 await model.load()
-                name = model.general.name
-                overdueTime = Self.time(model.general.overdueRemindersTime)
             }
         }
     }
 
-    private var profileSection: some View {
-        Section("Profile") {
-            HStack(spacing: 14) {
-                Text(initials)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color(.primary))
-                    .frame(width: 48, height: 48)
-                    .background(Color(.primarySoft), in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name.isEmpty ? model.username : name).font(Theme.rowTitle)
-                    Text("@\(model.username)").font(Theme.rowSubtitle).foregroundStyle(Color(.mutedForeground))
-                }
-            }
-            .frame(minHeight: 72)
-            .accessibilityElement(children: .combine)
-            TextField("Name", text: $name)
-                .onSubmit { Task { await model.save(GeneralSettings.changeName(name)) { $0.name = name } } }
-        }
+    private var displayName: String {
+        model.general.name.isEmpty ? model.username : model.general.name
     }
 
     private var initials: String {
-        let source = name.isEmpty ? model.username : name
-        let letters = source.split(separator: " ").prefix(2).compactMap(\.first)
+        let letters = displayName.split(separator: " ").prefix(2).compactMap(\.first)
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
-    private var appearanceSection: some View {
-        Section("Appearance") {
-            Picker(selection: Binding(
-                get: { preferences.colorScheme },
-                set: { choice in
-                    preferences.colorScheme = choice
-                    PreferencesStore().save(preferences)
-                    NotificationCenter.default.post(name: .criaPreferencesChanged, object: nil)
-                }
-            )) {
-                ForEach(ColorSchemePreference.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+    private var accountCard: some View {
+        Section {
+            NavigationLink {
+                AccountSettingsView(services: services)
             } label: {
-                SettingsLabel("Theme", symbol: "moon", token: .llama800)
-            }
-        }
-    }
-
-    private static let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-
-    private var generalSection: some View {
-        Section("General") {
-            Picker(selection: Binding(
-                get: { model.general.defaultProjectId },
-                set: { id in Task { await model.setDefaultProject(id) } }
-            )) {
-                Text("Inbox").tag(0)
-                ForEach(projects.filter { $0.serverId != 0 }, id: \.localId) { Text($0.title).tag($0.serverId) }
-            } label: {
-                SettingsLabel("Default project", symbol: "tray", token: .sky500)
-            }
-            Picker(selection: Binding(
-                get: { model.general.weekStart },
-                set: { day in Task { await model.setWeekStart(day) } }
-            )) {
-                ForEach(Self.weekdays.indices, id: \.self) { Text(Self.weekdays[$0]).tag($0) }
-            } label: {
-                SettingsLabel("Week starts on", symbol: "calendar", token: .coral500)
-            }
-            Picker(selection: Binding(
-                get: { model.general.quickAddMagicMode },
-                set: { mode in Task { await model.setQuickAddMode(mode) } }
-            )) {
-                Text("Vikunja (*label +project !priority)").tag("vikunja")
-                Text("Todoist (@label #project p1)").tag("todoist")
-                Text("Off").tag("disabled")
-            } label: {
-                SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
-            }
-            Toggle(isOn: $showDone) {
-                SettingsLabel("Show completed", symbol: "checkmark.circle", token: .meadow500)
-            }
-            Toggle(isOn: Binding(
-                get: { model.general.discoverableByEmail },
-                set: { value in setDiscoverableByEmail(value) }
-            )) {
-                SettingsLabel("Discoverable by email", symbol: "envelope", token: .sky700)
-            }
-            Toggle(isOn: Binding(
-                get: { model.general.discoverableByName },
-                set: { value in setDiscoverableByName(value) }
-            )) {
-                SettingsLabel("Discoverable by name", symbol: "person.text.rectangle", token: .sky700)
-            }
-        }
-    }
-
-    private var remindersSection: some View {
-        Section("Reminders") {
-            Toggle(isOn: Binding(
-                get: { model.general.emailRemindersEnabled },
-                set: { value in setEmailReminders(value) }
-            )) {
-                SettingsLabel("Email reminders", symbol: "bell", token: .coral500)
-            }
-            Toggle(isOn: Binding(
-                get: { model.general.overdueRemindersEnabled },
-                set: { value in setOverdueReminders(value) }
-            )) {
-                SettingsLabel("Overdue task digest", symbol: "sun.max", token: .marigold500)
-            }
-            if model.general.overdueRemindersEnabled {
-                DatePicker("Digest time", selection: $overdueTime, displayedComponents: .hourAndMinute)
-                    .onChange(of: overdueTime) { _, value in
-                        let text = Self.hourMinute(value)
-                        Task { await model.save(GeneralSettings.changeOverdueTime(text)) { $0.overdueRemindersTime = text } }
+                HStack(spacing: 14) {
+                    Text(initials)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color(.primary))
+                        .frame(width: 48, height: 48)
+                        .background(Color(.primarySoft), in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(displayName).font(Theme.rowTitle)
+                        Text("@\(model.username)").font(Theme.rowSubtitle).foregroundStyle(Color(.mutedForeground))
                     }
-            }
-        }
-    }
-
-    private func setDiscoverableByEmail(_ value: Bool) {
-        Task { await model.save(GeneralSettings.changeDiscoverableByEmail(value)) { $0.discoverableByEmail = value } }
-    }
-
-    private func setDiscoverableByName(_ value: Bool) {
-        Task { await model.save(GeneralSettings.changeDiscoverableByName(value)) { $0.discoverableByName = value } }
-    }
-
-    private func setEmailReminders(_ value: Bool) {
-        Task { await model.save(GeneralSettings.changeEmailReminders(value)) { $0.emailRemindersEnabled = value } }
-    }
-
-    private func setOverdueReminders(_ value: Bool) {
-        Task { await model.save(GeneralSettings.changeOverdueReminders(value)) { $0.overdueRemindersEnabled = value } }
-    }
-
-    private var collaborationSection: some View {
-        Section("Collaboration") {
-            NavigationLink { NotificationsView(services: services) } label: {
-                SettingsLabel("Notifications", symbol: "bell.badge", token: .coral500)
-            }
-            NavigationLink { TeamsView(services: services) } label: {
-                SettingsLabel("Teams", symbol: "person.2", token: .sky700)
+                }
+                .frame(minHeight: 72)
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -199,20 +84,18 @@ struct SettingsView: View {
             NavigationLink { ApiTokensView(services: services) } label: {
                 SettingsLabel("API tokens", symbol: "key", token: .fleece500)
             }
-            NavigationLink { ChangePasswordView(services: services) } label: {
-                SettingsLabel("Change password", symbol: "lock", token: .fleece500)
+            NavigationLink { TeamsView(services: services) } label: {
+                SettingsLabel("Teams", symbol: "person.2", token: .sky700)
             }
-            Button(role: .destructive) { onSignOut(false) } label: {
-                Text("Sign out").frame(maxWidth: .infinity)
+            NavigationLink { SecuritySettingsView(services: services) } label: {
+                SettingsLabel("Security", symbol: "lock.shield", token: .coral500)
             }
-            Button(role: .destructive) { confirmingWipe = true } label: {
-                Text("Sign out and delete local data").frame(maxWidth: .infinity)
+            NavigationLink { SessionsView(services: services) } label: {
+                SettingsLabel("Sessions", symbol: "iphone.and.arrow.forward", token: .llama500)
             }
-                .confirmationDialog("Delete the local database and caches?", isPresented: $confirmingWipe, titleVisibility: .visible) {
-                    Button("Sign out and delete", role: .destructive) { onSignOut(true) }
-                } message: {
-                    Text("Unsynced changes on this device are lost.")
-                }
+            NavigationLink { DataSettingsView(services: services, onSignOut: onSignOut) } label: {
+                SettingsLabel("Data", symbol: "externaldrive", token: .fleece500)
+            }
         }
     }
 
@@ -224,15 +107,30 @@ struct SettingsView: View {
         }
     }
 
-    private static func time(_ text: String) -> Date {
-        let parts = text.split(separator: ":").compactMap { Int($0) }
-        guard parts.count == 2 else { return Date() }
-        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: Date()) ?? Date()
+    private static var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        guard let build = info?["CFBundleVersion"] as? String, build != short else { return short }
+        return "\(short) (\(build))"
     }
 
-    private static func hourMinute(_ date: Date) -> String {
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    private var aboutSection: some View {
+        Section("About") {
+            LabeledContent("Version", value: Self.version)
+            if !model.server.isEmpty {
+                LabeledContent("Server", value: model.server)
+            }
+        }
+    }
+
+    private var signOutSection: some View {
+        Section {
+            Button(role: .destructive) { onSignOut(false) } label: {
+                Text("Sign out").frame(maxWidth: .infinity)
+            }
+        } footer: {
+            Text("Cria \(Self.version) ").frame(maxWidth: .infinity)
+        }
     }
 }
 

@@ -49,7 +49,8 @@ public enum DueDates {
 
     /// Compact row label: Today, Tomorrow, Yesterday, a weekday within the coming week, else "d MMM",
     /// with the time appended when one was set.
-    public static func label(_ iso: String, now: Date, calendar: Calendar = .current) -> String {
+    /// Far dates and times follow `display` (Settings > General); "Today" and the weekday names stay words.
+    public static func label(_ iso: String, now: Date, calendar: Calendar = .current, display: DateDisplay = .standard) -> String {
         guard let day = calendarDate(iso, calendar: calendar), let date = parse(iso) else { return "" }
         let today = calendar.startOfDay(for: now)
         let offset = calendar.dateComponents([.day], from: today, to: day).day ?? 0
@@ -60,12 +61,19 @@ public enum DueDates {
         case 1: text = "Tomorrow"
         case -1: text = "Yesterday"
         case 2...6: text = format(day, "EEEE", calendar: calendar, locale: locale)
-        default: text = format(day, "d MMM", calendar: calendar, locale: locale)
+        default: text = format(day, display.datePattern, calendar: calendar, locale: locale)
         }
         if hasTimeOfDay(iso) {
-            text += " " + format(date, "HH:mm", calendar: calendar, locale: locale)
+            text += " " + format(date, display.timePattern, calendar: calendar, locale: locale)
         }
         return text
+    }
+
+    /// Full date and time of an instant (reminders, timestamps): "2026-10-11 14:30", "11 Oct 2026 2:30 PM".
+    public static func fullLabel(_ date: Date, calendar: Calendar = .current, display: DateDisplay = .standard) -> String {
+        let locale = calendar.locale ?? .current
+        let day = display.dateFormat == .automatic ? "d MMM yyyy" : display.datePattern
+        return format(date, day, calendar: calendar, locale: locale) + " " + format(date, display.timePattern, calendar: calendar, locale: locale)
     }
 
     // MARK: Writing
@@ -100,5 +108,32 @@ public enum DueDates {
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = pattern
         return formatter.string(from: date)
+    }
+}
+
+/// How dates and times are written, from the Settings > General choices.
+public struct DateDisplay: Equatable, Sendable {
+    public var dateFormat: DateFormatPreference
+    public var timeFormat: TimeFormatPreference
+
+    public static let standard = DateDisplay()
+
+    public init(dateFormat: DateFormatPreference = .automatic, timeFormat: TimeFormatPreference = .h24) {
+        self.dateFormat = dateFormat
+        self.timeFormat = timeFormat
+    }
+
+    /// DateFormatter pattern for a calendar day.
+    var datePattern: String {
+        switch dateFormat {
+        case .automatic: "d MMM"
+        case .iso: "yyyy-MM-dd"
+        case .us: "MM/dd/yyyy"
+        case .european: "dd/MM/yyyy"
+        }
+    }
+
+    var timePattern: String {
+        timeFormat == .h12 ? "h:mm a" : "HH:mm"
     }
 }

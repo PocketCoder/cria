@@ -11,6 +11,7 @@ struct TableViewScreen: View {
     @AppStorage("cria.tableViewSortBy") private var sortText = ""
     @State private var pickingColumns = false
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dateDisplay) private var dateDisplay
 
     init(services: AppServices, projectLocalId: String) {
         self.services = services
@@ -144,7 +145,7 @@ struct TableViewScreen: View {
 
     private func dateText(_ iso: String?) -> String {
         guard let iso else { return "" }
-        return DueDates.label(iso, now: Date())
+        return DueDates.label(iso, now: Date(), display: dateDisplay)
     }
 
     private func cycle(_ column: TableViewColumn) {

@@ -7,28 +7,118 @@ public enum ColorSchemePreference: String, CaseIterable, Sendable {
     case dark
 }
 
+/// Date style for rows and labels. `automatic` is the compact "d MMM" the app has always used; the others match the
+/// Tauri build's numeric patterns.
+public enum DateFormatPreference: String, CaseIterable, Sendable {
+    case automatic = "auto"
+    case iso = "YYYY-MM-DD"
+    case us = "MM/DD/YYYY"
+    case european = "DD/MM/YYYY"
+}
+
+public enum TimeFormatPreference: String, CaseIterable, Sendable {
+    case h24 = "24h"
+    case h12 = "12h"
+}
+
 /// Client-side preferences that live only on this device. Replaces the Zustand `cria:settings/v2` store.
 /// Every field here has a reader in the app target (a setting nobody reads must not ship).
 public struct LocalPreferences: Equatable, Sendable {
     public var colorScheme: ColorSchemePreference
+    public var dateFormat: DateFormatPreference
+    public var timeFormat: TimeFormatPreference
+    public var playSoundWhenDone: Bool
+    /// Master switch for every notification Cria schedules on this device.
+    public var notificationsEnabled: Bool
+    public var morningSummaryEnabled: Bool
+    /// "HH:mm"
+    public var morningSummaryTime: String
+    public var weeklyRoundupEnabled: Bool
+    /// "HH:mm"
+    public var weeklyRoundupTime: String
+    /// Local id of the project photo capture files into; nil asks each time.
+    public var photoProjectId: String?
+    /// Label photo capture tags tasks with; empty means none.
+    public var photoLabel: String
 
-    public static let `default` = LocalPreferences(colorScheme: .system)
+    public static let `default` = LocalPreferences()
 
-    public init(colorScheme: ColorSchemePreference) {
+    public init(
+        colorScheme: ColorSchemePreference = .system,
+        dateFormat: DateFormatPreference = .automatic,
+        timeFormat: TimeFormatPreference = .h24,
+        playSoundWhenDone: Bool = false,
+        notificationsEnabled: Bool = true,
+        morningSummaryEnabled: Bool = true,
+        morningSummaryTime: String = "08:00",
+        weeklyRoundupEnabled: Bool = true,
+        weeklyRoundupTime: String = "09:00",
+        photoProjectId: String? = nil,
+        photoLabel: String = "shopping"
+    ) {
         self.colorScheme = colorScheme
+        self.dateFormat = dateFormat
+        self.timeFormat = timeFormat
+        self.playSoundWhenDone = playSoundWhenDone
+        self.notificationsEnabled = notificationsEnabled
+        self.morningSummaryEnabled = morningSummaryEnabled
+        self.morningSummaryTime = morningSummaryTime
+        self.weeklyRoundupEnabled = weeklyRoundupEnabled
+        self.weeklyRoundupTime = weeklyRoundupTime
+        self.photoProjectId = photoProjectId
+        self.photoLabel = photoLabel
     }
 
     /// Reads values leniently: a missing or unknown value falls back to the default for that field only.
     init(values: JSONBody) {
-        let raw = values["colorScheme"].flatMap { value -> String? in
-            if case .string(let text) = value { return text }
+        let base = Self.default
+        func text(_ key: String) -> String? {
+            if case .string(let value)? = values[key] { return value }
             return nil
         }
-        colorScheme = raw.flatMap(ColorSchemePreference.init(rawValue:)) ?? Self.default.colorScheme
+        func flag(_ key: String, _ fallback: Bool) -> Bool {
+            if case .bool(let value)? = values[key] { return value }
+            return fallback
+        }
+        func clock(_ key: String, _ fallback: String) -> String {
+            text(key).flatMap { Self.isClockTime($0) ? $0 : nil } ?? fallback
+        }
+        colorScheme = text("colorScheme").flatMap(ColorSchemePreference.init(rawValue:)) ?? base.colorScheme
+        dateFormat = text("dateFormat").flatMap(DateFormatPreference.init(rawValue:)) ?? base.dateFormat
+        timeFormat = text("timeFormat").flatMap(TimeFormatPreference.init(rawValue:)) ?? base.timeFormat
+        playSoundWhenDone = flag("playSoundWhenDone", base.playSoundWhenDone)
+        notificationsEnabled = flag("notificationsEnabled", base.notificationsEnabled)
+        morningSummaryEnabled = flag("morningSummaryEnabled", base.morningSummaryEnabled)
+        morningSummaryTime = clock("morningSummaryTime", base.morningSummaryTime)
+        weeklyRoundupEnabled = flag("weeklyRoundupEnabled", base.weeklyRoundupEnabled)
+        weeklyRoundupTime = clock("weeklyRoundupTime", base.weeklyRoundupTime)
+        photoProjectId = text("photoProjectId").flatMap { $0.isEmpty ? nil : $0 }
+        photoLabel = text("photoLabel") ?? base.photoLabel
     }
 
     var values: JSONBody {
-        ["colorScheme": .string(colorScheme.rawValue)]
+        var body: JSONBody = [
+            "colorScheme": .string(colorScheme.rawValue),
+            "dateFormat": .string(dateFormat.rawValue),
+            "timeFormat": .string(timeFormat.rawValue),
+            "playSoundWhenDone": .bool(playSoundWhenDone),
+            "notificationsEnabled": .bool(notificationsEnabled),
+            "morningSummaryEnabled": .bool(morningSummaryEnabled),
+            "morningSummaryTime": .string(morningSummaryTime),
+            "weeklyRoundupEnabled": .bool(weeklyRoundupEnabled),
+            "weeklyRoundupTime": .string(weeklyRoundupTime),
+            "photoLabel": .string(photoLabel)
+        ]
+        if let photoProjectId { body["photoProjectId"] = .string(photoProjectId) }
+        return body
+    }
+
+    /// "HH:mm" with a valid hour and minute.
+    static func isClockTime(_ text: String) -> Bool {
+        let parts = text.split(separator: ":")
+        guard parts.count == 2, parts[0].count == 2, parts[1].count == 2,
+              let hour = Int(parts[0]), let minute = Int(parts[1]) else { return false }
+        return (0..<24).contains(hour) && (0..<60).contains(minute)
     }
 }
 

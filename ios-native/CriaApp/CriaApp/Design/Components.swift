@@ -32,12 +32,14 @@ struct PriorityCheck: View {
     let action: () -> Void
     @State private var burst = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.playsCompletionSound) private var playsSound
 
     private var color: Color { ThemeToken.priority(priority).map { Color($0) } ?? Color(.mutedForeground) }
 
     var body: some View {
         Button {
             if !isDone && !reduceMotion { burst += 1 }
+            if !isDone && playsSound { CompletionSound.play() }
             action()
         } label: {
             ZStack {

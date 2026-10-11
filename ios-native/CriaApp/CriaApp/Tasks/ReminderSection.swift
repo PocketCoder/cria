@@ -7,6 +7,7 @@ private let presets: [(title: String, period: Int)] = [
 
 /// Reminders and recurrence for a task. Reminders ride the task update, so each change is queued like any edit.
 struct ReminderSection: View {
+    @Environment(\.dateDisplay) private var dateDisplay
     let services: AppServices
     let task: TaskRecord
     @State private var live: LiveValue<[ReminderRecord]>
@@ -29,7 +30,7 @@ struct ReminderSection: View {
         Section("Reminders") {
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
             ForEach(Array(live.value.enumerated()), id: \.offset) { _, reminder in
-                Label { Text(reminder.summary) } icon: { Image(systemName: "bell").foregroundStyle(Color(.coral500)) }
+                Label { Text(reminder.summary(display: dateDisplay)) } icon: { Image(systemName: "bell").foregroundStyle(Color(.coral500)) }
                     .swipeActions {
                         Button("Delete", role: .destructive) {
                             do {
@@ -103,12 +104,12 @@ struct RepeatRow: View {
 }
 
 extension ReminderRecord {
-    var summary: String {
+    func summary(display: DateDisplay) -> String {
         if let period = relativePeriod, let anchor = relativeTo {
             return ReminderText.relative(period: period, anchor: anchor)
         }
         guard let reminderAt, let date = DueDates.parse(reminderAt) else { return "Pending" }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return DueDates.fullLabel(date, display: display)
     }
 }
 

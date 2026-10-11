@@ -70,3 +70,40 @@ final class DueDateWritingTests: XCTestCase {
         XCTAssertEqual(DueDates.allDayISO(for: picked, calendar: calendar), "2026-05-27T00:00:00Z")
     }
 }
+
+final class DueDatesDisplayTests: XCTestCase {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        calendar.locale = Locale(identifier: "en_GB")
+        return calendar
+    }
+
+    private let now = DueDates.parse("2026-05-27T10:00:00Z") ?? Date()
+
+    func testFarDatesFollowTheDateFormat() {
+        let iso = "2026-07-04T00:00:00Z"
+        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar), "4 Jul")
+        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .iso)), "2026-07-04")
+        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .us)), "07/04/2026")
+        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(dateFormat: .european)), "04/07/2026")
+    }
+
+    func testWordsStayWordsWhateverTheFormat() {
+        let display = DateDisplay(dateFormat: .iso, timeFormat: .h12)
+        XCTAssertEqual(DueDates.label("2026-05-27T00:00:00Z", now: now, calendar: calendar, display: display), "Today")
+    }
+
+    func testTimeFollowsTheTimeFormat() {
+        let iso = "2026-05-27T14:30:00Z"
+        XCTAssertEqual(DueDates.label(iso, now: now, calendar: calendar), "Today 14:30")
+        let twelve = DueDates.label(iso, now: now, calendar: calendar, display: DateDisplay(timeFormat: .h12))
+        XCTAssertTrue(twelve.hasPrefix("Today 2:30"), twelve)
+    }
+
+    func testFullLabel() throws {
+        let date = try XCTUnwrap(DueDates.parse("2026-07-04T14:30:00Z"))
+        XCTAssertEqual(DueDates.fullLabel(date, calendar: calendar), "4 Jul 2026 14:30")
+        XCTAssertEqual(DueDates.fullLabel(date, calendar: calendar, display: DateDisplay(dateFormat: .iso)), "2026-07-04 14:30")
+    }
+}

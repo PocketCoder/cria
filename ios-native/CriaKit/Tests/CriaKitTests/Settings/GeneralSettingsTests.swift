@@ -86,3 +86,38 @@ final class GeneralSettingsTests: XCTestCase {
         XCTAssertEqual(GeneralSettings.changeDiscoverableByEmail(false).settings, ["discoverable_by_email": .bool(false)])
     }
 }
+
+final class GeneralSettingsLanguageTests: XCTestCase {
+    func testReadsLanguageAndTimezone() throws {
+        let value = try decodeFixture(JSONValue.self, #"{"id": 1, "settings": {"language": "de", "timezone": "Europe/Berlin"}}"#)
+        let general = GeneralSettings(user: value)
+        XCTAssertEqual(general.language, "de")
+        XCTAssertEqual(general.timezone, "Europe/Berlin")
+    }
+
+    func testLanguageAndTimezoneDefaults() throws {
+        let general = GeneralSettings(user: try decodeFixture(JSONValue.self, #"{"id": 1}"#))
+        XCTAssertEqual(general.language, "en")
+        XCTAssertEqual(general.timezone, "UTC")
+    }
+
+    func testChangesNameOnlyTheirField() throws {
+        XCTAssertEqual(GeneralSettings.changeLanguage("fr")?.settings, ["language": .string("fr")])
+        XCTAssertEqual(GeneralSettings.changeTimezone("Europe/London")?.settings, ["timezone": .string("Europe/London")])
+    }
+
+    func testInvalidChangesAreRejected() {
+        XCTAssertNil(GeneralSettings.changeLanguage(""))
+        XCTAssertNil(GeneralSettings.changeTimezone("Not/AZone"))
+    }
+
+    func testServerTimezoneSettingFallsBackToDevice() {
+        let key = GeneralSettings.timezoneDefaultsKey
+        let saved = UserDefaults.standard.string(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        UserDefaults.standard.set("Asia/Tokyo", forKey: key)
+        XCTAssertEqual(TimeZone.criaServerSetting.identifier, "Asia/Tokyo")
+        UserDefaults.standard.set("Nope/Nope", forKey: key)
+        XCTAssertEqual(TimeZone.criaServerSetting, TimeZone.current)
+    }
+}

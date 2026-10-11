@@ -59,8 +59,10 @@ struct ShoppingPhotoSheet: View {
             }
             .task {
                 projects = ProjectTree.visible((try? services.store.projects()) ?? [])
-                let remembered = try? services.store.captureProjectId()
-                projectId = remembered ?? projects.first?.localId ?? ""
+                // Settings > Photo capture: a chosen project is preselected, blank asks each time.
+                let defaults = PreferencesStore().load()
+                if let chosen = defaults.photoProjectId, projects.contains(where: { $0.localId == chosen }) { projectId = chosen }
+                label = defaults.photoLabel
             }
         }
         .presentationDetents([.large])
@@ -138,6 +140,7 @@ struct ShoppingPhotoSheet: View {
             .background(Color(.cell), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             VStack(spacing: 0) {
                 Picker("Project", selection: $projectId) {
+                    Text("Choose a project").tag("")
                     ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
                 }
                 .padding(.horizontal, 14).frame(minHeight: 48)
