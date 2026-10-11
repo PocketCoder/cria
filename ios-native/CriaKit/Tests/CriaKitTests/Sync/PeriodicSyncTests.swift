@@ -1,7 +1,7 @@
 import XCTest
 @testable import CriaKit
 
-private actor Counter {
+private actor TickCounter {
     private(set) var value = 0
     func increment() { value += 1 }
 }
@@ -12,7 +12,7 @@ final class PeriodicSyncTests: XCTestCase {
     }
 
     func testTicksImmediatelyThenOnEveryInterval() async {
-        let counter = Counter()
+        let counter = TickCounter()
         let sync = PeriodicSync(interval: 0.05, reconcileInterval: 100, tick: { await counter.increment() })
         await sync.start()
         await settle(30)
@@ -25,7 +25,7 @@ final class PeriodicSyncTests: XCTestCase {
     }
 
     func testScenePhaseInactivePausesAndActiveResumesWithAnImmediatePull() async {
-        let counter = Counter()
+        let counter = TickCounter()
         let sync = PeriodicSync(interval: 0.05, reconcileInterval: 100, tick: { await counter.increment() })
         await sync.start()
         await settle(120)
@@ -49,7 +49,7 @@ final class PeriodicSyncTests: XCTestCase {
     }
 
     func testStartWhileInactiveWaitsForActive() async {
-        let counter = Counter()
+        let counter = TickCounter()
         let sync = PeriodicSync(interval: 0.05, reconcileInterval: 100, tick: { await counter.increment() })
         await sync.setActive(false)
         await sync.start()
@@ -64,8 +64,8 @@ final class PeriodicSyncTests: XCTestCase {
     }
 
     func testStopEndsBothLoops() async {
-        let ticks = Counter()
-        let reconciles = Counter()
+        let ticks = TickCounter()
+        let reconciles = TickCounter()
         let sync = PeriodicSync(interval: 0.03, reconcileInterval: 0.03,
                                 tick: { await ticks.increment() }, reconcile: { await reconciles.increment() })
         await sync.start()
@@ -83,7 +83,7 @@ final class PeriodicSyncTests: XCTestCase {
     }
 
     func testSetActiveBeforeStartDoesNotStartTheLoop() async {
-        let counter = Counter()
+        let counter = TickCounter()
         let sync = PeriodicSync(interval: 0.05, tick: { await counter.increment() })
         await sync.setActive(false)
         await sync.setActive(true)

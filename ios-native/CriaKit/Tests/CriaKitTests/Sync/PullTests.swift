@@ -29,7 +29,7 @@ final class PullTests: XCTestCase {
             """)
         let count = try await puller.pullProjects()
         XCTAssertEqual(count, 2)
-        let ids = try store.database.writer.read { try Int.fetchAll($0, sql: "SELECT server_id FROM projects ORDER BY server_id") }
+        let ids = try fetchInts(store, "SELECT server_id FROM projects ORDER BY server_id")
         XCTAssertEqual(ids, [-5, 3])
     }
 
@@ -39,11 +39,9 @@ final class PullTests: XCTestCase {
             [{"id": 2, "title": "Child", "parent_project_id": 1}, {"id": 1, "title": "Parent"}]
             """)
         try await puller.pullProjects()
-        let parent = try store.database.writer.read { connection in
-            try String.fetchOne(connection, sql: """
-                SELECT p2.title FROM projects p JOIN projects p2 ON p2.local_id = p.parent_local_id WHERE p.title = 'Child'
-                """)
-        }
+        let parent = try fetchStrings(store, """
+            SELECT p2.title FROM projects p JOIN projects p2 ON p2.local_id = p.parent_local_id WHERE p.title = 'Child'
+            """).first
         XCTAssertEqual(parent, "Parent")
     }
 

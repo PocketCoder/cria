@@ -95,9 +95,7 @@ final class AttachmentUploadTests2: XCTestCase {
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM task_attachments WHERE pending = 0 AND server_id = 7"), 1)
         XCTAssertFalse(blobs.has("att1"))
         XCTAssertEqual(try store.outboxRows().filter { $0.entityType == "task_attachment" }.count, 0)
-        let description = try store.database.writer.read {
-            try String.fetchOne($0, sql: "SELECT description FROM tasks WHERE local_id = 'task1'")
-        }
+        let description = try fetchStrings(store, "SELECT description FROM tasks WHERE local_id = 'task1'").first
         XCTAssertTrue(description?.contains("/api/v1/tasks/42/attachments/7") == true)
         XCTAssertFalse(description?.contains("cria://pending") == true)
     }

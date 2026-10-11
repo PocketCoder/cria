@@ -67,3 +67,16 @@ func assertNoBusEvents(_ store: CriaStore, file: StaticString = #filePath, line:
     let first = await iterator.next()
     XCTAssertEqual(first, .savedFilters, "sync wrote a bus event", file: file, line: line)
 }
+
+/// Synchronous wrappers: inside an async test, GRDB's `read` and `write` resolve to their async overloads.
+func enqueueRaw(_ store: CriaStore, _ entity: OutboxEntity, localId: String, op: OutboxOp, payload: [String: Any] = [:]) throws {
+    try store.database.writer.write { try $0.enqueue(entity, localId: localId, operation: op, payload: payload, at: isoNow()) }
+}
+
+func fetchStrings(_ store: CriaStore, _ sql: String) throws -> [String] {
+    try store.database.writer.read { try String.fetchAll($0, sql: sql) }
+}
+
+func fetchInts(_ store: CriaStore, _ sql: String) throws -> [Int] {
+    try store.database.writer.read { try Int.fetchAll($0, sql: sql) }
+}

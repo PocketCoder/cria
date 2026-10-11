@@ -127,9 +127,7 @@ final class OutboxDrainerTests: XCTestCase {
 
     func testUnknownEntityTypeIsDeadLetteredNotDropped() async throws {
         let store = try makeStore()
-        try store.database.writer.write {
-            try $0.enqueue(.view, localId: "v", operation: .create, payload: [:], at: isoNow())
-        }
+        try enqueueRaw(store, .view, localId: "v", op: .create)
         await makeDrainer(store, ScriptedExecutor()).drain()
         XCTAssertEqual(try store.deadLetters().count, 1)
     }

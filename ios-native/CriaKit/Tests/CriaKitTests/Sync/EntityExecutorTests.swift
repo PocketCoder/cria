@@ -33,9 +33,7 @@ final class EntityExecutorTests: XCTestCase {
         try seedSyncedTask(store, serverId: 1, projectServerId: 4)
         let server = StubServer()
         server.json("DELETE /projects/4", "{}", status: 404)
-        try store.database.writer.write {
-            try $0.enqueue(.project, localId: local, operation: .delete, payload: [:], at: isoNow())
-        }
+        try enqueueRaw(store, .project, localId: local, op: .delete)
         await drain(store, server)
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM projects"), 0)
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks"), 0)
@@ -48,9 +46,7 @@ final class EntityExecutorTests: XCTestCase {
             INSERT INTO labels (local_id, title, hex_color, updated_at, dirty, deleted)
             VALUES (?, 'Home', '#00ff00', '2026-01-01T00:00:00Z', 1, 0)
             """, [local])
-        try store.database.writer.write {
-            try $0.enqueue(.label, localId: local, operation: .create, payload: [:], at: isoNow())
-        }
+        try enqueueRaw(store, .label, localId: local, op: .create)
         let server = StubServer()
         server.json("PUT /labels", #"{"id": 12, "title": "Home", "updated": "2026-06-11T10:00:00Z"}"#)
         await drain(store, server)
@@ -62,9 +58,7 @@ final class EntityExecutorTests: XCTestCase {
         let store = try makeStore()
         let project = try seedProject(store)
         let view = try XCTUnwrap(try store.createDefaultViews(projectLocalId: project).first)
-        try store.database.writer.write {
-            try $0.enqueue(.view, localId: view.localId, operation: .update, payload: [:], at: isoNow())
-        }
+        try enqueueRaw(store, .view, localId: view.localId, op: .update)
         let server = StubServer()
         await drain(store, server)
         XCTAssertEqual(try store.deadLetters().count, 1)
