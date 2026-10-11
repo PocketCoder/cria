@@ -59,12 +59,12 @@ final class ViewManagementTests: XCTestCase {
     }
 
     func testReorderMidpoints() {
-        let down = ViewManagement.planReorder(server, activeId: "list", overId: "table")
-        XCTAssertEqual(down?.orderedIds, ["gantt", "table", "list", "kanban"])
-        XCTAssertEqual(down?.plan, .midpoint(350))
-        let up = ViewManagement.planReorder(server, activeId: "kanban", overId: "gantt")
-        XCTAssertEqual(up?.orderedIds, ["list", "kanban", "gantt", "table"])
-        XCTAssertEqual(up?.plan, .midpoint(150))
+        let downward = ViewManagement.planReorder(server, activeId: "list", overId: "table")
+        XCTAssertEqual(downward?.orderedIds, ["gantt", "table", "list", "kanban"])
+        XCTAssertEqual(downward?.plan, .midpoint(350))
+        let upward = ViewManagement.planReorder(server, activeId: "kanban", overId: "gantt")
+        XCTAssertEqual(upward?.orderedIds, ["list", "kanban", "gantt", "table"])
+        XCTAssertEqual(upward?.plan, .midpoint(150))
         XCTAssertEqual(ViewManagement.planReorder(server, activeId: "table", overId: "list")?.plan, .midpoint(50))
         XCTAssertEqual(ViewManagement.planReorder(server, activeId: "list", overId: "kanban")?.plan, .midpoint(1424))
     }

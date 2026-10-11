@@ -17,7 +17,7 @@ struct KanbanBoardView: View {
         let store = services.store
         let viewId = view.localId
         _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.tasks, .projects]) { reading in
+            observeStore(store, kinds: [.tasks, .views, .projects]) { reading in
                 try reading.kanbanColumns(viewLocalId: viewId)
             }
         })

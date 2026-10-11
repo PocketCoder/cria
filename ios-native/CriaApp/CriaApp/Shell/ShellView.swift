@@ -70,7 +70,7 @@ struct RouteDestination: View {
         switch route {
         case .project(let localId):
             let title = (try? services.store.project(localId: localId))?.title ?? "Project"
-            TaskListView(services: services, source: .project(localId), title: title)
+            ProjectScreen(services: services, projectLocalId: localId, title: title)
         case .favorites:
             TaskListView(services: services, source: .favorites, title: "Favourites")
         case .label(let localId):

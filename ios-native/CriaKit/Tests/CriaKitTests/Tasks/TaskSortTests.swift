@@ -90,3 +90,24 @@ final class TaskSortTests: XCTestCase {
         XCTAssertEqual(sorted.compactMap(\.serverId), [4, 3, 2, 1])
     }
 }
+
+final class TableConfigCodecTests: XCTestCase {
+    func testColumnsRoundTripInRenderOrder() {
+        let text = TableConfigCodec.encodeColumns([.dueDate, .title])
+        XCTAssertEqual(text, "title,dueDate")
+        XCTAssertEqual(TableConfigCodec.decodeColumns(text), [.title, .dueDate])
+    }
+
+    func testEmptyColumnsFallBackToDefaultsAndUnknownNamesDrop() {
+        XCTAssertEqual(TableConfigCodec.decodeColumns(""), TableColumn.defaultVisible)
+        XCTAssertEqual(TableConfigCodec.decodeColumns("title,bogus"), [.title])
+    }
+
+    func testSortRoundTripAndDefault() {
+        let keys = [TableSortKey(column: .title, direction: .asc), TableSortKey(column: .dueDate, direction: .desc)]
+        XCTAssertEqual(TableConfigCodec.decodeSort(TableConfigCodec.encodeSort(keys)), keys)
+        XCTAssertEqual(TableConfigCodec.decodeSort(""), TableSort.defaultKeys)
+        XCTAssertEqual(TableConfigCodec.decodeSort(TableConfigCodec.encodeSort([])), [])
+        XCTAssertEqual(TableConfigCodec.decodeSort("title:up"), [])
+    }
+}

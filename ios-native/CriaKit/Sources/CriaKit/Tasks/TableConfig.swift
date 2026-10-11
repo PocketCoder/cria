@@ -108,3 +108,32 @@ public enum TableSort {
         }
     }
 }
+
+/// Text forms of the table config, for `UserDefaults`. Unknown names are dropped so an old value never breaks a launch.
+public enum TableConfigCodec {
+    public static func encodeColumns(_ columns: Set<TableColumn>) -> String {
+        TableColumn.allCases.filter { columns.contains($0) }.map(\.rawValue).joined(separator: ",")
+    }
+
+    public static func decodeColumns(_ text: String) -> Set<TableColumn> {
+        guard !text.isEmpty else { return TableColumn.defaultVisible }
+        return Set(text.split(separator: ",").compactMap { TableColumn(rawValue: String($0)) })
+    }
+
+    public static func encodeSort(_ keys: [TableSortKey]) -> String {
+        if keys.isEmpty { return "none" }
+        return keys.map { "\($0.column.rawValue):\($0.direction.rawValue)" }.joined(separator: ",")
+    }
+
+    /// An empty string means the default sort; "none" means the user cleared it.
+    public static func decodeSort(_ text: String) -> [TableSortKey] {
+        if text.isEmpty { return TableSort.defaultKeys }
+        if text == "none" { return [] }
+        return text.split(separator: ",").compactMap { part in
+            let pieces = part.split(separator: ":")
+            guard pieces.count == 2, let column = TableColumn(rawValue: String(pieces[0])),
+                  let direction = SortDirection(rawValue: String(pieces[1])) else { return nil }
+            return TableSortKey(column: column, direction: direction)
+        }
+    }
+}
