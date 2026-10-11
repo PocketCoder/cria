@@ -34,7 +34,7 @@ struct ShellView: View {
     }
 }
 
-/// Root screen of each tab. Search arrives in S-48.
+/// Root screen of each tab. 
 struct TabRoot: View {
     let tab: AppTab
     let services: AppServices
@@ -56,7 +56,7 @@ struct TabRoot: View {
         case .upcoming:
             SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
         case .search:
-            ContentUnavailableView("Search", systemImage: "hammer", description: Text("Coming in S-48."))
+            SearchScreen(services: services)
         }
     }
 }

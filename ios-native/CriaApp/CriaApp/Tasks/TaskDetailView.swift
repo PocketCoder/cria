@@ -75,34 +75,8 @@ struct TaskDetailView: View {
                     .lineLimit(3...12)
                     .focused($focus, equals: .notes)
             }
-            Section("Dates") {
-                DateFieldRow(title: "Due", iso: task.dueDate) { value in
-                    apply(TaskPatch(dueDate: value))
-                }
-                DateFieldRow(title: "Start", iso: task.startDate) { value in
-                    var patch = TaskPatch()
-                    patch.startDate = value
-                    apply(patch)
-                }
-                DateFieldRow(title: "End", iso: task.endDate) { value in
-                    var patch = TaskPatch()
-                    patch.endDate = value
-                    apply(patch)
-                }
-            }
-            Section("Details") {
-                Picker("Priority", selection: Binding(get: { task.priority }, set: { apply(TaskPatch(priority: $0)) })) {
-                    ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
-                }
-                Picker("Project", selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
-                    ForEach(live.value.projects, id: \.localId) { Text($0.title).tag($0.localId) }
-                }
-                Toggle("Favourite", isOn: Binding(get: { task.isFavorite }, set: { apply(TaskPatch(isFavorite: $0)) }))
-                VStack(alignment: .leading) {
-                    Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
-                    Slider(value: Binding(get: { task.percentDone }, set: { setPercent($0) }), in: 0...1, step: 0.1)
-                }
-            }
+            datesSection(task)
+            detailsSection(task)
             Section("Labels") {
                 FlowLabels(labels: live.value.labels)
                 Button("Edit labels", systemImage: "tag") { showLabels = true }
@@ -112,6 +86,40 @@ struct TaskDetailView: View {
                     try? services.store.deleteTask(localId: task.localId)
                     dismiss()
                 }
+            }
+        }
+    }
+
+    private func datesSection(_ task: TaskRecord) -> some View {
+        Section("Dates") {
+            DateFieldRow(title: "Due", iso: task.dueDate) { value in
+                apply(TaskPatch(dueDate: value))
+            }
+            DateFieldRow(title: "Start", iso: task.startDate) { value in
+                var patch = TaskPatch()
+                patch.startDate = value
+                apply(patch)
+            }
+            DateFieldRow(title: "End", iso: task.endDate) { value in
+                var patch = TaskPatch()
+                patch.endDate = value
+                apply(patch)
+            }
+        }
+    }
+
+    private func detailsSection(_ task: TaskRecord) -> some View {
+        Section("Details") {
+            Picker("Priority", selection: Binding(get: { task.priority }, set: { apply(TaskPatch(priority: $0)) })) {
+                ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
+            }
+            Picker("Project", selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
+                ForEach(live.value.projects, id: \.localId) { Text($0.title).tag($0.localId) }
+            }
+            Toggle("Favourite", isOn: Binding(get: { task.isFavorite }, set: { apply(TaskPatch(isFavorite: $0)) }))
+            VStack(alignment: .leading) {
+                Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
+                Slider(value: Binding(get: { task.percentDone }, set: { setPercent($0) }), in: 0...1, step: 0.1)
             }
         }
     }

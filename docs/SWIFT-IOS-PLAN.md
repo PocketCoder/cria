@@ -390,7 +390,7 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 | 1 Data | S-10 to S-19 | done (CI green on cdc59cb) |
 | 2 API and auth | S-20 to S-23 | done (CI green on 78e49de; KeychainSlot has no unit test: the SPM test host lacks Keychain entitlements; exercise it in the simulator. Sign-in does not yet cache a user row: Data layer has no user table. Link-share login is out of scope for this phase) |
 | 3 Sync | S-30 to S-39 | done (CI test-and-build green on 0c39417; the app does not yet start the coordinator: S-40 wires it; no network-reachability trigger, a tick plus the outbox bus cover reconnects) |
-| 4 Core screens | S-40 to S-48 | in progress (S-40 to S-47 done; next S-48) |
+| 4 Core screens | S-40 to S-48 | done (CI result pending on this commit; the SwiftUI app target compiles only in CI, UI code is unverified locally) |
 | 5 Rich content | S-50 to S-56 | not started |
 | 6 Views | S-60 to S-64 | not started |
 | 7 Settings | S-70 to S-75 | not started |

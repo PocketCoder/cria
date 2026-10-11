@@ -1,0 +1,2 @@
+- function_body_length: default warning at 50 lines, and `--strict` fails on warnings. Split long SwiftUI `body` and `form` builders into computed properties or helper views.
+- file_length: default warning at 400 lines. Split big test files by test class.

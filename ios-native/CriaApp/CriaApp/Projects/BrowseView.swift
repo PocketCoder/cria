@@ -50,25 +50,7 @@ struct BrowseView: View {
                 }
             }
             filtersSection
-            Section("Projects") {
-                ForEach(ProjectTree.rows(live.value.projects, collapsed: collapsed), id: \.project.localId) { row in
-                    ProjectRowView(
-                        row: row,
-                        openCount: live.value.openCounts[row.project.localId] ?? 0,
-                        onToggle: { toggle(row.project.localId) }
-                    )
-                    .swipeActions(edge: .trailing) {
-                        Button("Delete", role: .destructive) { pendingDelete = row.project }
-                        Button("Edit") { editor = .edit(row.project) }.tint(Color(.info))
-                    }
-                    .swipeActions(edge: .leading) {
-                        Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
-                            try? services.store.setProjectFavorite(localId: row.project.localId, isFavorite: !row.project.isFavorite)
-                        }
-                        .tint(Color(.warning))
-                    }
-                }
-            }
+            projectsSection
         }
         .navigationTitle("Browse")
         .refreshable { await services.refresh() }
@@ -103,6 +85,28 @@ struct BrowseView: View {
 }
 
 extension BrowseView {
+    @ViewBuilder var projectsSection: some View {
+        Section("Projects") {
+            ForEach(ProjectTree.rows(live.value.projects, collapsed: collapsed), id: \.project.localId) { row in
+                ProjectRowView(
+                    row: row,
+                    openCount: live.value.openCounts[row.project.localId] ?? 0,
+                    onToggle: { toggle(row.project.localId) }
+                )
+                .swipeActions(edge: .trailing) {
+                    Button("Delete", role: .destructive) { pendingDelete = row.project }
+                    Button("Edit") { editor = .edit(row.project) }.tint(Color(.info))
+                }
+                .swipeActions(edge: .leading) {
+                    Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
+                        try? services.store.setProjectFavorite(localId: row.project.localId, isFavorite: !row.project.isFavorite)
+                    }
+                    .tint(Color(.warning))
+                }
+            }
+        }
+    }
+
     @ViewBuilder var filtersSection: some View {
         if !live.value.savedFilters.isEmpty {
             Section("Filters") {
