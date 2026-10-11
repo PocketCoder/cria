@@ -3,3 +3,4 @@
 - identifier_name also applies to parameter labels and stored properties: 'at' (2 characters) failed. Use triggerAt, not at.
 - Not lint, but breaks the app build: passing a method reference as a Binding setter (Binding(get:set: method)) crashed swift-frontend in IRGen (ReminderSection). Use explicit closures and enum-backed pickers. xcodebuild logs hide diagnostics; look for 'Stack dump' in the full log zip.
 - Race fixed once: never check state then act across two actor calls (freshToken did snapshot then refreshSession). Use one actor method that does both.
+- identifier_name also flags a 2-letter internal parameter name even when its label is fine (func f(from: String, to: String)). Write 'to toISO: String' style so the internal name has 3 or more characters.
