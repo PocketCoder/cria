@@ -4,6 +4,8 @@ import UIKit
 enum EditorMetrics {
     static let indent: CGFloat = 24
     static let imageMaxWidth: CGFloat = 280
+    /// How far each enclosing blockquote shifts the text.
+    static let quoteIndent: CGFloat = 16
 }
 
 /// Turns the semantic attributes from `RichDocumentText` into fonts, colours and paragraph styles. This is the UIKit
@@ -21,12 +23,14 @@ enum EditorStyling {
     }
 
     /// Attributes for text typed into a paragraph of this kind with these inline styles.
-    static func typingAttributes(kind: BlockKind, depth: Int, styles: Set<InlineStyle>) -> [NSAttributedString.Key: Any] {
-        var attributes = RichDocumentText.blockAttributes(kind: kind, depth: depth)
+    static func typingAttributes(
+        kind: BlockKind, depth: Int, styles: Set<InlineStyle>, context: BlockContext = .none
+    ) -> [NSAttributedString.Key: Any] {
+        var attributes = RichDocumentText.blockAttributes(kind: kind, depth: depth, context: context)
         if !styles.isEmpty { attributes[.criaStyles] = styles.map(\.rawValue).sorted().joined(separator: ",") }
         attributes[.font] = font(kind: kind, styles: styles)
         attributes[.foregroundColor] = color(for: kind)
-        attributes[.paragraphStyle] = paragraphStyle(kind: kind, depth: depth)
+        attributes[.paragraphStyle] = paragraphStyle(kind: kind, depth: depth, context: context)
         return attributes
     }
 
@@ -51,7 +55,8 @@ enum EditorStyling {
     private static func style(_ paragraph: EditorParagraph, in storage: NSMutableAttributedString, images: ImageProvider) {
         let range = paragraph.range
         storage.removeAttribute(.backgroundColor, range: range)
-        storage.addAttribute(.paragraphStyle, value: paragraphStyle(kind: paragraph.kind, depth: paragraph.depth), range: range)
+        let layout = paragraphStyle(kind: paragraph.kind, depth: paragraph.depth, context: paragraph.context)
+        storage.addAttribute(.paragraphStyle, value: layout, range: range)
         storage.addAttribute(.foregroundColor, value: color(for: paragraph.kind), range: range)
         if paragraph.kind == .code { storage.addAttribute(.backgroundColor, value: UIColor.secondarySystemFill, range: range) }
         var runs: [(NSRange, [NSAttributedString.Key: Any])] = []
@@ -100,16 +105,19 @@ enum EditorStyling {
         kind == .quote ? .secondaryLabel : .label
     }
 
-    private static func paragraphStyle(kind: BlockKind, depth: Int) -> NSParagraphStyle {
+    private static func paragraphStyle(kind: BlockKind, depth: Int, context: BlockContext) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 6
-        let indent: CGFloat
+        var indent: CGFloat
         switch kind {
         case .bullet, .ordered, .task: indent = EditorMetrics.indent * CGFloat(depth + 1)
-        case .quote: indent = 16
         case .code: indent = 8
         default: indent = 0
         }
+        // More content of a list item lines up with the item's text.
+        if context.joinsItem, !kind.isListItem { indent += EditorMetrics.indent * CGFloat(depth + 1) }
+        let quotes = EditorParagraph(range: NSRange(), kind: kind, depth: depth, context: context, isEmpty: true).quoteLevels
+        indent += EditorMetrics.quoteIndent * CGFloat(quotes)
         style.firstLineHeadIndent = indent
         style.headIndent = indent
         if kind == .rule { style.minimumLineHeight = 24 }

@@ -6,8 +6,16 @@ struct EditorParagraph: Equatable {
     let range: NSRange
     let kind: BlockKind
     let depth: Int
+    /// The quotes around it, and whether it is more content of the list item above.
+    var context = BlockContext.none
     /// No characters besides the terminator.
     let isEmpty: Bool
+
+    /// Blockquotes around the paragraph, counting a quote inside a list item.
+    var quoteLevels: Int {
+        let block = Block(kind: kind, depth: depth, context: context)
+        return block.effectiveQuoteLevel + (kind == .quote && context.joinsItem ? 1 : 0)
+    }
 }
 
 /// Splits the editor text into paragraphs using the attributes `RichDocumentText` writes.
@@ -48,6 +56,6 @@ enum EditorParagraphs {
         let string = text.string as NSString
         let endsWithNewline = range.length > 0 && string.character(at: range.location + range.length - 1) == 10
         let contentLength = range.length - (endsWithNewline ? 1 : 0)
-        return EditorParagraph(range: range, kind: info.kind, depth: info.depth, isEmpty: contentLength == 0)
+        return EditorParagraph(range: range, kind: info.kind, depth: info.depth, context: info.context, isEmpty: contentLength == 0)
     }
 }

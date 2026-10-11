@@ -12,7 +12,8 @@ private enum ParserFrame {
 }
 
 /// Builds a `RichDocument` from Vikunja HTML. Forgiving: unknown tags are transparent, whitespace between blocks is
-/// dropped, headings deeper than 3 become 3, and extra paragraphs inside one list item become plain paragraphs.
+/// dropped and headings deeper than 3 become 3. The structure HTML nests is kept in each block's `BlockContext`: the
+/// blockquotes around it, and whether it is more content of the list item above (a second paragraph, a code block).
 struct RichDocumentParser {
     private var blocks: [Block] = []
     private var runs: [InlineRun] = []
@@ -62,33 +63,64 @@ struct RichDocumentParser {
 
     // MARK: Blocks
 
+    private static func isList(_ frame: ParserFrame) -> Bool {
+        if case .list = frame { return true }
+        return false
+    }
+
+    private static func isItem(_ frame: ParserFrame) -> Bool {
+        if case .item = frame { return true }
+        return false
+    }
+
+    private static func isQuote(_ frame: ParserFrame) -> Bool {
+        if case .quote = frame { return true }
+        return false
+    }
+
     private var listDepth: Int {
-        frames.filter { if case .list = $0 { true } else { false } }.count
-    }
-
-    private mutating func takeItemKind() -> BlockKind? {
-        guard case .item(var state)? = frames.last, !state.used else { return nil }
-        state.used = true
-        frames[frames.count - 1] = .item(state)
-        return state.kind
-    }
-
-    private var inQuote: Bool {
-        frames.contains { if case .quote = $0 { true } else { false } }
+        frames.filter(Self.isList).count
     }
 
     private mutating func emitBlock() {
-        let kind: BlockKind
-        if let level = headingLevel {
-            kind = .heading(level)
-        } else if let item = takeItemKind() {
-            kind = item
-        } else {
-            kind = inQuote ? .quote : .paragraph
-        }
-        let depth = kind.isListItem ? max(listDepth - 1, 0) : 0
-        blocks.append(Block(kind: kind, depth: depth, runs: runs))
+        append(headingLevel.map(BlockKind.heading) ?? .paragraph, runs: runs)
         runs = []
+    }
+
+    /// Adds a block of this natural kind, working out where it sits: the quotes around it, and, inside a list item,
+    /// whether it is the item's own text (the first paragraph) or more content of the item.
+    private mutating func append(_ natural: BlockKind, runs content: [InlineRun]) {
+        var block = Block(kind: natural, runs: content)
+        let firstList = frames.firstIndex(where: Self.isList)
+        let outer = frames.enumerated().filter { Self.isQuote($0.element) && $0.offset < (firstList ?? frames.count) }.count
+        guard let container = frames.lastIndex(where: { Self.isList($0) || Self.isItem($0) }),
+              case .item(var state) = frames[container] else {
+            // Not inside a list item: a paragraph in a quote is a quote block, anything else keeps its kind.
+            if natural == .paragraph, outer > 0 {
+                block.kind = .quote
+                block.context.quoteLevel = outer > 1 ? outer : 0
+            } else {
+                block.context.quoteLevel = outer
+            }
+            blocks.append(block)
+            return
+        }
+        let depth = max(listDepth - 1, 0)
+        let insideItemQuote = frames[container...].contains(where: Self.isQuote)
+        if !state.used, natural == .paragraph {
+            block = Block(kind: state.kind, depth: depth, runs: content, context: BlockContext(quoteLevel: outer))
+        } else {
+            if !state.used {
+                // Content before any paragraph (an image, a heading): the item still needs a block of its own first.
+                blocks.append(Block(kind: state.kind, depth: depth, context: BlockContext(quoteLevel: outer)))
+            }
+            block.depth = depth
+            if natural == .paragraph, insideItemQuote { block.kind = .quote }
+            block.context = BlockContext(quoteLevel: outer, joinsItem: true)
+        }
+        state.used = true
+        frames[container] = .item(state)
+        blocks.append(block)
     }
 
     private mutating func flushPending() {
@@ -122,10 +154,10 @@ struct RichDocumentParser {
             inCodeBlock = true
         case "hr":
             flushPending()
-            blocks.append(Block(kind: .rule))
+            append(.rule, runs: [])
         case "img":
             flushPending()
-            blocks.append(Block(kind: .image(image(attributes))))
+            append(.image(image(attributes)), runs: [])
         default:
             return false
         }
@@ -163,12 +195,13 @@ struct RichDocumentParser {
     }
 
     private mutating func finishItem() {
-        if case .item(let state)? = frames.last, !state.used { emitBlock() }
+        // An item with no paragraph still becomes a block, and text left after its last paragraph is more content.
+        if case .item(let state)? = frames.last, !state.used || !runs.isEmpty { emitBlock() }
         _ = frames.popLast()
     }
 
     private mutating func finishCodeBlock() {
-        blocks.append(Block(kind: .code, runs: runs))
+        append(.code, runs: runs)
         runs = []
         inCodeBlock = false
     }

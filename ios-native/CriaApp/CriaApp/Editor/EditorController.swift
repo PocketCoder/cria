@@ -71,7 +71,9 @@ final class EditorController {
         guard let view = textView, view.selectedRange.length == 0 else { return }
         guard let paragraph = EditorParagraphs.containing(view.selectedRange.location, in: view.textStorage) else { return }
         if paragraph.isEmpty {
-            view.typingAttributes = EditorStyling.typingAttributes(kind: paragraph.kind, depth: paragraph.depth, styles: [])
+            view.typingAttributes = EditorStyling.typingAttributes(
+                kind: paragraph.kind, depth: paragraph.depth, styles: [], context: paragraph.context
+            )
         }
     }
 
@@ -92,12 +94,18 @@ final class EditorController {
             let current = EditorParagraphs.containing(location, in: view.textStorage)
             let kind = current?.kind ?? kindFromTyping()
             let depth = current?.depth ?? 0
+            let context = current?.context ?? .none
+            // Return on an empty paragraph that is more content of a list item steps out of the item.
+            if let current, context.joinsItem, current.isEmpty, !kind.isListItem {
+                leaveItem(current)
+                return
+            }
             let action = EditorRules.returnAction(kind: kind, depth: depth, isEmpty: current?.isEmpty ?? true)
             switch action {
-            case .continueWith(let next): split(at: location, current: (kind, depth), next: next)
+            case .continueWith(let next): split(at: location, current: (kind, depth), context: context, next: next)
             case .exitToParagraph: convert(current, to: .paragraph, depth: 0)
             case .outdent: convert(current, to: kind, depth: EditorRules.outdented(depth: depth))
-            case .lineBreak: insert(RichDocumentText.lineSeparator, at: location, kind: kind, depth: depth)
+            case .lineBreak: insert(RichDocumentText.lineSeparator, at: location, kind: kind, depth: depth, context: context)
             }
         }
     }
@@ -124,11 +132,11 @@ final class EditorController {
 
     // MARK: Text surgery
 
-    private func split(at location: Int, current: (BlockKind, Int), next: BlockKind) {
+    private func split(at location: Int, current: (BlockKind, Int), context: BlockContext, next: BlockKind) {
         guard let view = textView else { return }
         let storage = view.textStorage
         let terminator = NSAttributedString(
-            string: "\n", attributes: RichDocumentText.blockAttributes(kind: current.0, depth: current.1)
+            string: "\n", attributes: RichDocumentText.blockAttributes(kind: current.0, depth: current.1, context: context)
         )
         storage.replaceCharacters(in: NSRange(location: location, length: 0), with: terminator)
         let depth = EditorRules.depth(afterChangingTo: next, from: current.1)
@@ -137,12 +145,13 @@ final class EditorController {
         }
         EditorStyling.restyle(storage, around: NSRange(location: location, length: 2), images: imageProvider)
         view.selectedRange = NSRange(location: location + 1, length: 0)
-        view.typingAttributes = EditorStyling.typingAttributes(kind: next, depth: depth, styles: [])
+        let nextContext = next.isListItem ? BlockContext(quoteLevel: context.quoteLevel) : context
+        view.typingAttributes = EditorStyling.typingAttributes(kind: next, depth: depth, styles: [], context: nextContext)
     }
 
-    func insert(_ text: String, at location: Int, kind: BlockKind, depth: Int) {
+    func insert(_ text: String, at location: Int, kind: BlockKind, depth: Int, context: BlockContext = .none) {
         guard let view = textView else { return }
-        let attributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [])
+        let attributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [], context: context)
         let inserted = NSAttributedString(string: text, attributes: attributes)
         view.textStorage.replaceCharacters(in: NSRange(location: location, length: 0), with: inserted)
         view.selectedRange = NSRange(location: location + (text as NSString).length, length: 0)
@@ -156,14 +165,44 @@ final class EditorController {
         }
         apply(kind: kind, depth: depth, to: paragraph.range)
         EditorStyling.restyle(view.textStorage, around: paragraph.range, images: imageProvider)
-        view.typingAttributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [])
+        let after = RichDocumentText.blockInfo(from: view.textStorage.attributes(at: paragraph.range.location, effectiveRange: nil))
+        view.typingAttributes = EditorStyling.typingAttributes(kind: kind, depth: after.depth, styles: [], context: after.context)
     }
 
+    /// Sets a paragraph's kind and depth. Its quotes stay; a block that joined a list item keeps its place (and the
+    /// item's depth) unless it becomes a list item itself, which has no item above to join.
     func apply(kind: BlockKind, depth: Int, to range: NSRange) {
-        guard let storage = textView?.textStorage else { return }
+        guard let storage = textView?.textStorage, storage.length > 0 else { return }
+        let position = min(range.location, storage.length - 1)
+        let existing = RichDocumentText.blockInfo(from: storage.attributes(at: position, effectiveRange: nil))
+        var context = existing.context
+        var newDepth = depth
+        if context.joinsItem {
+            if kind.isListItem { context.joinsItem = false } else { newDepth = existing.depth }
+        }
         storage.removeAttribute(.criaDepth, range: range)
         storage.removeAttribute(.criaImage, range: range)
-        storage.addAttributes(RichDocumentText.blockAttributes(kind: kind, depth: depth), range: range)
+        storage.addAttributes(RichDocumentText.blockAttributes(kind: kind, depth: newDepth, context: context), range: range)
+        if context.isNone { storage.removeAttribute(.criaContext, range: range) }
+    }
+
+    /// Sets or clears the quote and list-item context of a paragraph.
+    func setContext(_ context: BlockContext, on range: NSRange) {
+        guard let storage = textView?.textStorage else { return }
+        if context.isNone {
+            storage.removeAttribute(.criaContext, range: range)
+        } else {
+            storage.addAttribute(.criaContext, value: context.encoded, range: range)
+        }
+    }
+
+    /// An empty continuation paragraph becomes an ordinary paragraph after the list.
+    private func leaveItem(_ paragraph: EditorParagraph) {
+        guard let view = textView else { return }
+        let context = BlockContext(quoteLevel: paragraph.context.quoteLevel)
+        setContext(context, on: paragraph.range)
+        EditorStyling.restyle(view.textStorage, around: paragraph.range, images: imageProvider)
+        view.typingAttributes = EditorStyling.typingAttributes(kind: paragraph.kind, depth: 0, styles: [], context: context)
     }
 
     private func toggleTask(_ paragraph: EditorParagraph) {

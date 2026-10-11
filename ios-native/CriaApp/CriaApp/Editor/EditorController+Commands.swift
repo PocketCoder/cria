@@ -37,7 +37,7 @@ extension EditorController {
         let info = RichDocumentText.blockInfo(from: view.typingAttributes)
         var styles = EditorStyling.styleSet(view.typingAttributes[.criaStyles])
         if styles.contains(style) { styles.remove(style) } else { styles.insert(style) }
-        view.typingAttributes = EditorStyling.typingAttributes(kind: info.kind, depth: info.depth, styles: styles)
+        view.typingAttributes = EditorStyling.typingAttributes(kind: info.kind, depth: info.depth, styles: styles, context: info.context)
     }
 
     /// Applies a block kind to the selected paragraphs; choosing the active kind again turns them back into paragraphs.
@@ -52,12 +52,15 @@ extension EditorController {
             let info = RichDocumentText.blockInfo(from: view.typingAttributes)
             let kind = EditorRules.toggled(info.kind, to: target)
             let depth = EditorRules.depth(afterChangingTo: kind, from: 0)
-            view.typingAttributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [])
+            view.typingAttributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [], context: info.context)
             return
         }
         let kind = EditorRules.toggled(first.kind, to: target)
+        // Turning the quote button off also takes the paragraph out of any quote it was only in by context.
+        let leavingQuote = target == .quote && kind == .paragraph
         edit {
             for paragraph in paragraphs {
+                if leavingQuote { setContext(BlockContext(joinsItem: paragraph.context.joinsItem), on: paragraph.range) }
                 convert(paragraph, to: kind, depth: EditorRules.depth(afterChangingTo: kind, from: paragraph.depth))
             }
         }

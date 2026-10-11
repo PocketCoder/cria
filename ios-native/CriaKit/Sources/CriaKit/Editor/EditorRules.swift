@@ -70,7 +70,8 @@ public enum EditorRules {
         var result: [Int?] = []
         for block in blocks {
             guard block.kind.isListItem else {
-                counters = Array(repeating: 0, count: maxListDepth + 1)
+                // More content of an item (a second paragraph, a code block) does not interrupt the numbering.
+                if !block.context.joinsItem { counters = Array(repeating: 0, count: maxListDepth + 1) }
                 result.append(nil)
                 continue
             }

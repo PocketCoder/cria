@@ -3,8 +3,10 @@ import Foundation
 public extension NSAttributedString.Key {
     /// Block kind code of the paragraph a character belongs to (see `BlockKind.code`).
     static let criaBlock = NSAttributedString.Key("cria.block")
-    /// List nesting depth (Int), set on list item paragraphs.
+    /// List nesting depth (Int), set on list item paragraphs and the blocks that join an item.
     static let criaDepth = NSAttributedString.Key("cria.depth")
+    /// Quote and list-item context (`BlockContext.encoded`), set only when there is any.
+    static let criaContext = NSAttributedString.Key("cria.context")
     /// Comma-joined `InlineStyle` raw values.
     static let criaStyles = NSAttributedString.Key("cria.styles")
     /// Link target (String). The app maps it to the system link style, which lives in UIKit.
@@ -48,10 +50,11 @@ extension BlockKind {
     }
 }
 
-/// The block kind and depth of one paragraph.
+/// The block kind, depth and context of one paragraph.
 public struct BlockInfo: Equatable, Sendable {
     public let kind: BlockKind
     public let depth: Int
+    public var context = BlockContext.none
 }
 
 /// Maps a `RichDocument` to and from attributed text for the editor's text view. Only semantic attributes are set here
@@ -88,7 +91,7 @@ public enum RichDocumentText {
     // MARK: Document to text
 
     private static func paragraph(_ block: Block) -> NSAttributedString {
-        let attributes = blockAttributes(kind: block.kind, depth: block.depth)
+        let attributes = blockAttributes(kind: block.kind, depth: block.depth, context: block.context)
         let result = NSMutableAttributedString()
         switch block.kind {
         case .rule, .image:
@@ -105,9 +108,12 @@ public enum RichDocumentText {
     }
 
     /// The block-level attributes for a paragraph of this kind. The terminator and every character carry them.
-    public static func blockAttributes(kind: BlockKind, depth: Int) -> [NSAttributedString.Key: Any] {
+    public static func blockAttributes(
+        kind: BlockKind, depth: Int, context: BlockContext = .none
+    ) -> [NSAttributedString.Key: Any] {
         var attributes: [NSAttributedString.Key: Any] = [.criaBlock: kind.code]
-        if kind.isListItem { attributes[.criaDepth] = depth }
+        if kind.isListItem || context.joinsItem { attributes[.criaDepth] = depth }
+        if !context.isNone { attributes[.criaContext] = context.encoded }
         if case .image(let image) = kind,
            let data = try? JSONEncoder().encode(image), let json = String(bytes: data, encoding: .utf8) {
             attributes[.criaImage] = json
@@ -129,9 +135,12 @@ public enum RichDocumentText {
         let info = blockInfo(from: text.attributes(at: first, effectiveRange: nil))
         switch info.kind {
         case .rule, .image:
-            return Block(kind: info.kind)
+            return Block(kind: info.kind, depth: info.depth, context: info.context)
         default:
-            return Block(kind: info.kind, depth: info.depth, runs: runs(in: text, range: content, plain: info.kind == .code))
+            return Block(
+                kind: info.kind, depth: info.depth, runs: runs(in: text, range: content, plain: info.kind == .code),
+                context: info.context
+            )
         }
     }
 
@@ -142,7 +151,9 @@ public enum RichDocumentText {
             image = try? JSONDecoder().decode(RichImage.self, from: Data(json.utf8))
         }
         let kind = BlockKind(code: attributes[.criaBlock] as? String ?? "p", image: image)
-        return BlockInfo(kind: kind, depth: kind.isListItem ? (attributes[.criaDepth] as? Int ?? 0) : 0)
+        let context = BlockContext(encoded: attributes[.criaContext] as? String)
+        let depth = kind.isListItem || context.joinsItem ? (attributes[.criaDepth] as? Int ?? 0) : 0
+        return BlockInfo(kind: kind, depth: depth, context: context)
     }
 
     private static func runs(in text: NSAttributedString, range: NSRange, plain: Bool) -> [InlineRun] {

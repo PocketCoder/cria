@@ -58,6 +58,7 @@ final class EditorTextView: UITextView {
     func checkboxRect(of paragraph: EditorParagraph) -> CGRect {
         let line = firstLineRect(of: paragraph)
         let originX = textContainerInset.left + EditorMetrics.indent * CGFloat(paragraph.depth)
+            + EditorMetrics.quoteIndent * CGFloat(paragraph.quoteLevels)
         return CGRect(x: originX, y: line.minY, width: EditorMetrics.indent, height: max(line.height, EditorMetrics.indent))
     }
 
@@ -99,7 +100,7 @@ final class MarkerOverlay: UIView {
     override func draw(_ rect: CGRect) {
         guard let host else { return }
         let paragraphs = EditorParagraphs.all(in: host.textStorage)
-        let numbers = EditorRules.listNumbers(for: paragraphs.map { Block(kind: $0.kind, depth: $0.depth) })
+        let numbers = EditorRules.listNumbers(for: paragraphs.map { Block(kind: $0.kind, depth: $0.depth, context: $0.context) })
         for (index, paragraph) in paragraphs.enumerated() {
             let line = host.firstLineRect(of: paragraph)
             guard line.maxY >= rect.minY, line.minY <= rect.maxY else { continue }
@@ -109,6 +110,8 @@ final class MarkerOverlay: UIView {
 
     private func drawMarker(_ paragraph: EditorParagraph, number: Int?, host: EditorTextView, line: CGRect) {
         let originX = host.textContainerInset.left + EditorMetrics.indent * CGFloat(paragraph.depth)
+            + EditorMetrics.quoteIndent * CGFloat(paragraph.quoteLevels)
+        drawQuoteBars(paragraph, host: host)
         switch paragraph.kind {
         case .bullet:
             let glyphs = ["\u{2022}", "\u{25E6}", "\u{25AA}"]
@@ -119,10 +122,6 @@ final class MarkerOverlay: UIView {
             let name = checked ? "checkmark.square.fill" : "square"
             let image = UIImage(systemName: name)?.withTintColor(host.tintColor, renderingMode: .alwaysOriginal)
             image?.draw(in: CGRect(x: originX + 2, y: line.minY + 2, width: 20, height: 20))
-        case .quote:
-            let box = host.fullRect(of: paragraph)
-            UIColor.separator.setFill()
-            UIBezierPath(rect: CGRect(x: host.textContainerInset.left + 2, y: box.minY, width: 3, height: box.height)).fill()
         case .rule:
             UIColor.separator.setStroke()
             let path = UIBezierPath()
@@ -131,6 +130,18 @@ final class MarkerOverlay: UIView {
             path.stroke()
         default:
             break
+        }
+    }
+
+    /// One bar per enclosing blockquote, so a list or code block inside a quote is marked as quoted too.
+    private func drawQuoteBars(_ paragraph: EditorParagraph, host: EditorTextView) {
+        let levels = paragraph.quoteLevels
+        guard levels > 0 else { return }
+        let box = host.fullRect(of: paragraph)
+        UIColor.separator.setFill()
+        for level in 0..<levels {
+            let originX = host.textContainerInset.left + 2 + EditorMetrics.quoteIndent * CGFloat(level)
+            UIBezierPath(rect: CGRect(x: originX, y: box.minY, width: 3, height: box.height)).fill()
         }
     }
 
