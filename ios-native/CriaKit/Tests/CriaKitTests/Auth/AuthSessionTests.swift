@@ -1,9 +1,9 @@
-// swiftlint:disable large_tuple
 import XCTest
 @testable import CriaKit
 
 private let rotatedCookie = "vikunja_refresh_token=ref2; Path=/; HttpOnly"
 
+// swiftlint:disable:next large_tuple
 private func refreshReply(token: String = "new", cookie: String? = rotatedCookie) -> (Int, String, [String: String]) {
     (200, #"{"token": "\#(token)"}"#, cookie.map { ["Set-Cookie": $0] } ?? [:])
 }

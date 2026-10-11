@@ -1,9 +1,9 @@
-// swiftlint:disable large_tuple
 import XCTest
 @testable import CriaKit
 
 /// Exercises the real `URLSessionTransport` through a `URLProtocol` stub.
 class StubURLProtocol: URLProtocol, @unchecked Sendable {
+    // swiftlint:disable:next large_tuple
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> (Int, Data, [String: String]))?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
