@@ -6,6 +6,8 @@ import SwiftUI
 struct QuickAddSheet: View {
     let services: AppServices
     let contextProjectId: String?
+    /// Text to start with, e.g. from a `cria://add?title=` link.
+    var initialLine = ""
     @Environment(\.dismiss) private var dismiss
     @AppStorage("cria.quickAddMagicMode") private var modeRaw = QuickAddMagicMode.default.rawValue
     @State private var line = ""
@@ -101,6 +103,7 @@ struct QuickAddSheet: View {
     private func load() {
         projects = ProjectTree.visible((try? services.store.projects()) ?? [])
         projectId = baseProjectId
+        if line.isEmpty { line = initialLine }
         focused = true
     }
 

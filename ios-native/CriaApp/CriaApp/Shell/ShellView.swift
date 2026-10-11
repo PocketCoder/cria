@@ -1,12 +1,20 @@
 import CriaKit
 import SwiftUI
 
+/// A quick-add request from a `cria://add` link. Identifiable so a sheet can bind to it.
+struct QuickAddRequest: Identifiable {
+    let id = UUID()
+    let title: String
+}
+
 /// Signed-in shell: four tabs, each with its own navigation stack. On iOS 26 the system draws the glass tab
 /// bar for a plain `TabView`; older versions get the standard bar.
 struct ShellView: View {
     let services: AppServices
     let onSignOut: (_ wipeLocalData: Bool) -> Void
+    @Binding var pendingURL: URL?
     @State private var navigation = NavigationModel()
+    @State private var addRequest: QuickAddRequest?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +28,27 @@ struct ShellView: View {
         }
         .environment(navigation)
         .tint(Color(.primary))
+        .onChange(of: pendingURL) { _, _ in openPendingURL() }
+        .task { openPendingURL() }
+        .sheet(item: $addRequest) { request in
+            QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
+        }
+    }
+
+    /// Acts on a link that arrived from outside (widget, Spotlight, Shortcuts) and clears it.
+    private func openPendingURL() {
+        guard let url = pendingURL else { return }
+        pendingURL = nil
+        guard let link = DeepLink(url: url), let destination = try? link.destination(in: services.store) else { return }
+        switch destination {
+        case .open(let tab, let route?):
+            navigation.state.open(route, on: tab)
+        case .open(let tab, nil):
+            navigation.state.selected = tab
+            navigation.state.setPath([], for: tab)
+        case .quickAdd(let title):
+            addRequest = QuickAddRequest(title: title ?? "")
+        }
     }
 
     private func tab(_ tab: AppTab, title: String, symbol: String) -> some View {

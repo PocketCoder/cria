@@ -8,12 +8,12 @@ final class AppModel {
     private(set) var status: AuthStatus = .unknown
     private(set) var services: AppServices?
     private(set) var startupError: String?
+    /// A `cria://` link or Spotlight hit that arrived before the shell could act on it.
+    var pendingURL: URL?
     let session: AuthSession
     let api: ApiClient
     private let loginService: LoginService
     private let core: HTTPCore
-
-    private static let appGroup = "group.io.cria.app"
 
     init() {
         let core = HTTPCore()
@@ -43,7 +43,7 @@ final class AppModel {
         await session.signOut()
         status = await session.status
         if wipeLocalData {
-            try? LocalDataWipe.wipe(root: Self.dataDirectory())
+            try? LocalDataWipe.wipe(root: CriaPaths.dataDirectory())
         }
     }
 
@@ -60,7 +60,7 @@ final class AppModel {
     private func startServicesIfNeeded() async {
         guard case .authenticated = status, services == nil else { return }
         do {
-            let root = Self.dataDirectory()
+            let root = CriaPaths.dataDirectory()
             let database = try CriaDatabase.open(at: root.appendingPathComponent("cria.sqlite"))
             let built = await AppServices(
                 api: api,
@@ -74,15 +74,5 @@ final class AppModel {
         } catch {
             startupError = String(describing: error)
         }
-    }
-
-    /// The App Group container when the build is signed with the group (S-00 decision), else Application Support.
-    private static func dataDirectory() -> URL {
-        let fileManager = FileManager.default
-        if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
-            return group
-        }
-        let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        return (support ?? fileManager.temporaryDirectory).appendingPathComponent("Cria", isDirectory: true)
     }
 }

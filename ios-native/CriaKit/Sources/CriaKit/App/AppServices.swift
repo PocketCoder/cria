@@ -28,6 +28,8 @@ public final class AppServices: Sendable {
         await coordinator.start()
         await coordinator.forceSync()
         announcePull()
+        // Extensions and intents file new tasks into this project without asking the server.
+        try? store.rememberCaptureProject(serverId: await defaultProjectServerId())
     }
 
     public func stop() async {

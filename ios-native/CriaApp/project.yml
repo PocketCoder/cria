@@ -15,6 +15,14 @@ targets:
     sources: [CriaApp]
     dependencies:
       - package: CriaKit
+      - target: CriaShare
+      - target: CriaWidgets
+    info:
+      path: Config/CriaApp-Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: io.cria.app.swift
+            CFBundleURLSchemes: [cria]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.swift
@@ -25,3 +33,48 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSCameraUsageDescription: Take photos to attach to your tasks.
         CODE_SIGN_ENTITLEMENTS: CriaApp/CriaApp.entitlements
+  CriaShare:
+    type: app-extension
+    platform: iOS
+    sources: [CriaShare]
+    dependencies:
+      - package: CriaKit
+    info:
+      path: Config/CriaShare-Info.plist
+      properties:
+        CFBundleDisplayName: Cria
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.swift.share
+        PRODUCT_NAME: CriaShare
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: CriaShare/CriaShare.entitlements
+  CriaWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [CriaWidgets]
+    dependencies:
+      - package: CriaKit
+    info:
+      path: Config/CriaWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: Cria
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.swift.widgets
+        PRODUCT_NAME: CriaWidgets
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: CriaWidgets/CriaWidgets.entitlements
