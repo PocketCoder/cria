@@ -49,17 +49,12 @@ final class ConflictTests: XCTestCase {
         XCTAssertEqual(try store.outboxRows().count, 0)
     }
 
-    func testResolutionAnnouncesConflicts() throws {
+    func testResolutionAnnouncesConflicts() async throws {
         let (store, _, id) = try seedConflict()
         var iterator = store.bus.subscribe().makeAsyncIterator()
         try store.resolveConflictKeepMine(id: id)
-        let expectation = expectation(description: "event")
-        Task {
-            let kind = await iterator.next()
-            XCTAssertEqual(kind, .conflicts)
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 2)
+        let kind = await iterator.next()
+        XCTAssertEqual(kind, .conflicts)
     }
 
     func testDiffRendersBooleansNumbersAndMissingValues() {
