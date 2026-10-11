@@ -1,0 +1,105 @@
+import Foundation
+
+/// Runs one queued op against the server. One executor per entity type (S-34 and S-35).
+public protocol OutboxExecutor: Sendable {
+    func execute(_ op: OutboxRow, api: ApiClient, store: CriaStore) async throws
+}
+
+/// Drains the outbox FIFO with exponential backoff. Ported from `drainOutbox` in `src/sync/push.ts`.
+///
+/// An actor replaces the `__cria_isDraining__` global: bus triggers, the periodic tick and the manual
+/// button can all fire at once, and a second drain while one is running must be a no-op.
+public actor OutboxDrainer {
+    public static let maxAttempts = 10
+    public static let maxOpsPerDrain = 100
+    static let maxBackoff: TimeInterval = 60
+
+    private let api: ApiClient
+    private let store: CriaStore
+    private var executors: [String: any OutboxExecutor]
+    private let now: @Sendable () -> Date
+    private var isDraining = false
+
+    public init(api: ApiClient, store: CriaStore, executors: [String: any OutboxExecutor] = [:],
+                now: @escaping @Sendable () -> Date = { Date() }) {
+        self.api = api
+        self.store = store
+        self.executors = executors
+        self.now = now
+    }
+
+    public func register(_ entityType: String, _ executor: any OutboxExecutor) {
+        executors[entityType] = executor
+    }
+
+    /// Backoff after the nth failed attempt: `min(60, 2^n)` seconds.
+    public static func backoff(attempts: Int) -> TimeInterval {
+        min(maxBackoff, pow(2, Double(min(attempts, 30))))
+    }
+
+    /// Takes the oldest op, executes it, deletes it on success, backs off or dead-letters on failure,
+    /// and stops at the first failure so FIFO order holds across retries.
+    public func drain() async {
+        guard !isDraining else { return }
+        isDraining = true
+        defer { isDraining = false }
+
+        var processed = 0
+        while processed < Self.maxOpsPerDrain {
+            guard let head = try? store.outboxHead() else { break }
+            let stamp = now().formatted(.iso8601)
+            // A backing-off head blocks the queue: skipping it would break FIFO.
+            if let next = head.nextAttemptAt, next > stamp { break }
+            do {
+                try await execute(head)
+                try store.completeOutboxRow(id: head.id)
+                processed += 1
+            } catch {
+                handleFailure(head, error: error)
+                break
+            }
+        }
+    }
+
+    private func execute(_ op: OutboxRow) async throws {
+        guard let executor = executors[op.entityType] else {
+            throw OutboxError.noExecutor(op.entityType)
+        }
+        try await executor.execute(op, api: api, store: store)
+    }
+
+    private func handleFailure(_ op: OutboxRow, error: any Error) {
+        let isDependency = (error as? ApiError)?.dependency ?? false
+        // A dependency block (an un-synced parent) is not the op's fault, so it does not use up an attempt.
+        let attempts = isDependency ? op.attempts : op.attempts + 1
+        let text = String(describing: error)
+        let current = now()
+        if !Self.isRetryable(error) || (attempts >= Self.maxAttempts && !isDependency) {
+            try? store.deadLetterOutboxRow(op, attempts: attempts, error: text, at: current.formatted(.iso8601))
+        } else {
+            let next = current.addingTimeInterval(Self.backoff(attempts: attempts)).formatted(.iso8601)
+            try? store.recordOutboxFailure(id: op.id, attempts: attempts, error: text, nextAttemptAt: next)
+        }
+    }
+
+    static func isRetryable(_ error: any Error) -> Bool {
+        switch error {
+        case let api as ApiError: api.retryable
+        case is NetworkError: true
+        // Signed out or offline mid-drain is not the op's fault; keep it queued.
+        case is AuthRequiredError: true
+        case is URLError: true
+        default: false
+        }
+    }
+}
+
+public enum OutboxError: Error, Equatable, CustomStringConvertible {
+    case noExecutor(String)
+
+    public var description: String {
+        switch self {
+        case .noExecutor(let type): "No executor for outbox entity type '\(type)'"
+        }
+    }
+}
