@@ -97,10 +97,11 @@ enum OutboxEntity: String, Sendable {
     case taskPosition = "task_position"
     case taskComment = "task_comment"
     case taskAttachment = "task_attachment"
+    case taskRelation = "task_relation"
 }
 
 enum OutboxOp: String, Sendable {
-    case create, update, delete, upload
+    case create, update, delete, upload, add, remove
 }
 
 extension Database {
