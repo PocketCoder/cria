@@ -30,8 +30,19 @@ extension CriaStore {
 }
 
 extension AppServices {
-    public func attachFile(taskLocalId: String, fileName: String, mime: String, data: Data) throws {
+    /// Queues a picked file and returns the attachment's local id (the editor uses it for `cria://pending/{id}`).
+    @discardableResult
+    public func attachFile(taskLocalId: String, fileName: String, mime: String, data: Data) throws -> String {
         try store.queueAttachment(taskLocalId: taskLocalId, fileName: fileName, mime: mime, data: data, blobs: blobs)
+    }
+
+    /// The queued bytes of a pending attachment, for showing an inline image before it uploads.
+    public func pendingBlobData(_ localId: String) -> Data? {
+        try? blobs.read(localId)
+    }
+
+    public func searchUsers(_ query: String) async -> [UserResponse] {
+        (try? await api.searchUsers(query)) ?? []
     }
 
     /// Pending attachments are discarded locally; uploaded ones are deleted on the server first, then locally.

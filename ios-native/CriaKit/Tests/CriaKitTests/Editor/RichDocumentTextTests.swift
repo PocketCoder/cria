@@ -63,4 +63,16 @@ final class RichDocumentTextTests: XCTestCase {
         let text = NSAttributedString(string: "go", attributes: [.criaLink: "https://x.test/a"])
         XCTAssertEqual(RichDocumentText.document(from: text).blocks.first?.runs.first?.link, "https://x.test/a")
     }
+
+    func testBlockInfoReadsAttributesBackForEveryKind() {
+        let image = RichImage(src: "cria://pending/a", alt: "pic")
+        let kinds: [BlockKind] = [.paragraph, .heading(2), .bullet, .ordered, .task(checked: true), .quote, .code, .rule, .image(image)]
+        for kind in kinds {
+            let attributes = RichDocumentText.blockAttributes(kind: kind, depth: kind.isListItem ? 2 : 0)
+            let info = RichDocumentText.blockInfo(from: attributes)
+            XCTAssertEqual(info.kind, kind)
+            XCTAssertEqual(info.depth, kind.isListItem ? 2 : 0)
+        }
+        XCTAssertEqual(RichDocumentText.blockInfo(from: [:]), BlockInfo(kind: .paragraph, depth: 0))
+    }
 }

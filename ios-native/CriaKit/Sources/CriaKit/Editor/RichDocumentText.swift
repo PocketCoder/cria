@@ -16,7 +16,7 @@ public extension NSAttributedString.Key {
 }
 
 extension BlockKind {
-    var code: String {
+    public var code: String {
         switch self {
         case .paragraph: "p"
         case .heading(let level): "h\(level)"
@@ -30,7 +30,7 @@ extension BlockKind {
         }
     }
 
-    init(code: String, image: RichImage?) {
+    public init(code: String, image: RichImage?) {
         switch code {
         case "h1": self = .heading(1)
         case "h2": self = .heading(2)
@@ -48,6 +48,12 @@ extension BlockKind {
     }
 }
 
+/// The block kind and depth of one paragraph.
+public struct BlockInfo: Equatable, Sendable {
+    public let kind: BlockKind
+    public let depth: Int
+}
+
 /// Maps a `RichDocument` to and from attributed text for the editor's text view. Only semantic attributes are set here
 /// (block kind, styles, link, mention, image); the app applies fonts and paragraph styles from them, because fonts
 /// need UIKit and this package stays UIKit-free.
@@ -56,8 +62,8 @@ extension BlockKind {
 /// its kind. Line breaks inside a block (a `<br>`, or code block newlines) use U+2028. Rules and images are one U+FFFC.
 /// A trailing empty paragraph has no characters to carry it and is dropped when reading back.
 public enum RichDocumentText {
-    static let lineSeparator = "\u{2028}"
-    static let objectCharacter = "\u{FFFC}"
+    public static let lineSeparator = "\u{2028}"
+    public static let objectCharacter = "\u{FFFC}"
 
     public static func attributedString(from document: RichDocument) -> NSAttributedString {
         let output = NSMutableAttributedString()
@@ -82,7 +88,7 @@ public enum RichDocumentText {
     // MARK: Document to text
 
     private static func paragraph(_ block: Block) -> NSAttributedString {
-        let attributes = blockAttributes(block)
+        let attributes = blockAttributes(kind: block.kind, depth: block.depth)
         let result = NSMutableAttributedString()
         switch block.kind {
         case .rule, .image:
@@ -98,10 +104,11 @@ public enum RichDocumentText {
         return result
     }
 
-    private static func blockAttributes(_ block: Block) -> [NSAttributedString.Key: Any] {
-        var attributes: [NSAttributedString.Key: Any] = [.criaBlock: block.kind.code]
-        if block.kind.isListItem { attributes[.criaDepth] = block.depth }
-        if case .image(let image) = block.kind,
+    /// The block-level attributes for a paragraph of this kind. The terminator and every character carry them.
+    public static func blockAttributes(kind: BlockKind, depth: Int) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [.criaBlock: kind.code]
+        if kind.isListItem { attributes[.criaDepth] = depth }
+        if case .image(let image) = kind,
            let data = try? JSONEncoder().encode(image), let json = String(bytes: data, encoding: .utf8) {
             attributes[.criaImage] = json
         }
@@ -119,20 +126,23 @@ public enum RichDocumentText {
     // MARK: Text to document
 
     private static func block(in text: NSAttributedString, content: NSRange, first: Int) -> Block {
-        let attributes = text.attributes(at: first, effectiveRange: nil)
-        let code = attributes[.criaBlock] as? String ?? "p"
+        let info = blockInfo(from: text.attributes(at: first, effectiveRange: nil))
+        switch info.kind {
+        case .rule, .image:
+            return Block(kind: info.kind)
+        default:
+            return Block(kind: info.kind, depth: info.depth, runs: runs(in: text, range: content, plain: info.kind == .code))
+        }
+    }
+
+    /// The block kind and list depth recorded in a paragraph's attributes. Missing or unknown values mean a paragraph.
+    public static func blockInfo(from attributes: [NSAttributedString.Key: Any]) -> BlockInfo {
         var image: RichImage?
         if let json = attributes[.criaImage] as? String {
             image = try? JSONDecoder().decode(RichImage.self, from: Data(json.utf8))
         }
-        let kind = BlockKind(code: code, image: image)
-        let depth = kind.isListItem ? (attributes[.criaDepth] as? Int ?? 0) : 0
-        switch kind {
-        case .rule, .image:
-            return Block(kind: kind)
-        default:
-            return Block(kind: kind, depth: depth, runs: runs(in: text, range: content, plain: kind == .code))
-        }
+        let kind = BlockKind(code: attributes[.criaBlock] as? String ?? "p", image: image)
+        return BlockInfo(kind: kind, depth: kind.isListItem ? (attributes[.criaDepth] as? Int ?? 0) : 0)
     }
 
     private static func runs(in text: NSAttributedString, range: NSRange, plain: Bool) -> [InlineRun] {

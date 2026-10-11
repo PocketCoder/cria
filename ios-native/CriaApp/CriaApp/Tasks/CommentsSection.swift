@@ -6,9 +6,8 @@ struct CommentsSection: View {
     let services: AppServices
     let taskLocalId: String
     @State private var live: LiveValue<[CommentRecord]>
-    @State private var draft = ""
+    @State private var composing = false
     @State private var editing: CommentRecord?
-    @State private var editText = ""
 
     init(services: AppServices, taskLocalId: String) {
         self.services = services
@@ -26,23 +25,23 @@ struct CommentsSection: View {
             ForEach(live.value, id: \.localId) { comment in
                 row(comment)
             }
-            HStack {
-                TextField("Add a comment", text: $draft, axis: .vertical)
-                Button("Send", systemImage: "paperplane.fill", action: send)
-                    .labelStyle(.iconOnly)
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            Button("Add a comment", systemImage: "text.bubble") { composing = true }
         }
         .task { await live.run() }
-        .alert("Edit comment", isPresented: isEditing) {
-            TextField("Comment", text: $editText)
-            Button("Save", action: saveEdit)
-            Button("Cancel", role: .cancel) {}
+        .sheet(isPresented: $composing) {
+            CommentComposerSheet(
+                services: services, taskLocalId: taskLocalId, title: "New comment", initialHTML: ""
+            ) { html in
+                try? services.store.createComment(taskLocalId: taskLocalId, comment: html)
+            }
         }
-    }
-
-    private var isEditing: Binding<Bool> {
-        Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })
+        .sheet(item: $editing) { comment in
+            CommentComposerSheet(
+                services: services, taskLocalId: taskLocalId, title: "Edit comment", initialHTML: comment.comment
+            ) { html in
+                try? services.store.updateComment(localId: comment.localId, comment: html)
+            }
+        }
     }
 
     private func row(_ comment: CommentRecord) -> some View {
@@ -55,10 +54,7 @@ struct CommentsSection: View {
             Button("Delete", role: .destructive) {
                 try? services.store.deleteComment(localId: comment.localId)
             }
-            Button("Edit") {
-                editText = comment.comment
-                editing = comment
-            }
+            Button("Edit") { editing = comment }
         }
     }
 
@@ -86,16 +82,4 @@ struct CommentsSection: View {
         Task { await services.toggleCommentReaction(commentLocalId: comment.localId, emoji: emoji) }
     }
 
-    private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        try? services.store.createComment(taskLocalId: taskLocalId, comment: text)
-        draft = ""
-    }
-
-    private func saveEdit() {
-        guard let target = editing else { return }
-        try? services.store.updateComment(localId: target.localId, comment: editText)
-        editing = nil
-    }
 }

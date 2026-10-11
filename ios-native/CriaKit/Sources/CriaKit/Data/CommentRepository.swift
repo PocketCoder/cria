@@ -53,6 +53,10 @@ public struct CommentRecord: Equatable, Sendable {
 }
 
 /// What the sync path knows about a local comment row before merging.
+extension CommentRecord: Identifiable {
+    public var id: String { localId }
+}
+
 private struct ExistingComment {
     let localId: String
     let serverId: Int

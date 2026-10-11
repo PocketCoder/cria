@@ -17,13 +17,12 @@ struct TaskDetailView: View {
     let taskLocalId: String
     @State private var live: LiveValue<TaskDetailData>
     @State private var title = ""
-    @State private var notes = ""
     @State private var didLoad = false
     @State private var showLabels = false
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
 
-    private enum Field: Hashable { case title, notes }
+    private enum Field: Hashable { case title }
 
     init(services: AppServices, taskLocalId: String) {
         self.services = services
@@ -71,12 +70,7 @@ struct TaskDetailView: View {
                         .submitLabel(.done)
                         .onSubmit(saveText)
                 }
-                TextField("Notes", text: $notes, axis: .vertical)
-                    .lineLimit(3...12)
-                    .focused($focus, equals: .notes)
-                if focus != .notes, !notes.isEmpty {
-                    RichTextView(html: notes).frame(minHeight: 44)
-                }
+                descriptionLink(task)
             }
             datesSection(task)
             detailsSection(task)
@@ -93,6 +87,24 @@ struct TaskDetailView: View {
                     try? services.store.deleteTask(localId: task.localId)
                     dismiss()
                 }
+            }
+        }
+    }
+
+    private func descriptionLink(_ task: TaskRecord) -> some View {
+        NavigationLink {
+            DescriptionEditorView(
+                services: services, taskLocalId: task.localId, initialHTML: task.description ?? ""
+            ) { html in
+                var patch = TaskPatch()
+                patch.description = html
+                apply(patch)
+            }
+        } label: {
+            if (task.description ?? "").isEmpty {
+                Text("Add description").foregroundStyle(Color(.mutedForeground))
+            } else {
+                RichTextView(html: task.description ?? "").frame(minHeight: 44, maxHeight: 140)
             }
         }
     }
@@ -134,7 +146,6 @@ struct TaskDetailView: View {
     private func loadDrafts() {
         guard let task = live.value.task, !didLoad else { return }
         title = task.title
-        notes = task.description ?? ""
         didLoad = true
     }
 
@@ -143,8 +154,7 @@ struct TaskDetailView: View {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         var patch = TaskPatch()
         if !name.isEmpty, name != task.title { patch.title = name }
-        if notes != (task.description ?? "") { patch.description = notes }
-        if patch.title != nil || patch.description != nil { apply(patch) }
+        if patch.title != nil { apply(patch) }
     }
 
     private func apply(_ patch: TaskPatch) {

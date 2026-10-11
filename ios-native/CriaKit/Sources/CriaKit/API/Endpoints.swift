@@ -29,6 +29,7 @@ public extension ApiClient {
     // Server and user
     func info() async throws -> ServerInfo { try await get("/info") }
     func currentUser() async throws -> UserResponse { try await get("/user") }
+    func searchUsers(_ query: String) async throws -> [UserResponse] { try await get("/users", query: ["s": query]) }
 
     // Paged lists (projects, tasks, labels, views, buckets) go through `fetchAllPages`.
 
