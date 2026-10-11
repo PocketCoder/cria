@@ -84,6 +84,7 @@ struct TaskDetailView: View {
                 FlowLabels(labels: live.value.labels)
                 Button("Edit labels", systemImage: "tag") { showLabels = true }
             }
+            CommentsSection(services: services, taskLocalId: taskLocalId)
             Section {
                 Button("Delete task", systemImage: "trash", role: .destructive) {
                     try? services.store.deleteTask(localId: task.localId)
