@@ -3,7 +3,6 @@ import Foundation
 
 /// Scripted transport: records every request and answers from a handler.
 final class StubTransport: HTTPTransport, @unchecked Sendable {
-    // swiftlint:disable:next large_tuple
     typealias Handler = @Sendable (URLRequest, Int) async throws -> (Int, String, [String: String])
 
     private let lock = NSLock()
