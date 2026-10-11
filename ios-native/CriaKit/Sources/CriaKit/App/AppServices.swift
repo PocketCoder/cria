@@ -12,6 +12,9 @@ public final class AppServices: Sendable {
     /// Hears the share extension and App Intents, which write to the shared database from other processes.
     private let signal: CrossProcessSignal
     let blobs: FileBlobStore
+    let puller: Puller
+    private let currentUser = CurrentUserCache()
+    private let reactions = SerialQueue()
 
     public init(api: ApiClient, store: CriaStore, blobDirectory: URL, settings: UserSettingsService? = nil) async {
         self.api = api
@@ -23,7 +26,9 @@ public final class AppServices: Sendable {
         let drainer = OutboxDrainer(api: api, store: store)
         await drainer.registerStandardExecutors()
         await drainer.registerAttachmentExecutor(blobs: fileBlobs)
-        coordinator = SyncCoordinator(puller: Puller(api: api, store: store), drainer: drainer, store: store)
+        let puller = Puller(api: api, store: store)
+        self.puller = puller
+        coordinator = SyncCoordinator(puller: puller, drainer: drainer, store: store)
         signal = CrossProcessSignal { [store] in
             // New rows came from another process: refresh the screens and push them.
             for kind in [ChangeKind.tasks, .projects, .outbox] { store.bus.notify(kind) }
@@ -75,6 +80,20 @@ public final class AppServices: Sendable {
         announcePull()
     }
 
+    /// Re-reads one task and its comments from the server, for a detail screen that just opened. The periodic pull
+    /// does not fetch comments, so without this other people's comments never arrive. Offline it does nothing.
+    public func refreshTaskDetail(localId: String) async {
+        guard let serverId = try? store.taskServerId(localId: localId) else { return }
+        await puller.refetchTask(serverId: serverId)
+        await puller.pullComments(taskLocalId: localId)
+        store.bus.notify(.comments)
+    }
+
+    /// The default project the app last learnt from the server (local id), for filing tasks while offline.
+    public func rememberedDefaultProjectLocalId() -> String? {
+        try? store.captureProjectId()
+    }
+
     /// The user's default (inbox) project server id, or nil when offline or unset.
     public func defaultProjectServerId() async -> Int? {
         guard let id = (try? await api.currentUser())?.settings?.defaultProjectId, id > 0 else { return nil }
@@ -83,10 +102,20 @@ public final class AppServices: Sendable {
 
     // MARK: Comment reactions
 
-    /// Toggles the current user's reaction: optimistic local write, then a fire-and-forget API call.
-    /// Like the web client, a failure is corrected by the next pull. Needs a server user and a pushed comment.
+    /// Toggles the current user's reaction: optimistic local write, then the API call. Like the web client, a
+    /// failure is corrected by the next pull. Needs a known user and a pushed comment. Toggles run one at a time so
+    /// a quick add-then-remove reaches the server in that order; the user is read once and cached.
     public func toggleCommentReaction(commentLocalId: String, emoji: String) async {
-        guard let user = try? await api.currentUser(),
+        await reactions.run { [self] in await performReactionToggle(commentLocalId: commentLocalId, emoji: emoji) }
+    }
+
+    /// The signed-in user, read once per session (nil until a read succeeds).
+    public func signedInUser() async -> UserResponse? {
+        await currentUser.get(api)
+    }
+
+    private func performReactionToggle(commentLocalId: String, emoji: String) async {
+        guard let user = await currentUser.get(api),
               let comment = try? store.comment(localId: commentLocalId), comment.serverId != 0,
               let added = try? store.toggleCommentReaction(
                   commentLocalId: commentLocalId,
@@ -127,5 +156,31 @@ public final class AppServices: Sendable {
         let note = description.trimmingCharacters(in: .whitespacesAndNewlines)
         if !note.isEmpty { body["description"] = .string(note) }
         return body
+    }
+}
+
+/// The signed-in user, fetched on first use and kept for the session.
+actor CurrentUserCache {
+    private var user: UserResponse?
+
+    func get(_ api: ApiClient) async -> UserResponse? {
+        if let user { return user }
+        user = try? await api.currentUser()
+        return user
+    }
+}
+
+/// Runs async jobs strictly one after another, in the order they were queued.
+actor SerialQueue {
+    private var tail: Task<Void, Never>?
+
+    func run(_ job: @escaping @Sendable () async -> Void) async {
+        let previous = tail
+        let next = Task {
+            await previous?.value
+            await job()
+        }
+        tail = next
+        await next.value
     }
 }
