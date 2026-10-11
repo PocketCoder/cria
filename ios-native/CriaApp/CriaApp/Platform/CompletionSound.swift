@@ -1,4 +1,5 @@
 import AudioToolbox
+import CriaKit
 import SwiftUI
 
 /// "Play sound when a task is completed" (Settings > Appearance). A system sound, so the silent switch mutes it.
