@@ -61,7 +61,13 @@ struct TaskListView: View {
                 }
             }
         }
+        .quickAdd(services: services, contextProjectId: contextProjectId)
         .task { await live.run() }
+    }
+
+    private var contextProjectId: String? {
+        if case .project(let localId) = source { return localId }
+        return nil
     }
 
     private var emptyMessage: String {

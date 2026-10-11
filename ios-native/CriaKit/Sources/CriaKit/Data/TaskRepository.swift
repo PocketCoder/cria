@@ -67,6 +67,8 @@ public struct TaskInput: Sendable {
     public var dueDate: String?
     public var priority: Int
     public var isFavorite: Bool
+    public var repeatAfter = 0
+    public var repeatMode = 0
 
     public init(title: String, projectLocalId: String, description: String? = nil, dueDate: String? = nil,
                 priority: Int = 0, isFavorite: Bool = false) {
@@ -208,10 +210,10 @@ extension CriaStore {
                 INSERT INTO tasks (local_id, server_id, project_local_id, title, description, done, due_date,
                        priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
                        updated_at, created_at, dirty, deleted)
-                VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, 0, 0, ?, ?, 1, 0)
+                VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
                 """, arguments: [
                     localId, input.projectLocalId, input.title, input.description, input.dueDate,
-                    input.priority, input.isFavorite, now, now
+                    input.priority, input.isFavorite, input.repeatAfter, input.repeatMode, now, now
                 ])
             guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
                 throw CriaStoreError.notFound(localId)
