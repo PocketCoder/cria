@@ -37,6 +37,12 @@ If pnpm's build-script pre-flight nags, the same binaries live under
 done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
 `cargo check --target aarch64-apple-ios` to catch iOS-only breakage).
 
+**Touching Rust → also `pnpm fmt:rust` before every commit and after every
+merge.** The macOS "Rust checks" CI job runs `cargo fmt --check`, and unformatted
+Rust (or merge-reordered `mod` lines in `lib.rs`) was the cause of every recent
+CI failure there. `.claude/hooks/rustfmt.sh` formats edited `.rs` files
+automatically, but merges bypass it.
+
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
