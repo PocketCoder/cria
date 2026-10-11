@@ -5,6 +5,11 @@ public struct GanttData: Equatable, Sendable {
     public let nodes: [GanttNode]
     public let edges: [GanttEdge]
 
+    public init(nodes: [GanttNode], edges: [GanttEdge]) {
+        self.nodes = nodes
+        self.edges = edges
+    }
+
     /// The visible day range: every drawn date plus today, padded, and at least `minimumDays` wide.
     public func dayRange(today: Int, minimumDays: Int = 42) -> GanttDayRange {
         let days = nodes.flatMap { [$0.startDay, $0.endDay] }.compactMap { $0 } + [today]
