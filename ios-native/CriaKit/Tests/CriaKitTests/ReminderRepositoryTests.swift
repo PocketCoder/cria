@@ -8,7 +8,7 @@ final class ReminderRepositoryTests: XCTestCase {
         let task = try store.createTask(TaskInput(title: "Ring", projectLocalId: project))
         let before = try outboxEntries(store, entity: "task").count
 
-        try store.addReminder(taskLocalId: task.localId, ReminderInput(at: "2099-01-01T09:00:00Z"))
+        try store.addReminder(taskLocalId: task.localId, ReminderInput(triggerAt: "2099-01-01T09:00:00Z"))
         let stored = try store.reminders(forTask: task.localId)
         XCTAssertEqual(stored.map(\.reminderAt), ["2099-01-01T09:00:00Z"])
         XCTAssertEqual(try outboxEntries(store, entity: "task").count, before + 1)
@@ -38,9 +38,9 @@ final class ReminderRepositoryTests: XCTestCase {
         let project = try seedProject(store)
         let open = try store.createTask(TaskInput(title: "Open", projectLocalId: project))
         let finished = try store.createTask(TaskInput(title: "Finished", projectLocalId: project))
-        try store.addReminder(taskLocalId: open.localId, ReminderInput(at: "2099-01-01T09:00:00Z"))
-        try store.addReminder(taskLocalId: open.localId, ReminderInput(at: "2001-01-01T09:00:00Z"))
-        try store.addReminder(taskLocalId: finished.localId, ReminderInput(at: "2099-02-01T09:00:00Z"))
+        try store.addReminder(taskLocalId: open.localId, ReminderInput(triggerAt: "2099-01-01T09:00:00Z"))
+        try store.addReminder(taskLocalId: open.localId, ReminderInput(triggerAt: "2001-01-01T09:00:00Z"))
+        try store.addReminder(taskLocalId: finished.localId, ReminderInput(triggerAt: "2099-02-01T09:00:00Z"))
         _ = try store.updateTask(localId: finished.localId, patch: TaskPatch(done: true))
 
         let upcoming = try store.upcomingReminders(after: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)

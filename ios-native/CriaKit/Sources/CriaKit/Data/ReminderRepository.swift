@@ -24,12 +24,12 @@ public enum ReminderAnchor: String, CaseIterable, Sendable {
 
 /// What to add: an absolute time, or an offset from one of the task's dates.
 public struct ReminderInput: Sendable {
-    public var at: String?
+    public var triggerAt: String?
     public var period: Int?
     public var relativeTo: ReminderAnchor?
 
-    public init(at: String? = nil, period: Int? = nil, relativeTo: ReminderAnchor? = nil) {
-        self.at = at
+    public init(triggerAt: String? = nil, period: Int? = nil, relativeTo: ReminderAnchor? = nil) {
+        self.triggerAt = triggerAt
         self.period = period
         self.relativeTo = relativeTo
     }
@@ -66,7 +66,7 @@ extension CriaStore {
     /// A relative reminder resolves its local trigger time from the task's matching date; the next pull corrects it.
     public func addReminder(taskLocalId: String, _ input: ReminderInput) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            var resolved = input.at
+            var resolved = input.triggerAt
             let relative = input.period != nil && input.relativeTo != nil
             if let period = input.period, let anchor = input.relativeTo {
                 let column = anchor.rawValue

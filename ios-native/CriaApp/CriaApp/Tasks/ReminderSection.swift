@@ -40,10 +40,10 @@ struct ReminderSection: View {
                         Button(preset.title) { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) }
                     }
                 }
-                Button("In one hour") { add(ReminderInput(at: DueDates.timedISO(Date().addingTimeInterval(3600)))) }
+                Button("In one hour") { add(ReminderInput(triggerAt: DueDates.timedISO(Date().addingTimeInterval(3600)))) }
             }
             DatePicker("Custom", selection: $custom)
-            Button("Add custom reminder") { add(ReminderInput(at: DueDates.timedISO(custom))) }
+            Button("Add custom reminder") { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) }
             repeatRow
         }
         .task { await live.run() }
