@@ -117,12 +117,24 @@ final class OutboxDrainerTests: XCTestCase {
     func testDependencyBlockDoesNotUseAnAttempt() async throws {
         let store = try makeStore()
         try enqueue(store, 1)
-        try runSQL(store, "UPDATE outbox SET attempts = 9")
+        // Created "just now" by the test clock, so the wait for the parent is not yet stale.
+        let created = Date(timeIntervalSince1970: 1_800_000_000).formatted(.iso8601)
+        try runSQL(store, "UPDATE outbox SET attempts = 9, created_at = ?", [created])
         let blocked = ApiError(status: 0, code: nil, message: "parent not synced", retryable: true, dependency: true)
         await makeDrainer(store, ScriptedExecutor(failures: [1: blocked])).drain()
         let head = try XCTUnwrap(try store.outboxHead())
         XCTAssertEqual(head.attempts, 9)
         XCTAssertEqual(try store.deadLetters().count, 0)
+    }
+
+    func testDependencyBlockThatNeverClearsIsDeadLettered() async throws {
+        let store = try makeStore()
+        try enqueue(store, 1)
+        try runSQL(store, "UPDATE outbox SET created_at = '2000-01-01T00:00:00Z'")
+        let blocked = ApiError(status: 0, code: nil, message: "parent never synced", retryable: true, dependency: true)
+        await makeDrainer(store, ScriptedExecutor(failures: [1: blocked])).drain()
+        XCTAssertEqual(try store.deadLetters().count, 1)
+        XCTAssertEqual(try store.outboxRows().count, 0)
     }
 
     func testUnknownEntityTypeIsDeadLetteredNotDropped() async throws {

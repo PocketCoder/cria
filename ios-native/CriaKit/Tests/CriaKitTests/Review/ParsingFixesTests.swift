@@ -8,7 +8,8 @@ final class ParsingFixesTests: XCTestCase {
     func testPrependCharacterCannotHideMarkup() {
         let out = HTMLSanitizer.sanitize("\u{0600}<img src=x onerror=alert(1)>")
         XCTAssertFalse(out.contains("onerror"))
-        XCTAssertTrue(out.contains("<img"))
+        // NSString, not String.contains: the prepend character and "<" are one Character, so a String search misses it.
+        XCTAssertNotEqual((out as NSString).range(of: "<img").location, NSNotFound)
     }
 
     func testPrependCharacterCannotHideAnIframe() {
