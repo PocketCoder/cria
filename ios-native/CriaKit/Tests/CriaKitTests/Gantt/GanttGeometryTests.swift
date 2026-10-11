@@ -69,3 +69,24 @@ final class GanttGeometryTests: XCTestCase {
         XCTAssertEqual(narrow[0].width, 150 - 2 * GanttMetrics.dayWidth)
     }
 }
+
+final class GanttDataTests: XCTestCase {
+    func testDayRangePadsAndHasAMinimumWidth() {
+        let node = GanttNode(taskLocalId: "a", startDay: 100, endDay: 103)
+        let range = GanttData(nodes: [node], edges: []).dayRange(today: 101)
+        XCTAssertEqual(range.low, 93)
+        XCTAssertEqual(range.high, 134)
+        XCTAssertEqual(GanttData(nodes: [], edges: []).dayRange(today: 50), GanttDayRange(today: 50, low: 43, high: 84))
+    }
+
+    func testSetGanttDatesWritesIsoDatesAndQueuesAPush() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let local = try seedSyncedTask(store, serverId: 1, title: "Bar")
+        let start = GanttTree.day(fromISO: "2026-06-10T00:00:00Z") ?? 0
+        let updated = try store.setGanttDates(taskLocalId: local, start: start, end: start + 4)
+        XCTAssertEqual(GanttTree.day(fromISO: updated.startDate), start)
+        XCTAssertEqual(GanttTree.day(fromISO: updated.endDate), start + 4)
+        XCTAssertEqual(try outboxEntries(store, entity: "task").count, 1)
+    }
+}
