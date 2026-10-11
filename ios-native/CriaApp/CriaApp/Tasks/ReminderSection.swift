@@ -50,24 +50,21 @@ struct ReminderSection: View {
     }
 
     private var repeatRow: some View {
-        let label = RepeatLabel.label(repeatAfter: task.repeatAfter, repeatMode: task.repeatMode)
-        return Picker("Repeat", selection: Binding(get: { label }, set: setRepeat)) {
-            ForEach(Array(Set(["", label, "Daily", "Weekly", "Monthly", "Yearly"])).sorted(), id: \.self) {
-                Text($0.isEmpty ? "Never" : $0).tag($0)
+        Picker("Repeat", selection: Binding<RepeatChoice>(
+            get: { RepeatChoice(repeatAfter: task.repeatAfter, repeatMode: task.repeatMode) },
+            set: { choice in setRepeat(choice) }
+        )) {
+            ForEach(RepeatChoice.allCases) { choice in
+                Text(choice.title).tag(choice)
             }
         }
     }
 
-    private func setRepeat(_ label: String) {
+    private func setRepeat(_ choice: RepeatChoice) {
+        guard choice != .custom else { return }
         var patch = TaskPatch()
-        switch label {
-        case "Daily": (patch.repeatAfter, patch.repeatMode) = (86_400, 0)
-        case "Weekly": (patch.repeatAfter, patch.repeatMode) = (604_800, 0)
-        case "Yearly": (patch.repeatAfter, patch.repeatMode) = (31_536_000, 0)
-        case "Monthly": (patch.repeatAfter, patch.repeatMode) = (0, 1)
-        case "": (patch.repeatAfter, patch.repeatMode) = (0, 0)
-        default: return
-        }
+        patch.repeatAfter = choice.repeatAfter
+        patch.repeatMode = choice.repeatMode
         _ = try? services.store.updateTask(localId: task.localId, patch: patch)
     }
 
@@ -86,4 +83,36 @@ extension ReminderRecord {
         guard let reminderAt, let date = DueDates.parse(reminderAt) else { return "Pending" }
         return date.formatted(date: .abbreviated, time: .shortened)
     }
+}
+
+/// The repeat options the picker offers. Other intervals set on the server show as "Custom" and are left alone.
+enum RepeatChoice: String, CaseIterable, Identifiable {
+    case never, daily, weekly, monthly, yearly, custom
+
+    var id: String { rawValue }
+
+    init(repeatAfter: Int, repeatMode: Int) {
+        let label = RepeatLabel.label(repeatAfter: repeatAfter, repeatMode: repeatMode)
+        switch label {
+        case "": self = .never
+        case "Daily": self = .daily
+        case "Weekly": self = .weekly
+        case "Monthly": self = .monthly
+        case "Yearly": self = .yearly
+        default: self = .custom
+        }
+    }
+
+    var title: String { self == .never ? "Never" : rawValue.capitalized }
+
+    var repeatAfter: Int {
+        switch self {
+        case .daily: 86_400
+        case .weekly: 604_800
+        case .yearly: 31_536_000
+        default: 0
+        }
+    }
+
+    var repeatMode: Int { self == .monthly ? 1 : 0 }
 }
