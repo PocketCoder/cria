@@ -6,7 +6,7 @@ final class PaginationTests: XCTestCase {
         let transport = StubTransport { request, _ in
             let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
                 .queryItems?.first { $0.name == "page" }?.value ?? "1"
-            return (200, #"[{"id": \#(page)}]"#, ["x-pagination-total-pages": "3"])
+            return (200, #"[{"id": \#(page), "title": "P\#(page)"}]"#, ["x-pagination-total-pages": "3"])
         }
         let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
         let items = try await api.fetchAllPages("/projects")
