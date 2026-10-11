@@ -39,7 +39,7 @@ private final class SettingsServer: @unchecked Sendable {
             case .v1Only: return (404, "{}", json)
             case .v24: return (405, "{}", json)
             case .v27:
-                guard let body else { return (304, "", [:]) }
+                guard let body, !body.isEmpty else { return (304, "", [:]) }
                 lock.withLock { merge(&_settings, body) }
                 return (200, "{}", json)
             }
@@ -200,8 +200,11 @@ final class UserSettingsServiceTests: XCTestCase {
         async let first: Void = service.save(SettingsChange(settings: ["name": .string("one")]))
         async let second: Void = service.save(SettingsChange(settings: ["name": .string("two")]))
         _ = try await (first, second)
-        XCTAssertEqual(server.settings["name"] as? String, "two")
-        XCTAssertEqual(server.bodies.suffix(2).compactMap { $0["name"] as? String }, ["one", "two"])
+        // Which save queued first is up to the scheduler; what matters is they never overlap, so the last
+        // write is the final state and both were sent.
+        let sent = server.bodies.suffix(2).compactMap { $0["name"] as? String }
+        XCTAssertEqual(Set(sent), ["one", "two"])
+        XCTAssertEqual(server.settings["name"] as? String, sent.last)
     }
 
     func testUnsupportedMemoIsPerServerURL() async throws {
