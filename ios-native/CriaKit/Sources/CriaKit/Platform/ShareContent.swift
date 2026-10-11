@@ -89,11 +89,22 @@ public struct TodaySnapshot: Equatable, Sendable {
         public let id: String
         public let title: String
         public let isOverdue: Bool
+
+        public init(id: String, title: String, isOverdue: Bool) {
+            self.id = id
+            self.title = title
+            self.isOverdue = isOverdue
+        }
     }
 
     public let entries: [Entry]
     /// Open tasks due today or overdue, including any beyond `entries`.
     public let total: Int
+
+    public init(entries: [Entry], total: Int) {
+        self.entries = entries
+        self.total = total
+    }
 
     public static func load(store: CriaStore, limit: Int, now: Date = Date()) throws -> TodaySnapshot {
         let groups = try store.smartGroups(.today, now: now)
