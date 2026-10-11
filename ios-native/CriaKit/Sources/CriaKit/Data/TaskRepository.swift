@@ -86,6 +86,14 @@ public struct TaskPatch: Sendable {
     public var dueDate: String?
     public var priority: Int?
     public var isFavorite: Bool?
+    /// An empty string clears the description.
+    public var description: String?
+    public var startDate: String?
+    public var endDate: String?
+    /// 0 to 1, as stored locally (the push body scales it to 0 to 100).
+    public var percentDone: Double?
+    /// Moves the task to another project.
+    public var projectLocalId: String?
 
     public init(title: String? = nil, done: Bool? = nil, dueDate: String? = nil,
                 priority: Int? = nil, isFavorite: Bool? = nil) {
@@ -94,6 +102,32 @@ public struct TaskPatch: Sendable {
         self.dueDate = dueDate
         self.priority = priority
         self.isFavorite = isFavorite
+    }
+}
+
+extension TaskPatch {
+    /// The SET clauses and arguments for the fields this patch changes, after the always-set dirty and updated_at.
+    func assignments(now: String) -> ([String], [(any DatabaseValueConvertible)?]) {
+        var columns = ["dirty = 1", "updated_at = ?"]
+        var arguments: [(any DatabaseValueConvertible)?] = [now]
+        func add(_ column: String, _ value: (any DatabaseValueConvertible)?) {
+            columns.append("\(column) = ?")
+            arguments.append(value)
+        }
+        if let title { add("title", title) }
+        if let done {
+            add("done", done)
+            add("done_at", done ? now : nil)
+        }
+        let optionalFields: [(String, (any DatabaseValueConvertible)?)] = [
+            ("due_date", dueDate), ("start_date", startDate), ("end_date", endDate),
+            ("description", description), ("project_local_id", projectLocalId),
+            ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone)
+        ]
+        for (column, value) in optionalFields where value != nil {
+            add(column, value)
+        }
+        return (columns, arguments)
     }
 }
 
@@ -191,31 +225,8 @@ extension CriaStore {
     public func updateTask(localId: String, patch: TaskPatch) throws -> TaskRecord {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
             let now = isoNow()
-            var assignments = ["dirty = 1", "updated_at = ?"]
-            var arguments: [(any DatabaseValueConvertible)?] = [now]
-            if let title = patch.title {
-                assignments.append("title = ?")
-                arguments.append(title)
-            }
-            if let done = patch.done {
-                let doneAt: String? = done ? now : nil
-                assignments += ["done = ?", "done_at = ?"]
-                arguments.append(done)
-                arguments.append(doneAt)
-            }
-            if let dueDate = patch.dueDate {
-                assignments.append("due_date = ?")
-                arguments.append(dueDate)
-            }
-            if let priority = patch.priority {
-                assignments.append("priority = ?")
-                arguments.append(priority)
-            }
-            if let isFavorite = patch.isFavorite {
-                assignments.append("is_favorite = ?")
-                arguments.append(isFavorite)
-            }
-            arguments.append(localId)
+            let (assignments, changes) = patch.assignments(now: now)
+            let arguments = changes + [localId]
             try connection.execute(
                 sql: "UPDATE tasks SET \(assignments.joined(separator: ", ")) WHERE local_id = ? AND deleted = 0",
                 arguments: StatementArguments(arguments)

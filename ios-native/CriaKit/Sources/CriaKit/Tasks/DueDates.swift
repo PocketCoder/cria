@@ -63,6 +63,30 @@ public enum DueDates {
         return text
     }
 
+    // MARK: Writing
+
+    /// All-day value for the calendar day `date` falls on locally: UTC midnight of that day.
+    public static func allDayISO(for date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let midnight = utc.date(from: parts) ?? date
+        return ISO8601DateFormatter().string(from: midnight)
+    }
+
+    /// Timed value. An instant that lands exactly on UTC midnight would read back as all-day, so it moves one second.
+    public static func timedISO(_ date: Date) -> String {
+        let millis = Int((date.timeIntervalSince1970 * 1000).rounded())
+        let safe = millis % 86_400_000 == 0 ? date.addingTimeInterval(1) : date
+        return ISO8601DateFormatter().string(from: safe)
+    }
+
+    /// The `Date` a picker should show for a stored value: local midnight of the day for all-day values,
+    /// the instant for timed ones.
+    public static func pickerDate(_ iso: String, calendar: Calendar = .current) -> Date? {
+        hasTimeOfDay(iso) ? parse(iso) : calendarDate(iso, calendar: calendar)
+    }
+
     private static func format(_ date: Date, _ pattern: String, calendar: Calendar, locale: Locale) -> String {
         let formatter = DateFormatter()
         formatter.calendar = calendar

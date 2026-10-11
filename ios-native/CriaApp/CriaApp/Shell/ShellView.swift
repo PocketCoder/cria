@@ -57,7 +57,7 @@ struct TabRoot: View {
     }
 }
 
-/// Screens pushed from a tab. Task detail and smart views arrive in S-45 and S-47.
+/// Screens pushed from a tab. Smart views arrive in S-47.
 struct RouteDestination: View {
     let route: Route
     let services: AppServices
@@ -72,6 +72,8 @@ struct RouteDestination: View {
         case .label(let localId):
             let title = (try? services.store.labels())?.first { $0.localId == localId }?.title ?? "Label"
             TaskListView(services: services, source: .label(localId), title: title)
+        case .task(let localId):
+            TaskDetailView(services: services, taskLocalId: localId)
         default:
             ContentUnavailableView("Not built yet", systemImage: "hammer")
         }

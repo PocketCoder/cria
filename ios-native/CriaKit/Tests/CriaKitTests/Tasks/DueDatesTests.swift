@@ -43,3 +43,30 @@ final class DueDatesTests: XCTestCase {
         XCTAssertEqual(DueDates.label("2026-05-28T21:00:00Z", now: now, calendar: calendar), "Tomorrow 17:00")
     }
 }
+
+final class DueDateWritingTests: XCTestCase {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        return calendar
+    }
+
+    func testAllDayWritesUTCMidnightOfTheLocalDay() throws {
+        // 22:00 on 27 May in New York is already 28 May in UTC; the picked day is still the 27th.
+        let evening = try XCTUnwrap(DueDates.parse("2026-05-28T02:00:00Z"))
+        XCTAssertEqual(DueDates.allDayISO(for: evening, calendar: calendar), "2026-05-27T00:00:00Z")
+    }
+
+    func testTimedMovesOffUTCMidnight() throws {
+        let midnight = try XCTUnwrap(DueDates.parse("2026-05-28T00:00:00Z"))
+        let written = DueDates.timedISO(midnight)
+        XCTAssertEqual(written, "2026-05-28T00:00:01Z")
+        XCTAssertTrue(DueDates.hasTimeOfDay(written))
+        XCTAssertEqual(DueDates.timedISO(try XCTUnwrap(DueDates.parse("2026-05-28T13:30:00Z"))), "2026-05-28T13:30:00Z")
+    }
+
+    func testPickerDateRoundTripsAllDay() throws {
+        let picked = try XCTUnwrap(DueDates.pickerDate("2026-05-27T00:00:00Z", calendar: calendar))
+        XCTAssertEqual(DueDates.allDayISO(for: picked, calendar: calendar), "2026-05-27T00:00:00Z")
+    }
+}
