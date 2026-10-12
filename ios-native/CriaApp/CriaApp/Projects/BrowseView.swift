@@ -24,6 +24,8 @@ struct BrowseView: View {
     @State private var showPhoto = false
     private var aiStatus: AIStatus { AIStatus.shared }
     @State var filterEditor: FilterEditorTarget?
+    @State private var labelEditor: LabelEditTarget?
+    @State private var pendingLabelDelete: LabelDeleteTarget?
     @AppStorage("cria.projectTree.collapsed") private var collapsedJSON = "[]"
 
     init(services: AppServices) {
@@ -101,6 +103,9 @@ struct BrowseView: View {
         .sheet(item: $filterEditor) { target in
             FilterEditorSheet(services: services, existing: target.record)
         }
+        .sheet(item: $labelEditor) { target in
+            LabelEditorSheet(services: services, label: target.label)
+        }
         .task { await aiStatus.refresh() }
         .alert(failureTitle, isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
@@ -141,6 +146,16 @@ struct BrowseView: View {
             Button("Cancel", role: .cancel) {}
         } message: { filter in
             Text(filter.title)
+        }
+        .alert(
+            "Delete label?",
+            isPresented: Binding(get: { pendingLabelDelete != nil }, set: { if !$0 { pendingLabelDelete = nil } }),
+            presenting: pendingLabelDelete
+        ) { target in
+            Button("Delete", role: .destructive) { deleteLabel(target.label) }
+            Button("Cancel", role: .cancel) {}
+        } message: { target in
+            Text(target.message)
         }
         .task { await live.run() }
     }
@@ -196,8 +211,31 @@ extension BrowseView {
                             }
                         }
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
+                        Button("Delete") { askToDelete(label) }.tint(Color(.destructive))
+                        Button("Edit") { labelEditor = LabelEditTarget(label: label) }.tint(Color(.sky500))
+                    }
+                    .contextMenu {
+                        Button("Edit", systemImage: "pencil") { labelEditor = LabelEditTarget(label: label) }
+                        Button("Delete", systemImage: "trash", role: .destructive) { askToDelete(label) }
+                    }
                 }
             }
+        }
+    }
+
+    /// Labels have no undo, so the confirmation says how many tasks lose it (open and done).
+    func askToDelete(_ label: LabelRecord) {
+        let count = (try? services.store.taskCount(forLabel: label.localId)) ?? live.value.labelCounts[label.localId] ?? 0
+        pendingLabelDelete = LabelDeleteTarget(label: label, taskCount: count)
+    }
+
+    func deleteLabel(_ label: LabelRecord) {
+        do {
+            try services.store.deleteLabel(localId: label.localId)
+        } catch {
+            fail("Could not delete", error)
         }
     }
 
@@ -216,6 +254,21 @@ extension BrowseView {
                     }
                 }
             }
+        }
+    }
+}
+
+/// A label waiting for delete confirmation, with how many tasks carry it.
+struct LabelDeleteTarget {
+    let label: LabelRecord
+    let taskCount: Int
+
+    var message: String {
+        let name = "\u{201C}\(label.title)\u{201D}"
+        switch taskCount {
+        case 0: return "No tasks carry \(name). This cannot be undone."
+        case 1: return "\(name) will be removed from 1 task. This cannot be undone."
+        default: return "\(name) will be removed from \(taskCount) tasks. This cannot be undone."
         }
     }
 }

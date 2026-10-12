@@ -14,6 +14,9 @@ struct TaskListView: View {
     @State private var failure: String?
     /// Parents whose subtasks are hidden, for this screen only.
     @State private var collapsed: Set<String> = []
+    /// The label being edited from the toolbar, and its new title once saved (the route passes the old one).
+    @State private var labelEditor: LabelEditTarget?
+    @State private var renamedTitle: String?
 
     init(services: AppServices, source: TaskListSource, title: String) {
         self.services = services
@@ -90,7 +93,7 @@ struct TaskListView: View {
                 ContentUnavailableView("No tasks", systemImage: "checklist", description: Text(emptyMessage))
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(renamedTitle ?? title)
         .refreshable { await services.refresh() }
         .toolbar {
             if canReorder {
@@ -102,8 +105,15 @@ struct TaskListView: View {
                     Picker("Sort", selection: $sortIndex) {
                         ForEach(TaskSort.options.indices, id: \.self) { Text(TaskSort.options[$0].label).tag($0) }
                     }
+                    if let labelLocalId {
+                        Divider()
+                        Button("Edit label", systemImage: "pencil") { editLabel(labelLocalId) }
+                    }
                 }
             }
+        }
+        .sheet(item: $labelEditor) { target in
+            LabelEditorSheet(services: services, label: target.label) { renamedTitle = $0.title }
         }
         .quickAdd(services: services, contextProjectId: contextProjectId)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -112,6 +122,20 @@ struct TaskListView: View {
             Text(failure ?? "")
         }
         .task { await live.run() }
+    }
+
+    private var labelLocalId: String? {
+        if case .label(let localId) = source { return localId }
+        return nil
+    }
+
+    private func editLabel(_ localId: String) {
+        do {
+            guard let label = try services.store.labels().first(where: { $0.localId == localId }) else { return }
+            labelEditor = LabelEditTarget(label: label)
+        } catch {
+            failure = String(describing: error)
+        }
     }
 
     private var contextProjectId: String? {
