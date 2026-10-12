@@ -14,6 +14,9 @@ final class EditorTextView: UITextView {
     private var onHeightChange: (@MainActor (CGFloat) -> Void)?
     private var reportedHeight: CGFloat = 0
     private var idleTap = UITapGestureRecognizer()
+    /// A double tap on the read-only view starts editing with the word selected. Without it the first tap of the
+    /// pair started editing with a bare caret, which undid the system's word selection.
+    private var idleDoubleTap = UITapGestureRecognizer()
     private let idleTapDelegate = SimultaneousTapDelegate()
 
     init() {
@@ -45,8 +48,13 @@ final class EditorTextView: UITextView {
         textContainer.lineFragmentPadding = 0
         textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        idleDoubleTap = UITapGestureRecognizer(target: self, action: #selector(handleIdleDoubleTap(_:)))
+        idleDoubleTap.numberOfTapsRequired = 2
+        idleDoubleTap.delegate = idleTapDelegate
+        addGestureRecognizer(idleDoubleTap)
         idleTap = UITapGestureRecognizer(target: self, action: #selector(handleIdleTap(_:)))
         idleTap.delegate = idleTapDelegate
+        idleTap.require(toFail: idleDoubleTap)
         addGestureRecognizer(idleTap)
     }
 
@@ -116,6 +124,16 @@ final class EditorTextView: UITextView {
         }
     }
 
+    @objc private func handleIdleDoubleTap(_ gesture: UITapGestureRecognizer) {
+        let point = gesture.location(in: self)
+        isEditable = true
+        becomeFirstResponder()
+        guard let position = closestPosition(to: point) else { return }
+        let word = tokenizer.rangeEnclosingPosition(position, with: .word, inDirection: .storage(.forward))
+            ?? tokenizer.rangeEnclosingPosition(position, with: .word, inDirection: .storage(.backward))
+        selectedTextRange = word ?? textRange(from: position, to: position)
+    }
+
     /// The rect of the first line of a paragraph, in the text view's content coordinates.
     func firstLineRect(of paragraph: EditorParagraph) -> CGRect {
         layoutManager.ensureLayout(for: textContainer)
@@ -154,7 +172,7 @@ final class EditorTextView: UITextView {
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === checkboxTap { return taskParagraph(at: gestureRecognizer.location(in: self)) != nil }
-        if gestureRecognizer === idleTap {
+        if gestureRecognizer === idleTap || gestureRecognizer === idleDoubleTap {
             return !isEditable && taskParagraph(at: gestureRecognizer.location(in: self)) == nil
         }
         return super.gestureRecognizerShouldBegin(gestureRecognizer)

@@ -36,6 +36,14 @@ struct EditorFormattingBar: View {
             }
             .padding(.horizontal, 8)
         }
+        .foregroundStyle(Color(.foreground))
+        // iOS 26 draws the keyboard-style input view see-through, so the form showed behind the buttons. A solid
+        // material capsule keeps them readable over anything.
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color(.mutedForeground).opacity(0.2)))
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .frame(height: EditorAccessoryView.barHeight)
     }
 
@@ -50,7 +58,7 @@ struct EditorFormattingBar: View {
 /// Hosts the SwiftUI bar as a text view's `inputAccessoryView`. A `UIInputView` in keyboard style takes the keyboard's
 /// own background; the height is explicit because an accessory view gets no size from SwiftUI.
 final class EditorAccessoryView: UIInputView {
-    static let barHeight: CGFloat = 44
+    static let barHeight: CGFloat = 52
 
     /// Kept for the life of the accessory view; releasing it would blank the bar.
     private let hosting: UIHostingController<EditorFormattingBar>

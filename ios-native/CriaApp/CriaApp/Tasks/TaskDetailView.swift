@@ -185,6 +185,8 @@ struct TaskDetailView: View {
             }
         }
             .criaSurface()
+            // A grouped form starts ~35pt below the bar; the task title belongs right under it.
+            .contentMargins(.top, 8, for: .scrollContent)
     }
 
     private func deleteTask() {
