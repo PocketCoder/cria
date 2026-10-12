@@ -130,14 +130,18 @@ public enum GanttTree {
         var resolver = SpanResolver(tasks: byId, childMap: childMap)
         var nodes: [GanttNode] = []
         for task in tasks where !childSet.contains(task.localId) {
-            appendNode(task, indent: 0, byId: byId, resolver: &resolver, into: &nodes)
+            appendNode(task, indent: 0, path: [], byId: byId, resolver: &resolver, into: &nodes)
         }
         return nodes
     }
 
     private static func appendNode(
-        _ task: TaskRecord, indent: Int, byId: [String: TaskRecord], resolver: inout SpanResolver, into nodes: inout [GanttNode]
+        _ task: TaskRecord, indent: Int, path: Set<String>, byId: [String: TaskRecord], resolver: inout SpanResolver,
+        into nodes: inout [GanttNode]
     ) {
+        // A subtask cycle (A is B's parent and B is A's) would otherwise recurse until the stack overflows.
+        var path = path
+        guard path.insert(task.localId).inserted else { return }
         let kids = (resolver.childMap[task.localId] ?? []).filter { byId[$0] != nil }
         var seen = Set<String>()
         let span = resolver.effective(task.localId, seen: &seen)
@@ -147,7 +151,9 @@ public enum GanttTree {
             hasOwnDates: SpanResolver.ownSpan(task).hasOwn, hasDerivedDates: span.derived
         ))
         for kid in kids {
-            if let child = byId[kid] { appendNode(child, indent: indent + 1, byId: byId, resolver: &resolver, into: &nodes) }
+            if let child = byId[kid] {
+                appendNode(child, indent: indent + 1, path: path, byId: byId, resolver: &resolver, into: &nodes)
+            }
         }
     }
 

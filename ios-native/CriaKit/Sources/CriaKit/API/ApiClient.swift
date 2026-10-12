@@ -113,6 +113,9 @@ public final class ApiClient: Sendable {
         }
         if !query.isEmpty {
             components.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+            // URLComponents leaves "+" as is and Go reads it as a space, which broke a "+02:00" offset in the delta
+            // filter and a search for "c++".
+            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         }
         guard let url = components.url else { throw NetworkError("Invalid URL: \(urlString)") }
         var request = URLRequest(url: url)

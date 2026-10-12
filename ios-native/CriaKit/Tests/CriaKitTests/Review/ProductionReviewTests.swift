@@ -123,4 +123,23 @@ final class ProductionReviewTests: XCTestCase {
         let upcoming = try store.upcomingReminders(after: now, limit: 60)
         XCTAssertEqual(upcoming.map(\.reminderAt), ["2026-10-11T05:30:00-04:00"])
     }
+
+    // MARK: Transport and HTML
+
+    func testPlusInAQueryIsEncoded() async throws {
+        let transport = StubTransport { _, _ in (200, "[]", [:]) }
+        let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
+        _ = try await api.searchUsers("c++")
+        let query = try XCTUnwrap(transport.requests.first?.url?.query)
+        XCTAssertTrue(query.contains("s=c%2B%2B"), query)
+    }
+
+    func testSanitiserKeepsDataImagesButNotSVG() {
+        let png = HTMLSanitizer.sanitize(#"<p><img src="data:image/png;base64,AAAA"></p>"#)
+        XCTAssertTrue(png.contains("data:image/png"))
+        let svg = HTMLSanitizer.sanitize(#"<p><img src="data:image/svg+xml;base64,AAAA"></p>"#)
+        XCTAssertFalse(svg.contains("data:image/svg"))
+        let link = HTMLSanitizer.sanitize("<a href=\"\nhttps://example.com\">x</a>")
+        XCTAssertTrue(link.contains("href"))
+    }
 }

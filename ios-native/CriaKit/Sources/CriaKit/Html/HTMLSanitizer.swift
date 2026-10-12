@@ -43,6 +43,11 @@ public enum HTMLSanitizer {
         return matches(uriRegex, stripped.lowercased())
     }
 
+    static func isDataImage(_ value: String) -> Bool {
+        let lower = HTMLEntities.decode(value).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return lower.hasPrefix("data:image/") && !lower.hasPrefix("data:image/svg")
+    }
+
     static func isSafeLink(_ href: String) -> Bool {
         matches(linkRegex, href.lowercased())
     }
@@ -65,8 +70,11 @@ public enum HTMLSanitizer {
             guard allowedAttributes.contains(attribute.name) else { continue }
             if tag == mentionTag, attribute.name != "data-id" { continue }
             let value = attribute.value ?? ""
-            if !uriExemptAttributes.contains(attribute.name), !isSafeValue(value) { continue }
-            if tag == "a", attribute.name == "href", !isSafeLink(HTMLEntities.decode(value).trimmingCharacters(in: .whitespaces)) {
+            // DOMPurify allows data: URIs on images (pasted base64 pictures); SVG is left out as it can carry script.
+            let dataImage = tag == "img" && attribute.name == "src" && isDataImage(value)
+            if !uriExemptAttributes.contains(attribute.name), !dataImage, !isSafeValue(value) { continue }
+            if tag == "a", attribute.name == "href",
+               !isSafeLink(HTMLEntities.decode(value).trimmingCharacters(in: .whitespacesAndNewlines)) {
                 continue
             }
             kept.append(attribute)
