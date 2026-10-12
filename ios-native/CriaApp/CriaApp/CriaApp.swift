@@ -13,6 +13,7 @@ struct CriaApp: App {
         Theme.applyNavigationAppearance()
         // Before launch finishes, so a tap on a notification that started the app is delivered.
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+        NotificationRouter.registerCategories()
     }
 
     var body: some Scene {

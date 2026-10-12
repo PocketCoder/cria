@@ -9,6 +9,7 @@ final class ForgetAccountTests: XCTestCase {
         defaults.set("Europe/London", forKey: "cria.timezone")
         defaults.set(["task-1"], forKey: "cria.manualProgress")
         defaults.set(Data([1]), forKey: PreferencesStore.key)
+        RecentServers(defaults: defaults).remember(server: "https://vk.example", username: "ada")
         shared.set("project-1", forKey: "cria.captureProjectLocalId")
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("forget-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -21,6 +22,8 @@ final class ForgetAccountTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: "cria.manualProgress"))
         XCTAssertNotNil(defaults.object(forKey: PreferencesStore.key), "device preferences stay")
         XCTAssertNil(shared.object(forKey: "cria.captureProjectLocalId"))
+        XCTAssertEqual(RecentServers(defaults: defaults).servers(), ["https://vk.example"], "recent servers stay")
+        XCTAssertNil(RecentServers(defaults: defaults).username(for: "https://vk.example"), "the remembered username goes")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: temporary.path), [])
     }
 }

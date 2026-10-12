@@ -8,6 +8,7 @@ struct RambleSheet: View {
     let services: AppServices
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var text = ""
     @State private var proposals: [RambleProposal] = []
     @State private var projects: [ProjectRecord] = []
@@ -18,6 +19,9 @@ struct RambleSheet: View {
     @State private var autoStarted = false
     @State private var editing: RambleProposal?
     @State private var detent = PresentationDetent.medium
+    /// The model run. It keeps going if the app is switched away (see `BackgroundRun`) and stops with the sheet.
+    @State private var generation: Task<Void, Never>?
+    @State private var confirmingDiscard = false
     @FocusState private var typing: Bool
 
     private var mode: QuickAddMagicMode {
@@ -25,6 +29,9 @@ struct RambleSheet: View {
     }
 
     private var chosen: [RambleProposal] { Ramble.chosen(proposals) }
+
+    /// Rows that would be lost by closing. Switching to another app never loses them; closing the sheet does.
+    private var hasUnsavedRows: Bool { !chosen.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -40,6 +47,10 @@ struct RambleSheet: View {
                 }
                 .task { await startOnOpen() }
                 .onDisappear { speech.stop() }
+                // A finished-in-the-background notice has done its job once the user is back.
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { RambleNotice.clear() }
+                }
                 .navigationTitle("Ramble")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
@@ -50,6 +61,18 @@ struct RambleSheet: View {
                 }
         }
         .presentationDetents([.medium, .large], selection: $detent)
+        // With rows to lose, a swipe down asks first (the hook turns the blocked swipe into the dialog below).
+        .interactiveDismissDisabled(hasUnsavedRows)
+        // On the stack, not on `content` (which swaps views when rows arrive): closing the sheet ends the model run.
+        .onDisappear { generation?.cancel() }
+        .confirmationDialog(
+            "Discard \(Ramble.taskCount(chosen.count))?", isPresented: $confirmingDiscard, titleVisibility: .visible
+        ) {
+            Button("Discard", role: .destructive) { discardAndClose() }
+            Button("Keep reviewing", role: .cancel) {}
+        } message: {
+            Text("They have not been added yet.")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -72,7 +95,7 @@ struct RambleSheet: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { close() } }
         if !proposals.isEmpty {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Add \(Ramble.taskCount(chosen.count))", systemImage: "checkmark") { save() }
@@ -91,7 +114,7 @@ struct RambleSheet: View {
                 Text(problem).font(Theme.caption).foregroundStyle(Color(.destructive))
             }
             Button {
-                Task { await generate() }
+                generation = Task { await generate() }
             } label: {
                 Text(working ? "Organising…" : "Make a task list")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -182,14 +205,40 @@ struct RambleSheet: View {
             let labels = try store.labels().map(\.title)
             let autoTag = PreferencesStore().load().rambleChoosesTags
             let context = AIPrompts.RambleContext(projects: visible.map(\.title), labels: labels, mode: mode, autoTag: autoTag)
-            let drafts = try await AIStatus.shared.features.ramble(text, context: context)
+            let features = AIStatus.shared.features
+            let spoken = text
+            // Keeps running if the user switches apps; a Live Activity shows progress on iOS 26.
+            let drafts = try await BackgroundRun.run(title: "Organising your ramble") {
+                try await features.ramble(spoken, context: context)
+            }
+            if Task.isCancelled { return }
             projects = visible
             proposals = Ramble.proposals(from: drafts, projects: visible, mode: mode, knownLabels: autoTag ? labels : nil)
             errorMessage = proposals.isEmpty ? "The model found no tasks in that." : nil
-            if !proposals.isEmpty { detent = .large }
+            if !proposals.isEmpty {
+                detent = .large
+                await RambleNotice.postIfBackgrounded(count: proposals.count)
+            }
         } catch {
+            if Task.isCancelled { return }
             errorMessage = AIPrompts.errorMessage(String(describing: error))
         }
+    }
+
+    /// Cancel: closes straight away unless there are rows to lose.
+    private func close() {
+        if hasUnsavedRows {
+            confirmingDiscard = true
+        } else {
+            generation?.cancel()
+            dismiss()
+        }
+    }
+
+    private func discardAndClose() {
+        generation?.cancel()
+        proposals = []
+        dismiss()
     }
 
     private func save() {

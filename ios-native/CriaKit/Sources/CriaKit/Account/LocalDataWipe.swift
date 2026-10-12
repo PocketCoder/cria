@@ -23,10 +23,11 @@ public enum LocalDataWipe {
     }
 
     /// Settings values that belong to the account: other people's names, cached server settings, hand-set progress
-    /// (keyed by task), the last full reconcile and, in the App Group, the capture project.
+    /// (keyed by task), the last full reconcile, the usernames remembered at sign-in (the recent server list stays)
+    /// and, in the App Group, the capture project.
     static let accountDefaultsKeys = [
         "cria.userNames", "cria.timezone", "cria.weekStart", "cria.quickAddMagicMode", "cria.manualProgress",
-        "cria.lastReconcileAt"
+        "cria.lastReconcileAt", RecentServers.usernamesKey
     ]
     static let sharedAccountDefaultsKeys = ["cria.captureProjectLocalId"]
 

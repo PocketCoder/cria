@@ -30,6 +30,7 @@ struct LoginView: View {
                     .submitLabel(.next)
                     .onSubmit { focus = firstField }
                     .accessibilityIdentifier("login.server")
+                if !model.recentServers.isEmpty { recentServerChips }
             } header: {
                 Text("Server")
             } footer: {
@@ -73,8 +74,35 @@ struct LoginView: View {
         .criaSurface()
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            model.adoptRecentServers(RecentServers())
             if model.serverURL.isEmpty { model.serverURL = lastServerURL }
         }
+    }
+
+    /// Up to five servers signed in to before. A tap fills the server (and its remembered username); a long press
+    /// offers to forget it.
+    private var recentServerChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(model.recentServers, id: \.self) { server in
+                    Button(Self.chipTitle(server)) { model.pickServer(server) }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                        .tint(server == model.serverURL ? Color(.primary) : Color(.mutedForeground))
+                        .contextMenu {
+                            Button("Forget this server", systemImage: "trash", role: .destructive) { model.forgetServer(server) }
+                        }
+                        .accessibilityLabel("Use \(server)")
+                }
+            }
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+    }
+
+    /// The address without its scheme, which every recent server shares.
+    private static func chipTitle(_ server: String) -> String {
+        server.replacingOccurrences(of: "https://", with: "")
     }
 
     private var firstField: Field {
@@ -122,6 +150,8 @@ struct LoginView: View {
             .onSubmit(submit)
             .focused($focus, equals: .password)
             .accessibilityIdentifier("login.password")
+        Toggle("Remember me", isOn: $model.rememberMe)
+            .accessibilityIdentifier("login.rememberMe")
         if model.totpRequired {
             TextField("Two-factor code", text: $model.totpCode)
                 .textContentType(.oneTimeCode)

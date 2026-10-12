@@ -17,6 +17,8 @@ public final class LoginViewModel {
     /// A share URL or its bare hash.
     public var shareLink = ""
     public var sharePassword = ""
+    /// Keep the username (never the password) for the next sign-in to this server. Password sign-in only.
+    public var rememberMe = true
 
     public private(set) var serverURLError: String?
     public private(set) var submitError: String?
@@ -24,7 +26,12 @@ public final class LoginViewModel {
     /// Set once the server said the share has a password, so the field is shown.
     public private(set) var sharePasswordRequired = false
     public private(set) var isSubmitting = false
+    /// Servers signed in to before, newest first, for the quick-pick chips. Empty until `adoptRecentServers`.
+    public private(set) var recentServers: [String] = []
 
+    @ObservationIgnored private var recentStore: RecentServers?
+    /// The address that passed validation in the current submit, for remembering it once the sign-in works.
+    @ObservationIgnored private var validatedURL: String?
     private let service: LoginService
     private let onSignedIn: @MainActor (SignInResult) async throws -> Void
 
@@ -40,6 +47,29 @@ public final class LoginViewModel {
         totpRequired = false
         totpCode = ""
         serverURLError = nil
+    }
+
+    /// Starts using the recent-server list: loads it, and when the server field is still empty fills it (and the
+    /// username remembered for it) from the newest entry. A remembered username also opens the Password tab.
+    public func adoptRecentServers(_ store: RecentServers) {
+        guard recentStore == nil else { return }
+        recentStore = store
+        recentServers = store.servers()
+        guard serverURL.isEmpty, let latest = recentServers.first else { return }
+        pickServer(latest)
+        if !username.isEmpty { method = .password }
+    }
+
+    /// A tap on a recent-server chip.
+    public func pickServer(_ server: String) {
+        serverURL = server
+        serverURLError = nil
+        if let saved = recentStore?.username(for: server) { username = saved }
+    }
+
+    public func forgetServer(_ server: String) {
+        recentStore?.forget(server: server)
+        recentServers = recentStore?.servers() ?? []
     }
 
     /// Fills the server field from a pasted share URL, so pasting the link is enough. The field stays editable for
@@ -63,6 +93,7 @@ public final class LoginViewModel {
         case .success(let value):
             serverURLError = nil
             url = value
+            validatedURL = value
         }
 
         switch method {
@@ -126,9 +157,19 @@ public final class LoginViewModel {
         do {
             let result = try await operation()
             try await onSignedIn(result)
+            rememberSignIn()
         } catch {
             if handleError?(error) == true { return }
             submitError = LoginValidation.message(for: error)
         }
+    }
+
+    /// Only once the server has accepted the credentials. The username is kept for password sign-ins with
+    /// "Remember me" on; the password is never stored.
+    private func rememberSignIn() {
+        guard let recentStore, let url = validatedURL else { return }
+        let keepName = method == .password && rememberMe
+        recentStore.remember(server: url, username: keepName ? username : nil)
+        recentServers = recentStore.servers()
     }
 }

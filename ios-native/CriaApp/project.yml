@@ -21,6 +21,9 @@ targets:
       path: Config/CriaApp-Info.plist
       properties:
         UIAppFonts: [Onest-Bold.ttf]
+        # Ramble's on-device model run continues in the background as a BGContinuedProcessingTask on iOS 26
+        # (BackgroundRun.swift). Its identifiers are "<bundle id>.ai.<uuid>". No background mode is needed.
+        BGTaskSchedulerPermittedIdentifiers: ["$(PRODUCT_BUNDLE_IDENTIFIER).ai.*"]
         CFBundleURLTypes:
           - CFBundleURLName: io.cria.app.swift
             CFBundleURLSchemes: [cria]

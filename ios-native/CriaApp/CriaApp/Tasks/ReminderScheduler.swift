@@ -30,10 +30,18 @@ enum ReminderScheduler {
         let center = UNUserNotificationCenter.current()
         // Signed out (or signing out): schedule nothing for an account that has gone.
         let enabled = PreferencesStore().load().notificationsEnabled && SignedInFlag.isSignedIn()
-        let pending = await center.pendingNotificationRequests().map(\.identifier)
+        let requests = await center.pendingNotificationRequests()
+        // Reminders scheduled before the Complete and Snooze actions existed lack the category: drop and re-add them.
+        let outdated = requests.filter {
+            $0.identifier.hasPrefix(ReminderSchedule.identifierPrefix)
+                && $0.content.categoryIdentifier != ReminderActions.categoryIdentifier
+        }.map(\.identifier)
+        let pending = requests.map(\.identifier).filter { !outdated.contains($0) }
         let wanted = enabled ? ReminderSchedule.plan(upcoming) : []
         let change = ReminderSchedule.reconcile(wanted: wanted, pendingIdentifiers: pending)
-        center.removePendingNotificationRequests(withIdentifiers: change.removeIdentifiers)
+        // Snoozed copies (see `ReminderActions`) are not part of the plan, but the master switch still clears them.
+        let snoozed = enabled ? [] : pending.filter { $0.hasPrefix(ReminderActions.snoozePrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: change.removeIdentifiers + snoozed + outdated)
         guard !change.add.isEmpty, await isAuthorised(center) else { return }
         let owners = taskOwners(upcoming)
         for item in change.add {
@@ -41,6 +49,8 @@ enum ReminderScheduler {
             let content = UNMutableNotificationContent()
             content.title = item.title
             content.sound = .default
+            // Press and hold offers Complete and Snooze.
+            content.categoryIdentifier = ReminderActions.categoryIdentifier
             if let localId = owners[item.identifier] { content.userInfo = [NotificationRouter.taskKey: localId] }
             let parts = Calendar.cria.dateComponents([.year, .month, .day, .hour, .minute, .second], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)

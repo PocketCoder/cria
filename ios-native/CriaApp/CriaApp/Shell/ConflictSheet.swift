@@ -1,6 +1,7 @@
 import CriaKit
 import Observation
 import SwiftUI
+import UIKit
 
 /// Unresolved conflicts and whether the sheet is up. An unresolved conflict holds that task's pushes, so the sheet
 /// opens by itself when one appears; once the user closes it with conflicts left, it stays closed for the session
@@ -14,17 +15,49 @@ final class ConflictPrompt {
     private var dismissedThisSession = false
 
     /// Conflicts recorded by a pull are silent, so this also rereads after task, project and label changes (a pull's
-    /// end announces them).
+    /// end announces them). A tap on the conflict notification opens the sheet from here too.
     func run(store: CriaStore) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.watch(store) }
+            group.addTask { await self.listenForOpenRequests() }
+        }
+    }
+
+    private func watch(_ store: CriaStore) async {
         let stream = observeStore(store, kinds: [.conflicts, .tasks, .projects, .labels, .outbox]) { try $0.unresolvedConflicts() }
+        var known: Set<Int>?
         for await list in stream {
             conflicts = list
             if !list.isEmpty, !dismissedThisSession, !isPresented { isPresented = true }
+            // The first read is what was already there; only conflicts that arrive after it are news.
+            let ids = Set(list.map(\.id))
+            if let known, !ids.subtracting(known).isEmpty { notifyNewConflicts() }
+            known = ids
+            openIfRequested()
         }
+    }
+
+    private func listenForOpenRequests() async {
+        for await _ in ConflictNotice.openRequests() {
+            openIfRequested()
+        }
+    }
+
+    private func openIfRequested() {
+        if NotificationRouter.shared.takeConflictSheetRequest() { open() }
+    }
+
+    /// A local notification when new conflicts appear and the user would not otherwise see the sheet: the app is in
+    /// the background, or the sheet was closed earlier this session (so it will not open by itself).
+    private func notifyNewConflicts() {
+        guard !isShowing, UIApplication.shared.applicationState != .active || dismissedThisSession else { return }
+        let count = conflicts.count
+        Task { await ConflictNotice.post(count: count) }
     }
 
     func sheetAppeared() {
         isShowing = true
+        ConflictNotice.clear()
     }
 
     func sheetDismissed() {
