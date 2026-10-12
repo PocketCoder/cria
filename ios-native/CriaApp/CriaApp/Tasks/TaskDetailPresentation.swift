@@ -21,6 +21,9 @@ final class TaskDetailPresentation {
     var deletingAttachment: AttachmentRecord?
     var attachmentError: String?
     var addingRelation = false
+    var suggestingSubtasks = false
+    /// Titles of the subtasks there when suggestions were asked for, so the model's repeats are dropped.
+    var existingSubtasks: [String] = []
     var assigning = false
     /// The user picked in the assign sheet, saved once the sheet has gone.
     var pickedAssignee: UserResponse?
@@ -100,6 +103,9 @@ struct TaskDetailSheets: ViewModifier {
             }
             .sheet(isPresented: $state.addingRelation) {
                 RelationPickerSheet(services: services, taskLocalId: taskLocalId)
+            }
+            .sheet(isPresented: $state.suggestingSubtasks) {
+                SubtaskSuggestionsSheet(services: services, taskLocalId: taskLocalId, existing: state.existingSubtasks)
             }
             .sheet(isPresented: $state.assigning, onDismiss: assignPicked) {
                 AssigneePickerSheet(services: services, assigned: assigned) { state.pickedAssignee = $0 }

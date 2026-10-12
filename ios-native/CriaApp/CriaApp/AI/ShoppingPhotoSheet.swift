@@ -5,7 +5,8 @@ import UIKit
 import Vision
 
 /// Photo of a handwritten or printed list to tasks: Vision reads the text, `ShoppingItems` cleans it, the model
-/// (when available) tidies it further, and the user reviews before anything is created.
+/// (when available) tidies it further, and the user reviews before anything is created. "Tidy up" runs the model again
+/// on the ticked lines, and "Undo tidy" restores the list from before the last tidy, since the model may drop lines.
 struct ShoppingPhotoSheet: View {
     let services: AppServices
     @Environment(\.dismiss) private var dismiss
@@ -19,6 +20,8 @@ struct ShoppingPhotoSheet: View {
     @State private var errorMessage: String?
     @State private var captured: UIImage?
     @State private var libraryRequested = false
+    @State private var tidying = false
+    @State private var untidied: [DraftItem]?
 
     var body: some View {
         NavigationStack {
@@ -45,7 +48,7 @@ struct ShoppingPhotoSheet: View {
                 if !items.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(ShoppingItems.addButtonLabel(ShoppingItems.selected(items).count), systemImage: "checkmark") { save() }
-                            .disabled(ShoppingItems.selected(items).isEmpty || projectId.isEmpty)
+                            .disabled(tidying || ShoppingItems.selected(items).isEmpty || projectId.isEmpty)
                             .modifier(CriaProminentToolbarButton())
                     }
                 }
@@ -117,8 +120,7 @@ struct ShoppingPhotoSheet: View {
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(ShoppingItems.selectedLabel(ShoppingItems.selected(items).count))
-                .font(Theme.headline).padding(.horizontal, 6)
+            reviewHeader
             VStack(spacing: 0) {
                 ForEach($items) { $item in
                     HStack(spacing: 12) {
@@ -138,6 +140,7 @@ struct ShoppingPhotoSheet: View {
                 }
             }
             .background(Color(.cell), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .disabled(tidying)
             VStack(spacing: 0) {
                 Picker("Project", selection: $projectId) {
                     Text("Choose a project").tag("")
@@ -148,8 +151,9 @@ struct ShoppingPhotoSheet: View {
                 TextField("Label (optional)", text: $label).padding(.horizontal, 14).frame(minHeight: 48)
             }
             .background(Color(.cell), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            Button("Start over", role: .destructive) { items = []; captured = nil }
+            Button("Start over", role: .destructive) { items = []; captured = nil; untidied = nil }
                 .font(Theme.rowSubtitle).frame(maxWidth: .infinity)
+                .disabled(tidying)
         }
     }
 
@@ -167,16 +171,60 @@ struct ShoppingPhotoSheet: View {
         defer { working = false }
         captured = UIImage(data: data)
         let lines = await TextRecogniser.lines(in: data)
-        var parsed = ShoppingItems.parse(lines)
-        if AIStatus.shared.isOfferable, !parsed.isEmpty,
-           let tidy = try? await AIStatus.shared.features.tidyList(parsed) {
-            parsed = ShoppingItems.parse(tidy)
-        }
-        items = ShoppingItems.drafts(from: parsed)
+        items = ShoppingItems.drafts(from: ShoppingItems.parse(lines))
+        untidied = nil
         errorMessage = items.isEmpty ? "No list items found in that photo." : nil
+        if AIStatus.shared.isOfferable, AIStatus.shared.notReadyMessage == nil { await tidy() }
+    }
+
+    /// The count, then "Undo tidy" and "Tidy up" where the device can run the model.
+    private var reviewHeader: some View {
+        HStack(spacing: 12) {
+            Text(ShoppingItems.selectedLabel(ShoppingItems.selected(items).count)).font(Theme.headline)
+            Spacer()
+            if AIStatus.shared.isOfferable {
+                if untidied != nil {
+                    Button("Undo tidy", systemImage: "arrow.uturn.backward") { undoTidy() }
+                        .accessibilityHint("Restores the list as it was before tidying")
+                }
+                Button(tidying ? "Tidying…" : "Tidy up", systemImage: "sparkles") { Task { await tidy() } }
+                    .disabled(AIStatus.shared.notReadyMessage != nil)
+                    .accessibilityHint("Fixes misreadings and drops prices and headings, on this device")
+            }
+        }
+        .font(Theme.rowSubtitle)
+        .buttonStyle(.borderless)
+        .disabled(tidying)
+        .padding(.horizontal, 6)
+    }
+
+    /// On-device clean-up of the ticked lines (misreadings, split items, prices). Replaces the list and keeps the one
+    /// before it for "Undo tidy". The list is locked while it runs, since the result would overwrite edits.
+    private func tidy() async {
+        let before = items
+        let lines = ShoppingItems.selected(before).map(\.text)
+        guard !lines.isEmpty, !tidying else { return }
+        tidying = true
+        defer { tidying = false }
+        do {
+            let cleaned = ShoppingItems.parse(try await AIStatus.shared.features.tidyList(lines))
+            guard !cleaned.isEmpty else { return }
+            items = ShoppingItems.drafts(from: cleaned)
+            untidied = before
+            errorMessage = nil
+        } catch {
+            errorMessage = AIPrompts.errorMessage(String(describing: error))
+        }
+    }
+
+    private func undoTidy() {
+        if let untidied { items = untidied }
+        untidied = nil
     }
 
     private func save() {
+        // A pre-tidy list would bring back items saved below.
+        untidied = nil
         do {
             try services.store.createTasks(fromItems: ShoppingItems.selected(items), projectId: projectId, label: label) { saved in
                 items.removeAll { $0.id == saved.id }

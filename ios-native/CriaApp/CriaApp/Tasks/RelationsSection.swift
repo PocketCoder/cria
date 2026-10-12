@@ -41,7 +41,25 @@ struct RelationsSection: View {
             } else {
                 Button("Add subtask", systemImage: "plus.circle") { addingSubtask = true }
             }
+            suggestButton
             Button("Add relation", systemImage: "link.badge.plus") { state.addingRelation = true }
+        }
+    }
+
+    /// "Suggest subtasks" from the on-device model. Hidden where the device cannot run it; disabled, with the reason,
+    /// while Apple Intelligence is off or still getting ready.
+    @ViewBuilder
+    private var suggestButton: some View {
+        if AIStatus.shared.isOfferable {
+            // Presented by the screen (TaskDetailSheets), not this lazily created row.
+            Button("Suggest subtasks", systemImage: "sparkles") {
+                state.existingSubtasks = relations.filter { $0.kind == "subtask" }.map(\.otherTitle)
+                state.suggestingSubtasks = true
+            }
+            .disabled(AIStatus.shared.notReadyMessage != nil)
+            if let reason = AIStatus.shared.notReadyMessage {
+                Text(reason).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
         }
     }
 

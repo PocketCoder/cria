@@ -37,6 +37,8 @@ struct FilterEditorSheet: View {
                     TextField("Description", text: $details)
                 }
                 Section {
+                    // Hidden where the on-device model is not offered.
+                    DescribeFilterRow(services: services) { query = $0 }
                     TextField("done = false && priority >= 3", text: $query, axis: .vertical)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

@@ -24,7 +24,7 @@ public enum AIPrompts {
         return shown.isEmpty ? "(none)" : shown.joined(separator: ", ")
     }
 
-    private static func replacing(_ text: String, _ pattern: String, with template: String) -> String {
+    static func replacing(_ text: String, _ pattern: String, with template: String) -> String {
         text.replacingOccurrences(of: pattern, with: template, options: .regularExpression)
     }
 

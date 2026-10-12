@@ -41,12 +41,31 @@ public struct AIFeatures: Sendable {
         return Ramble.drafts(fromLines: AIPrompts.parseLines(output), mode: context.mode)
     }
 
-    public func subtasks(title: String, descriptionHtml: String?) async throws -> [String] {
+    /// Up to eight subtask titles, without any that repeat the task itself or one of `existing` (its current
+    /// subtasks).
+    public func subtasks(title: String, descriptionHtml: String?, existing: [String] = []) async throws -> [String] {
         let output = try await model.generate(
             instructions: AIPrompts.subtaskInstructions,
             prompt: AIPrompts.subtaskPrompt(title: title, descriptionHtml: descriptionHtml)
         )
-        return AIPrompts.parseLines(output, max: 8)
+        let fresh = AIPrompts.newSubtasks(AIPrompts.parseLines(output), parentTitle: title, existing: existing)
+        return Array(fresh.prefix(8))
+    }
+
+    /// A filter query for a request in words. The answer must pass the same parser Save uses; on a parse error the
+    /// model gets one retry with the error fed back, and the second answer is returned as is for the user to fix.
+    public func filterQuery(describing request: String, projects: [String], labels: [String],
+                            now: Date = Date()) async throws -> String {
+        let text = request.trimmingCharacters(in: .whitespacesAndNewlines)
+        let instructions = AIPrompts.filterInstructions(projects: projects, labels: labels)
+        let query = AIPrompts.cleanFilter(try await model.generate(instructions: instructions, prompt: AIPrompts.clip(text)))
+        do {
+            _ = try parseFilterQuery(query, now: now)
+            return query
+        } catch {
+            let repair = AIPrompts.filterRepairPrompt(request: text, invalid: query, error: String(describing: error))
+            return AIPrompts.cleanFilter(try await model.generate(instructions: instructions, prompt: AIPrompts.clip(repair)))
+        }
     }
 
     public func summary(of comments: [AIPrompts.ThreadComment]) async throws -> String {
