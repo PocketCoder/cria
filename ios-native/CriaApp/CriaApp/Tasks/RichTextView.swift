@@ -44,7 +44,10 @@ private struct RichTextWebView: UIViewRepresentable {
         // Every parent re-render (each sync) lands here; only a real change of content reloads the page.
         guard context.coordinator.loadedHTML != html else { return }
         context.coordinator.loadedHTML = html
+        // The editor stores a pending image as `src="#"` with the real address in `data-src`; point `src` at it so
+        // the scheme handler can serve the queued bytes.
         let body = HTMLSanitizer.sanitize(html)
+            .replacingOccurrences(of: ##"src="#" data-src="cria://pending/"##, with: ##"src="cria://pending/"##)
         let page = """
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>body{font:-apple-system-body;margin:0;color-scheme:light dark}\
