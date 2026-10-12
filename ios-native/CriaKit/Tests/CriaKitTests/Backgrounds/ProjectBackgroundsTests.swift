@@ -54,6 +54,17 @@ final class ProjectBackgroundsTests: XCTestCase {
         XCTAssertEqual(hit, imageBytes)
     }
 
+    func testCachedAndReplaceSkipTheServer() throws {
+        let blobs = MemoryBlobs()
+        let cache = ProjectBackgroundCache(blobs: blobs)
+        XCTAssertNil(cache.cached(serverId: 7))
+        cache.replace(serverId: 7, with: imageBytes)
+        XCTAssertEqual(cache.cached(serverId: 7), imageBytes)
+        cache.replace(serverId: 7, with: nil)
+        XCTAssertNil(cache.cached(serverId: 7))
+        XCTAssertEqual(blobs.ids, [])
+    }
+
     func testClearRemovesOnlyBackgrounds() throws {
         let blobs = MemoryBlobs()
         try blobs.write("project-bg-1", imageBytes)

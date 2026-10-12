@@ -68,7 +68,15 @@ struct ProjectEditorSheet: View {
                         }
                     }
                 }
-                if editing != nil {
+                if let editing {
+                    Section {
+                        // Online and applied at once, unlike the fields above, which wait for Save.
+                        NavigationLink {
+                            ProjectBackgroundView(services: services, project: editing)
+                        } label: {
+                            Label("Background", systemImage: "photo")
+                        }
+                    }
                     Section { Toggle("Archived", isOn: $isArchived) }
                 }
                 if let errorMessage {

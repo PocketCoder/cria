@@ -1,5 +1,6 @@
 import CriaKit
 import SwiftUI
+import UIKit
 
 /// What a project screen reads for its title, subtitle and view pills.
 struct ProjectScreenData: Equatable, Sendable {
@@ -9,7 +10,7 @@ struct ProjectScreenData: Equatable, Sendable {
 }
 
 /// The line under a project's large title (colour dot and open count, like Today's date line) and a scrolling row
-/// of view pills. The last pill opens Manage views.
+/// of view pills. The last pill opens Manage views. A project with a background shows it as a banner on top.
 struct ProjectHeader: View {
     let views: [ViewRecord]
     let selectedId: String?
@@ -18,12 +19,20 @@ struct ProjectHeader: View {
     let canManage: Bool
     let onSelect: (String) -> Void
     let onManage: () -> Void
+    /// The project's background, once loaded. Nil (no background, or not loaded yet) shows no banner.
+    var background: UIImage?
+    /// Shorter when pinned above a board or timeline, which need the height.
+    var bannerHeight: CGFloat = 120
 
     /// One view and nothing to manage: a single pill would only repeat the title.
     private var showsPills: Bool { views.count > 1 || canManage }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let background {
+                ProjectBackgroundBanner(image: background, height: bannerHeight)
+                    .transition(.opacity)
+            }
             subtitle
             if showsPills { pills }
         }
@@ -107,9 +116,15 @@ struct PinnedProjectHeader<Content: View>: View {
     let header: ProjectHeader
     @ViewBuilder let content: Content
 
+    private var compactHeader: ProjectHeader {
+        var compact = header
+        compact.bannerHeight = 72
+        return compact
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            header
+            compactHeader
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
                 .padding(.bottom, 12)

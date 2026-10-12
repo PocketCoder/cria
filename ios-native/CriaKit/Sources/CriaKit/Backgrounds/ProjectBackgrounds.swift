@@ -64,6 +64,21 @@ public struct ProjectBackgroundCache: Sendable {
         return try? blobs.read(blobId)
     }
 
+    /// The cached bytes only, without asking the server: what a screen shows while the fresh copy loads.
+    public func cached(serverId: Int) -> Data? {
+        try? blobs.read(BlobIds.projectBackground(serverId: serverId))
+    }
+
+    /// Records a background the user just set (its bytes) or removed (nil), so screens show it without a refetch.
+    public func replace(serverId: Int, with data: Data?) {
+        let blobId = BlobIds.projectBackground(serverId: serverId)
+        if let data {
+            try? blobs.write(blobId, data)
+        } else {
+            try? blobs.delete(blobId)
+        }
+    }
+
     /// Drops every cached background, e.g. from Settings or on sign-out. Never throws. Returns how many were removed.
     @discardableResult
     public func clear() -> Int {

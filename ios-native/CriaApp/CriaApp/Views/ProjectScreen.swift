@@ -1,9 +1,10 @@
 import CriaKit
 import SwiftUI
+import UIKit
 
 /// A project with its views: the project's name as a large title, an open count and a row of view pills under
 /// it, then the selected view. List-shaped views carry the header in their scroll content (like Today); the board
-/// and the timeline pin it above.
+/// and the timeline pin it above. A project background shows as a banner in the header.
 struct ProjectScreen: View {
     let services: AppServices
     let projectLocalId: String
@@ -11,6 +12,9 @@ struct ProjectScreen: View {
     @State private var live: LiveValue<ProjectScreenData>
     @State private var selectedId: String?
     @State private var managing = false
+    @State private var background: UIImage?
+    /// Bumped when the background changes elsewhere, to reload it.
+    @State private var backgroundRevision = 0
 
     init(services: AppServices, projectLocalId: String, title: String) {
         self.services = services
@@ -46,7 +50,8 @@ struct ProjectScreen: View {
             openCount: live.value.openCount,
             canManage: canManage,
             onSelect: { id in withAnimation(.snappy) { selectedId = id } },
-            onManage: { managing = true }
+            onManage: { managing = true },
+            background: background
         )
     }
 
@@ -60,6 +65,21 @@ struct ProjectScreen: View {
                 }
             }
             .task { await live.run() }
+            .task(id: "\(live.value.project?.serverId ?? 0)-\(backgroundRevision)") { await loadBackground() }
+            .onReceive(NotificationCenter.default.publisher(for: .criaProjectBackgroundChanged)) { note in
+                if let serverId = note.object as? Int, serverId == live.value.project?.serverId { backgroundRevision += 1 }
+            }
+    }
+
+    /// Cached copy first, then the server's; nothing for a project that has not synced yet.
+    private func loadBackground() async {
+        guard let serverId = live.value.project?.serverId else {
+            background = nil
+            return
+        }
+        await ProjectBackgroundLoader.load(services: services, serverId: serverId) { image in
+            withAnimation(.easeOut(duration: 0.25)) { background = image }
+        }
     }
 
     @ViewBuilder private var content: some View {
