@@ -8,16 +8,21 @@ private let kindTitles: [String: String] = [
 ]
 
 /// Subtasks, parent and other relations of a task. Add and remove write through the store and queue the server call.
-/// A related task that exists locally opens on tap, as in the web client.
+/// A related task that exists locally opens on tap, as in the web client. Subtasks come first, each with its own
+/// done toggle, and "Add subtask" creates one in place.
 struct RelationsSection: View {
     let services: AppServices
     let taskLocalId: String
     let relations: [RelationRecord]
     let state: TaskDetailPresentation
+    @State private var addingSubtask = false
+    @State private var subtaskTitle = ""
+    @State private var subtaskError: String?
+    @FocusState private var subtaskFocused: Bool
 
     var body: some View {
         Section("Relations") {
-            ForEach(relations, id: \.identity) { relation in
+            ForEach(ordered, id: \.identity) { relation in
                 Group {
                     if let otherId = relation.otherTaskLocalId {
                         NavigationLink(value: Route.task(otherId)) { relationLabel(relation) }
@@ -31,17 +36,90 @@ struct RelationsSection: View {
                     }
                 }
             }
+            if addingSubtask {
+                subtaskField
+            } else {
+                Button("Add subtask", systemImage: "plus.circle") { addingSubtask = true }
+            }
             Button("Add relation", systemImage: "link.badge.plus") { state.addingRelation = true }
         }
     }
 
+    /// Subtasks first, then the other kinds in the store's order.
+    private var ordered: [RelationRecord] {
+        relations.filter { $0.kind == "subtask" } + relations.filter { $0.kind != "subtask" }
+    }
+
+    @ViewBuilder
+    private var subtaskField: some View {
+        HStack {
+            Image(systemName: "circle").foregroundStyle(Color(.mutedForeground))
+            TextField("Subtask title", text: $subtaskTitle)
+                .focused($subtaskFocused)
+                .submitLabel(.next)
+                .onAppear { subtaskFocused = true }
+                .onSubmit(createSubtask)
+            Button("Done") { closeSubtaskField() }
+                .buttonStyle(.borderless)
+        }
+        if let subtaskError {
+            Text(subtaskError).font(Theme.caption).foregroundStyle(Color(.destructive))
+        }
+    }
+
+    /// Creates the subtask and keeps the field open for the next one. Return on an empty field closes it.
+    private func createSubtask() {
+        let title = subtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            closeSubtaskField()
+            return
+        }
+        do {
+            try services.store.createSubtask(parentLocalId: taskLocalId, title: title)
+            subtaskTitle = ""
+            subtaskError = nil
+        } catch {
+            subtaskError = "Could not add the subtask: \(error)"
+        }
+        // Return ends editing; take the focus back for the next title.
+        Task { @MainActor in subtaskFocused = true }
+    }
+
+    private func closeSubtaskField() {
+        addingSubtask = false
+        subtaskTitle = ""
+        subtaskError = nil
+        subtaskFocused = false
+    }
+
     private func relationLabel(_ relation: RelationRecord) -> some View {
         HStack {
-            Image(systemName: relation.otherDone ? "checkmark.circle.fill" : "circle")
+            doneMark(relation)
             VStack(alignment: .leading) {
                 Text(relation.otherTitle)
+                    .strikethrough(relation.kind == "subtask" && relation.otherDone)
                 Text(kindTitles[relation.kind] ?? relation.kind).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
+        }
+    }
+
+    /// A subtask that exists locally gets a tappable done toggle; anything else only shows its state.
+    @ViewBuilder
+    private func doneMark(_ relation: RelationRecord) -> some View {
+        let symbol = relation.otherDone ? "checkmark.circle.fill" : "circle"
+        if relation.kind == "subtask", let otherId = relation.otherTaskLocalId {
+            Button {
+                state.attempt { _ = try services.store.updateTask(localId: otherId, patch: TaskPatch(done: !relation.otherDone)) }
+            } label: {
+                Image(systemName: symbol)
+                    .foregroundStyle(relation.otherDone ? Color(.primary) : Color(.mutedForeground))
+                    .frame(minWidth: 28, minHeight: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(relation.otherDone ? "Mark not done" : "Mark done")
+        } else {
+            Image(systemName: symbol)
         }
     }
 }

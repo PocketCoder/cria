@@ -111,7 +111,8 @@ struct TaskDetailSheets: ViewModifier {
     }
 }
 
-/// Delete confirmations and the shared error alert of the task detail screen.
+/// Delete confirmations and the shared error alert of the task detail screen. Centred alerts, not confirmation
+/// dialogs: on iOS 26 a dialog is a popover anchored to the view it hangs off, which here is the whole screen.
 struct TaskDetailDialogs: ViewModifier {
     let services: AppServices
     let taskLocalId: String
@@ -120,24 +121,23 @@ struct TaskDetailDialogs: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog("Delete task?", isPresented: $state.deletingTask, titleVisibility: .visible) {
+            .alert("Delete task?", isPresented: $state.deletingTask) {
                 Button("Delete", role: .destructive, action: onDeleteTask)
+                Button("Cancel", role: .cancel) {}
             }
-            .confirmationDialog(
-                "Delete this comment?", isPresented: state.isSet(\.deletingComment), titleVisibility: .visible,
-                presenting: state.deletingComment
-            ) { comment in
+            .alert("Delete this comment?", isPresented: state.isSet(\.deletingComment), presenting: state.deletingComment) { comment in
                 Button("Delete", role: .destructive) {
                     state.attempt { try services.store.deleteComment(localId: comment.localId) }
                 }
+                Button("Cancel", role: .cancel) {}
             }
-            .confirmationDialog(
-                "Delete this attachment?", isPresented: state.isSet(\.deletingAttachment), titleVisibility: .visible,
-                presenting: state.deletingAttachment
+            .alert(
+                "Delete this attachment?", isPresented: state.isSet(\.deletingAttachment), presenting: state.deletingAttachment
             ) { attachment in
                 Button("Delete", role: .destructive) {
                     AttachmentActions(services: services, taskLocalId: taskLocalId, state: state).remove(attachment)
                 }
+                Button("Cancel", role: .cancel) {}
             } message: { attachment in
                 Text(attachment.fileName)
             }

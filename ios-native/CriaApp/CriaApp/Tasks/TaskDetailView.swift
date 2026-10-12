@@ -10,25 +10,26 @@ struct TaskDetailData: Equatable, Sendable {
     var currentProject: ProjectRecord?
 }
 
-private let priorityNames = ["None", "Low", "Medium", "High", "Urgent", "Do now"]
-
 /// Task detail. Every control writes through the store, so the change is saved locally at once and queued in the
-/// outbox for the server. Text fields save when editing ends.
+/// outbox for the server. Text fields, the description included, save when editing ends.
 struct TaskDetailView: View {
     let services: AppServices
     let taskLocalId: String
     @State private var live: LiveValue<TaskDetailData>
     @State private var feeds: TaskDetailFeeds
-    @State private var sheets = TaskDetailPresentation()
+    @State private var sheets: TaskDetailPresentation
+    @State private var descriptionDraft: DescriptionDraft
     @State private var title = ""
     /// The title as last loaded from the store. Only a difference from this is the user's edit, so a title that
     /// changed elsewhere (another device, a pull) is never written back over.
     @State private var loadedTitle = ""
-    @State private var percentDraft: Double?
     @State private var didLoad = false
     @State private var showLabels = false
+    @State private var editingRepeat = false
+    @State private var expandingDescription = false
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     private enum Field: Hashable { case title }
 
@@ -50,6 +51,13 @@ struct TaskDetailView: View {
             }
         })
         _feeds = State(initialValue: TaskDetailFeeds(store: store, taskLocalId: taskLocalId))
+        let presentation = TaskDetailPresentation()
+        _sheets = State(initialValue: presentation)
+        _descriptionDraft = State(initialValue: DescriptionDraft { html in
+            var patch = TaskPatch()
+            patch.description = html
+            presentation.attempt { _ = try store.updateTask(localId: taskLocalId, patch: patch) }
+        })
     }
 
     var body: some View {
@@ -66,7 +74,7 @@ struct TaskDetailView: View {
             if let task = live.value.task {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
-                        apply(TaskPatch(isFavorite: !task.isFavorite))
+                        _ = apply(TaskPatch(isFavorite: !task.isFavorite))
                     }
                     .tint(task.isFavorite ? Color(.warning) : nil)
                 }
@@ -84,9 +92,36 @@ struct TaskDetailView: View {
         .onChange(of: live.value.task?.localId, initial: true) { _, _ in loadDrafts() }
         .onChange(of: focus) { _, _ in saveText() }
         .onChange(of: live.value.task?.title) { _, newTitle in followServerTitle(newTitle) }
-        .onDisappear(perform: saveText)
+        .onChange(of: live.value.task?.description, initial: true) { _, html in descriptionDraft.follow(html ?? "") }
+        // An app suspended mid-edit can be killed without ever calling onDisappear.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { descriptionDraft.save() }
+        }
+        .onDisappear {
+            saveText()
+            descriptionDraft.save()
+        }
         .sheet(isPresented: $showLabels) {
             LabelPickerSheet(services: services, taskLocalId: taskLocalId, selected: live.value.labels, all: live.value.allLabels)
+        }
+        .sheet(isPresented: $editingRepeat) {
+            if let task = live.value.task {
+                RepeatEditorSheet(repeatAfter: task.repeatAfter, repeatMode: task.repeatMode) { after, mode in
+                    var patch = TaskPatch()
+                    patch.repeatAfter = after
+                    patch.repeatMode = mode
+                    apply(patch)
+                }
+            }
+        }
+        .navigationDestination(isPresented: $expandingDescription) {
+            DescriptionEditorView(
+                services: services, taskLocalId: taskLocalId, initialHTML: descriptionDraft.baselineHTML
+            ) { html in
+                var patch = TaskPatch()
+                patch.description = html
+                apply(patch)
+            }
         }
         .modifier(TaskDetailSheets(services: services, taskLocalId: taskLocalId, state: sheets))
         .modifier(TaskDetailDialogs(services: services, taskLocalId: taskLocalId, state: sheets, onDeleteTask: deleteTask))
@@ -96,7 +131,7 @@ struct TaskDetailView: View {
         Form {
             Section {
                 HStack(alignment: .top) {
-                    PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { apply(TaskPatch(done: !task.done)) }
+                    PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { _ = apply(TaskPatch(done: !task.done)) }
                     TextField("Title", text: $title, axis: .vertical)
                         .font(Theme.title)
                         .focused($focus, equals: .title)
@@ -110,10 +145,15 @@ struct TaskDetailView: View {
                             focus = nil
                         }
                 }
-                descriptionLink(task)
+                DescriptionField(
+                    services: services, taskLocalId: taskLocalId, html: task.description ?? "", draft: descriptionDraft
+                ) {
+                    descriptionDraft.finishEditing()
+                    expandingDescription = true
+                }
             }
-            detailsSection(task)
-            datesSection(task)
+            TaskPropertiesSection(task: task, projects: moveChoices, apply: apply) { editingRepeat = true }
+            TaskScheduleSection(task: task, apply: apply)
             Section {
                 FlowLabels(labels: live.value.labels)
             } header: {
@@ -141,80 +181,14 @@ struct TaskDetailView: View {
     private func deleteTask() {
         // Nothing may be saved onto a task that is going away.
         didLoad = false
+        descriptionDraft.close()
         do {
             try services.store.deleteTask(localId: taskLocalId)
             dismiss()
         } catch {
             didLoad = true
+            descriptionDraft.reopen()
             sheets.failure = String(describing: error)
-        }
-    }
-
-    private func descriptionLink(_ task: TaskRecord) -> some View {
-        NavigationLink {
-            DescriptionEditorView(
-                services: services, taskLocalId: task.localId, initialHTML: task.description ?? ""
-            ) { html in
-                var patch = TaskPatch()
-                patch.description = html
-                apply(patch)
-            }
-        } label: {
-            if (task.description ?? "").isEmpty {
-                Text("Add description").font(Theme.rowSubtitle).foregroundStyle(Color(.mutedForeground))
-            } else {
-                RichTextView(html: task.description ?? "", services: services).frame(minHeight: 44, maxHeight: 140)
-            }
-        }
-    }
-
-    private func datesSection(_ task: TaskRecord) -> some View {
-        Section("Schedule") {
-            DateFieldRow(title: "Start", iso: task.startDate) { value in
-                var patch = TaskPatch()
-                patch.startDate = value
-                apply(patch)
-            }
-            DateFieldRow(title: "End", iso: task.endDate) { value in
-                var patch = TaskPatch()
-                patch.endDate = value
-                apply(patch)
-            }
-        }
-    }
-
-    private func detailsSection(_ task: TaskRecord) -> some View {
-        Section {
-            Picker(selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
-                ForEach(moveChoices, id: \.localId) { Text($0.title).tag($0.localId) }
-            } label: {
-                Label("Project", systemImage: "folder")
-            }
-            DateFieldRow(title: "Due", iso: task.dueDate) { value in
-                apply(TaskPatch(dueDate: value))
-            }
-            Picker(selection: Binding(get: { task.priority }, set: { apply(TaskPatch(priority: $0)) })) {
-                ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
-            } label: {
-                Label { Text("Priority") } icon: {
-                    Image(systemName: "flag")
-                        .foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
-                }
-            }
-            RepeatRow(task: task) { apply($0) }
-            VStack(alignment: .leading) {
-                Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
-                // One write when the finger lifts, not one (and one outbox op) per 0.1 step while dragging.
-                Slider(
-                    value: Binding(get: { percentDraft ?? task.percentDone }, set: { percentDraft = $0 }),
-                    in: 0...1, step: 0.1,
-                    onEditingChanged: { editing in
-                        guard !editing, let value = percentDraft else { return }
-                        percentDraft = nil
-                        setPercent(value)
-                    }
-                )
-            }
         }
     }
 
@@ -240,8 +214,16 @@ struct TaskDetailView: View {
         if patch.title != nil { apply(patch) }
     }
 
-    private func apply(_ patch: TaskPatch) {
-        sheets.attempt { _ = try services.store.updateTask(localId: taskLocalId, patch: patch) }
+    /// Saves a patch; false (with the error shown) when that failed.
+    @discardableResult
+    private func apply(_ patch: TaskPatch) -> Bool {
+        do {
+            _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
+            return true
+        } catch {
+            sheets.failure = String(describing: error)
+            return false
+        }
     }
 
     /// Projects the task can move to, plus its current one when archived, so the picker never shows a blank value.
@@ -251,17 +233,5 @@ struct TaskDetailView: View {
             return visible
         }
         return visible + [current]
-    }
-
-    private func moveTask(to projectLocalId: String) {
-        var patch = TaskPatch()
-        patch.projectLocalId = projectLocalId
-        apply(patch)
-    }
-
-    private func setPercent(_ value: Double) {
-        var patch = TaskPatch()
-        patch.percentDone = value
-        apply(patch)
     }
 }

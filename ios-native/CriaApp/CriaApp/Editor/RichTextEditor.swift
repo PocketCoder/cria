@@ -7,6 +7,10 @@ struct RichTextEditor: UIViewRepresentable {
     /// Resolves `cria://pending/{id}` sources. Set before the HTML loads so pending images render at once.
     let imageProvider: EditorStyling.ImageProvider
     let barActions: EditorBarActions
+    /// Inline editor only (the task screen): the height to take, as last reported through `onHeightChange`.
+    var inlineHeight: CGFloat?
+    /// Set for the inline editor, which sizes to its text and is read-only until tapped. Nil for a full-screen editor.
+    var onHeightChange: (@MainActor (CGFloat) -> Void)?
 
     func makeUIView(context: Context) -> EditorTextView {
         let view = EditorTextView()
@@ -16,6 +20,7 @@ struct RichTextEditor: UIViewRepresentable {
         view.keyboardDismissMode = .interactive
         view.adjustsFontForContentSizeCategory = true
         view.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        if let onHeightChange { view.configureInline(onHeightChange: onHeightChange) }
         // `.keyboard` toolbar items never reach a UITextView inside a representable, so the bar is its accessory view.
         view.installAccessoryBar(EditorFormattingBar(controller: controller, actions: barActions))
         controller.attach(view)
@@ -25,6 +30,12 @@ struct RichTextEditor: UIViewRepresentable {
     }
 
     func updateUIView(_ view: EditorTextView, context: Context) {}
+
+    /// The inline editor takes the offered width and its measured height; a full-screen editor sizes as usual.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: EditorTextView, context: Context) -> CGSize? {
+        guard let inlineHeight else { return nil }
+        return CGSize(width: proposal.width ?? uiView.bounds.width, height: inlineHeight)
+    }
 
     static func dismantleUIView(_ view: EditorTextView, coordinator: EditorCoordinator) {
         // The text view is about to go; keep what it holds for a save that runs after this.
@@ -56,6 +67,7 @@ final class EditorCoordinator: NSObject, UITextViewDelegate {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
+        (textView as? EditorTextView)?.endInlineEditing()
         controller.onEndEditing()
     }
 }

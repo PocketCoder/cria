@@ -10,6 +10,11 @@ final class EditorTextView: UITextView {
     var onToggleTask: ((EditorParagraph) -> Void)?
     /// Backspace with the caret at the very start. Returns false when it handled the key (cleared list formatting).
     var onBackspaceAtStart: (() -> Bool)?
+    /// Set by `configureInline`: the height the text needs at the current width, reported when it changes.
+    private var onHeightChange: (@MainActor (CGFloat) -> Void)?
+    private var reportedHeight: CGFloat = 0
+    private var idleTap = UITapGestureRecognizer()
+    private let idleTapDelegate = SimultaneousTapDelegate()
 
     init() {
         let storage = NSTextStorage()
@@ -30,8 +35,29 @@ final class EditorTextView: UITextView {
         fatalError("init(coder:) is not supported")
     }
 
+    /// Inline mode (the task screen): no scrolling, the height follows the text, and the view stays read-only until
+    /// tapped, so a tap on a link opens it instead of placing the caret.
+    func configureInline(onHeightChange: @escaping @MainActor (CGFloat) -> Void) {
+        self.onHeightChange = onHeightChange
+        isScrollEnabled = false
+        alwaysBounceVertical = false
+        isEditable = false
+        textContainer.lineFragmentPadding = 0
+        textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        idleTap = UITapGestureRecognizer(target: self, action: #selector(handleIdleTap(_:)))
+        idleTap.delegate = idleTapDelegate
+        addGestureRecognizer(idleTap)
+    }
+
+    /// Back to read-only once editing ends (inline mode only).
+    func endInlineEditing() {
+        if onHeightChange != nil { isEditable = false }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        reportHeight()
         // This runs every scroll frame. Redraw only when the overlay's size changes (width or content height);
         // text edits redraw through `refreshMarkers`.
         let size = CGSize(width: max(bounds.width, contentSize.width), height: max(bounds.height, contentSize.height))
@@ -47,6 +73,47 @@ final class EditorTextView: UITextView {
 
     func refreshMarkers() {
         overlay.setNeedsDisplay()
+        reportHeight()
+    }
+
+    private func reportHeight() {
+        guard onHeightChange != nil, bounds.width > 0 else { return }
+        let fitting = ceil(sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height)
+        guard abs(fitting - reportedHeight) > 0.5 else { return }
+        reportedHeight = fitting
+        // Not during this layout pass: the receiver updates SwiftUI state.
+        Task { @MainActor [weak self] in self?.onHeightChange?(fitting) }
+    }
+
+    /// The http(s) or mailto link under a point, if any.
+    private func link(at point: CGPoint) -> URL? {
+        guard textStorage.length > 0 else { return nil }
+        let inContainer = CGPoint(x: point.x - textContainerInset.left, y: point.y - textContainerInset.top)
+        let index = layoutManager.characterIndex(
+            for: inContainer, in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil
+        )
+        guard index < textStorage.length else { return nil }
+        // The nearest character can be far from the point (past the end of a short line).
+        let glyphs = layoutManager.glyphRange(forCharacterRange: NSRange(location: index, length: 1), actualCharacterRange: nil)
+        let box = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+        guard box.insetBy(dx: -4, dy: -4).contains(inContainer),
+              let address = textStorage.attribute(.criaLink, at: index, effectiveRange: nil) as? String,
+              let url = URL(string: address),
+              ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return url
+    }
+
+    @objc private func handleIdleTap(_ gesture: UITapGestureRecognizer) {
+        let point = gesture.location(in: self)
+        if let url = link(at: point) {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            return
+        }
+        isEditable = true
+        becomeFirstResponder()
+        if let position = closestPosition(to: point) {
+            selectedTextRange = textRange(from: position, to: position)
+        }
     }
 
     /// The rect of the first line of a paragraph, in the text view's content coordinates.
@@ -87,7 +154,20 @@ final class EditorTextView: UITextView {
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === checkboxTap { return taskParagraph(at: gestureRecognizer.location(in: self)) != nil }
+        if gestureRecognizer === idleTap {
+            return !isEditable && taskParagraph(at: gestureRecognizer.location(in: self)) == nil
+        }
         return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+}
+
+/// Lets the inline view's tap run alongside the text view's own recognisers.
+@MainActor
+private final class SimultaneousTapDelegate: NSObject, UIGestureRecognizerDelegate {
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+    ) -> Bool {
+        true
     }
 }
 

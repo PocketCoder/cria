@@ -10,6 +10,7 @@ struct AttachmentsSection: View {
     let taskLocalId: String
     let attachments: [AttachmentRecord]
     let state: TaskDetailPresentation
+    @State private var clipboard = ClipboardPeek()
 
     private var actions: AttachmentActions {
         AttachmentActions(services: services, taskLocalId: taskLocalId, state: state)
@@ -29,9 +30,31 @@ struct AttachmentsSection: View {
             if CameraPicker.isAvailable {
                 Button("Take photo", systemImage: "camera") { state.takingPhoto = true }
             }
-            PasteButton(supportedContentTypes: [.image]) { providers in actions.pasteImage(providers) }
+            pasteRow
             if let errorText = state.attachmentError {
                 Text(errorText).font(Theme.caption).foregroundStyle(Color(.destructive))
+            }
+        }
+        .onAppear { clipboard.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in clipboard.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            clipboard.refresh()
+        }
+    }
+
+    /// The system Paste button (its label is fixed, and it pastes without the permission prompt), with what it would
+    /// paste beside it. Hidden when the clipboard holds nothing to attach.
+    @ViewBuilder
+    private var pasteRow: some View {
+        if let content = clipboard.content {
+            HStack(spacing: 12) {
+                PasteButton(supportedContentTypes: [content.type]) { providers in actions.paste(providers, as: content.type) }
+                    .buttonBorderShape(.capsule)
+                    .labelStyle(.titleAndIcon)
+                Text(content.summary)
+                    .font(Theme.caption)
+                    .foregroundStyle(Color(.mutedForeground))
+                    .lineLimit(2)
             }
         }
     }
@@ -98,18 +121,34 @@ struct AttachmentActions {
         queue(name: name, mime: type?.preferredMIMEType ?? "image/jpeg", data: data)
     }
 
-    func pasteImage(_ providers: [NSItemProvider]) {
+    /// Attaches the first pasted item. An image is stored as PNG; any other file keeps its own bytes and type. The
+    /// name is the one the source app offered, when there is one.
+    func paste(_ providers: [NSItemProvider], as type: UTType) {
         guard let provider = providers.first else { return }
+        let stamp = Int(Date().timeIntervalSince1970)
+        let suggested = provider.suggestedName.flatMap { $0.isEmpty ? nil : ($0 as NSString).deletingPathExtension }
         Task {
-            guard let data = await Self.loadImageData(from: provider),
-                  let png = UIImage(data: data)?.pngData() else { return }
-            queue(name: "pasted-\(Int(Date().timeIntervalSince1970)).png", mime: "image/png", data: png)
+            guard let data = await Self.loadData(from: provider, type: type.conforms(to: .image) ? .image : type) else {
+                state.attachmentError = "Could not read the pasted item"
+                return
+            }
+            if type.conforms(to: .image) {
+                guard let png = UIImage(data: data)?.pngData() else {
+                    state.attachmentError = "Could not read the pasted image"
+                    return
+                }
+                queue(name: "\(suggested ?? "pasted-\(stamp)").png", mime: "image/png", data: png)
+            } else {
+                let base = suggested ?? "pasted-\(stamp)"
+                let name = type.preferredFilenameExtension.map { "\(base).\($0)" } ?? base
+                queue(name: name, mime: type.preferredMIMEType ?? "application/octet-stream", data: data)
+            }
         }
     }
 
-    private static func loadImageData(from provider: NSItemProvider) async -> Data? {
+    private static func loadData(from provider: NSItemProvider, type: UTType) async -> Data? {
         await withCheckedContinuation { continuation in
-            provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
                 continuation.resume(returning: data)
             }
         }

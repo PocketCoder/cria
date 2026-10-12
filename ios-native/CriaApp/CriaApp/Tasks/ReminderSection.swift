@@ -5,15 +5,16 @@ private let presets: [(title: String, period: Int)] = [
     ("At due time", 0), ("5 minutes before", -300), ("1 hour before", -3600), ("1 day before", -86_400)
 ]
 
-/// Reminders and recurrence for a task. Reminders ride the task update, so each change is queued like any edit.
-/// TaskDetailView observes the reminders and shows failures, so neither hangs off a lazily created row.
+/// Reminders for a task. Reminders ride the task update, so each change is queued like any edit. TaskDetailView
+/// observes the reminders and shows failures, so neither hangs off a lazily created row. The date and time pickers
+/// for a custom reminder show only after "Custom…" in the Add menu.
 struct ReminderSection: View {
     @Environment(\.dateDisplay) private var dateDisplay
     let services: AppServices
     let task: TaskRecord
     let reminders: [ReminderRecord]
     let state: TaskDetailPresentation
-    @State private var custom = Date().addingTimeInterval(3600)
+    @State private var custom: Date?
 
     var body: some View {
         Section("Reminders") {
@@ -26,52 +27,64 @@ struct ReminderSection: View {
                         }
                     }
             }
-            Menu {
-                if task.dueDate != nil {
-                    ForEach(presets, id: \.period) { preset in
-                        Button(preset.title) { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) }
-                    }
-                }
-                Button("In one hour") { add(ReminderInput(triggerAt: DueDates.timedISO(Date().addingTimeInterval(3600)))) }
-            } label: {
-                Label("Add reminder", systemImage: "bell.badge").foregroundStyle(Color(.primary))
-            }
-            DatePicker(selection: $custom) { Label("Custom", systemImage: "clock") }
-            Button { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) } label: {
-                Label("Add custom reminder", systemImage: "plus").foregroundStyle(Color(.primary))
+            if let custom {
+                customRows(custom)
+            } else {
+                addMenu
             }
         }
+    }
+
+    private var addMenu: some View {
+        Menu {
+            if task.dueDate != nil {
+                ForEach(presets, id: \.period) { preset in
+                    Button(preset.title) { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) }
+                }
+            }
+            Button("In one hour") { add(ReminderInput(triggerAt: DueDates.timedISO(Date().addingTimeInterval(3600)))) }
+            Button("Custom…", systemImage: "clock") { custom = defaultCustomDate }
+        } label: {
+            Label("Add reminder", systemImage: "bell.badge").foregroundStyle(Color(.primary))
+        }
+    }
+
+    @ViewBuilder
+    private func customRows(_ date: Date) -> some View {
+        let isPast = date <= Date()
+        DatePicker(selection: Binding(get: { date }, set: { custom = $0 })) {
+            Label("Remind at", systemImage: "clock")
+        }
+        HStack {
+            Button("Cancel") { custom = nil }
+            Spacer()
+            if isPast {
+                Text("Pick a future time").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
+            Button("Add") {
+                guard date > Date() else { return }
+                add(ReminderInput(triggerAt: DueDates.timedISO(date)))
+                custom = nil
+            }
+            .fontWeight(.semibold)
+            .disabled(isPast)
+        }
+        // Borderless, or a tap anywhere in the row would run both buttons.
+        .buttonStyle(.borderless)
+    }
+
+    /// An hour before the due date when that is still ahead, else the next whole hour.
+    private var defaultCustomDate: Date {
+        let now = Date()
+        if let iso = task.dueDate, let due = DueDates.pickerDate(iso) {
+            let before = due.addingTimeInterval(-3600)
+            if before > now { return before }
+        }
+        return Calendar.cria.dateInterval(of: .hour, for: now)?.end ?? now.addingTimeInterval(3600)
     }
 
     private func add(_ input: ReminderInput) {
         state.attempt { try services.store.addReminder(taskLocalId: task.localId, input) }
-    }
-}
-
-/// The Repeat row of task details: `repeat` icon, current value, menu. `apply` saves the patch and reports failures.
-struct RepeatRow: View {
-    let task: TaskRecord
-    let apply: (TaskPatch) -> Void
-
-    var body: some View {
-        Picker(selection: Binding<RepeatChoice>(
-            get: { RepeatChoice(repeatAfter: task.repeatAfter, repeatMode: task.repeatMode) },
-            set: { choice in setRepeat(choice) }
-        )) {
-            ForEach(RepeatChoice.allCases) { choice in
-                Text(choice.title).tag(choice)
-            }
-        } label: {
-            Label("Repeat", systemImage: "repeat")
-        }
-    }
-
-    private func setRepeat(_ choice: RepeatChoice) {
-        guard choice != .custom else { return }
-        var patch = TaskPatch()
-        patch.repeatAfter = choice.repeatAfter
-        patch.repeatMode = choice.repeatMode
-        apply(patch)
     }
 }
 
@@ -83,36 +96,4 @@ extension ReminderRecord {
         guard let reminderAt, let date = DueDates.parse(reminderAt) else { return "Pending" }
         return DueDates.fullLabel(date, display: display)
     }
-}
-
-/// The repeat options the picker offers. Other intervals set on the server show as "Custom" and are left alone.
-enum RepeatChoice: String, CaseIterable, Identifiable {
-    case never, daily, weekly, monthly, yearly, custom
-
-    var id: String { rawValue }
-
-    init(repeatAfter: Int, repeatMode: Int) {
-        let label = RepeatLabel.label(repeatAfter: repeatAfter, repeatMode: repeatMode)
-        switch label {
-        case "": self = .never
-        case "Daily": self = .daily
-        case "Weekly": self = .weekly
-        case "Monthly": self = .monthly
-        case "Yearly": self = .yearly
-        default: self = .custom
-        }
-    }
-
-    var title: String { self == .never ? "Never" : rawValue.capitalized }
-
-    var repeatAfter: Int {
-        switch self {
-        case .daily: 86_400
-        case .weekly: 604_800
-        case .yearly: 31_536_000
-        default: 0
-        }
-    }
-
-    var repeatMode: Int { self == .monthly ? 1 : 0 }
 }

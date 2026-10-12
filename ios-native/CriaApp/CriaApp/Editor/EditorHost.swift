@@ -8,6 +8,9 @@ struct EditorHost: View {
     let taskLocalId: String
     let initialHTML: String
     let controller: EditorController
+    /// Inline editor only: see `RichTextEditor.inlineHeight` and `onHeightChange`.
+    var inlineHeight: CGFloat?
+    var onHeightChange: (@MainActor (CGFloat) -> Void)?
     @State private var barActions = EditorBarActions()
     @State private var showMention = false
     @State private var mentionPicked = false
@@ -19,7 +22,10 @@ struct EditorHost: View {
     @State private var showPhotoPicker = false
 
     var body: some View {
-        RichTextEditor(controller: controller, initialHTML: initialHTML, imageProvider: imageProvider, barActions: barActions)
+        RichTextEditor(
+            controller: controller, initialHTML: initialHTML, imageProvider: imageProvider, barActions: barActions,
+            inlineHeight: inlineHeight, onHeightChange: onHeightChange
+        )
             // Presented from here, not from the formatting bar: that bar is torn down when the keyboard hides,
             // which would dismiss the picker with it.
             .photosPicker(isPresented: $showPhotoPicker, selection: $photo, matching: .images)
