@@ -204,6 +204,8 @@ struct TaskRowLink: View {
                 .background(Color(.cell))
         }
         .accessibilityActions {
+            // Swipe actions reach VoiceOver on their own; these are the context-menu-only ones.
+            Button("Due tomorrow") { dueTomorrow() }
             if let collapsed = tree.isCollapsed {
                 Button(collapsed ? "Show subtasks" : "Hide subtasks") { tree.onToggleCollapsed() }
             }
@@ -221,7 +223,8 @@ struct TaskRowLink: View {
         case .none:
             EmptyView()
         case .complete:
-            Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
+            // Swipe buttons show only the icon; the title is what VoiceOver offers as the row's action.
+            Button(item.task.done ? "Mark not done" : "Complete", systemImage: "checkmark") { toggle() }
                 .tint(Color(.meadow500))
         case .schedule:
             Button("Schedule", systemImage: "calendar") { scheduling = true }

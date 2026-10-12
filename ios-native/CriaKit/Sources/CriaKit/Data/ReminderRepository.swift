@@ -6,6 +6,23 @@ public struct ReminderRecord: Equatable, Sendable {
     public let reminderAt: String?
     public let relativePeriod: Int?
     public let relativeTo: String?
+
+    public init(reminderAt: String?, relativePeriod: Int?, relativeTo: String?) {
+        self.reminderAt = reminderAt
+        self.relativePeriod = relativePeriod
+        self.relativeTo = relativeTo
+    }
+
+    /// An empty anchor (what an older pull stored for a fixed-time reminder) reads as absolute.
+    init(_ row: Row) {
+        let anchor: String? = row["relative_to"]
+        let hasAnchor = !(anchor ?? "").isEmpty
+        self.init(
+            reminderAt: row["reminder_at"],
+            relativePeriod: hasAnchor ? row["relative_period"] : nil,
+            relativeTo: hasAnchor ? anchor : nil
+        )
+    }
 }
 
 /// A reminder that has not fired yet, joined with its task for the notification text.
@@ -42,7 +59,7 @@ extension CriaStore {
                 SELECT reminder_at, relative_period, relative_to FROM task_reminders
                  WHERE task_local_id = ? ORDER BY reminder_at ASC
                 """, arguments: [taskLocalId]).map { row in
-                ReminderRecord(reminderAt: row["reminder_at"], relativePeriod: row["relative_period"], relativeTo: row["relative_to"])
+                ReminderRecord(row)
             }
         }
     }
@@ -78,7 +95,8 @@ extension CriaStore {
                 let base = try String.fetchOne(
                     connection, sql: "SELECT \(column) FROM tasks WHERE local_id = ?", arguments: [taskLocalId]
                 )
-                if let base, let date = DueDates.parse(base) {
+                // An all-day date counts from the start of that day here, as the date sheet and the push read it.
+                if let base, let date = DueDates.pickerDate(base) {
                     resolved = ISO8601DateFormatter().string(from: date.addingTimeInterval(TimeInterval(period)))
                 }
             }
@@ -97,9 +115,9 @@ extension CriaStore {
                 DELETE FROM task_reminders
                  WHERE task_local_id = ?
                    AND COALESCE(reminder_at, '') = COALESCE(?, '')
-                   AND COALESCE(relative_period, -2147483648) = COALESCE(?, -2147483648)
                    AND COALESCE(relative_to, '') = COALESCE(?, '')
-                """, arguments: [taskLocalId, reminder.reminderAt, reminder.relativePeriod, reminder.relativeTo])
+                   AND (COALESCE(relative_to, '') = '' OR relative_period IS ?)
+                """, arguments: [taskLocalId, reminder.reminderAt, reminder.relativeTo, reminder.relativePeriod])
             try CriaStore.markTaskChanged(connection, localId: taskLocalId)
         }
     }

@@ -5,6 +5,9 @@ import SwiftUI
 /// rows on Today.
 struct KanbanCardView: View {
     @Environment(\.dateDisplay) private var dateDisplay
+    @Environment(\.colorScheme) private var colorScheme
+    /// Optional so a card shown outside the shell (a preview) still renders; VoiceOver's open action needs it.
+    @Environment(NavigationModel.self) private var navigation: NavigationModel?
     let services: AppServices
     let task: TaskRecord
     var labels: [LabelRecord] = []
@@ -55,8 +58,17 @@ struct KanbanCardView: View {
                 Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
             }
         }
+        // One VoiceOver element per card: activating opens the task, and the ring, columns and delete are actions.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenLabel)
+        .accessibilityValue(task.done ? "Done" : "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { navigation?.state.push(.task(task.localId)) }
         // Dragging is not available to VoiceOver, so each column is also an action on the card.
         .accessibilityActions {
+            Button(task.done ? "Mark not done" : "Mark done") {
+                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+            }
             ForEach(moveTargets, id: \.bucket.localId) { target in
                 Button("Move to \(target.bucket.title)") { onMove(target) }
             }
@@ -64,6 +76,19 @@ struct KanbanCardView: View {
                 Button("Delete") { onDelete() }
             }
         }
+    }
+
+    /// Title, then the chips in reading order.
+    private var spokenLabel: String {
+        var parts = [task.title]
+        if showsDue, let due = task.dueDate {
+            let label = DueDates.label(due, now: Date(), display: dateDisplay)
+            parts.append(DueDates.isOverdue(due, now: Date()) ? "overdue, \(label)" : "due \(label)")
+            if task.repeatAfter > 0 { parts.append("repeats") }
+        }
+        if showsPriority, let name = TableCells.priorityName(task.priority) { parts.append("\(name) priority") }
+        if !labels.isEmpty { parts.append("labels " + labels.map(\.title).joined(separator: ", ")) }
+        return parts.joined(separator: ", ")
     }
 
     /// Priority shows as a chip from High up; lower ones are already the ring's colour.
@@ -86,7 +111,10 @@ struct KanbanCardView: View {
             )
         }
         ForEach(labels.prefix(2), id: \.localId) { label in
-            CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
+            CriaChip(
+                text: label.title, systemImage: "tag",
+                tint: LegibleTint.chip(label.hexColor, scheme: colorScheme) ?? Color(.info)
+            )
         }
         if labels.count > 2 {
             CriaChip(text: "+\(labels.count - 2)", tint: Color(.mutedForeground))

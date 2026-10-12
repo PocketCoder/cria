@@ -4,6 +4,7 @@ import UIKit
 /// Toolbar commands: inline styles, block kinds, indentation, links, mentions and images.
 extension EditorController {
     func toggleStyle(_ style: InlineStyle) {
+        defer { refreshBarState() }
         guard let view = textView else { return }
         let range = view.selectedRange
         if range.length == 0 {
@@ -42,6 +43,7 @@ extension EditorController {
 
     /// Applies a block kind to the selected paragraphs; choosing the active kind again turns them back into paragraphs.
     func setBlock(_ target: BlockKind) {
+        defer { refreshBarState() }
         guard let view = textView else { return }
         let paragraphs = EditorParagraphs.intersecting(view.selectedRange, in: view.textStorage)
             .filter { paragraph in

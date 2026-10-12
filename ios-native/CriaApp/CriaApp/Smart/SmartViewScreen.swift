@@ -137,6 +137,7 @@ struct SmartViewScreen: View {
                 Button { addPresented = true } label: {
                     Label("Nothing planned", systemImage: "plus").foregroundStyle(Color(.mutedForeground))
                 }
+                .accessibilityHint("Adds a task on this day")
             } header: {
                 Text(selectedDay.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
             }
@@ -185,13 +186,16 @@ struct SmartViewScreen: View {
         if view == .today && group.key == "overdue" {
             HStack {
                 Text(group.label).font(Theme.headline).foregroundStyle(Color(.destructive))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Reschedule") { rescheduling = group }
                     .font(Theme.rowSubtitle)
+                    .accessibilityLabel("Reschedule overdue tasks")
             }
             .textCase(nil)
         } else {
             Text(group.label).font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
+                .accessibilityAddTraits(.isHeader)
         }
     }
 

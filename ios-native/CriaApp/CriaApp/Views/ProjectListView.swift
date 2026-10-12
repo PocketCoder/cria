@@ -14,6 +14,7 @@ struct ProjectListView: View {
     @AppStorage("cria.taskList.sort") private var sortIndex = 0
     @State private var optimistic = OptimisticOrder()
     @State private var editMode: EditMode = .inactive
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var failure: String?
     /// Parents whose subtasks are hidden, for this screen only.
     @State private var collapsed: Set<String> = []
@@ -107,7 +108,7 @@ struct ProjectListView: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if editMode.isEditing {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { withAnimation { editMode = .inactive } }
+                Button("Done") { withAnimation(reduceMotion ? nil : .default) { editMode = .inactive } }
             }
         } else {
             ToolbarItem(placement: .topBarTrailing) {
@@ -119,7 +120,7 @@ struct ProjectListView: View {
                     .pickerStyle(.menu)
                     if isManual && openItems.count > 1 {
                         Button("Reorder tasks", systemImage: "arrow.up.arrow.down") {
-                            withAnimation { editMode = .active }
+                            withAnimation(reduceMotion ? nil : .default) { editMode = .active }
                         }
                     }
                 }

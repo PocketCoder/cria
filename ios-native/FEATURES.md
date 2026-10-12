@@ -145,7 +145,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Credentials | This device | Keychain. The last server URL is remembered in `UserDefaults` (`cria.login.lastServerURL`). |
 | Sign out | This device | Clears pending alerts and Spotlight, and signals the widget and extensions. |
 | Sign out and delete data on this iPhone | This device | Also deletes the database, queued uploads, cached backgrounds, cached account settings, other people's names and temporary files. Warns how many changes have not synced. Device preferences stay. |
-| Sign in with a share link | Vikunja | Login > Share link: paste a project's share link (and its password). Account-only settings, the activity inbox and email settings are hidden. |
+| Sign in with a share link | Vikunja | Login > Share link: paste a project's share link (and its password). Account-only settings, the activity inbox, email settings, assigning people, project sharing and new saved filters are hidden. |
 
 ## Settings
 
@@ -227,6 +227,5 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 
 - **English only.** There is no language setting: the interface is not translated. The account's language stays as set on the server (Vikunja-web and emails use it).
 - **Polling only.** No WebSocket live sync, and no network-reachability trigger; the 60 second tick and the outbox cover reconnects.
-- **Link-share sessions are partly gated.** Assignee search, project sharing and saved filters show the server's error rather than being hidden, and a share token cannot be refreshed: when it expires, the app signs out.
-- **Subtask creation is two steps.** If linking a new subtask fails, the task exists without the link and the error is shown.
+- **Link-share sessions end when the token expires.** A share token cannot be refreshed, so the app signs out when it runs out.
 - **Device checks pending.** README and the plan list what has not been run on a device: notification permission and delivery, completion sound, camera, avatar upload, two-factor QR, session revoke, Liquid Glass tab bar, extension signing and App Group provisioning under a free Apple ID, Foundation Models output, Vision OCR, widget refresh timing, editor behaviour, Kanban and Gantt gestures.

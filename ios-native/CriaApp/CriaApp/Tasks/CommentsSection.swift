@@ -9,6 +9,7 @@ struct CommentsSection: View {
     let state: TaskDetailPresentation
     @State private var summary: String?
     @State private var summarising = false
+    @ScaledMetric(relativeTo: .caption) private var avatarSize: CGFloat = 30
 
     var body: some View {
         Section("Comments") {
@@ -50,10 +51,11 @@ struct CommentsSection: View {
 
     private func row(_ comment: CommentRecord) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            // Primary ink, not heather: heather on its own wash is too faint in dark mode.
             Text(initials(comment.authorName ?? "You"))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color(.heather600))
-                .frame(width: 30, height: 30)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(.primary))
+                .frame(width: avatarSize, height: avatarSize)
                 .background(Color(.heather600).opacity(0.15), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
@@ -63,15 +65,16 @@ struct CommentsSection: View {
                         Text(stamp).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                     }
                 }
+                .accessibilityElement(children: .combine)
                 RichTextView(html: comment.comment, services: services).frame(minHeight: 28)
                 reactionBar(comment)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
-            Button("Delete", systemImage: "trash") { state.deletingComment = comment }
+            Button("Delete comment", systemImage: "trash") { state.deletingComment = comment }
                 .tint(Color(.destructive))
-            Button("Edit", systemImage: "pencil") { state.editingComment = comment }
+            Button("Edit comment", systemImage: "pencil") { state.editingComment = comment }
         }
     }
 
@@ -97,8 +100,10 @@ struct CommentsSection: View {
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
                     .controlSize(.small)
+                    .accessibilityLabel("\(emoji), \(count) \(count == 1 ? "reaction" : "reactions")")
+                    .accessibilityHint("Adds or removes your reaction")
             }
-            Menu("React", systemImage: "face.smiling") {
+            Menu("Add reaction", systemImage: "face.smiling") {
                 ForEach(Self.quickEmojis, id: \.self) { emoji in
                     Button(emoji) { react(comment, emoji) }
                 }

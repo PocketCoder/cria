@@ -5,6 +5,7 @@ import SwiftUI
 /// labels. A nested row is indented under its parent, with a guide line per level.
 struct TaskRowView: View {
     @Environment(\.dateDisplay) private var dateDisplay
+    @Environment(\.dynamicTypeSize) private var typeSize
     let item: TaskListItem
     var showProject = false
     var tree = TaskRowTree()
@@ -21,9 +22,9 @@ struct TaskRowView: View {
                         .font(Theme.rowTitle)
                         .strikethrough(task.done)
                         .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                     if task.isFavorite {
-                        Image(systemName: "star.fill").font(.system(size: 13)).foregroundStyle(Color(.warning))
+                        Image(systemName: "star.fill").font(.footnote).foregroundStyle(Color(.warning))
                     }
                 }
                 .padding(.top, 10)
@@ -31,7 +32,7 @@ struct TaskRowView: View {
                     Text("Subtask of ‘\(parent)’")
                         .font(Theme.caption)
                         .foregroundStyle(Color(.mutedForeground))
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                         .padding(.top, 2)
                 }
                 metadata
@@ -43,7 +44,35 @@ struct TaskRowView: View {
         .padding(.leading, CGFloat(tree.depth) * TaskListNesting.indent)
         .background(alignment: .leading) { guides }
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        // One VoiceOver element. The ring and the collapse chevron are not separate stops: TaskRowLink exposes them
+        // as actions (the swipe actions and its own accessibility actions).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(spokenSummary))
+    }
+
+    /// "Buy milk, due tomorrow, high priority, not done", with the subtask, project and label details the chips show.
+    private var spokenSummary: String {
+        var parts = [task.title]
+        if let parent = tree.parentTitle { parts.append("subtask of \(parent)") }
+        if task.isFavorite { parts.append("starred") }
+        if !task.done, let due = task.dueDate {
+            let label = DueDates.label(due, now: Date(), display: dateDisplay)
+            parts.append(DueDates.isOverdue(due, now: Date()) ? "overdue, due \(label)" : "due \(label)")
+            if task.repeatAfter > 0 { parts.append("repeats") }
+        }
+        if task.priority > 0, TableCells.priorityNames.indices.contains(task.priority) {
+            parts.append("\(TableCells.priorityNames[task.priority].lowercased()) priority")
+        }
+        if showProject && !task.done, let project = item.projectTitle { parts.append("in \(project)") }
+        if !task.done, !item.labels.isEmpty {
+            parts.append("labels \(item.labels.map(\.title).formatted(.list(type: .and)))")
+        }
+        if let progress = tree.progress {
+            parts.append("\(progress.done) of \(progress.total) subtasks done")
+            if tree.isCollapsed == true { parts.append("subtasks hidden") }
+        }
+        parts.append(task.done ? "done" : "not done")
+        return parts.joined(separator: ", ")
     }
 
     /// One thin line per level, under each ancestor's ring.
@@ -65,7 +94,10 @@ struct TaskRowView: View {
         let due = task.done ? nil : task.dueDate
         let others = task.done ? 0 : item.labels.count + (showProject && item.projectTitle != nil ? 1 : 0)
         if others + (due == nil ? 0 : 1) > 0 || tree.progress != nil {
-            HStack(spacing: 6) {
+            // Chips stack at accessibility sizes, where a row of them would truncate.
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
+            layout {
                 if let progress = tree.progress { subtaskChip(progress) }
                 if let due {
                     let overdue = DueDates.isOverdue(due, now: Date())

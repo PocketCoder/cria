@@ -18,6 +18,8 @@ final class EditorTextView: UITextView {
     /// pair started editing with a bare caret, which undid the system's word selection.
     private var idleDoubleTap = UITapGestureRecognizer()
     private let idleTapDelegate = SimultaneousTapDelegate()
+    /// The text size changed while the editor is open; the controller restyles at the new size.
+    var onContentSizeChange: (() -> Void)?
 
     init() {
         let storage = NSTextStorage()
@@ -31,6 +33,32 @@ final class EditorTextView: UITextView {
         addSubview(overlay)
         checkboxTap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         addGestureRecognizer(checkboxTap)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(contentSizeChanged), name: UIContentSizeCategory.didChangeNotification, object: nil
+        )
+    }
+
+    @objc private func contentSizeChanged() {
+        onContentSizeChange?()
+    }
+
+    /// Checkboxes are drawn, not text, so VoiceOver cannot tap them; the caret's task line gets an action instead.
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get {
+            var actions = super.accessibilityCustomActions ?? []
+            let location = selectedRange.location
+            if let paragraph = EditorParagraphs.containing(location, in: textStorage), case .task(let checked) = paragraph.kind {
+                actions.append(UIAccessibilityCustomAction(name: checked ? "Untick task" : "Tick task") { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, let current = EditorParagraphs.containing(location, in: self.textStorage) else { return }
+                        self.onToggleTask?(current)
+                    }
+                    return true
+                })
+            }
+            return actions
+        }
+        set { super.accessibilityCustomActions = newValue }
     }
 
     @available(*, unavailable)

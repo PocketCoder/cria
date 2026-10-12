@@ -15,6 +15,7 @@ struct ProjectScreen: View {
     @State private var background: UIImage?
     /// Bumped when the background changes elsewhere, to reload it.
     @State private var backgroundRevision = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(services: AppServices, projectLocalId: String, title: String) {
         self.services = services
@@ -49,7 +50,7 @@ struct ProjectScreen: View {
             colour: Color(hexString: live.value.project?.hexColor),
             openCount: live.value.openCount,
             canManage: canManage,
-            onSelect: { id in withAnimation(.snappy) { selectedId = id } },
+            onSelect: { id in withAnimation(reduceMotion ? nil : .snappy) { selectedId = id } },
             onManage: { managing = true },
             background: background
         )

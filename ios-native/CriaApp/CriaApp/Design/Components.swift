@@ -2,7 +2,7 @@ import CriaKit
 import SwiftUI
 
 /// Small tinted capsule for due date, project and labels: at least 22pt high (growing with Dynamic Type), 12pt
-/// medium, 13% fill.
+/// medium, 13% fill. The icon and dot are decorative; VoiceOver reads the text.
 struct CriaChip: View {
     let text: String
     var systemImage: String?
@@ -10,13 +10,15 @@ struct CriaChip: View {
     var tint: Color = Color(.mutedForeground)
     var filled = false
     @ScaledMetric(relativeTo: .caption) private var minHeight = Theme.chipHeight
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         HStack(spacing: 4) {
-            if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
-            if let systemImage { Image(systemName: systemImage).imageScale(.small) }
+            if let dot { Circle().fill(dot).frame(width: 7, height: 7).accessibilityHidden(true) }
+            if let systemImage { Image(systemName: systemImage).imageScale(.small).accessibilityHidden(true) }
             // Empty text is an icon-only chip (quick add with action labels off).
-            if !text.isEmpty { Text(text).lineLimit(1) }
+            if !text.isEmpty { Text(text).lineLimit(1).foregroundStyle(textColour) }
         }
         .font(Theme.chip)
         .padding(.horizontal, 8)
@@ -24,27 +26,72 @@ struct CriaChip: View {
         .frame(minHeight: minHeight)
         .foregroundStyle(filled ? Color(.primaryForeground) : tint)
         .background(filled ? tint : tint.opacity(0.13), in: Capsule())
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The tint, unless it is too faint to read on its own 13% fill (a pale label colour, or a mid tone in light
+    /// mode): then the text falls back to the foreground and only the icon, dot and fill carry the colour.
+    private var textColour: Color {
+        guard !filled else { return Color(.primaryForeground) }
+        let needed = contrast == .increased ? 7.0 : 4.5
+        var environment = EnvironmentValues()
+        environment.colorScheme = colorScheme
+        let cell = Color(.cell).resolve(in: environment)
+        let ink = tint.resolve(in: environment)
+        return ChipContrast.ratio(ink, over: cell) >= needed ? tint : Color(.foreground)
+    }
+}
+
+/// WCAG contrast for chip text drawn in a colour over a 13% wash of that colour on a cell.
+enum ChipContrast {
+    static func ratio(_ tint: Color.Resolved, over base: Color.Resolved) -> Double {
+        let wash = 0.13
+        let background = [
+            Double(base.red) * (1 - wash) + Double(tint.red) * wash,
+            Double(base.green) * (1 - wash) + Double(tint.green) * wash,
+            Double(base.blue) * (1 - wash) + Double(tint.blue) * wash
+        ]
+        let first = luminance([Double(tint.red), Double(tint.green), Double(tint.blue)])
+        let second = luminance(background)
+        return (max(first, second) + 0.05) / (min(first, second) + 0.05)
+    }
+
+    /// Relative luminance from gamma-encoded sRGB components.
+    private static func luminance(_ rgb: [Double]) -> Double {
+        let linear = rgb.map { value in
+            let clamped = min(max(value, 0), 1)
+            return clamped <= 0.04045 ? clamped / 12.92 : pow((clamped + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
     }
 }
 
 /// Todoist-style completion ring: priority-coloured stroke and soft fill. Completing pops the circle, draws
-/// the tick, bursts a ring and six sparks, and plays a success haptic. Reduce Motion skips the burst.
+/// the tick, bursts a ring and six sparks, and plays a success haptic. Reduce Motion skips the pop and burst and
+/// fades the tick in; the haptic stays. The ring grows a little with Dynamic Type.
 struct PriorityCheck: View {
     let priority: Int
     let isDone: Bool
     var size: CGFloat = Theme.checkSize
     let action: () -> Void
     @State private var burst = 0
+    /// Every completion, burst or not, so the haptic plays under Reduce Motion too.
+    @State private var completions = 0
+    @ScaledMetric(relativeTo: .body) private var typeScale: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.playsCompletionSound) private var playsSound
     @Environment(\.preferences) private var preferences
 
     private var color: Color { ThemeToken.priority(priority).map { Color($0) } ?? Color(.mutedForeground) }
+    private var ring: CGFloat { size * min(max(typeScale, 1), 1.6) }
 
     var body: some View {
         Button {
-            if !isDone && !reduceMotion { burst += 1 }
-            if !isDone && playsSound { CompletionSound.play(preferences.custom.completionTone) }
+            if !isDone {
+                completions += 1
+                if !reduceMotion { burst += 1 }
+                if playsSound { CompletionSound.play(preferences.custom.completionTone) }
+            }
             action()
         } label: {
             ZStack {
@@ -52,12 +99,12 @@ struct PriorityCheck: View {
                 Circle().strokeBorder(color, lineWidth: 2)
                 if isDone {
                     Image(systemName: "checkmark")
-                        .font(.system(size: size * 0.5, weight: .heavy))
+                        .font(.system(size: ring * 0.5, weight: .heavy))
                         .foregroundStyle(.white)
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.scale.combined(with: .opacity))
                 }
             }
-            .frame(width: size, height: size)
+            .frame(width: ring, height: ring)
             .keyframeAnimator(initialValue: 1.0, trigger: burst) { view, scale in
                 view.scaleEffect(scale)
             } keyframes: { _ in
@@ -65,14 +112,21 @@ struct PriorityCheck: View {
                 SpringKeyframe(0.92, duration: 0.11)
                 SpringKeyframe(1.0, duration: 0.12)
             }
-            .background { BurstView(trigger: burst, color: color, size: size) }
-            .frame(width: 44, height: 44)
+            .background { BurstView(trigger: burst, color: color, size: ring) }
+            .frame(width: max(44, ring), height: max(44, ring))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.success, trigger: burst)
-        .animation(.spring(duration: 0.28), value: isDone)
-        .accessibilityLabel(isDone ? "Mark not done" : "Mark done")
+        .sensoryFeedback(.success, trigger: completions)
+        .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.28), value: isDone)
+        .accessibilityLabel(isDone ? "Mark not done" : "Complete")
+        .accessibilityValue(priorityName)
+    }
+
+    /// "High priority", read after the action so VoiceOver users hear what the ring colour shows.
+    private var priorityName: String {
+        guard priority > 0, TableCells.priorityNames.indices.contains(priority) else { return "" }
+        return "\(TableCells.priorityNames[priority]) priority"
     }
 }
 
@@ -155,14 +209,24 @@ struct CriaFab: View {
                 .menuStyle(.button)
                 .buttonStyle(.plain)
                 .accessibilityHint("Touch and hold for more ways to add")
+                .accessibilityActions {
+                    // The press-and-hold shortcuts, reachable from the VoiceOver actions rotor.
+                    ForEach(menuItems.indices.filter { !menuItems[$0].isDisabled }, id: \.self) { index in
+                        Button(menuItems[index].title, action: menuItems[index].action)
+                    }
+                }
             }
         }
         .accessibilityLabel("Add task")
+        .accessibilityShowsLargeContentViewer {
+            Label("Add task", systemImage: "plus")
+        }
         .accessibilityIdentifier("fab.add")
         .padding(.trailing, 21)
         .padding(.bottom, 16)
     }
 
+    /// Fixed size, like a tab bar button: the large content viewer stands in for Dynamic Type.
     private var face: some View {
         Image(systemName: "plus")
             .font(.system(size: 24, weight: .semibold))
@@ -175,6 +239,8 @@ struct CriaFab: View {
 
 /// Prominent capsule: filled primary with a bouncy press.
 struct CriaPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.headline)
@@ -182,12 +248,15 @@ struct CriaPrimaryButtonStyle: ButtonStyle {
             .frame(minHeight: 50)
             .foregroundStyle(Color(.primaryForeground))
             .background(Color(.primary), in: Capsule())
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.8 : 1)
+            .animation(reduceMotion ? nil : .spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
     }
 }
 
 struct CriaSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.headline)
@@ -195,8 +264,9 @@ struct CriaSecondaryButtonStyle: ButtonStyle {
             .frame(minHeight: 50)
             .foregroundStyle(Color(.primary))
             .background(Color(.primarySoft), in: Capsule())
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.8 : 1)
+            .animation(reduceMotion ? nil : .spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
     }
 }
 

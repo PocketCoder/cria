@@ -8,20 +8,38 @@ struct AssigneesSection: View {
     let taskLocalId: String
     let assignees: [AssigneeRecord]
     let state: TaskDetailPresentation
+    /// A share link cannot search for people, so it cannot add assignees.
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
 
     var body: some View {
         Section("Assignees") {
             ForEach(assignees) { assignee in
-                AssigneeRow(name: assignee.username ?? "User \(assignee.userId)")
+                AssigneeRow(name: Self.name(assignee), detail: Self.handle(assignee))
                     .swipeActions {
                         Button("Remove", systemImage: "person.badge.minus", role: .destructive) { remove(assignee) }
                     }
                     .contextMenu {
                         Button("Remove", systemImage: "person.badge.minus", role: .destructive) { remove(assignee) }
                     }
+                    .accessibilityAction(named: "Remove") { remove(assignee) }
             }
-            Button("Assign…", systemImage: "person.badge.plus") { state.assigning = true }
+            if !isLinkShare {
+                Button("Assign…", systemImage: "person.badge.plus") { state.assigning = true }
+            }
         }
+    }
+
+    /// The display name when the server has sent one, else the username.
+    static func name(_ assignee: AssigneeRecord) -> String {
+        if let display = assignee.displayName, !display.isEmpty { return display }
+        return assignee.username ?? "User \(assignee.userId)"
+    }
+
+    /// "@username" under a display name; nothing when the name already is the username.
+    static func handle(_ assignee: AssigneeRecord) -> String? {
+        guard let display = assignee.displayName, !display.isEmpty, let username = assignee.username,
+              display != username else { return nil }
+        return "@\(username)"
     }
 
     private func remove(_ assignee: AssigneeRecord) {
@@ -33,13 +51,15 @@ struct AssigneesSection: View {
 struct AssigneeRow: View {
     let name: String
     var detail: String?
+    @ScaledMetric(relativeTo: .caption) private var avatarSize: CGFloat = 30
 
     var body: some View {
         HStack(spacing: 12) {
+            // Primary ink, not heather: heather on its own wash is too faint in dark mode.
             Text(Self.initials(name))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color(.heather600))
-                .frame(width: 30, height: 30)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(.primary))
+                .frame(width: avatarSize, height: avatarSize)
                 .background(Color(.heather600).opacity(0.15), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -49,6 +69,7 @@ struct AssigneeRow: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     static func initials(_ name: String) -> String {
@@ -69,6 +90,8 @@ struct AssigneePickerSheet: View {
     @State private var results: [UserResponse] = []
     /// The query the results belong to, so "no match" only shows once a search has come back.
     @State private var searched: String?
+    /// Why the last search failed, shown in place of the results.
+    @State private var failure: String?
 
     var body: some View {
         NavigationStack {
@@ -78,14 +101,16 @@ struct AssigneePickerSheet: View {
                     dismiss()
                 } label: {
                     HStack {
-                        AssigneeRow(name: Self.displayName(user), detail: "@\(user.username)")
+                        AssigneeRow(name: Self.displayName(user), detail: Self.handle(user))
                         Spacer()
                         if assigned.contains(user.id) {
                             Image(systemName: "checkmark").foregroundStyle(Color(.primary))
+                                .accessibilityHidden(true)
                         }
                     }
                 }
                 .disabled(assigned.contains(user.id))
+                .accessibilityValue(assigned.contains(user.id) ? "Already assigned" : "")
             }
             .criaSurface()
             .overlay { emptyState }
@@ -104,10 +129,10 @@ struct AssigneePickerSheet: View {
         if trimmed.isEmpty {
             ContentUnavailableView("Find someone", systemImage: "person.crop.circle.badge.plus",
                                    description: Text("Type a name or username."))
+        } else if let failure, searched == trimmed {
+            ContentUnavailableView("Couldn’t search", systemImage: "exclamationmark.triangle", description: Text(failure))
         } else if results.isEmpty, searched == trimmed {
-            // The search reports no error, so an empty answer may also mean the server could not be reached.
-            ContentUnavailableView("No users found", systemImage: "person.slash",
-                                   description: Text("Nobody matches, or the server could not be reached. Searching needs a connection."))
+            ContentUnavailableView("Nobody matches ‘\(trimmed)’", systemImage: "person.slash")
         }
     }
 
@@ -116,18 +141,33 @@ struct AssigneePickerSheet: View {
         guard !trimmed.isEmpty else {
             results = []
             searched = nil
+            failure = nil
             return
         }
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
-        let found = await services.searchUsers(trimmed)
-        guard !Task.isCancelled else { return }
-        results = found
+        do {
+            let found = try await services.searchUsersOrThrow(trimmed)
+            guard !Task.isCancelled else { return }
+            results = found
+            failure = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            results = []
+            failure = isOfflineError(error)
+                ? "You're offline. Searching for people needs a connection."
+                : String(describing: error)
+        }
         searched = trimmed
     }
 
     private static func displayName(_ user: UserResponse) -> String {
         guard let name = user.name, !name.isEmpty else { return user.username }
         return name
+    }
+
+    private static func handle(_ user: UserResponse) -> String? {
+        guard let name = user.name, !name.isEmpty, name != user.username else { return nil }
+        return "@\(user.username)"
     }
 }

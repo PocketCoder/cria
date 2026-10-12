@@ -2,7 +2,8 @@ import CriaKit
 import SwiftUI
 
 /// Seven day buttons for the week of the selected day, between previous and next week chevrons. A dot marks days
-/// with open tasks.
+/// with open tasks. Nine fixed columns cannot grow with every text size, so the strip stops at xxxLarge and a long
+/// press shows the large content viewer instead, as tab bars do.
 struct WeekStrip: View {
     @Binding var selected: Date
     let busyDays: Set<String>
@@ -22,6 +23,7 @@ struct WeekStrip: View {
             ForEach(days, id: \.self) { day in dayButton(day) }
             weekButton("Next week", systemImage: "chevron.right", by: 7)
         }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func weekButton(_ title: String, systemImage: String, by days: Int) -> some View {
@@ -38,6 +40,7 @@ struct WeekStrip: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+        .accessibilityShowsLargeContentViewer { Label(title, systemImage: systemImage) }
     }
 
     private func dayButton(_ day: Date) -> some View {
@@ -55,12 +58,16 @@ struct WeekStrip: View {
                 Circle().fill(busy ? (isSelected ? Color(.primary) : Color(.mutedForeground)) : .clear)
                     .frame(width: 5, height: 5)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity, minHeight: 64)
             .background(isSelected ? Color(.primarySoft) : .clear, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+        .accessibilityValue([isToday ? "Today" : nil, busy ? "Has tasks" : nil].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityShowsLargeContentViewer { Text(day.formatted(.dateTime.weekday(.abbreviated).day())) }
     }
 }

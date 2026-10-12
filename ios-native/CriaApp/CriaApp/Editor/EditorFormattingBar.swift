@@ -15,26 +15,17 @@ struct EditorFormattingBar: View {
     let controller: EditorController
     let actions: EditorBarActions
 
+    private var state: EditorBarState { controller.barState }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                barButton("bold", "Bold") { controller.toggleStyle(.bold) }
-                barButton("italic", "Italic") { controller.toggleStyle(.italic) }
-                barButton("underline", "Underline") { controller.toggleStyle(.underline) }
-                barButton("strikethrough", "Strikethrough") { controller.toggleStyle(.strike) }
-                barButton("textformat.size", "Heading") { controller.setBlock(.heading(2)) }
-                barButton("list.bullet", "Bulleted list") { controller.setBlock(.bullet) }
-                barButton("list.number", "Numbered list") { controller.setBlock(.ordered) }
-                barButton("checklist", "Task list") { controller.setBlock(.task(checked: false)) }
-                barButton("increase.indent", "Indent") { controller.changeIndent(by: 1) }
-                barButton("decrease.indent", "Outdent") { controller.changeIndent(by: -1) }
-                barButton("text.quote", "Quote") { controller.setBlock(.quote) }
-                barButton("chevron.left.forwardslash.chevron.right", "Code block") { controller.setBlock(.code) }
-                barButton("link", "Link") { actions.onLink() }
-                barButton("photo", "Image") { actions.onPhoto() }
-                barButton("at", "Mention") { actions.onMention() }
+        HStack(spacing: 0) {
+            formatButtons
+            Divider().frame(height: 24)
+            // Pinned outside the scrolling buttons: the way to put the keyboard away while typing.
+            barButton("keyboard.chevron.compact.down", "Hide keyboard") {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 4)
         }
         .foregroundStyle(Color(.foreground))
         // iOS 26 draws the keyboard-style input view see-through, so the form showed behind the buttons. A solid
@@ -45,13 +36,48 @@ struct EditorFormattingBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .frame(height: EditorAccessoryView.barHeight)
+        // The accessory view has a fixed height, so the glyphs stop growing before they would clip; a long press
+        // shows the Large Content Viewer instead.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    private func barButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+    private var formatButtons: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                barButton("bold", "Bold", on: state.isOn(.bold)) { controller.toggleStyle(.bold) }
+                barButton("italic", "Italic", on: state.isOn(.italic)) { controller.toggleStyle(.italic) }
+                barButton("underline", "Underline", on: state.isOn(.underline)) { controller.toggleStyle(.underline) }
+                barButton("strikethrough", "Strikethrough", on: state.isOn(.strike)) { controller.toggleStyle(.strike) }
+                barButton("textformat.size", "Heading", on: state.isBlock(.heading(2))) { controller.setBlock(.heading(2)) }
+                barButton("list.bullet", "Bulleted list", on: state.isBlock(.bullet)) { controller.setBlock(.bullet) }
+                barButton("list.number", "Numbered list", on: state.isBlock(.ordered)) { controller.setBlock(.ordered) }
+                barButton("checklist", "Task list", on: state.isBlock(.task(checked: false))) {
+                    controller.setBlock(.task(checked: false))
+                }
+                barButton("increase.indent", "Indent") { controller.changeIndent(by: 1) }
+                barButton("decrease.indent", "Outdent") { controller.changeIndent(by: -1) }
+                barButton("text.quote", "Quote", on: state.isBlock(.quote)) { controller.setBlock(.quote) }
+                barButton("chevron.left.forwardslash.chevron.right", "Code block", on: state.isBlock(.code)) {
+                    controller.setBlock(.code)
+                }
+                barButton("link", "Link") { actions.onLink() }
+                barButton("photo", "Image") { actions.onPhoto() }
+                barButton("at", "Mention") { actions.onMention() }
+            }
+            .padding(.horizontal, 8)
+        }
+    }
+
+    /// `on` is nil for buttons with no state (indent, link); otherwise the button is tinted and reads as selected.
+    private func barButton(_ symbol: String, _ label: String, on isOn: Bool? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).frame(minWidth: 40, minHeight: 40)
+            Image(systemName: symbol)
+                .frame(minWidth: 40, minHeight: 40)
+                .background(isOn == true ? Color(.primary).opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         }
         .accessibilityLabel(label)
+        .accessibilityAddTraits(isOn == true ? .isSelected : [])
+        .accessibilityShowsLargeContentViewer()
     }
 }
 

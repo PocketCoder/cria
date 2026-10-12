@@ -52,6 +52,11 @@ struct ManageViewsSheet: View {
                 Text(hint).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityActions {
+            Button("Rename") { beginRename(view) }
+            Button("Delete") { delete(view) }
+        }
         .swipeActions {
             Button("Delete", systemImage: "trash", role: .destructive) { delete(view) }
             Button("Rename", systemImage: "pencil") { beginRename(view) }

@@ -18,6 +18,8 @@ final class EditorSnapshot: @unchecked Sendable {
 @MainActor
 final class EditorController {
     weak var textView: EditorTextView?
+    /// Which formatting buttons show as on; the bar observes it.
+    let barState = EditorBarState()
     var imageProvider: EditorStyling.ImageProvider = { _ in nil }
     var onMentionTrigger: () -> Void = {}
     var onChange: () -> Void = {}
@@ -34,6 +36,7 @@ final class EditorController {
         textView = view
         view.onToggleTask = { [weak self] paragraph in self?.toggleTask(paragraph) }
         view.onBackspaceAtStart = { [weak self] in self?.handleBackspaceAtStart() ?? true }
+        view.onContentSizeChange = { [weak self] in self?.restyleForTextSize() }
     }
 
     /// Replaces the content with a document parsed from stored HTML.
@@ -81,10 +84,12 @@ final class EditorController {
 
     func didChange() {
         textView?.refreshMarkers()
+        refreshBarState()
         onChange()
     }
 
     func selectionChanged() {
+        refreshBarState()
         guard let view = textView, view.selectedRange.length == 0 else { return }
         guard let paragraph = EditorParagraphs.containing(view.selectedRange.location, in: view.textStorage) else { return }
         if paragraph.isEmpty {

@@ -101,21 +101,32 @@ struct KanbanColumnView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Text(column.bucket.title)
-                .font(Theme.rowSubtitle.weight(.semibold))
-                .foregroundStyle(Color(.foreground))
-                .lineLimit(1)
-            Text(countText)
-                .font(Theme.caption)
-                .monospacedDigit()
-                .foregroundStyle(column.atLimit ? Color(.destructive) : Color(.mutedForeground))
-                .accessibilityLabel(column.atLimit ? "\(countText), full" : "\(column.tasks.count) tasks")
-            roleBadge
+            // Title, count and role badges read as one heading, e.g. "To do, 3 of 5 tasks, full, Done column".
+            HStack(spacing: 6) {
+                Text(column.bucket.title)
+                    .font(Theme.rowSubtitle.weight(.semibold))
+                    .foregroundStyle(Color(.foreground))
+                    .lineLimit(2)
+                Text(countText)
+                    .font(Theme.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(column.atLimit ? Color(.destructive) : Color(.mutedForeground))
+                    .accessibilityLabel(spokenCount)
+                roleBadge
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
             if !readOnly { columnMenu }
         }
         .padding(.leading, 4)
         .frame(minHeight: 32)
+    }
+
+    private var spokenCount: String {
+        let count = column.tasks.count
+        guard column.bucket.limit > 0 else { return SpokenText.tasks(count) }
+        return "\(count) of \(column.bucket.limit) tasks" + (column.atLimit ? ", full" : "")
     }
 
     private var columnMenu: some View {
@@ -138,7 +149,7 @@ struct KanbanColumnView: View {
                 .frame(width: 36, height: 32)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel("Column options")
+        .accessibilityLabel("Options for \(column.bucket.title)")
     }
 
     private var countText: String {

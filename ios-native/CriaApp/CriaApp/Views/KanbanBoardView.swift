@@ -23,6 +23,7 @@ struct KanbanBoardView: View {
     @State private var addingBucket = false
     @State private var limitNotice = false
     @State private var failure: String?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(services: AppServices, view: ViewRecord) {
         self.services = services
@@ -44,9 +45,12 @@ struct KanbanBoardView: View {
     private var columns: [KanbanColumn] { live.value.columns }
     private var readOnly: Bool { Kanban.isFilterMode(view) }
 
-    /// About 85% of the screen, so the next column peeks in, within 280 to 340 points.
-    private static func columnWidth(_ available: CGFloat) -> CGFloat {
-        min(max(available * 0.85, 280), 340)
+    /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
+    /// and accessibility sizes take nearly the whole width so titles and chips are not squeezed.
+    private static func columnWidth(_ available: CGFloat, typeSize: DynamicTypeSize) -> CGFloat {
+        if typeSize.isAccessibilitySize { return available * 0.94 }
+        let cap: CGFloat = typeSize >= .xxLarge ? 400 : 340
+        return min(max(available * 0.85, 280), cap)
     }
 
     var body: some View {
@@ -65,7 +69,7 @@ struct KanbanBoardView: View {
                         onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: columns.count > 1) },
                         onSetRole: { role in setRole(role, of: column.bucket) }
                     )
-                    .containerRelativeFrame(.horizontal) { length, _ in Self.columnWidth(length) }
+                    .containerRelativeFrame(.horizontal) { length, _ in Self.columnWidth(length, typeSize: typeSize) }
                 }
                 if !readOnly { addBucketButton }
             }

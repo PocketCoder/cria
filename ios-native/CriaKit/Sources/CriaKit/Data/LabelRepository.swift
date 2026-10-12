@@ -145,11 +145,15 @@ extension CriaStore {
             try connection.execute(sql: "DELETE FROM task_reminders WHERE task_local_id = ?", arguments: [taskLocalId])
             for reminder in reminders {
                 let triggerAt = normaliseDate(reminder.reminder)
-                let key = ReminderKey(reminderAt: triggerAt, relativePeriod: reminder.relativePeriod, relativeTo: reminder.relativeTo)
+                // Vikunja sends `relative_to: ""` and `relative_period: 0` for a fixed-time reminder; store that as
+                // absolute (no anchor), or it reads back as "at" with nothing after it.
+                let anchor = reminder.relativeTo.flatMap { $0.isEmpty ? nil : $0 }
+                let period = anchor == nil ? nil : reminder.relativePeriod
+                let key = ReminderKey(reminderAt: triggerAt, relativePeriod: period, relativeTo: anchor)
                 try connection.execute(sql: """
                     INSERT OR IGNORE INTO task_reminders (task_local_id, reminder_at, relative_period, relative_to, notified)
                     VALUES (?, ?, ?, ?, ?)
-                    """, arguments: [taskLocalId, triggerAt, reminder.relativePeriod, reminder.relativeTo, fired.contains(key) ? 1 : 0])
+                    """, arguments: [taskLocalId, triggerAt, period, anchor, fired.contains(key) ? 1 : 0])
             }
         }
     }

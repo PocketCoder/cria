@@ -27,7 +27,17 @@ struct ReminderSection: View {
             }
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
             ForEach(Array(reminders.enumerated()), id: \.offset) { _, reminder in
-                Label { Text(reminder.summary(display: dateDisplay)) } icon: { Image(systemName: "bell").foregroundStyle(Color(.coral500)) }
+                Label {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(reminder.summary(display: dateDisplay))
+                        // A relative reminder also names the moment it fires, so "1 hour before" is never vague.
+                        if let when = reminder.firesAtText(display: dateDisplay) {
+                            Text(when).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "bell").foregroundStyle(Color(.coral500))
+                }
                     .swipeActions {
                         Button("Delete", role: .destructive) {
                             state.attempt { try services.store.removeReminder(taskLocalId: task.localId, reminder) }
@@ -44,9 +54,11 @@ struct ReminderSection: View {
 
     private var addMenu: some View {
         Menu {
-            if task.dueDate != nil {
-                ForEach(presets, id: \.period) { preset in
-                    Button(preset.title) { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) }
+            if let due = task.dueDate {
+                Section {
+                    presetButtons
+                } header: {
+                    if !DueDates.hasTimeOfDay(due) { Text("The due date has no time, so these count from midnight") }
                 }
             }
             Button("In one hour") { add(ReminderInput(triggerAt: DueDates.timedISO(Date().addingTimeInterval(3600)))) }
@@ -90,12 +102,33 @@ struct ReminderSection: View {
         return Calendar.cria.dateInterval(of: .hour, for: now)?.end ?? now.addingTimeInterval(3600)
     }
 
+    private var presetButtons: some View {
+        ForEach(presets, id: \.period) { preset in
+            Button { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) } label: {
+                Text(preset.title)
+                if let when = presetTime(preset.period) { Text(when) }
+            }
+        }
+    }
+
+    /// When a preset would fire: the due date (its time, or the start of an all-day due day) moved by the period.
+    private func presetTime(_ period: Int) -> String? {
+        guard let iso = task.dueDate, let due = DueDates.pickerDate(iso) else { return nil }
+        return DueDates.fullLabel(due.addingTimeInterval(TimeInterval(period)), display: dateDisplay)
+    }
+
     private func add(_ input: ReminderInput) {
         state.attempt { try services.store.addReminder(taskLocalId: task.localId, input) }
     }
 }
 
 extension ReminderRecord {
+    /// The moment a relative reminder fires; nil for a fixed-time one, whose summary already says it.
+    func firesAtText(display: DateDisplay) -> String? {
+        guard relativePeriod != nil, relativeTo != nil, let reminderAt, let date = DueDates.parse(reminderAt) else { return nil }
+        return DueDates.fullLabel(date, display: display)
+    }
+
     func summary(display: DateDisplay) -> String {
         if let period = relativePeriod, let anchor = relativeTo {
             return ReminderText.relative(period: period, anchor: anchor)

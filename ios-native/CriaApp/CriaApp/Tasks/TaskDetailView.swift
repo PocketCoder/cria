@@ -176,6 +176,8 @@ struct TaskDetailView: View {
             }
         }
             .criaSurface()
+            // Dragging the form down puts the keyboard away, as in Notes.
+            .scrollDismissesKeyboard(.interactively)
             // A grouped form starts ~35pt below the bar; the task title belongs right under it.
             .contentMargins(.top, 8, for: .scrollContent)
     }
@@ -271,6 +273,7 @@ extension TaskDetailView {
                     Text("Labels")
                     Spacer()
                     Button("Edit") { showLabels = true }.textCase(nil)
+                        .accessibilityLabel("Edit labels")
                 }
             }
         case .assignees:

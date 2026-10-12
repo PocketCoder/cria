@@ -36,35 +36,41 @@ extension CriaStore {
     public func addRelation(taskLocalId: String, otherTaskLocalId: String, kind: TaskRelationKind) throws {
         guard taskLocalId != otherTaskLocalId else { return }
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            let now = isoNow()
-            let insert = """
-                INSERT OR REPLACE INTO task_relations (task_local_id, other_task_local_id, other_task_server_id, relation_kind, created_at)
-                VALUES (?, ?, NULL, ?, ?)
-                """
-            try connection.execute(sql: insert, arguments: [taskLocalId, otherTaskLocalId, kind.rawValue, now])
-            try connection.execute(sql: insert, arguments: [otherTaskLocalId, taskLocalId, kind.inverse.rawValue, now])
-            try connection.enqueue(
-                .taskRelation,
-                localId: taskLocalId,
-                operation: .add,
-                payload: ["other_task_local_id": otherTaskLocalId, "kind": kind.rawValue],
-                at: now
-            )
-            if kind == .subtask || kind == .parenttask {
-                try CriaStore.refreshParentProgress(connection, childLocalId: kind == .subtask ? otherTaskLocalId : taskLocalId, now: now)
-            }
+            try CriaStore.insertRelation(connection, taskLocalId: taskLocalId, otherTaskLocalId: otherTaskLocalId, kind: kind)
         }
     }
 
-    /// User mutation: a new task in the parent's project, linked as its subtask. The create op is queued before the
-    /// relation op, so the outbox pushes them in that order.
+    static func insertRelation(_ connection: Database, taskLocalId: String, otherTaskLocalId: String, kind: TaskRelationKind) throws {
+        let now = isoNow()
+        let insert = """
+            INSERT OR REPLACE INTO task_relations (task_local_id, other_task_local_id, other_task_server_id, relation_kind, created_at)
+            VALUES (?, ?, NULL, ?, ?)
+            """
+        try connection.execute(sql: insert, arguments: [taskLocalId, otherTaskLocalId, kind.rawValue, now])
+        try connection.execute(sql: insert, arguments: [otherTaskLocalId, taskLocalId, kind.inverse.rawValue, now])
+        try connection.enqueue(
+            .taskRelation,
+            localId: taskLocalId,
+            operation: .add,
+            payload: ["other_task_local_id": otherTaskLocalId, "kind": kind.rawValue],
+            at: now
+        )
+        if kind == .subtask || kind == .parenttask {
+            try CriaStore.refreshParentProgress(connection, childLocalId: kind == .subtask ? otherTaskLocalId : taskLocalId, now: now)
+        }
+    }
+
+    /// User mutation: a new task in the parent's project, linked as its subtask, in one transaction: either both are
+    /// saved or neither is. The create op is queued before the relation op, so the outbox pushes them in that order.
     @discardableResult
     public func createSubtask(parentLocalId: String, title: String) throws -> TaskRecord {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let parent = try task(localId: parentLocalId) else { throw CriaStoreError.notFound(parentLocalId) }
-        let child = try createTask(TaskInput(title: trimmed, projectLocalId: parent.projectLocalId))
-        try addRelation(taskLocalId: parentLocalId, otherTaskLocalId: child.localId, kind: .subtask)
-        return child
+        return try userWrite(announcing: [.tasks, .outbox]) { connection in
+            let child = try CriaStore.insertTask(connection, TaskInput(title: trimmed, projectLocalId: parent.projectLocalId))
+            try CriaStore.insertRelation(connection, taskLocalId: parentLocalId, otherTaskLocalId: child.localId, kind: .subtask)
+            return child
+        }
     }
 
     /// User mutation: removes both directions locally and queues the removal. Carries the peer's server id when known.

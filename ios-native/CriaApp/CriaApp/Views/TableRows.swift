@@ -7,6 +7,7 @@ struct TableCompactRow: View {
     let item: TaskListItem
     let columns: [TableViewColumn]
     @Environment(\.dateDisplay) private var dateDisplay
+    @Environment(\.colorScheme) private var colorScheme
     @State private var failure: String?
 
     private var task: TaskRecord { item.task }
@@ -29,8 +30,12 @@ struct TableCompactRow: View {
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
+            // Spoken text instead of combining the children, which would read each chip's icon name.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenLabel)
+            .accessibilityValue(task.done ? "Done" : "")
         }
+        .accessibilityAction(named: task.done ? "Mark not done" : "Mark done") { toggle() }
         .swipeActions(edge: .leading) {
             Button(task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
                 .tint(Color(.meadow500))
@@ -58,12 +63,30 @@ struct TableCompactRow: View {
         ForEach(chipColumns, id: \.self) { column in
             if column == .labels {
                 ForEach(item.labels.prefix(3), id: \.localId) { label in
-                    CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
+                    CriaChip(
+                        text: label.title, systemImage: "tag",
+                        tint: LegibleTint.chip(label.hexColor, scheme: colorScheme) ?? Color(.info)
+                    )
                 }
             } else if let text = cellText(column) {
                 CriaChip(text: chipText(column, text), systemImage: Self.icon(column), tint: tint(column))
             }
         }
+    }
+
+    /// Title, then each shown column named, e.g. "Buy milk, due Tomorrow, High priority, labels Home, Errands".
+    private var spokenLabel: String {
+        let parts = chipColumns.compactMap { column -> String? in
+            if column == .labels { return "labels " + item.labels.map(\.title).joined(separator: ", ") }
+            guard let text = cellText(column) else { return nil }
+            switch column {
+            case .dueDate: return "due \(text)"
+            case .priority: return "\(text) priority"
+            case .startDate, .endDate, .updated, .created, .doneAt: return chipText(column, text)
+            default: return "\(column.label) \(text)"
+            }
+        }
+        return ([task.title] + parts).joined(separator: ", ")
     }
 
     private func cellText(_ column: TableViewColumn) -> String? {
@@ -169,13 +192,16 @@ struct TableGridView: View {
                     Image(systemName: key.direction == .asc ? "arrow.up" : "arrow.down")
                         .font(Theme.footnote)
                         .foregroundStyle(Color(.primary))
+                        .accessibilityHidden(true)
                 }
             }
         }
         .buttonStyle(.plain)
         .disabled(!column.sortable)
         .frame(minWidth: width(column), alignment: .leading)
-        .accessibilityValue(key.map { $0.direction == .asc ? "Ascending" : "Descending" } ?? "")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(key.map { $0.direction == .asc ? "Sorted ascending" : "Sorted descending" } ?? "")
+        .accessibilityHint(column.sortable ? "Changes the sort order" : "")
     }
 
     @ViewBuilder private func cell(_ item: TaskListItem, _ column: TableViewColumn) -> some View {
@@ -192,14 +218,19 @@ struct TableGridView: View {
             .buttonStyle(.plain)
         case .labels:
             Text(item.labels.map(\.title).joined(separator: ", ")).font(Theme.caption).lineLimit(1)
+                .accessibilityLabel(item.labels.isEmpty ? "No labels" : "Labels: " + item.labels.map(\.title).joined(separator: ", "))
         case .done:
             Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(task.done ? Color(.success) : Color(.mutedForeground))
                 .accessibilityLabel(task.done ? "Done" : "Not done")
         default:
-            Text(TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay) ?? "")
+            let text = TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay)
+            Text(text ?? "")
                 .font(Theme.caption)
                 .foregroundStyle(Color(.foreground))
+                // Named per cell, so a row read cell by cell still says which column each value is.
+                .accessibilityLabel(text.map { "\(column.label): \($0)" } ?? "")
+                .accessibilityHidden(text == nil)
         }
     }
 }

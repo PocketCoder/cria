@@ -7,36 +7,48 @@ struct DateFieldRow: View {
     let title: String
     let iso: String?
     let onChange: (String) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 8) {
+        // At accessibility sizes the pills drop under the title instead of squeezing beside it.
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        layout {
             Label(title, systemImage: "calendar")
-            Spacer(minLength: 8)
-            if let iso, let current = DueDates.pickerDate(iso) {
-                let timed = DueDates.hasTimeOfDay(iso)
-                DatePicker("\(title) date", selection: Binding(get: { current }, set: { write($0, timed: timed) }),
-                           displayedComponents: [.date])
+            if !stacked { Spacer(minLength: 8) }
+            HStack(spacing: 8) { controls }
+        }
+        .padding(.vertical, stacked ? 8 : 0)
+        .frame(minHeight: 56)
+    }
+
+    @ViewBuilder private var controls: some View {
+        if let iso, let current = DueDates.pickerDate(iso) {
+            let timed = DueDates.hasTimeOfDay(iso)
+            DatePicker("\(title) date", selection: Binding(get: { current }, set: { write($0, timed: timed) }),
+                       displayedComponents: [.date])
+                .labelsHidden()
+            if timed {
+                DatePicker("\(title) time", selection: Binding(get: { current }, set: { write($0, timed: true) }),
+                           displayedComponents: [.hourAndMinute])
                     .labelsHidden()
-                if timed {
-                    DatePicker("\(title) time", selection: Binding(get: { current }, set: { write($0, timed: true) }),
-                               displayedComponents: [.hourAndMinute])
-                        .labelsHidden()
-                } else {
-                    Button("Add time") { setTimed(current: current) }
-                        .font(Theme.chip)
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.small)
-                }
-                removeMenu(current: current, timed: timed)
             } else {
-                Button("Add") { onChange(DueDates.allDayISO(for: Date())) }
+                Button("Add time") { setTimed(current: current) }
+                    .accessibilityLabel("Add \(title.lowercased()) time")
                     .font(Theme.chip)
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
                     .controlSize(.small)
-                    .tint(Color(.primary))
             }
+            removeMenu(current: current, timed: timed)
+        } else {
+            Button("Add") { onChange(DueDates.allDayISO(for: Date())) }
+                .accessibilityLabel("Add \(title.lowercased()) date")
+                .font(Theme.chip)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(Color(.primary))
         }
     }
 
@@ -49,6 +61,7 @@ struct DateFieldRow: View {
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(Color(.mutedForeground))
+                .accessibilityHidden(true)
                 .frame(minWidth: 28, minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -73,11 +86,17 @@ struct FlowLabels: View {
         if labels.isEmpty {
             Text("No labels").foregroundStyle(Color(.mutedForeground))
         } else {
-            HStack {
-                ForEach(labels, id: \.localId) { label in
-                    CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
-                }
+            // A row while it fits, else one label per line (many labels, or accessibility text sizes).
+            ViewThatFits(in: .horizontal) {
+                HStack { chips }
+                VStack(alignment: .leading, spacing: 6) { chips }
             }
+        }
+    }
+
+    private var chips: some View {
+        ForEach(labels, id: \.localId) { label in
+            CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
         }
     }
 }
@@ -115,9 +134,11 @@ struct LabelPickerSheet: View {
                                 Spacer()
                                 if selected.contains(where: { $0.localId == label.localId }) {
                                     Image(systemName: "checkmark").foregroundStyle(Color(.primary))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
+                        .accessibilityAddTraits(selected.contains(where: { $0.localId == label.localId }) ? .isSelected : [])
                     }
                 }
             }

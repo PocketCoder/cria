@@ -111,36 +111,6 @@ public struct TaskPatch: Sendable {
     }
 }
 
-extension TaskPatch {
-    /// The SET clauses and arguments for the fields this patch changes, after the always-set dirty and updated_at.
-    func assignments(now: String) -> ([String], [(any DatabaseValueConvertible)?]) {
-        var columns = ["dirty = 1", "updated_at = ?"]
-        var arguments: [(any DatabaseValueConvertible)?] = [now]
-        func add(_ column: String, _ value: (any DatabaseValueConvertible)?) {
-            columns.append("\(column) = ?")
-            arguments.append(value)
-        }
-        if let title { add("title", title) }
-        if let done {
-            add("done", done)
-            add("done_at", done ? now : nil)
-        }
-        for (column, value) in [("due_date", dueDate), ("start_date", startDate), ("end_date", endDate)] {
-            guard let value else { continue }
-            add(column, value.isEmpty ? nil : value)
-        }
-        let optionalFields: [(String, (any DatabaseValueConvertible)?)] = [
-            ("description", description), ("project_local_id", projectLocalId),
-            ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone),
-            ("repeat_after", repeatAfter), ("repeat_mode", repeatMode)
-        ]
-        for (column, value) in optionalFields where value != nil {
-            add(column, value)
-        }
-        return (columns, arguments)
-    }
-}
-
 extension CriaStore {
     static let taskColumns = """
         local_id, server_id, project_local_id, title, description, done, done_at, due_date, \
@@ -212,23 +182,28 @@ extension CriaStore {
     @discardableResult
     public func createTask(_ input: TaskInput) throws -> TaskRecord {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            let localId = UUID().uuidString
-            let now = isoNow()
-            try connection.execute(sql: """
-                INSERT INTO tasks (local_id, server_id, project_local_id, title, description, done, due_date,
-                       priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
-                       updated_at, created_at, dirty, deleted)
-                VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
-                """, arguments: [
-                    localId, input.projectLocalId, input.title, input.description, input.dueDate,
-                    input.priority, input.isFavorite, input.repeatAfter, input.repeatMode, now, now
-                ])
-            guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
-                throw CriaStoreError.notFound(localId)
-            }
-            try connection.enqueue(.task, localId: localId, operation: .create, payload: CriaStore.taskPayload(record), at: now)
-            return record
+            try CriaStore.insertTask(connection, input)
         }
+    }
+
+    /// The insert and its create op, inside a write the caller holds (so a subtask and its link share one transaction).
+    static func insertTask(_ connection: Database, _ input: TaskInput) throws -> TaskRecord {
+        let localId = UUID().uuidString
+        let now = isoNow()
+        try connection.execute(sql: """
+            INSERT INTO tasks (local_id, server_id, project_local_id, title, description, done, due_date,
+                   priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
+                   updated_at, created_at, dirty, deleted)
+            VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
+            """, arguments: [
+                localId, input.projectLocalId, input.title, input.description, input.dueDate,
+                input.priority, input.isFavorite, input.repeatAfter, input.repeatMode, now, now
+            ])
+        guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
+            throw CriaStoreError.notFound(localId)
+        }
+        try connection.enqueue(.task, localId: localId, operation: .create, payload: CriaStore.taskPayload(record), at: now)
+        return record
     }
 
     @discardableResult

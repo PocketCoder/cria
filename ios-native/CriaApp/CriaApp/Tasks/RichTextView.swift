@@ -14,10 +14,12 @@ struct RichTextView: View {
     @State private var height: CGFloat = 28
     @State private var serverBase: String?
     @State private var baseResolved = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         RichTextWebView(
-            html: html, services: services, serverBase: serverBase, ready: services == nil || baseResolved, height: $height
+            html: html, services: services, serverBase: serverBase, ready: services == nil || baseResolved,
+            typeSize: typeSize, height: $height
         )
         .frame(height: height)
         .task {
@@ -34,6 +36,8 @@ private struct RichTextWebView: UIViewRepresentable {
     let serverBase: String?
     /// False until the server address is known; nothing loads before then.
     let ready: Bool
+    /// The page's `-apple-system-body` follows Dynamic Type; a size change reloads it so the height is measured again.
+    let typeSize: DynamicTypeSize
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator {
@@ -59,8 +63,9 @@ private struct RichTextWebView: UIViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {
         // Every parent re-render (each sync) lands here; only a real change of content reloads the page.
-        guard ready, context.coordinator.loadedHTML != html else { return }
+        guard ready, context.coordinator.loadedHTML != html || context.coordinator.loadedTypeSize != typeSize else { return }
         context.coordinator.loadedHTML = html
+        context.coordinator.loadedTypeSize = typeSize
         context.coordinator.images?.serverScheme = serverBase.flatMap { URL(string: $0)?.scheme } ?? "https"
         let body = RichTextImages.rewrite(HTMLSanitizer.sanitize(html), serverBase: serverBase)
         let page = """
@@ -74,6 +79,7 @@ private struct RichTextWebView: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
         var loadedHTML: String?
+        var loadedTypeSize: DynamicTypeSize?
         var images: RichTextImageSchemeHandler?
         private let height: Binding<CGFloat>
 

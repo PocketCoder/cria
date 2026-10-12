@@ -30,6 +30,12 @@ struct RelationsSection: View {
                         relationLabel(relation)
                     }
                 }
+                .accessibilityActions {
+                    // The tick inside a row that opens the task is not its own VoiceOver stop.
+                    if relation.kind == "subtask", relation.otherTaskLocalId != nil {
+                        Button(relation.otherDone ? "Mark not done" : "Complete") { toggleSubtask(relation) }
+                    }
+                }
                 .swipeActions {
                     Button("Remove", role: .destructive) {
                         state.attempt { try services.store.removeRelation(taskLocalId: taskLocalId, relation: relation) }
@@ -72,6 +78,7 @@ struct RelationsSection: View {
     private var subtaskField: some View {
         HStack {
             Image(systemName: "circle").foregroundStyle(Color(.mutedForeground))
+                .accessibilityHidden(true)
             TextField("Subtask title", text: $subtaskTitle)
                 .focused($subtaskFocused)
                 .submitLabel(.next)
@@ -135,15 +142,24 @@ struct RelationsSection: View {
                 Text(kindTitles[relation.kind] ?? relation.kind).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(relation.otherTitle), \(kindTitles[relation.kind] ?? relation.kind)\(relation.otherDone ? ", done" : "")"
+        )
+    }
+
+    private func toggleSubtask(_ relation: RelationRecord) {
+        guard let otherId = relation.otherTaskLocalId else { return }
+        state.attempt { _ = try services.store.updateTask(localId: otherId, patch: TaskPatch(done: !relation.otherDone)) }
     }
 
     /// A subtask that exists locally gets a tappable done toggle; anything else only shows its state.
     @ViewBuilder
     private func doneMark(_ relation: RelationRecord) -> some View {
         let symbol = relation.otherDone ? "checkmark.circle.fill" : "circle"
-        if relation.kind == "subtask", let otherId = relation.otherTaskLocalId {
+        if relation.kind == "subtask", relation.otherTaskLocalId != nil {
             Button {
-                state.attempt { _ = try services.store.updateTask(localId: otherId, patch: TaskPatch(done: !relation.otherDone)) }
+                toggleSubtask(relation)
             } label: {
                 Image(systemName: symbol)
                     .foregroundStyle(relation.otherDone ? Color(.primary) : Color(.mutedForeground))
@@ -151,7 +167,6 @@ struct RelationsSection: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(relation.otherDone ? "Mark not done" : "Mark done")
         } else {
             Image(systemName: symbol)
         }

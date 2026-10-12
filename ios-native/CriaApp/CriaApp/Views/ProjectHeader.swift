@@ -49,6 +49,8 @@ struct ProjectHeader: View {
         }
         .font(Theme.rowSubtitle)
         .foregroundStyle(Color(.mutedForeground))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(openCount == 1 ? "1 open task" : "\(openCount) open tasks")
     }
 
     private var pills: some View {

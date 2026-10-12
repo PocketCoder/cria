@@ -65,6 +65,7 @@ struct AttachmentsSection: View {
         } label: {
             HStack {
                 Image(systemName: attachment.pending ? "arrow.up.circle" : "doc")
+                    .accessibilityHidden(true)
                 Text(attachment.fileName)
                 Spacer()
                 if attachment.uploadFailed { Text("Failed").font(Theme.caption).foregroundStyle(Color(.destructive)) }
@@ -73,9 +74,10 @@ struct AttachmentsSection: View {
                 }
             }
         }
+        .accessibilityHint(attachment.pending ? "" : "Opens a preview")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
-            Button("Delete", systemImage: "trash") { state.deletingAttachment = attachment }
+            Button("Delete attachment", systemImage: "trash") { state.deletingAttachment = attachment }
                 .tint(Color(.destructive))
         }
     }

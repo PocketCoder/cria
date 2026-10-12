@@ -74,6 +74,10 @@ struct GanttChart: View {
             }
         }
         .frame(width: chartWidth, height: height, alignment: .topLeading)
+        // The header and rows are drawn at fixed heights, so text stops growing before it would overlap them.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Timeline")
         .background(dropTargeted ? Color(.primary).opacity(0.06) : Color.clear)
         // A task dragged in from the no-dates tray starts on the day it is dropped on.
         .dropDestination(for: String.self) { items, location in

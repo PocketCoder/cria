@@ -27,6 +27,8 @@ struct BrowseView: View {
     @State private var labelEditor: LabelEditTarget?
     @State private var pendingLabelDelete: LabelDeleteTarget?
     @AppStorage("cria.projectTree.collapsed") private var collapsedJSON = "[]"
+    /// A share link has no account: no sharing or saved filters, which the server would refuse.
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
 
     init(services: AppServices) {
         self.services = services
@@ -88,8 +90,10 @@ struct BrowseView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("Add", systemImage: "plus") {
                     Button("New project", systemImage: "folder.badge.plus") { editor = .create }
-                    Button("New filter", systemImage: "line.3.horizontal.decrease.circle") {
-                        filterEditor = FilterEditorTarget(record: nil)
+                    if !isLinkShare {
+                        Button("New filter", systemImage: "line.3.horizontal.decrease.circle") {
+                            filterEditor = FilterEditorTarget(record: nil)
+                        }
                     }
                     Divider()
                     Button("List from photo", systemImage: "camera.viewfinder") { showPhoto = true }
@@ -174,7 +178,9 @@ extension BrowseView {
                     // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
                     Button("Delete") { pendingDelete = row.project }.tint(Color(.destructive))
                     Button("Edit") { editor = .edit(row.project) }.tint(Color(.sky500))
-                    Button("Share") { sharing = ProjectShareTarget(project: row.project) }.tint(Color(.primary))
+                    if !isLinkShare {
+                        Button("Share") { sharing = ProjectShareTarget(project: row.project) }.tint(Color(.primary))
+                    }
                 }
                 .swipeActions(edge: .leading) {
                     Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {

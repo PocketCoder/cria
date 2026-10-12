@@ -146,9 +146,11 @@ struct GanttBar: View {
             RoundedRectangle(cornerRadius: 6).fill(fill.opacity(place.isPlaceholder ? 0.35 : 0.9))
             Text(node.title)
                 .font(Theme.caption)
-                .foregroundStyle(Color(.primaryForeground))
+                .foregroundStyle(textColor)
                 .lineLimit(1)
                 .padding(.horizontal, 10)
+                // Rows are a fixed height, so very large text would spill out of the bar; the label caps instead.
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
         .frame(width: place.width, height: place.height)
         .contentShape(Rectangle())
@@ -168,9 +170,34 @@ struct GanttBar: View {
         .overlay(alignment: .leading) { handle(.resizeStart) }
         .overlay(alignment: .trailing) { handle(.resizeEnd) }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(node.title), \(place.label)")
+        .accessibilityLabel(spokenLabel)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onOpen() }
+        // Dragging is not available to VoiceOver, so moving by a day is an action on the bar.
+        .accessibilityActions {
+            if !place.resolved.dateless {
+                Button("Move a day earlier") { shift(-1) }
+                Button("Move a day later") { shift(1) }
+            }
+        }
+    }
+
+    /// "Task, 3 to 7 June", noting derived or missing dates and a finished task.
+    private var spokenLabel: String {
+        var parts = [node.title, SpokenText.dayRange(start: place.resolved.start, end: place.resolved.end)]
+        if place.isPlaceholder { parts.append(place.resolved.dateless ? "no dates set" : "estimated dates") }
+        if node.done { parts.append("done") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// White or black, whichever reads on the bar. A placeholder bar is a pale wash, so it takes the text colour.
+    private var textColor: Color {
+        if place.isPlaceholder { return Color(.foreground) }
+        return place.color == nil ? Color(.primaryForeground) : LegibleTint.onFill(place.color)
+    }
+
+    private func shift(_ days: Int) {
+        onCommit(place.resolved.start + days, place.resolved.end + days)
     }
 
     /// The resize handle, shown only when the bar is wide enough that it does not cover the whole bar.
