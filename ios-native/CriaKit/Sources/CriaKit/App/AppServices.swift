@@ -37,6 +37,8 @@ public final class AppServices: Sendable {
     }
 
     public func start() async {
+        // Task and comment links (copy link, share) need the server's address before any task screen opens.
+        await rememberServerBase()
         await coordinator.start()
         await coordinator.forceSync()
         announcePull()

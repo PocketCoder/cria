@@ -103,6 +103,8 @@ public struct TaskPatch: Sendable {
     /// Recurrence: interval in seconds, and mode (1 = monthly).
     public var repeatAfter: Int?
     public var repeatMode: Int?
+    /// Task colour as six hex digits (a leading `#` is dropped); an empty string clears it. The push sends it raw.
+    public var hexColor: String?
 
     public init(title: String? = nil, done: Bool? = nil, dueDate: String? = nil,
                 priority: Int? = nil, isFavorite: Bool? = nil) {

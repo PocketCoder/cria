@@ -22,6 +22,7 @@ struct EditorHost: View {
     @State private var pendingLink: String?
     @State private var photo: PhotosPickerItem?
     @State private var showPhotoPicker = false
+    @State private var viewingImage: ImageViewerItem?
 
     var body: some View {
         RichTextEditor(
@@ -53,6 +54,7 @@ struct EditorHost: View {
                 guard let item else { return }
                 Task { await insertPhoto(item) }
             }
+            .fullScreenCover(item: $viewingImage) { ImageViewer(item: $0, services: services) }
             .onAppear { configureController() }
     }
 
@@ -81,6 +83,9 @@ struct EditorHost: View {
         barActions.onPhoto = {
             controller.holdFocus()
             showPhotoPicker = true
+        }
+        barActions.onOpenImage = { source in
+            viewingImage = ImageViewerItem(source: source)
         }
         barActions.onMention = {
             controller.holdFocus()

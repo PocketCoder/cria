@@ -21,6 +21,8 @@ struct RichTextEditor: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         if let onHeightChange { view.configureInline(onHeightChange: onHeightChange) }
+        let actions = barActions
+        view.onOpenImage = { actions.onOpenImage($0) }
         // `.keyboard` toolbar items never reach a UITextView inside a representable, so the bar is its accessory view.
         view.installAccessoryBar(EditorFormattingBar(controller: controller, actions: barActions))
         controller.attach(view)

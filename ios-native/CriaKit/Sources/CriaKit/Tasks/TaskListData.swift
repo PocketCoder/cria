@@ -13,6 +13,58 @@ public struct TaskListItem: Equatable, Sendable {
     public let task: TaskRecord
     public let labels: [LabelRecord]
     public let projectTitle: String?
+    /// True when the task has any attachment (a paperclip on the row).
+    public let hasAttachments: Bool
+    /// Ticked and total task-list items in the description ("2/5" on the row).
+    public let checklist: ChecklistCount
+
+    public init(task: TaskRecord, labels: [LabelRecord], projectTitle: String?,
+                hasAttachments: Bool = false, checklist: ChecklistCount = .none) {
+        self.task = task
+        self.labels = labels
+        self.projectTitle = projectTitle
+        self.hasAttachments = hasAttachments
+        self.checklist = checklist
+    }
+}
+
+/// Task-list progress counted from a description's HTML. Ported from `countChecklistItems` in
+/// `src/features/tasks/taskRowHelpers.ts`.
+public struct ChecklistCount: Equatable, Sendable {
+    public let checked: Int
+    public let total: Int
+
+    public static let none = ChecklistCount(checked: 0, total: 0)
+
+    public init(checked: Int, total: Int) {
+        self.checked = checked
+        self.total = total
+    }
+
+    private nonisolated(unsafe) static let input = try? NSRegularExpression(
+        pattern: #"<input\s[^>]*?type="checkbox"[^>]*?>"#, options: .caseInsensitive
+    )
+    private nonisolated(unsafe) static let ticked = try? NSRegularExpression(
+        pattern: #"\bchecked\s*[= >]"#, options: .caseInsensitive
+    )
+
+    public init(html: String?) {
+        // Most descriptions have no checkbox: skip the regex for them, as a list may hold hundreds of rows.
+        guard let html, html.localizedCaseInsensitiveContains("checkbox"), let input = Self.input else {
+            self = .none
+            return
+        }
+        let whole = NSRange(html.startIndex..., in: html)
+        var total = 0
+        var checked = 0
+        for match in input.matches(in: html, range: whole) {
+            total += 1
+            let tag = (html as NSString).substring(with: match.range)
+            let tagRange = NSRange(location: 0, length: (tag as NSString).length)
+            if Self.ticked?.firstMatch(in: tag, range: tagRange) != nil { checked += 1 }
+        }
+        self.init(checked: checked, total: total)
+    }
 }
 
 extension CriaStore {
@@ -47,12 +99,16 @@ extension CriaStore {
         }
     }
 
-    /// Adds labels and project titles to a task list with two queries, not one per row.
+    /// Adds labels, project titles and attachment flags to a task list with three queries, not one per row.
     public func attachRowData(_ tasks: [TaskRecord]) throws -> [TaskListItem] {
         let labelsByTask = try labelsGroupedByTask()
         let titles = try projectTitles()
+        let withAttachments = Set(try taskLocalIdsWithAttachments())
         return tasks.map { task in
-            TaskListItem(task: task, labels: labelsByTask[task.localId] ?? [], projectTitle: titles[task.projectLocalId])
+            TaskListItem(
+                task: task, labels: labelsByTask[task.localId] ?? [], projectTitle: titles[task.projectLocalId],
+                hasAttachments: withAttachments.contains(task.localId), checklist: ChecklistCount(html: task.description)
+            )
         }
     }
 

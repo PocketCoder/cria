@@ -8,6 +8,8 @@ import WebKit
 enum RichTextImages {
     static let pendingScheme = "cria"
     static let serverScheme = "cria-server"
+    /// Scheme of the link wrapped around a tappable image. The web view cancels it and the page opens the viewer.
+    static let openScheme = "cria-image"
     private static let pendingPrefix = "cria://pending/"
 
     /// `serverBase` is the server origin as `ApiClient.serverBase()` gives it (no trailing slash).
@@ -18,11 +20,41 @@ enum RichTextImages {
               let close = html[open.upperBound...].firstIndex(of: ">") {
             output += html[cursor..<open.lowerBound]
             let end = html.index(after: close)
-            output += rewriteTag(String(html[open.lowerBound..<end]), serverBase: serverBase)
+            let tag = String(html[open.lowerBound..<end])
+            output += openable(rewriteTag(tag, serverBase: serverBase), original: tag, inLink: isInsideLink(output))
             cursor = end
         }
         output += html[cursor...]
         return output
+    }
+
+    /// The image address a tap should open: the tag's `src`, or `data-src` when `src` is the "#" stand-in. Only queued
+    /// uploads and http(s) addresses open; anything else (a `data:` image) stays plain.
+    static func openableSource(of tag: String) -> String? {
+        guard let src = value(of: "src", in: tag) else { return nil }
+        let source = src.isEmpty || src == "#" ? (value(of: "data-src", in: tag) ?? src) : src
+        let lower = source.lowercased()
+        return source.hasPrefix(pendingPrefix) || lower.hasPrefix("https://") || lower.hasPrefix("http://") ? source : nil
+    }
+
+    /// The address a `cria-image://` link carries, or nil when it is not one.
+    static func openedSource(_ url: URL) -> String? {
+        guard url.scheme == openScheme else { return nil }
+        return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "src" }?.value
+    }
+
+    /// Wraps the image in a link the web view reports as a tap, unless it already sits inside the page's own link
+    /// (that one keeps working).
+    private static func openable(_ tag: String, original: String, inLink: Bool) -> String {
+        guard !inLink, let source = openableSource(of: original),
+              let encoded = source.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return tag }
+        return "<a href=\"\(openScheme)://open?src=\(encoded)\">\(tag)</a>"
+    }
+
+    private static func isInsideLink(_ html: String) -> Bool {
+        guard let open = html.range(of: "<a ", options: [.caseInsensitive, .backwards]) else { return false }
+        guard let close = html.range(of: "</a>", options: [.caseInsensitive, .backwards]) else { return true }
+        return open.lowerBound > close.lowerBound
     }
 
     /// The sanitiser writes every attribute as ` name="value"`. The editor stores an image as `src="#"` with the real

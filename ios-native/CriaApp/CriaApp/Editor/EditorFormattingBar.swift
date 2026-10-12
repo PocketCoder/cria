@@ -8,6 +8,8 @@ final class EditorBarActions {
     var onLink: () -> Void = {}
     var onPhoto: () -> Void = {}
     var onMention: () -> Void = {}
+    /// A tap on an inline image while the editor is idle: open it full size.
+    var onOpenImage: (String) -> Void = { _ in }
 }
 
 /// The formatting buttons shown above the keyboard. Every button runs the same `EditorController` command as before.

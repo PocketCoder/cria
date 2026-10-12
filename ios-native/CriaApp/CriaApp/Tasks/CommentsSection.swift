@@ -5,6 +5,8 @@ import SwiftUI
 /// composer, the edit sheet and the delete confirmation are presented by TaskDetailView through `state`.
 struct CommentsSection: View {
     let services: AppServices
+    /// The task the thread belongs to, for the address of a comment.
+    let task: TaskRecord
     let comments: [CommentRecord]
     let state: TaskDetailPresentation
     @State private var summary: String?
@@ -68,6 +70,11 @@ struct CommentsSection: View {
                 .accessibilityElement(children: .combine)
                 RichTextView(html: comment.comment, services: services).frame(minHeight: 28)
                 reactionBar(comment)
+            }
+        }
+        .contextMenu {
+            if let url = services.commentWebURL(task: task, commentServerId: comment.serverId) {
+                Button("Copy link to comment", systemImage: "link") { state.copyLink(url, notice: "Comment link copied") }
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {

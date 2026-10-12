@@ -47,6 +47,7 @@ struct TaskPropertiesSection: View {
                 }
                 .font(Theme.rowSubtitle)
             }
+            TaskColourRow(task: task, apply: apply)
         }
     }
 

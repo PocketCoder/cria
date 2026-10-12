@@ -28,6 +28,8 @@ struct TaskDetailView: View {
     @State private var editingRepeat = false
     @State private var editingDate: TaskDateField?
     @State private var expandingDescription = false
+    /// The copy just made by Duplicate, pushed once it exists.
+    @State private var openedCopy: String?
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
     /// Nil when shown inside a sheet, outside the shell's environment: the delete then goes ahead without Undo.
@@ -76,7 +78,8 @@ struct TaskDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let task = live.value.task {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    TaskDetailMenu(services: services, task: task, state: sheets, onDuplicate: duplicateTask)
                     Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
                         _ = apply(TaskPatch(isFavorite: !task.isFavorite))
                     }
@@ -92,6 +95,8 @@ struct TaskDetailView: View {
         .task { await feeds.reminders.run() }
         .task { await feeds.assignees.run() }
         .task { await AIStatus.shared.refresh() }
+        // So Copy link and Share link know the server address.
+        .task { await services.rememberServerBase() }
         // The periodic pull does not fetch comments: read this task's thread once when the screen opens.
         .task { await services.refreshTaskDetail(localId: taskLocalId) }
         .onChange(of: live.value.task?.localId, initial: true) { _, _ in loadDrafts() }
@@ -131,6 +136,10 @@ struct TaskDetailView: View {
                 apply(patch)
             }
         }
+        .navigationDestination(item: $openedCopy) { copyId in
+            TaskDetailView(services: services, taskLocalId: copyId)
+        }
+        .transientNotice(Binding(get: { sheets.notice }, set: { sheets.notice = $0 }))
         .modifier(TaskDetailSheets(
             services: services, taskLocalId: taskLocalId, state: sheets, assigned: Set(feeds.assignees.value.map(\.userId))
         ))
@@ -180,6 +189,13 @@ struct TaskDetailView: View {
             .scrollDismissesKeyboard(.interactively)
             // A grouped form starts ~35pt below the bar; the task title belongs right under it.
             .contentMargins(.top, 8, for: .scrollContent)
+    }
+
+    /// Saves what is being typed, then copies the task and opens the copy.
+    private func duplicateTask() {
+        saveText()
+        descriptionDraft.save()
+        sheets.attempt { openedCopy = try services.store.duplicateTask(localId: taskLocalId).localId }
     }
 
     private func deleteTask() {
@@ -283,7 +299,7 @@ extension TaskDetailView {
                 services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets
             )
         case .comments:
-            CommentsSection(services: services, comments: feeds.comments.value, state: sheets)
+            CommentsSection(services: services, task: task, comments: feeds.comments.value, state: sheets)
         }
     }
 

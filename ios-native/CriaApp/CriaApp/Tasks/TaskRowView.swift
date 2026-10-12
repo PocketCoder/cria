@@ -71,8 +71,24 @@ struct TaskRowView: View {
             parts.append("\(progress.done) of \(progress.total) subtasks done")
             if tree.isCollapsed == true { parts.append("subtasks hidden") }
         }
+        if !task.done { parts += signalDetails }
         parts.append(task.done ? "done" : "not done")
         return parts.joined(separator: ", ")
+    }
+
+    /// The due chip shows the repeat glyph (and the spoken summary says "repeats") for an interval repeat.
+    private var dueChipRepeats: Bool { !task.done && task.dueDate != nil && task.repeatAfter > 0 }
+
+    /// What the signals show, for VoiceOver.
+    private var signalDetails: [String] {
+        var parts: [String] = []
+        if item.hasAttachments { parts.append("has attachments") }
+        if item.checklist.total > 0 { parts.append("checklist \(item.checklist.checked) of \(item.checklist.total) done") }
+        if tree.progress == nil, task.percentDone > 0, task.percentDone < 1 {
+            parts.append("\(Int((task.percentDone * 100).rounded())) percent done")
+        }
+        if !dueChipRepeats, task.repeatAfter > 0 || task.repeatMode != 0 { parts.append("repeats") }
+        return parts
     }
 
     /// One thin line per level, under each ancestor's ring.
@@ -93,7 +109,8 @@ struct TaskRowView: View {
     @ViewBuilder private var metadata: some View {
         let due = task.done ? nil : task.dueDate
         let others = task.done ? 0 : item.labels.count + (showProject && item.projectTitle != nil ? 1 : 0)
-        if others + (due == nil ? 0 : 1) > 0 || tree.progress != nil {
+        let signals = !task.done && TaskRowSignals.hasAny(item, hasSubtaskChip: tree.progress != nil, repeatShownByDue: dueChipRepeats)
+        if others + (due == nil ? 0 : 1) > 0 || tree.progress != nil || signals {
             // Chips stack at accessibility sizes, where a row of them would truncate.
             let layout = typeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
@@ -109,6 +126,9 @@ struct TaskRowView: View {
                 }
                 if showProject && !task.done, let title = item.projectTitle {
                     CriaChip(text: title, tint: Color(.mutedForeground))
+                }
+                if signals {
+                    TaskRowSignals(item: item, hasSubtaskChip: tree.progress != nil, repeatShownByDue: dueChipRepeats)
                 }
                 if !task.done {
                     ForEach(item.labels.prefix(3), id: \.localId) { label in

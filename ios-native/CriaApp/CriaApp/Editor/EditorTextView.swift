@@ -20,6 +20,8 @@ final class EditorTextView: UITextView {
     private let idleTapDelegate = SimultaneousTapDelegate()
     /// The text size changed while the editor is open; the controller restyles at the new size.
     var onContentSizeChange: (() -> Void)?
+    /// Set by `RichTextEditor`: an idle tap on an inline image opens it instead of starting to edit.
+    var onOpenImage: ((String) -> Void)?
 
     init() {
         let storage = NSTextStorage()
@@ -143,6 +145,10 @@ final class EditorTextView: UITextView {
         let point = gesture.location(in: self)
         if let url = link(at: point) {
             LinkOpener.open(url)
+            return
+        }
+        if let source = imageSource(at: point), let onOpenImage {
+            onOpenImage(source)
             return
         }
         isEditable = true

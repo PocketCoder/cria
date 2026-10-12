@@ -19,6 +19,10 @@ extension TaskPatch {
             guard let value else { continue }
             add(column, value.isEmpty ? nil : value)
         }
+        if let hexColor {
+            let raw = hexColor.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased()
+            add("hex_color", raw.isEmpty ? nil : raw)
+        }
         let optionalFields: [(String, (any DatabaseValueConvertible)?)] = [
             ("description", description), ("project_local_id", projectLocalId),
             ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone),

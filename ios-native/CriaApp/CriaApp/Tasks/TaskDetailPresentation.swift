@@ -3,6 +3,7 @@ import Observation
 import PhotosUI
 import QuickLook
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// What the task detail sections present, and the failures they report. TaskDetailView owns it and attaches every
@@ -25,6 +26,9 @@ final class TaskDetailPresentation {
     /// Titles of the subtasks there when suggestions were asked for, so the model's repeats are dropped.
     var existingSubtasks: [String] = []
     var assigning = false
+    var addingRelativeReminder = false
+    /// A short confirmation ("Link copied") shown over the screen for a moment.
+    var notice: String?
     /// The user picked in the assign sheet, saved once the sheet has gone.
     var pickedAssignee: UserResponse?
     var failure: String?
@@ -32,6 +36,14 @@ final class TaskDetailPresentation {
     /// True while the optional at `keyPath` holds a value; setting false clears it.
     func isSet<Value>(_ keyPath: ReferenceWritableKeyPath<TaskDetailPresentation, Value?>) -> Binding<Bool> {
         Binding(get: { self[keyPath: keyPath] != nil }, set: { if !$0 { self[keyPath: keyPath] = nil } })
+    }
+
+    /// Puts the address on the clipboard and confirms it with a haptic, a spoken announcement and a brief notice.
+    func copyLink(_ url: URL, notice message: String = "Link copied") {
+        UIPasteboard.general.string = url.absoluteString
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        notice = message
+        UIAccessibility.post(notification: .announcement, argument: message)
     }
 
     func attempt(_ work: () throws -> Void) {
@@ -100,6 +112,9 @@ struct TaskDetailSheets: ViewModifier {
                 ) { html in
                     state.attempt { try services.store.updateComment(localId: comment.localId, comment: html) }
                 }
+            }
+            .sheet(isPresented: $state.addingRelativeReminder) {
+                RelativeReminderSheet(services: services, taskLocalId: taskLocalId)
             }
             .sheet(isPresented: $state.addingRelation) {
                 RelationPickerSheet(services: services, taskLocalId: taskLocalId)
