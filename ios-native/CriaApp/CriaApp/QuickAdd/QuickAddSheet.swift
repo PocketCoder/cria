@@ -39,7 +39,6 @@ struct QuickAddSheet: View {
     @State private var note = ""
     /// Height of the field, chips and hint, so the sheet hugs them above the keyboard.
     @State private var contentHeight: CGFloat = 260
-    @State private var detent: PresentationDetent = .height(260 + QuickAddSheet.navigationBarAllowance)
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     private var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
@@ -102,7 +101,9 @@ struct QuickAddSheet: View {
                 onDue: { setDue($0) }
             )
         })
-        .presentationDetents([fittedDetent, .large], selection: $detent)
+        // One fitted height only: with a taller detent available, iOS moves the sheet up to it as soon as the
+        // keyboard opens, which left a screen of empty space above the keyboard.
+        .presentationDetents([fittedDetent])
         .task { await aiStatus.refresh() }
         .task { await adoptServerDefault() }
     }
@@ -117,12 +118,10 @@ struct QuickAddSheet: View {
 
     private var fittedDetent: PresentationDetent { .height(contentHeight + Self.navigationBarAllowance) }
 
-    /// Follows the content as chips and the preview come and go, unless the sheet was pulled up to full height.
+    /// Follows the content as chips, the preview and a longer description come and go.
     private func fitContent(_ height: CGFloat) {
         guard height > 0, abs(height - contentHeight) > 1 else { return }
-        let wasFitted = detent != .large
         contentHeight = height
-        if wasFitted { detent = fittedDetent }
     }
 
     private var canSubmit: Bool {
