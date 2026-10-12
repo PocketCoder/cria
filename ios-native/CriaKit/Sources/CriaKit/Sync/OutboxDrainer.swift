@@ -82,10 +82,10 @@ public actor OutboxDrainer {
 
     private func handleFailure(_ op: OutboxRow, error: any Error) {
         let isDependency = (error as? ApiError)?.dependency ?? false
-        // A dependency block (an un-synced parent), being signed out or being offline is not the op's fault, so it
-        // does not use up an attempt. Counting offline failures would dead-letter an edit after ~10 minutes without
-        // a connection.
-        let notTheOpsFault = isDependency || error is AuthRequiredError || isOfflineError(error)
+        // A dependency block (an un-synced parent), being signed out, a rejected token or being offline is not the
+        // op's fault, so it does not use up an attempt. Counting offline failures would dead-letter an edit after
+        // ~10 minutes without a connection.
+        let notTheOpsFault = isDependency || Self.isAuthFailure(error) || isOfflineError(error)
         let attempts = notTheOpsFault ? op.attempts : op.attempts + 1
         let text = String(describing: error)
         let current = now()
@@ -101,12 +101,19 @@ public actor OutboxDrainer {
         }
     }
 
+    /// Signed out, or a 401 the client could not refresh past. The TS drain dead-letters a 401 like any 4xx, which
+    /// loses the queue when a token is revoked; here the op waits, `AuthSession` signs out after three 401s in a row,
+    /// and signing back in resumes the queue.
+    static func isAuthFailure(_ error: any Error) -> Bool {
+        error is AuthRequiredError || (error as? ApiError)?.status == 401
+    }
+
     static func isRetryable(_ error: any Error) -> Bool {
         switch error {
+        // Signed out, a rejected token or offline mid-drain is not the op's fault; keep it queued.
+        case _ where isAuthFailure(error): true
         case let api as ApiError: api.retryable
         case is NetworkError: true
-        // Signed out or offline mid-drain is not the op's fault; keep it queued.
-        case is AuthRequiredError: true
         case is URLError: true
         default: false
         }
