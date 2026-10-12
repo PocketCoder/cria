@@ -415,6 +415,7 @@ Fixed, sync and data:
 - No conflict UI existed and "keep mine" could never push; conflicts now have a sheet, keep-mine re-baselines and queues the edit, and a conflict-held op is never dead-lettered as stale.
 - Offline failures used up outbox attempts (dead-letter after ~10 minutes offline); ops on rows deleted before syncing held the queue for a day; list reorder left tasks dirty forever; cover images were cleared on push; reconcile could delete everything past page 1 without the pages header; reminders were compared as text across offsets.
 - Pulls no longer resurrect rows hidden by a pending delete. Comments and server edits refresh when a task opens. Rotated refresh tokens are re-saved until the Keychain takes them.
+- A 401 during an outbox drain dead-lettered the op at the head of the queue (the TS drain still does): one failed refresh or a revoked API token could lose the whole queue before sign-out. The Swift drainer keeps the op queued without using an attempt; signing back in resumes the queue (`OutboxDrainer.isAuthFailure`).
 
 Fixed, logic: Gregorian calendar for all date maths (Buddhist or Hebrew device calendars broke dates or crashed); quick add and search match chrono for "next friday", "at 5pm tomorrow", "tonight at 8", "this weekend"; the rich text writer could loop forever on a list inside a quote; Gantt subtask cycles; `+` in queries.
 
