@@ -42,6 +42,26 @@ func cachedCreateResponse(_ payload: String) -> Int? {
     return object["_cachedServerId"] as? Int
 }
 
+/// Equality for conflict checks. The server writes the same instant in different forms depending on the request
+/// (an update echoes the offset it was sent, a read uses the server's zone), and "no date" as null or the
+/// 0001-01-01 sentinel, so dates compare as instants; a missing description equals an empty one. Text comparison
+/// raised a conflict on every second edit of a task with a date.
+func conflictValuesEqual(field: String, _ lhs: Any?, _ rhs: Any?) -> Bool {
+    if field.hasSuffix("_date") || field == "done_at" {
+        let left = normaliseDate(lhs as? String).flatMap { DueDates.parse($0) }
+        let right = normaliseDate(rhs as? String).flatMap { DueDates.parse($0) }
+        return left == right
+    }
+    if field == "description" {
+        return ((lhs as? String) ?? "") == ((rhs as? String) ?? "")
+    }
+    if field == "hex_color" {
+        func color(_ value: Any?) -> String { ((value as? String) ?? "").replacingOccurrences(of: "#", with: "").lowercased() }
+        return color(lhs) == color(rhs)
+    }
+    return jsonValuesEqual(lhs, rhs)
+}
+
 func jsonValuesEqual(_ lhs: Any?, _ rhs: Any?) -> Bool {
     let left = lhs ?? NSNull()
     let right = rhs ?? NSNull()
@@ -56,7 +76,7 @@ extension CriaStore {
         guard let lastSynced,
               let before = try? JSONSerialization.jsonObject(with: Data(lastSynced.utf8)) as? [String: Any],
               let after = try? JSONSerialization.jsonObject(with: serverPayload) as? [String: Any] else { return false }
-        let diverged = fields.filter { !jsonValuesEqual(before[$0], after[$0]) }
+        let diverged = fields.filter { !conflictValuesEqual(field: $0, before[$0], after[$0]) }
         guard !diverged.isEmpty else { return false }
         let fieldsJSON = String(bytes: try JSONSerialization.data(withJSONObject: diverged), encoding: .utf8) ?? ""
         let remoteText = String(bytes: serverPayload, encoding: .utf8) ?? ""

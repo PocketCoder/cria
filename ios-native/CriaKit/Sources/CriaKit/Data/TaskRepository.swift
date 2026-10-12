@@ -334,7 +334,7 @@ extension CriaStore {
         guard duplicate == nil else { return }
         guard let before = try jsonObject(lastSynced), let after = try jsonObject(remoteJSON) else { return }
         let fields = conflictFields.filter { field in
-            (before[field] as? AnyHashable) != (after[field] as? AnyHashable)
+            !conflictValuesEqual(field: field, before[field], after[field])
         }
         guard !fields.isEmpty else { return }
         let fieldsData = try JSONSerialization.data(withJSONObject: fields)

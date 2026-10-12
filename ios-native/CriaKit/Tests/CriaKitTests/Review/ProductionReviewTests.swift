@@ -142,4 +142,27 @@ final class ProductionReviewTests: XCTestCase {
         let link = HTMLSanitizer.sanitize("<a href=\"\nhttps://example.com\">x</a>")
         XCTAssertTrue(link.contains("href"))
     }
+
+    // MARK: Conflicts and subtasks
+
+    func testSameInstantInAnotherOffsetIsNotAConflict() {
+        XCTAssertTrue(conflictValuesEqual(field: "due_date", "2026-10-12T09:00:00+01:00", "2026-10-12T08:00:00Z"))
+        XCTAssertTrue(conflictValuesEqual(field: "start_date", "0001-01-01T00:00:00Z", nil))
+        XCTAssertFalse(conflictValuesEqual(field: "due_date", "2026-10-12T09:00:00Z", "2026-10-13T09:00:00Z"))
+        XCTAssertTrue(conflictValuesEqual(field: "description", nil, ""))
+        XCTAssertFalse(conflictValuesEqual(field: "title", "a", "b"))
+    }
+
+    func testCreateSubtaskLinksTheNewTaskUnderItsParent() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let parent = try seedSyncedTask(store, serverId: 5)
+        let child = try store.createSubtask(parentLocalId: parent, title: "  Buy rings ")
+        XCTAssertEqual(child.title, "Buy rings")
+        let relations = try store.relations(forTask: parent)
+        XCTAssertEqual(relations.map(\.kind), ["subtask"])
+        XCTAssertEqual(relations.first?.otherTaskLocalId, child.localId)
+        let ops = try store.outboxRows().map(\.entityType)
+        XCTAssertEqual(ops.firstIndex(of: "task").map { $0 < (ops.firstIndex(of: "task_relation") ?? 0) }, true)
+    }
 }

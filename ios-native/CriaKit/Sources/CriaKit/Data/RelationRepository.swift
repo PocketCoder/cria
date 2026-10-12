@@ -53,6 +53,17 @@ extension CriaStore {
         }
     }
 
+    /// User mutation: a new task in the parent's project, linked as its subtask. The create op is queued before the
+    /// relation op, so the outbox pushes them in that order.
+    @discardableResult
+    public func createSubtask(parentLocalId: String, title: String) throws -> TaskRecord {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let parent = try task(localId: parentLocalId) else { throw CriaStoreError.notFound(parentLocalId) }
+        let child = try createTask(TaskInput(title: trimmed, projectLocalId: parent.projectLocalId))
+        try addRelation(taskLocalId: parentLocalId, otherTaskLocalId: child.localId, kind: .subtask)
+        return child
+    }
+
     /// User mutation: removes both directions locally and queues the removal. Carries the peer's server id when known.
     public func removeRelation(taskLocalId: String, relation: RelationRecord) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
