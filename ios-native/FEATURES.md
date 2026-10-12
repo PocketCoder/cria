@@ -77,6 +77,8 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Detect dates in the title | Cria accounts | `detectDates`. Off keeps dates as text. |
 | "Next week" and "weekend" meaning | Cria accounts | `nextWeekDay`, `weekendDay`. |
 | "Keep open after adding" | This device | In memory, per sheet. |
+| Suggest subtasks | Vikunja for the subtasks | Task detail > Subtasks. The on-device model proposes an editable checklist; ticked lines become subtasks. Same device requirements as Ramble. |
+| Describe a filter | Vikunja for the filter | Saved-filter editor: describe it in words and the on-device model writes the query, retrying once if it does not parse. |
 | Ramble (speak or type a list, review, add) | Vikunja for the tasks | Needs iOS 26 on a device with Apple Intelligence; the button is hidden otherwise. The model runs on the device and writes dates in words for the parser to resolve. Speech recognition is on-device. |
 | "Let Ramble choose projects and labels" | This device | `rambleChoosesTags` in `LocalPreferences`. Not in the account sync. |
 | List from photo (OCR to tasks) | Vikunja for the tasks | Camera or library, Vision text recognition, review and edit, then add. Tidy-up with the on-device model when available. |
@@ -101,6 +103,8 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Expand and collapse in Browse | This device | `@AppStorage` (`cria.projectTree.collapsed`). |
 | Labels: create | Vikunja | From the task label picker, quick add, or Ramble. |
 | Labels: browse and filter by label | Vikunja | Browse lists labels with open counts. |
+| Labels: rename, recolour, delete | Vikunja | Swipe or long-press a label in Browse, or Edit label on its screen. Queued offline. Delete asks first and removes the label from its tasks. |
+| Project background | Vikunja | Shown as a banner on the project screen (cached on this device). Edit project > Background: upload a photo, pick from Unsplash when the server offers it (with credit), or remove. Online only. |
 | Share a project with people, teams and links | Vikunja | Online only. Permission per person or team, add and remove, read-only link shares, optional password. Needs the project to have synced first. |
 | Teams (create, rename, delete, members, admin toggle) | Vikunja | Online only. Settings > Account > Teams. |
 | Subscriptions | Not in the UI | The endpoints exist in `CriaKit`; nothing calls them. |
@@ -135,11 +139,13 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Outbox | This device, drained to Vikunja | FIFO with exponential backoff (capped at 60 seconds). Offline failures do not use up attempts. After 10 failed attempts an op moves to failed. |
 | Sync queue screen | This device | Settings > Sync. Waiting and failed ops; Retry, Retry all, Discard, Discard all, Copy details, Sync now. |
 | Sync banner | This device | Shows the current step, offline state, or the last error; tap to retry. |
-| Conflicts | Vikunja | Detected when a push finds the server copy changed since the last pull. Sheet shows Yours and Server per field; Keep mine or Use theirs. Task fields compared: title, description, done, dates, priority, percent done, colour, position. |
+| Conflicts | Vikunja | Detected on pull and before a push when the server copy changed since the last sync. Sheet shows Yours and Server per field; Keep mine or Use theirs. Task fields compared: title, description, done, dates, priority, percent done, colour, position. Projects: title, description, colour, parent, archived, favourite. Labels: title, description, colour. |
 | Undo | This device | Task delete only (5 second toast, 7 second hold in the outbox). |
 | Sign in | Vikunja | Server URL plus an API token, or username, password and a two-factor code. |
 | Credentials | This device | Keychain. The last server URL is remembered in `UserDefaults` (`cria.login.lastServerURL`). |
 | Sign out | This device | Clears pending alerts and Spotlight, and signals the widget and extensions. |
+| Sign out and delete data on this iPhone | This device | Also deletes the database, queued uploads, cached backgrounds, cached account settings, other people's names and temporary files. Warns how many changes have not synced. Device preferences stay. |
+| Sign in with a share link | Vikunja | Login > Share link: paste a project's share link (and its password). Account-only settings, the activity inbox and email settings are hidden. |
 
 ## Settings
 
@@ -149,7 +155,6 @@ Settings opens from the gear in Browse.
 
 | Feature | Where it lives | Notes |
 |---|---|---|
-| Language | Vikunja | Sent to the server (web UI, emails). The iOS UI itself is not localised. |
 | Timezone | Vikunja | Also cached on the device and used for pushed all-day dates. |
 | Week starts on | Vikunja | Read by the Upcoming strip and the weekly round-up. |
 | Default project | Vikunja | Also remembered in the App Group so the share extension and Siri can file tasks offline. |
@@ -201,9 +206,10 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 | Two-factor authentication (QR code, secret, confirm, turn off) | Vikunja | Online only. |
 | Sessions (list, revoke) | Vikunja | Online only. Older servers without the route get a message. |
 | API tokens (create with route permissions and expiry, delete) | Vikunja | Online only. The token text is shown once. |
+| CalDAV tokens | Vikunja | Settings > Account > CalDAV: the address to use, create (token shown once) and delete. Online only. |
 | Data export (request, download, share) | Vikunja | Online only. ZIP from the server. |
 | Account deletion (request, cancel) | Vikunja | The server emails a confirmation link; nothing is deleted or signed out until it is followed. |
-| Storage: cached project backgrounds (count, clear) | This device | The cache can be cleared here. See Known gaps. |
+| Storage: cached project backgrounds (count, clear) | This device | The cache can be cleared here. |
 | About (version, server) | This device | |
 
 ## Platform
@@ -219,13 +225,8 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 
 ## Known gaps
 
-- **No label management.** Labels can be created and attached, but there is no screen to rename, recolour or delete one. The push code handles label updates and deletes; nothing in the app queues them.
-- **Project backgrounds are never shown.** Fetch and cache code exists and Settings can clear the cache, but no screen loads or displays a background. No Unsplash picker.
-- **"Delete local data" has no UI.** The wipe exists in `AppModel.signOut(wipeLocalData:)`, but every caller passes `false`.
-- **CalDAV tokens have no screen.** The API calls exist in `CriaKit`.
-- **AI is partial.** Ramble, photo tidy and thread summary are wired. Subtask breakdown (`AIFeatures.subtasks`) has no UI, and neither do filter-from-text or tidy-with-AI outside the photo flow.
-- **Language is stored, not applied.** The iOS interface is English only.
+- **English only.** There is no language setting: the interface is not translated. The account's language stays as set on the server (Vikunja-web and emails use it).
 - **Polling only.** No WebSocket live sync, and no network-reachability trigger; the 60 second tick and the outbox cover reconnects.
-- **Conflict detection is thin outside tasks.** Project and label conflicts are recorded only at push, and compare title and description only.
-- **Link-share sign-in is out of scope.** `AuthMethod.linkShare` exists but the login screen offers token and password only.
+- **Link-share sessions are partly gated.** Assignee search, project sharing and saved filters show the server's error rather than being hidden, and a share token cannot be refreshed: when it expires, the app signs out.
+- **Subtask creation is two steps.** If linking a new subtask fails, the task exists without the link and the error is shown.
 - **Device checks pending.** README and the plan list what has not been run on a device: notification permission and delivery, completion sound, camera, avatar upload, two-factor QR, session revoke, Liquid Glass tab bar, extension signing and App Group provisioning under a free Apple ID, Foundation Models output, Vision OCR, widget refresh timing, editor behaviour, Kanban and Gantt gestures.

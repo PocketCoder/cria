@@ -13,6 +13,8 @@ struct NotificationSettingsSection: View {
     @ObservedObject var prefs: PreferencesModel
     @State private var status = UNAuthorizationStatus.notDetermined
     @Environment(\.scenePhase) private var scenePhase
+    /// A share link has no user of its own: no activity inbox or email settings, as on desktop.
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
 
     private var denied: Bool { status == .denied }
     private var notificationsOn: Bool { prefs.value.notificationsEnabled && !denied }
@@ -20,7 +22,7 @@ struct NotificationSettingsSection: View {
     var body: some View {
         Group {
             localSection
-            emailSection
+            if !isLinkShare { emailSection }
         }
         .task(id: scenePhase) { await refreshStatus() }
     }
@@ -31,8 +33,10 @@ struct NotificationSettingsSection: View {
                 SettingsLabel("Notifications", symbol: "bell.badge", token: .coral500)
             }
             summaryRows
-            NavigationLink { NotificationsView(services: services, onClose: onClose) } label: {
-                SettingsLabel("Activity", symbol: "tray.full", token: .sky700)
+            if !isLinkShare {
+                NavigationLink { NotificationsView(services: services, onClose: onClose) } label: {
+                    SettingsLabel("Activity", symbol: "tray.full", token: .sky700)
+                }
             }
         } header: {
             Text("Notifications")
