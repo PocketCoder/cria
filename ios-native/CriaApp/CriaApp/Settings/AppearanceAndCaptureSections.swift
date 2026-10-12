@@ -16,6 +16,15 @@ struct AppearanceSettingsSection: View {
             Toggle(isOn: $prefs.value.playSoundWhenDone) {
                 SettingsLabel("Sound when completing a task", symbol: "speaker.wave.2", token: .plum500)
             }
+            if prefs.value.playSoundWhenDone {
+                Picker(selection: $prefs.value.custom.completionTone) {
+                    ForEach(CompletionTone.allCases, id: \.self) { Text($0.title).tag($0) }
+                } label: {
+                    SettingsLabel("Task complete tone", symbol: "music.note", token: .plum500)
+                }
+                // Play the choice, so it can be heard before leaving.
+                .onChange(of: prefs.value.custom.completionTone) { _, tone in CompletionSound.play(tone) }
+            }
         } header: {
             Text("Appearance")
         } footer: {

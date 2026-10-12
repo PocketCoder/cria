@@ -119,16 +119,16 @@ public enum QuickAddDatePreset: String, CaseIterable, Sendable {
         }
     }
 
-    /// All-day value for the preset's day. This weekend is the coming Saturday (today on a Saturday), as the typed
-    /// "this weekend" reads; next week is seven days on, as typed "next week".
-    public func iso(now: Date, calendar: Calendar = .cria) -> String {
+    /// All-day value for the preset's day. This weekend and next week read as the typed phrases do: the coming
+    /// weekend day (today when it is that day) and the day `rules` gives "next week".
+    public func iso(now: Date, calendar: Calendar = .cria, rules: CriaRules = .current) -> String {
         let today = calendar.startOfDay(for: now)
         let days: Int
         switch self {
         case .today: days = 0
         case .tomorrow: days = 1
-        case .thisWeekend: days = (7 - calendar.component(.weekday, from: today) + 7) % 7
-        case .nextWeek: days = 7
+        case .thisWeekend: days = rules.weekendOffset(from: today, calendar: calendar)
+        case .nextWeek: days = rules.nextWeekOffset(from: today, calendar: calendar)
         }
         return DueDates.allDayISO(for: calendar.date(byAdding: .day, value: days, to: today) ?? today, calendar: calendar)
     }

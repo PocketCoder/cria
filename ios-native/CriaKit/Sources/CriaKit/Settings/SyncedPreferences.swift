@@ -18,6 +18,12 @@ public enum SyncedPreferences {
         if let raw = cria[timeFormat]?.stringValue, let value = TimeFormatPreference(rawValue: raw) { next.timeFormat = value }
         if case .bool(let value)? = cria[playSound] { next.playSoundWhenDone = value }
         if let raw = cria[taskDetailOrder]?.stringValue { next.taskDetailOrder = TaskDetailSection.order(from: raw) }
+        // Customise: lay the account's values over this device's, then read them back leniently.
+        var custom = prefs.custom.values
+        for key in customKeys(syncingHomeView: prefs.custom.syncHomeView) {
+            if let value = cria[key] { custom[key] = value }
+        }
+        next.custom = Customisation(values: custom)
         return next
     }
 
@@ -31,7 +37,21 @@ public enum SyncedPreferences {
         if old.taskDetailOrder != new.taskDetailOrder {
             cria[taskDetailOrder] = .string(TaskDetailSection.text(of: new.taskDetailOrder))
         }
+        let before = old.custom.values
+        let after = new.custom.values
+        // Turning the home-view sync on shares this device's choice, so it wins over the account's.
+        let homeViewTurnedOn = new.custom.syncHomeView && !old.custom.syncHomeView
+        for key in customKeys(syncingHomeView: new.custom.syncHomeView)
+        where before[key] != after[key] || (homeViewTurnedOn && key == Customisation.homeViewKey) {
+            cria[key] = after[key]
+        }
         return cria.isEmpty ? nil : SettingsChange(cria: cria)
+    }
+}
+
+extension SyncedPreferences {
+    static func customKeys(syncingHomeView: Bool) -> [String] {
+        Customisation.syncedKeys + (syncingHomeView ? [Customisation.homeViewKey] : [])
     }
 }
 

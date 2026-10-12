@@ -17,6 +17,23 @@ struct ShellView: View {
     @State private var addRequest: QuickAddRequest?
     @State private var conflictPrompt = ConflictPrompt()
     @State private var undoCenter = UndoCenter()
+    @State private var counts: LiveValue<TabCounts>
+    @Environment(\.preferences) private var preferences
+
+    init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void, pendingURL: Binding<URL?>) {
+        self.services = services
+        self.onSignOut = onSignOut
+        _pendingURL = pendingURL
+        let store = services.store
+        _counts = State(initialValue: LiveValue(initial: TabCounts()) {
+            // The inbox id is read on each change: on a first launch it arrives with the first server read.
+            observeStore(store, kinds: [.tasks, .projects]) { reading in
+                try TabCounts.read(reading, inboxLocalId: services.rememberedDefaultProjectLocalId())
+            }
+        })
+    }
+
+    private var custom: Customisation { preferences.custom }
 
     var body: some View {
         // An inset, not a VStack: a view stacked above the TabView kept its navigation bars off the top edge, which
@@ -30,7 +47,15 @@ struct ShellView: View {
             .environment(undoCenter)
             .tint(Color(.primary))
             .onChange(of: pendingURL) { _, _ in openPendingURL() }
-            .task { openPendingURL() }
+            .task {
+                // The home view first, so a link that opened the app still wins.
+                navigation.state.selected = custom.launchTab
+                openPendingURL()
+            }
+            .task { await counts.run() }
+            .onChange(of: custom.barTabs) { _, tabs in
+                if !tabs.contains(navigation.state.selected) { navigation.state.selected = custom.launchTab }
+            }
             .task { await conflictPrompt.run(store: services.store) }
             .task { undoCenter.attach(services) }
             .sheet(item: $addRequest) { request in
@@ -43,24 +68,40 @@ struct ShellView: View {
             )
     }
 
-    /// Three tabs plus a search-role tab: on iOS 26 the system detaches Search into its own glass circle. Tab
-    /// needs iOS 18; iOS 17 keeps the plain tab items.
+    /// The tabs from Settings > Customise > Navigation, then Browse, plus a search-role tab: on iOS 26 the system
+    /// detaches Search into its own glass circle. Tab needs iOS 18; iOS 17 keeps the plain tab items.
     @ViewBuilder private var tabs: some View {
+        let shown = custom.barTabs.filter { $0 != .search }
         if #available(iOS 18, *) {
             TabView(selection: navigation.selection) {
-                Tab("Today", systemImage: "calendar", value: AppTab.today) { stack(.today) }
-                Tab("Upcoming", systemImage: "calendar.badge.clock", value: AppTab.upcoming) { stack(.upcoming) }
-                Tab("Browse", systemImage: "square.grid.2x2", value: AppTab.browse) { stack(.browse) }
-                Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) { stack(.search) }
+                ForEach(shown, id: \.self) { tab in
+                    Tab(tab.title, systemImage: tab.symbol, value: tab) { stack(tab) }
+                        .badge(badge(for: tab))
+                }
+                Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search, role: .search) {
+                    stack(.search)
+                }
             }
             .modifier(KeepTabBarVisible())
         } else {
             TabView(selection: navigation.selection) {
-                stack(.today).tabItem { Label("Today", systemImage: "calendar") }.tag(AppTab.today)
-                stack(.upcoming).tabItem { Label("Upcoming", systemImage: "calendar.badge.clock") }.tag(AppTab.upcoming)
-                stack(.browse).tabItem { Label("Browse", systemImage: "square.grid.2x2") }.tag(AppTab.browse)
-                stack(.search).tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(AppTab.search)
+                ForEach(shown + [.search], id: \.self) { tab in
+                    stack(tab)
+                        .tabItem { Label(tab.title, systemImage: tab.symbol) }
+                        .tag(tab)
+                        .badge(badge(for: tab))
+                }
             }
+        }
+    }
+
+    /// Open tasks due today or earlier on Today, open tasks on Inbox; nothing when counts are off.
+    private func badge(for tab: AppTab) -> Int {
+        guard custom.showTaskCount else { return 0 }
+        switch tab {
+        case .today: return counts.value.today
+        case .inbox: return counts.value.inbox
+        default: return 0
         }
     }
 
@@ -70,6 +111,11 @@ struct ShellView: View {
         pendingURL = nil
         guard let link = DeepLink(url: url), let destination = try? link.destination(in: services.store) else { return }
         switch destination {
+        // A tab left out of the bar opens through Browse.
+        case .open(let tab, let route?) where !custom.barTabs.contains(tab):
+            navigation.state.open(route, on: .browse)
+        case .open(let tab, nil) where !custom.barTabs.contains(tab):
+            navigation.state.selected = .browse
         case .open(let tab, let route?):
             navigation.state.open(route, on: tab)
         case .open(let tab, nil):
@@ -126,6 +172,10 @@ struct TabRoot: View {
             SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
         case .search:
             SearchScreen(services: services)
+        case .inbox:
+            InboxScreen(services: services)
+        case .favorites:
+            TaskListView(services: services, source: .favorites, title: "Favourites")
         }
     }
 }
@@ -152,5 +202,41 @@ struct RouteDestination: View {
         case .savedFilter(let serverId):
             SavedFilterScreen(services: services, serverId: serverId)
         }
+    }
+}
+
+extension AppTab {
+    var title: String {
+        switch self {
+        case .today: return "Today"
+        case .upcoming: return "Upcoming"
+        case .browse: return "Browse"
+        case .search: return "Search"
+        case .inbox: return "Inbox"
+        case .favorites: return "Favourites"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .today: return "calendar"
+        case .upcoming: return "calendar.badge.clock"
+        case .browse: return "square.grid.2x2"
+        case .search: return "magnifyingglass"
+        case .inbox: return "tray"
+        case .favorites: return "star"
+        }
+    }
+}
+
+/// Task counts for the tab badges.
+struct TabCounts: Equatable, Sendable {
+    var today = 0
+    var inbox = 0
+
+    static func read(_ store: CriaStore, inboxLocalId: String?) throws -> TabCounts {
+        let today = try store.smartGroups(.today).reduce(0) { $0 + $1.items.count }
+        let inbox = try inboxLocalId.map { try store.taskItems(.project($0), includeDone: false).count } ?? 0
+        return TabCounts(today: today, inbox: inbox)
     }
 }

@@ -81,13 +81,13 @@ private struct RichTextWebView: UIViewRepresentable {
             self.height = height
         }
 
-        /// Only our own `loadHTMLString` (about:blank) loads in place. A tapped link opens in the system browser;
+        /// Only our own `loadHTMLString` (about:blank) loads in place. A tapped link opens through `LinkOpener`;
         /// anything else is refused.
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
             guard let url = navigationAction.request.url else { return .cancel }
             if url.scheme == "about" { return .allow }
             if navigationAction.navigationType == .linkActivated, ["http", "https", "mailto"].contains(url.scheme?.lowercased()) {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                LinkOpener.open(url)
             }
             return .cancel
         }

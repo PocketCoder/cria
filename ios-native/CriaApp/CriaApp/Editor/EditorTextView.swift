@@ -114,7 +114,7 @@ final class EditorTextView: UITextView {
     @objc private func handleIdleTap(_ gesture: UITapGestureRecognizer) {
         let point = gesture.location(in: self)
         if let url = link(at: point) {
-            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            LinkOpener.open(url)
             return
         }
         isEditable = true

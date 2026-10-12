@@ -15,7 +15,8 @@ struct CriaChip: View {
         HStack(spacing: 4) {
             if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
             if let systemImage { Image(systemName: systemImage).imageScale(.small) }
-            Text(text).lineLimit(1)
+            // Empty text is an icon-only chip (quick add with action labels off).
+            if !text.isEmpty { Text(text).lineLimit(1) }
         }
         .font(Theme.chip)
         .padding(.horizontal, 8)
@@ -36,13 +37,14 @@ struct PriorityCheck: View {
     @State private var burst = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.playsCompletionSound) private var playsSound
+    @Environment(\.preferences) private var preferences
 
     private var color: Color { ThemeToken.priority(priority).map { Color($0) } ?? Color(.mutedForeground) }
 
     var body: some View {
         Button {
             if !isDone && !reduceMotion { burst += 1 }
-            if !isDone && playsSound { CompletionSound.play() }
+            if !isDone && playsSound { CompletionSound.play(preferences.custom.completionTone) }
             action()
         } label: {
             ZStack {

@@ -68,6 +68,8 @@ struct RootView: View {
             .environment(\.dateDisplay, DateDisplay(dateFormat: preferences.dateFormat, timeFormat: preferences.timeFormat))
             .environment(\.playsCompletionSound, preferences.playSoundWhenDone)
             .environment(\.preferences, preferences)
+            // The date parser and the task repository read these (next week, weekend, resetting subtasks).
+            .onChange(of: preferences.custom.rules, initial: true) { _, rules in CriaRules.current = rules }
             .onReceive(NotificationCenter.default.publisher(for: .criaPreferencesChanged)) { _ in
                 preferences = PreferencesStore().load()
             }

@@ -3,11 +3,22 @@ import CriaKit
 import SwiftUI
 
 /// "Play sound when a task is completed" (Settings > Appearance). A system sound, so the silent switch mutes it.
+/// The tone is chosen in Settings > Appearance.
 enum CompletionSound {
-    private static let tink: SystemSoundID = 1057
+    static func play(_ tone: CompletionTone = .tink) {
+        AudioServicesPlaySystemSound(soundID(tone))
+    }
 
-    static func play() {
-        AudioServicesPlaySystemSound(tink)
+    /// Built-in iOS alert sounds.
+    private static func soundID(_ tone: CompletionTone) -> SystemSoundID {
+        switch tone {
+        case .tink: return 1057
+        case .tweet: return 1016
+        case .bloom: return 1021
+        case .calypso: return 1022
+        case .fanfare: return 1025
+        case .spell: return 1031
+        }
     }
 }
 

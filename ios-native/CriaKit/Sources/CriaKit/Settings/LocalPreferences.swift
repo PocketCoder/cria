@@ -44,6 +44,8 @@ public struct LocalPreferences: Equatable, Sendable {
     public var rambleChoosesTags: Bool
     /// Order of the task screen's sections. Follows the account (frontend_settings.cria).
     public var taskDetailOrder: [TaskDetailSection]
+    /// Navigation, quick add, swipes, dates and links (Settings > Customise).
+    public var custom: Customisation
 
     public static let `default` = LocalPreferences()
 
@@ -60,7 +62,8 @@ public struct LocalPreferences: Equatable, Sendable {
         photoProjectId: String? = nil,
         photoLabel: String = "shopping",
         rambleChoosesTags: Bool = false,
-        taskDetailOrder: [TaskDetailSection] = TaskDetailSection.defaultOrder
+        taskDetailOrder: [TaskDetailSection] = TaskDetailSection.defaultOrder,
+        custom: Customisation = .default
     ) {
         self.colorScheme = colorScheme
         self.dateFormat = dateFormat
@@ -75,6 +78,7 @@ public struct LocalPreferences: Equatable, Sendable {
         self.photoLabel = photoLabel
         self.rambleChoosesTags = rambleChoosesTags
         self.taskDetailOrder = taskDetailOrder
+        self.custom = custom
     }
 
     /// Reads values leniently: a missing or unknown value falls back to the default for that field only.
@@ -104,6 +108,7 @@ public struct LocalPreferences: Equatable, Sendable {
         photoLabel = text("photoLabel") ?? base.photoLabel
         rambleChoosesTags = flag("rambleChoosesTags", base.rambleChoosesTags)
         taskDetailOrder = text("taskDetailOrder").map(TaskDetailSection.order(from:)) ?? base.taskDetailOrder
+        custom = Customisation(values: values)
     }
 
     var values: JSONBody {
@@ -122,6 +127,7 @@ public struct LocalPreferences: Equatable, Sendable {
             "taskDetailOrder": .string(TaskDetailSection.text(of: taskDetailOrder))
         ]
         if let photoProjectId { body["photoProjectId"] = .string(photoProjectId) }
+        body.merge(custom.values) { current, _ in current }
         return body
     }
 

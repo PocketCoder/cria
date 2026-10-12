@@ -246,6 +246,7 @@ extension CriaStore {
             }
             try connection.enqueue(.task, localId: localId, operation: .update, payload: CriaStore.taskPayload(record), at: now)
             if patch.done != nil { try CriaStore.refreshParentProgress(connection, childLocalId: localId, now: now) }
+            if patch.done == true { try CriaStore.resetSubtasksIfRepeating(connection, task: record, now: now) }
             return record
         }
     }

@@ -15,17 +15,20 @@ enum QuickAddPickerSheet: String, Identifiable {
 /// The due date chip. Tapping opens the date sheet (type a date, presets, calendar, time).
 struct QuickAddDateChip: View {
     let dueISO: String
+    /// Off: an empty chip shows only its icon.
+    var showsLabel = true
     let onTap: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
         Button(action: onTap) {
             CriaChip(
-                text: dueISO.isEmpty ? "Date" : DueDates.label(dueISO, now: Date(), display: dateDisplay),
+                text: dueISO.isEmpty ? (showsLabel ? "Date" : "") : DueDates.label(dueISO, now: Date(), display: dateDisplay),
                 systemImage: "calendar", tint: Color(.sky700)
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Date")
     }
 }
 
@@ -33,6 +36,8 @@ struct QuickAddDateChip: View {
 struct QuickAddReminderMenu: View {
     @Binding var reminders: [QuickAddReminder]
     let hasDueDate: Bool
+    /// Off: with no reminder the chip shows only its icon.
+    var showsLabel = true
     let onCustom: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
@@ -57,6 +62,7 @@ struct QuickAddReminderMenu: View {
         } label: {
             CriaChip(text: chipText, systemImage: reminders.isEmpty ? "bell" : "bell.fill", tint: Color(.coral500))
         }
+        .accessibilityLabel("Reminders")
     }
 
     private func binding(for reminder: QuickAddReminder) -> Binding<Bool> {
@@ -71,7 +77,7 @@ struct QuickAddReminderMenu: View {
 
     private var chipText: String {
         guard reminders.count == 1, let only = reminders.first else {
-            return reminders.isEmpty ? "Remind" : "\(reminders.count) reminders"
+            return reminders.isEmpty ? (showsLabel ? "Remind" : "") : "\(reminders.count) reminders"
         }
         switch only {
         case .beforeDue(let seconds):

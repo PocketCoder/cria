@@ -193,17 +193,21 @@ private func resolve(_ phrase: String, now: Date, calendar: Calendar) -> Resolve
     let words = phrase.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     guard let first = words.first else { return nil }
     let today = calendar.startOfDay(for: now)
+    let rules = CriaRules.current
     switch first {
     case "today", "tonight": return .day(today)
     case "this" where words.count == 2 && partOfDayHours[words[1]] != nil: return .day(today)
-    case "weekend": return weekdayDate(7, isNext: false, today: today, calendar: calendar)
+    case "weekend": return shifted(today, days: rules.weekendOffset(from: today, calendar: calendar), calendar: calendar)
     case "tomorrow", "tmrw": return shifted(today, days: 1, calendar: calendar)
     case "yesterday": return shifted(today, days: -1, calendar: calendar)
     case "in": return relative(words, now: now, calendar: calendar)
     default: break
     }
-    if words == ["next", "week"] { return shifted(today, days: 7, calendar: calendar) }
-    if words == ["this", "weekend"] { return weekdayDate(7, isNext: false, today: today, calendar: calendar) }
+    // "next week" and "weekend" mean what Settings > Customise > Dates says (same day next week and Saturday unless set).
+    if words == ["next", "week"] { return shifted(today, days: rules.nextWeekOffset(from: today, calendar: calendar), calendar: calendar) }
+    if words == ["this", "weekend"] {
+        return shifted(today, days: rules.weekendOffset(from: today, calendar: calendar), calendar: calendar)
+    }
     if let weekday = weekdayNumber(words.last ?? ""), words.count <= 2 {
         return weekdayDate(weekday, isNext: first == "next", today: today, calendar: calendar)
     }

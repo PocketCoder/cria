@@ -15,6 +15,7 @@ struct QuickAddSheet: View {
     var onRamble: (() -> Void)?
     var onPhoto: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.preferences) private var preferences
     @AppStorage("cria.quickAddMagicMode") private var modeRaw = QuickAddMagicMode.default.rawValue
     @State private var line = ""
     @State private var projects: [ProjectRecord] = []
@@ -41,7 +42,7 @@ struct QuickAddSheet: View {
     @State private var detent: PresentationDetent = .height(260 + QuickAddSheet.navigationBarAllowance)
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
-    private var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode) }
+    private var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
     /// The typed `+project`, unless a project was picked over it.
     private var typedProjectTitle: String? { picked.contains(.project) ? nil : parsed.projectTitle }
     private var aiStatus: AIStatus { AIStatus.shared }
@@ -165,8 +166,8 @@ struct QuickAddSheet: View {
 
     /// Keeps the pickers in step with what the typed line parses to, except fields set by hand.
     private func lineChanged(from old: String, to new: String) {
-        let before = parseQuickAddTask(old, mode: mode)
-        let after = parseQuickAddTask(new, mode: mode)
+        let before = parseQuickAddTask(old, mode: mode, detectDates: preferences.custom.detectDates)
+        let after = parseQuickAddTask(new, mode: mode, detectDates: preferences.custom.detectDates)
         if !picked.contains(.priority) {
             priority = followParsed(priority, before: before.priority, after: after.priority, empty: 0)
         }
@@ -276,26 +277,12 @@ extension QuickAddSheet {
         }
     }
 
-    /// One row of compact chips. Picked labels show as their own chips, and the ••• chip holds the rest.
+    /// One row of compact chips, in the order Settings > Customise > Quick Add sets. Ones left out sit in the •••
+    /// menu.
     private var pickers: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                QuickAddDateChip(dueISO: dueISO) { pickerSheet = .date }
-                Menu {
-                    Picker("Priority", selection: priorityPick) {
-                        ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
-                    }
-                } label: {
-                    CriaChip(text: priority == 0 ? "Priority" : "P\(priority)", systemImage: "flag", tint: Color(.marigold700))
-                }
-                QuickAddReminderMenu(reminders: $reminders, hasDueDate: !dueISO.isEmpty, onCustom: { pickerSheet = .reminder })
-                Button { pickerSheet = .labels } label: {
-                    CriaChip(
-                        text: labelTitles.isEmpty ? "Labels" : labelTitles.joined(separator: ", "),
-                        systemImage: "tag", tint: Color(.meadow700)
-                    )
-                }
-                .buttonStyle(.plain)
+                ForEach(preferences.custom.quickAddActions) { chip($0) }
                 if parsed.repeatAfter != nil || parsed.repeatMode != nil {
                     CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
                 }
@@ -305,8 +292,48 @@ extension QuickAddSheet {
         }
     }
 
+    @ViewBuilder
+    private func chip(_ action: QuickAddAction) -> some View {
+        let showsLabels = preferences.custom.quickAddShowsLabels
+        switch action {
+        case .date:
+            QuickAddDateChip(dueISO: dueISO, showsLabel: showsLabels) { pickerSheet = .date }
+        case .priority:
+            Menu {
+                Picker("Priority", selection: priorityPick) {
+                    ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
+                }
+            } label: {
+                CriaChip(
+                    text: priority == 0 ? (showsLabels ? "Priority" : "") : "P\(priority)",
+                    systemImage: "flag", tint: Color(.marigold700)
+                )
+            }
+            .accessibilityLabel("Priority")
+        case .reminders:
+            QuickAddReminderMenu(
+                reminders: $reminders, hasDueDate: !dueISO.isEmpty, showsLabel: showsLabels, onCustom: { pickerSheet = .reminder }
+            )
+        case .labels:
+            Button { pickerSheet = .labels } label: {
+                CriaChip(
+                    text: labelTitles.isEmpty ? (showsLabels ? "Labels" : "") : labelTitles.joined(separator: ", "),
+                    systemImage: "tag", tint: Color(.meadow700)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Labels")
+        }
+    }
+
     private var moreMenu: some View {
         Menu {
+            let hidden = QuickAddAction.allCases.filter { !preferences.custom.quickAddActions.contains($0) }
+            if !hidden.isEmpty {
+                Section {
+                    ForEach(hidden) { hiddenAction($0) }
+                }
+            }
             Toggle("Keep open after adding", isOn: $addAnother)
             if let onPhoto {
                 Button("List from photo", systemImage: "camera") { dismiss(); onPhoto() }
@@ -318,6 +345,25 @@ extension QuickAddSheet {
             CriaChip(text: "•••", tint: Color(.mutedForeground))
         }
         .accessibilityLabel("More options")
+    }
+
+    @ViewBuilder
+    private func hiddenAction(_ action: QuickAddAction) -> some View {
+        switch action {
+        case .date:
+            Button("Date", systemImage: "calendar") { pickerSheet = .date }
+        case .priority:
+            Picker(selection: priorityPick) {
+                ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
+            } label: {
+                Label("Priority", systemImage: "flag")
+            }
+            .pickerStyle(.menu)
+        case .reminders:
+            Button("Reminder", systemImage: "bell") { pickerSheet = .reminder }
+        case .labels:
+            Button("Labels", systemImage: "tag") { pickerSheet = .labels }
+        }
     }
 
     /// Plain text as a paragraph, escaped, with line breaks kept.

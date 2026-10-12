@@ -134,8 +134,9 @@ struct TaskListView: View {
     }
 }
 
-/// A task row that opens the detail screen, with the shared swipe actions: done, star and delete. Delete goes
-/// straight through with an Undo toast (never a full swipe); failed writes show an alert.
+/// A task row that opens the detail screen. Each swipe does what Settings > Customise > Swipe actions says
+/// (complete and delete by default). Delete goes straight through with an Undo toast (never a full swipe); failed
+/// writes show an alert.
 struct TaskRowLink: View {
     let services: AppServices
     let item: TaskListItem
@@ -143,27 +144,28 @@ struct TaskRowLink: View {
     var tree = TaskRowTree()
     /// Optional so a row shown inside a sheet (no shell environment) still deletes, without the Undo toast.
     @Environment(UndoCenter.self) private var undo: UndoCenter?
+    @Environment(\.preferences) private var preferences
     @State private var failure: String?
+    @State private var scheduling = false
 
     var body: some View {
+        let swipes = preferences.custom
         NavigationLink(value: Route.task(item.task.localId)) {
             TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
         }
-        .swipeActions(edge: .leading) {
-            Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
-                .tint(Color(.meadow500))
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            // Not `.destructive`: that role animates the row away before the write, even when it fails.
-            Button("Delete", systemImage: "trash") { delete() }
-                .tint(Color(.destructive))
-            Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
-                .tint(Color(.marigold500))
+        .swipeActions(edge: .leading, allowsFullSwipe: swipes.swipeRight != .delete) { swipeButton(swipes.swipeRight) }
+        .swipeActions(edge: .trailing, allowsFullSwipe: swipes.swipeLeft != .delete) { swipeButton(swipes.swipeLeft) }
+        .sheet(isPresented: $scheduling) {
+            DateSheet(
+                title: "Date", iso: item.task.dueDate,
+                repeatValue: RepeatValue(after: item.task.repeatAfter, mode: item.task.repeatMode)
+            ) { iso, chosen in schedule(iso, repeatValue: chosen) }
         }
         .contextMenu {
             Button(item.task.done ? "Mark as not done" : "Complete", systemImage: "checkmark.circle") { toggle() }
             Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
             Button("Due tomorrow", systemImage: "sunrise") { dueTomorrow() }
+            Button("Schedule…", systemImage: "calendar") { scheduling = true }
             if let collapsed = tree.isCollapsed {
                 Button(collapsed ? "Show subtasks" : "Hide subtasks", systemImage: "list.bullet.indent") {
                     tree.onToggleCollapsed()
@@ -187,6 +189,36 @@ struct TaskRowLink: View {
         } message: {
             Text(failure ?? "")
         }
+    }
+
+    @ViewBuilder
+    private func swipeButton(_ action: SwipeAction) -> some View {
+        switch action {
+        case .none:
+            EmptyView()
+        case .complete:
+            Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
+                .tint(Color(.meadow500))
+        case .schedule:
+            Button("Schedule", systemImage: "calendar") { scheduling = true }
+                .tint(Color(.sky500))
+        case .star:
+            Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
+                .tint(Color(.marigold500))
+        case .delete:
+            // Not `.destructive`: that role animates the row away before the write, even when it fails.
+            Button("Delete", systemImage: "trash") { delete() }
+                .tint(Color(.destructive))
+        }
+    }
+
+    private func schedule(_ iso: String, repeatValue: RepeatValue?) {
+        var patch = TaskPatch(dueDate: iso)
+        if let repeatValue, repeatValue != RepeatValue(after: item.task.repeatAfter, mode: item.task.repeatMode) {
+            patch.repeatAfter = repeatValue.after
+            patch.repeatMode = repeatValue.mode
+        }
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
     }
 
     private func attempt(_ work: () throws -> Void) {

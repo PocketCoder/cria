@@ -3,6 +3,8 @@ import Foundation
 /// The four tabs of the iOS shell (`src/features/shell/TabBar.tsx`).
 public enum AppTab: String, CaseIterable, Sendable {
     case today, upcoming, browse, search
+    /// Optional tabs (Settings > Customise > Navigation).
+    case inbox, favorites
 }
 
 /// Where a navigation push can go. Ids are local ids except saved filters, which are server-only.
