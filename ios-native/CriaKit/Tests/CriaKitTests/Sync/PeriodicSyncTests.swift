@@ -12,12 +12,19 @@ final class PeriodicSyncTests: XCTestCase {
     }
 
     func testTicksImmediatelyThenOnEveryInterval() async {
+        // The immediate tick is checked against a long interval: with a 50 ms timer a loaded runner could fit a second
+        // tick into the 30 ms settle and make an exact count flaky.
+        let once = TickCounter()
+        let slow = PeriodicSync(interval: 30, reconcileInterval: 100, tick: { await once.increment() })
+        await slow.start()
+        await settle(30)
+        let first = await once.value
+        XCTAssertEqual(first, 1, "one tick straight away")
+        await slow.stop()
+
         let counter = TickCounter()
         let sync = PeriodicSync(interval: 0.05, reconcileInterval: 100, tick: { await counter.increment() })
         await sync.start()
-        await settle(30)
-        let first = await counter.value
-        XCTAssertEqual(first, 1, "one tick straight away")
         // Poll up to 3 seconds: a loaded CI runner can delay timer ticks well past the nominal 50 ms.
         var later = await counter.value
         for _ in 0..<30 where later < 3 {
