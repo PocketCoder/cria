@@ -13,9 +13,10 @@ final class ConflictPrompt {
     private(set) var isShowing = false
     private var dismissedThisSession = false
 
-    /// Conflicts recorded by a pull are silent, so this also rereads after task changes (a pull's end announces them).
+    /// Conflicts recorded by a pull are silent, so this also rereads after task, project and label changes (a pull's
+    /// end announces them).
     func run(store: CriaStore) async {
-        let stream = observeStore(store, kinds: [.conflicts, .tasks, .outbox]) { try $0.unresolvedConflicts() }
+        let stream = observeStore(store, kinds: [.conflicts, .tasks, .projects, .labels, .outbox]) { try $0.unresolvedConflicts() }
         for await list in stream {
             conflicts = list
             if !list.isEmpty, !dismissedThisSession, !isPresented { isPresented = true }
@@ -45,7 +46,7 @@ final class ConflictPrompt {
 }
 
 /// One section per conflict: the whole task side by side, "Yours" (as on this device now) and "Server", with the rows
-/// that differ highlighted, and a choice of one side.
+/// that differ highlighted, and a choice of one side. Projects and labels list the fields that differ.
 struct ConflictSheet: View {
     let services: AppServices
     let prompt: ConflictPrompt
@@ -59,6 +60,8 @@ struct ConflictSheet: View {
                     ConflictSection(
                         conflict: conflict,
                         current: currentTask(conflict),
+                        diff: (try? services.store.conflictDiff(conflict)) ?? conflict.diff,
+                        currentName: currentName(conflict),
                         onKeepMine: { resolve { try services.store.resolveConflictKeepMine(id: conflict.id) } },
                         onUseTheirs: { resolve { try services.store.resolveConflictUseTheirs(id: conflict.id) } }
                     )
@@ -97,6 +100,15 @@ struct ConflictSheet: View {
         return try? services.store.task(localId: conflict.entityLocalId)
     }
 
+    /// A project's or label's name as it is on this device (the snapshot holds the last-synced one).
+    private func currentName(_ conflict: ConflictRecord) -> String? {
+        switch conflict.entityType {
+        case "project": (try? services.store.project(localId: conflict.entityLocalId))?.title
+        case "label": (try? services.store.labels())?.first { $0.localId == conflict.entityLocalId }?.title
+        default: nil
+        }
+    }
+
     private func resolve(_ action: () throws -> Void) {
         do {
             try action()
@@ -110,6 +122,9 @@ private struct ConflictSection: View {
     let conflict: ConflictRecord
     /// The task as it is on this device now (`localSnapshot` is the last-synced server copy, not the edit).
     let current: TaskRecord?
+    /// Per-field rows for projects and labels, with "Yours" as on this device now (`CriaStore.conflictDiff`).
+    let diff: [ConflictFieldDiff]
+    let currentName: String?
     let onKeepMine: () -> Void
     let onUseTheirs: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
@@ -138,7 +153,7 @@ private struct ConflictSection: View {
                     fieldRow(field, yours: yours, server: server)
                 }
             } else {
-                ForEach(conflict.diff, id: \.field) { diff in
+                ForEach(diff, id: \.field) { diff in
                     columns(label: diff.label, yours: Text(diff.local), server: Text(diff.remote))
                 }
             }
@@ -150,7 +165,7 @@ private struct ConflictSection: View {
             }
             .frame(maxWidth: .infinity)
         } header: {
-            Text(title ?? "Task")
+            Text(title ?? noun.capitalized)
         } footer: {
             Text("Highlighted rows differ. Found \(found).")
         }
@@ -192,14 +207,22 @@ private struct ConflictSection: View {
     /// The title as it is on this device.
     private var title: String? {
         let object = try? JSONSerialization.jsonObject(with: Data(conflict.localSnapshot.utf8)) as? [String: Any]
-        let text = (yours?.title ?? (object?["title"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = (yours?.title ?? currentName ?? (object?["title"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
     }
 
     private var intro: AttributedString {
-        var name = AttributedString(title ?? "this task")
+        var name = AttributedString(title ?? "this \(noun)")
         if title != nil { name.font = Theme.rowSubtitle.weight(.semibold) }
         return AttributedString("You edited ") + name + AttributedString(" offline while the server also changed it. Keep one.")
+    }
+
+    /// "task", "project" or "label", for the header and intro.
+    private var noun: String {
+        switch conflict.entityType {
+        case "project", "label": conflict.entityType
+        default: "task"
+        }
     }
 
     private var found: String {

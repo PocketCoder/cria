@@ -37,7 +37,8 @@ public struct ConflictFieldDiff: Equatable, Sendable {
 private let fieldLabels: [String: String] = [
     "title": "Title", "description": "Description", "done": "Done", "due_date": "Due date",
     "start_date": "Start date", "end_date": "End date", "priority": "Priority", "percent_done": "Progress",
-    "hex_color": "Colour", "position": "Position"
+    "hex_color": "Colour", "position": "Position", "parent_project_id": "Parent project", "is_archived": "Archived",
+    "is_favorite": "Favourite", "identifier": "Identifier"
 ]
 
 public func diffConflict(fields: [String], localSnapshot: String, remoteSnapshot: String) -> [ConflictFieldDiff] {
@@ -52,7 +53,7 @@ public func diffConflict(fields: [String], localSnapshot: String, remoteSnapshot
     }
 }
 
-private func renderConflictValue(_ value: Any?) -> String {
+func renderConflictValue(_ value: Any?) -> String {
     switch value {
     case nil, is NSNull: return "—"
     case let text as String:
@@ -79,13 +80,15 @@ extension CriaStore {
         }
     }
 
-    /// Keep mine: the server's copy becomes the new baseline (`last_synced`), so the push's divergence check passes
-    /// instead of recording the same conflict again, and an update is queued if none is, so the edit is sent.
+    /// Keep mine. Tasks: the server's copy becomes the new baseline (`last_synced`), so the push's divergence check
+    /// passes instead of recording the same conflict again, and an update is queued if none is, so the edit is sent.
+    /// Projects and labels also take the server's value for every field not edited here (`keepMineMerged`).
     public func resolveConflictKeepMine(id: Int) throws {
         try userWrite(announcing: [.conflicts, .outbox, .projects, .labels]) { connection in
             let now = isoNow()
-            if let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]),
-               case let conflict = ConflictRecord(row: row), conflict.entityType == "task" {
+            guard let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]) else { return }
+            let conflict = ConflictRecord(row: row)
+            if conflict.entityType == "task" {
                 try connection.execute(
                     sql: "UPDATE tasks SET last_synced = ? WHERE local_id = ?",
                     arguments: [conflict.remoteSnapshot, conflict.entityLocalId]
@@ -97,18 +100,8 @@ extension CriaStore {
                     try connection.enqueue(.task, localId: record.localId, operation: .update,
                                            payload: CriaStore.taskPayload(record), at: now)
                 }
-            } else if let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]),
-                      case let conflict = ConflictRecord(row: row),
-                      case let (table, entity)? = Self.syncedTable(conflict.entityType) {
-                try connection.execute(
-                    sql: "UPDATE \(table) SET last_synced = ? WHERE local_id = ?",
-                    arguments: [conflict.remoteSnapshot, conflict.entityLocalId]
-                )
-                let queued = try Bool.fetchOne(connection, sql: """
-                    SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = ? AND entity_local_id = ? AND op = 'update')
-                    """, arguments: [conflict.entityType, conflict.entityLocalId]) ?? false
-                // The executor reads the row, not the payload, so an empty payload sends the current state.
-                if !queued { try connection.enqueue(entity, localId: conflict.entityLocalId, operation: .update, payload: [:], at: now) }
+            } else if CriaStore.conflictFields(conflict.entityType) != nil {
+                try CriaStore.keepMineMerged(connection, conflict: conflict, now: now)
             }
             try connection.execute(sql: "UPDATE conflicts SET resolved_at = ? WHERE id = ?", arguments: [now, id])
         }
@@ -128,29 +121,10 @@ extension CriaStore {
                 try connection.execute(
                     sql: "DELETE FROM outbox WHERE entity_type = 'task' AND entity_local_id = ?", arguments: [conflict.entityLocalId]
                 )
-            }
-            if case let (table, _)? = Self.syncedTable(conflict.entityType),
-               let remote = try CriaStore.jsonObject(conflict.remoteSnapshot) {
-                // Projects and labels conflict on title and description only: take the server's, clear the edit.
-                try connection.execute(sql: """
-                    UPDATE \(table) SET title = ?, description = ?, last_synced = ?, synced_at = ?, dirty = 0 WHERE local_id = ?
-                    """, arguments: [remote["title"] as? String ?? "", remote["description"] as? String,
-                                     conflict.remoteSnapshot, now, conflict.entityLocalId])
-                try connection.execute(
-                    sql: "DELETE FROM outbox WHERE entity_type = ? AND entity_local_id = ? AND op = 'update'",
-                    arguments: [conflict.entityType, conflict.entityLocalId]
-                )
+            } else if CriaStore.conflictFields(conflict.entityType) != nil {
+                try CriaStore.overwriteFromRemote(connection, conflict: conflict, now: now)
             }
             try connection.execute(sql: "UPDATE conflicts SET resolved_at = ? WHERE id = ?", arguments: [now, id])
-        }
-    }
-
-    /// The table and outbox entity for project and label conflicts.
-    private static func syncedTable(_ entityType: String) -> (String, OutboxEntity)? {
-        switch entityType {
-        case "project": ("projects", .project)
-        case "label": ("labels", .label)
-        default: nil
         }
     }
 

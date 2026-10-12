@@ -33,14 +33,15 @@ extension CriaStore {
 
     /// Create succeeded (or its id was cached). The server id is always recorded: losing it would make the next pull
     /// insert a duplicate. `onlyIfUnchangedSince` keeps `dirty` (and the local `updated_at`) when the user edited the
-    /// row while the request was in flight, so that edit still pushes.
+    /// row while the request was in flight, so that edit still pushes. `lastSynced` (the server's reply), when given,
+    /// becomes the conflict baseline either way: it is what the server now holds.
     func markCreated(table: String, localId: String, serverId: Int?, updatedAt: String?, onlyIfUnchangedSince: String?,
-                     announcing kind: ChangeKind) throws {
+                     lastSynced: String? = nil, announcing kind: ChangeKind) throws {
         let now = isoNow()
         try userWrite(announcing: [kind]) { connection in
             try connection.execute(
-                sql: "UPDATE \(table) SET server_id = ?, synced_at = ? WHERE local_id = ?",
-                arguments: [serverId, now, localId]
+                sql: "UPDATE \(table) SET server_id = ?, synced_at = ?, last_synced = COALESCE(?, last_synced) WHERE local_id = ?",
+                arguments: [serverId, now, lastSynced, localId]
             )
             var sql = "UPDATE \(table) SET dirty = 0"
             var arguments: [(any DatabaseValueConvertible)?] = []
@@ -58,11 +59,15 @@ extension CriaStore {
         }
     }
 
-    /// Update succeeded.
+    /// Update succeeded. `lastSynced` (the server's reply), when given, becomes the conflict baseline even if the row
+    /// was edited again in flight, so this device's own push is never mistaken for a change made elsewhere.
     func markPushed(table: String, localId: String, updatedAt: String?, onlyIfUnchangedSince: String?,
-                    announcing kind: ChangeKind) throws {
+                    lastSynced: String? = nil, announcing kind: ChangeKind) throws {
         let now = isoNow()
         try userWrite(announcing: [kind]) { connection in
+            if let lastSynced {
+                try connection.execute(sql: "UPDATE \(table) SET last_synced = ? WHERE local_id = ?", arguments: [lastSynced, localId])
+            }
             var sql = "UPDATE \(table) SET synced_at = ?, dirty = 0"
             var arguments: [(any DatabaseValueConvertible)?] = [now]
             if let updatedAt {

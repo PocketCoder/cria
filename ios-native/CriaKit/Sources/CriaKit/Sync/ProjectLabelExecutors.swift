@@ -47,22 +47,24 @@ public struct ProjectExecutor: OutboxExecutor {
                                       onlyIfUnchangedSince: nil, announcing: .projects)
                 return
             }
-            let created = try await api.createProject(try body(project, store: store))
+            let reply = try await api.send(.put, "/projects", body: try body(project, store: store))
+            let (created, raw) = try serverCopy(ProjectResponse.self, reply)
             try store.cacheCreateResponse(opId: op.id, payload: op.payload, serverId: created.id)
             try store.markCreated(table: "projects", localId: localId, serverId: created.id, updatedAt: created.updated,
-                                  onlyIfUnchangedSince: project.updatedAt, announcing: .projects)
+                                  onlyIfUnchangedSince: project.updatedAt, lastSynced: raw, announcing: .projects)
         case "update":
             if deleted { return }
             guard let serverId = project.serverId else { throw ApiError.blocked("Cannot update a project without server id") }
             if try store.hasUnresolvedConflict(entityType: "project", localId: localId) { throw ApiError.conflictBlocked }
             if let lastSynced, let current = try? await api.send(.get, "/projects/\(serverId)"), current.isSuccess,
                try store.checkDivergence(lastSynced: lastSynced, serverPayload: current.data,
-                                         fields: ["title", "description"], entityType: "project", localId: localId) {
+                                         fields: CriaStore.projectConflictFields, entityType: "project", localId: localId) {
                 return
             }
-            let updated = try await api.updateProject(id: serverId, try body(project, store: store))
+            let reply = try await api.send(.post, "/projects/\(serverId)", body: try body(project, store: store))
+            let (updated, raw) = try serverCopy(ProjectResponse.self, reply)
             try store.markPushed(table: "projects", localId: localId, updatedAt: updated.updated,
-                                 onlyIfUnchangedSince: project.updatedAt, announcing: .projects)
+                                 onlyIfUnchangedSince: project.updatedAt, lastSynced: raw, announcing: .projects)
         case "delete":
             if let serverId = project.serverId {
                 try await api.performIgnoring404(.delete, "/projects/\(serverId)")
@@ -124,22 +126,24 @@ public struct LabelExecutor: OutboxExecutor {
                                       onlyIfUnchangedSince: nil, announcing: .labels)
                 return
             }
-            let created = try await api.createLabel(body(label))
+            let reply = try await api.send(.put, "/labels", body: body(label))
+            let (created, raw) = try serverCopy(LabelResponse.self, reply)
             try store.cacheCreateResponse(opId: op.id, payload: op.payload, serverId: created.id)
             try store.markCreated(table: "labels", localId: localId, serverId: created.id, updatedAt: created.updated,
-                                  onlyIfUnchangedSince: label.updatedAt, announcing: .labels)
+                                  onlyIfUnchangedSince: label.updatedAt, lastSynced: raw, announcing: .labels)
         case "update":
             if deleted { return }
             guard let serverId = label.serverId else { throw ApiError.blocked("Cannot update a label without server id") }
             if try store.hasUnresolvedConflict(entityType: "label", localId: localId) { throw ApiError.conflictBlocked }
             if let lastSynced, let current = try? await api.send(.get, "/labels/\(serverId)"), current.isSuccess,
                try store.checkDivergence(lastSynced: lastSynced, serverPayload: current.data,
-                                         fields: ["title", "description"], entityType: "label", localId: localId) {
+                                         fields: CriaStore.labelConflictFields, entityType: "label", localId: localId) {
                 return
             }
-            let updated = try await api.updateLabel(id: serverId, body(label))
+            let reply = try await api.send(.post, "/labels/\(serverId)", body: body(label))
+            let (updated, raw) = try serverCopy(LabelResponse.self, reply)
             try store.markPushed(table: "labels", localId: localId, updatedAt: updated.updated,
-                                 onlyIfUnchangedSince: label.updatedAt, announcing: .labels)
+                                 onlyIfUnchangedSince: label.updatedAt, lastSynced: raw, announcing: .labels)
         case "delete":
             if let serverId = label.serverId {
                 try await api.performIgnoring404(.delete, "/labels/\(serverId)")
@@ -150,4 +154,9 @@ public struct LabelExecutor: OutboxExecutor {
             return
         }
     }
+}
+
+/// The decoded server reply and its raw JSON, which becomes the row's `last_synced` (the conflict baseline).
+private func serverCopy<T: Decodable>(_ type: T.Type, _ response: ApiResponse) throws -> (T, String) {
+    (try response.decoded(type), String(bytes: response.data, encoding: .utf8) ?? "")
 }

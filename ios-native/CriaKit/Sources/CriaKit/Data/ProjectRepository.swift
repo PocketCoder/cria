@@ -47,7 +47,8 @@ extension CriaStore {
         }
     }
 
-    /// Silent server merge. Never publishes a change. A row with a pending local edit is left untouched.
+    /// Silent server merge. Never publishes a change. A row with a pending local edit is left untouched; if the server
+    /// also changed it, a conflict is recorded.
     /// Returns the local id, or nil when the row is pending a local delete.
     @discardableResult
     public func upsertProjectFromServer(_ payload: ProjectResponse, rawJSON: String) throws -> String? {
@@ -67,9 +68,9 @@ extension CriaStore {
                 let deleted: Bool = existing["deleted"]
                 if dirty {
                     if !deleted {
-                        try CriaStore.recordConflictIfDiverged(
+                        try CriaStore.recordSyncedEntityConflict(
                             connection, entityType: "project", localId: localId, lastSynced: existing["last_synced"],
-                            remoteJSON: rawJSON, fields: ["title", "description"], now: now
+                            remoteJSON: rawJSON, now: now
                         )
                     }
                     return deleted ? nil : localId

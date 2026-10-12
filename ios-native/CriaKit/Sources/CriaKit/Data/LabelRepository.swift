@@ -59,7 +59,7 @@ extension CriaStore {
         }
     }
 
-    /// Silent server merge for one label. A dirty row is left alone.
+    /// Silent server merge for one label. A dirty row is left alone; if the server also changed it, a conflict is recorded.
     @discardableResult
     public func upsertLabelFromServer(_ payload: LabelResponse, rawJSON: String, in held: Database? = nil) throws -> String {
         try inWrite(held) { connection -> String in
@@ -72,9 +72,9 @@ extension CriaStore {
                 let dirty: Bool = existing["dirty"]
                 let deleted: Bool = existing["deleted"]
                 if dirty && !deleted {
-                    try CriaStore.recordConflictIfDiverged(
+                    try CriaStore.recordSyncedEntityConflict(
                         connection, entityType: "label", localId: localId, lastSynced: existing["last_synced"],
-                        remoteJSON: rawJSON, fields: ["title", "description"], now: now
+                        remoteJSON: rawJSON, now: now
                     )
                 }
                 if !dirty && !deleted {
