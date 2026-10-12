@@ -8,7 +8,7 @@ struct LoginView: View {
     @AppStorage("cria.login.lastServerURL") private var lastServerURL = ""
 
     private enum Field: Hashable {
-        case server, token, username, password, totp
+        case server, token, username, password, totp, shareLink, sharePassword
     }
 
     var body: some View {
@@ -28,7 +28,7 @@ struct LoginView: View {
                     .autocorrectionDisabled()
                     .focused($focus, equals: .server)
                     .submitLabel(.next)
-                    .onSubmit { focus = model.method == .token ? .token : .username }
+                    .onSubmit { focus = firstField }
                     .accessibilityIdentifier("login.server")
             } header: {
                 Text("Server")
@@ -42,49 +42,14 @@ struct LoginView: View {
                 Picker("Sign in with", selection: Binding(get: { model.method }, set: { model.switchMethod($0) })) {
                     Text("API token").tag(LoginViewModel.Method.token)
                     Text("Password").tag(LoginViewModel.Method.password)
+                    Text("Share link").tag(LoginViewModel.Method.linkShare)
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             }
 
-            Section {
-                switch model.method {
-                case .token:
-                    SecureField("API token", text: $model.token)
-                        .submitLabel(.go)
-                        .onSubmit(submit)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($focus, equals: .token)
-                        .accessibilityIdentifier("login.token")
-                    Text("Create one in Vikunja under Settings → API tokens.")
-                        .font(Theme.caption)
-                        .foregroundStyle(Color(.mutedForeground))
-                case .password:
-                    TextField("Username", text: $model.username)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($focus, equals: .username)
-                        .submitLabel(.next)
-                        .onSubmit { focus = .password }
-                        .accessibilityIdentifier("login.username")
-                    SecureField("Password", text: $model.password)
-                        .textContentType(.password)
-                        .submitLabel(.go)
-                        .onSubmit(submit)
-                        .focused($focus, equals: .password)
-                        .accessibilityIdentifier("login.password")
-                    if model.totpRequired {
-                        TextField("Two-factor code", text: $model.totpCode)
-                            .textContentType(.oneTimeCode)
-                            .keyboardType(.numberPad)
-                            .focused($focus, equals: .totp)
-                            .accessibilityIdentifier("login.totp")
-                    }
-                }
-            }
+            Section { credentialFields }
 
             if let error = model.submitError {
                 Section { Text(error).foregroundStyle(Color(.destructive)).accessibilityIdentifier("login.error") }
@@ -110,6 +75,82 @@ struct LoginView: View {
         .onAppear {
             if model.serverURL.isEmpty { model.serverURL = lastServerURL }
         }
+    }
+
+    private var firstField: Field {
+        switch model.method {
+        case .token: .token
+        case .password: .username
+        case .linkShare: .shareLink
+        }
+    }
+
+    @ViewBuilder
+    private var credentialFields: some View {
+        switch model.method {
+        case .token:
+            SecureField("API token", text: $model.token)
+                .submitLabel(.go)
+                .onSubmit(submit)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($focus, equals: .token)
+                .accessibilityIdentifier("login.token")
+            Text("Create one in Vikunja under Settings → API tokens.")
+                .font(Theme.caption)
+                .foregroundStyle(Color(.mutedForeground))
+        case .password:
+            passwordFields
+        case .linkShare:
+            shareFields
+        }
+    }
+
+    @ViewBuilder
+    private var passwordFields: some View {
+        TextField("Username", text: $model.username)
+            .textContentType(.username)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($focus, equals: .username)
+            .submitLabel(.next)
+            .onSubmit { focus = .password }
+            .accessibilityIdentifier("login.username")
+        SecureField("Password", text: $model.password)
+            .textContentType(.password)
+            .submitLabel(.go)
+            .onSubmit(submit)
+            .focused($focus, equals: .password)
+            .accessibilityIdentifier("login.password")
+        if model.totpRequired {
+            TextField("Two-factor code", text: $model.totpCode)
+                .textContentType(.oneTimeCode)
+                .keyboardType(.numberPad)
+                .focused($focus, equals: .totp)
+                .accessibilityIdentifier("login.totp")
+        }
+    }
+
+    /// A pasted share URL fills the server field. The session only sees the shared project.
+    @ViewBuilder
+    private var shareFields: some View {
+        TextField("https://vikunja.example.com/share/\u{2026}/auth", text: $model.shareLink)
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($focus, equals: .shareLink)
+            .submitLabel(.go)
+            .onSubmit(submit)
+            .onChange(of: model.shareLink) { model.adoptServerFromShareLink() }
+            .accessibilityIdentifier("login.shareLink")
+        SecureField(model.sharePasswordRequired ? "Share password" : "Share password (if it has one)", text: $model.sharePassword)
+            .submitLabel(.go)
+            .onSubmit(submit)
+            .focused($focus, equals: .sharePassword)
+            .accessibilityIdentifier("login.sharePassword")
+        Text("Paste a Vikunja share link. You will only see the shared project, and account settings are unavailable.")
+            .font(Theme.caption)
+            .foregroundStyle(Color(.mutedForeground))
     }
 
     private func submit() {

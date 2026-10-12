@@ -1,11 +1,11 @@
 import Foundation
 import Observation
 
-/// State and submit flow of the login screen. Ported from `LoginScreen.tsx` (token and password methods).
+/// State and submit flow of the login screen. Ported from `LoginScreen.tsx` (token, password and share link methods).
 @MainActor @Observable
 public final class LoginViewModel {
     public enum Method: String, CaseIterable, Sendable {
-        case token, password
+        case token, password, linkShare
     }
 
     public var method: Method = .token
@@ -14,10 +14,15 @@ public final class LoginViewModel {
     public var username = ""
     public var password = ""
     public var totpCode = ""
+    /// A share URL or its bare hash.
+    public var shareLink = ""
+    public var sharePassword = ""
 
     public private(set) var serverURLError: String?
     public private(set) var submitError: String?
     public private(set) var totpRequired = false
+    /// Set once the server said the share has a password, so the field is shown.
+    public private(set) var sharePasswordRequired = false
     public private(set) var isSubmitting = false
 
     private let service: LoginService
@@ -37,8 +42,19 @@ public final class LoginViewModel {
         serverURLError = nil
     }
 
+    /// Fills the server field from a pasted share URL, so pasting the link is enough. The field stays editable for
+    /// servers whose web app and API live on different hosts.
+    public func adoptServerFromShareLink() {
+        guard let server = ShareLinkInput.parse(shareLink)?.serverURL else { return }
+        serverURL = server
+        serverURLError = nil
+    }
+
     public func submit() async {
         submitError = nil
+        if method == .linkShare, serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            adoptServerFromShareLink()
+        }
         let url: String
         switch LoginValidation.validateServerURL(serverURL) {
         case .failure(let failure):
@@ -63,7 +79,29 @@ public final class LoginViewModel {
                 return
             }
             await submitPassword(url: url)
+        case .linkShare:
+            guard let share = ShareLinkInput.parse(shareLink) else {
+                submitError = "Paste a share link or its code."
+                return
+            }
+            await submitLinkShare(url: url, hash: share.hash)
         }
+    }
+
+    private func submitLinkShare(url: String, hash: String) async {
+        let password = sharePassword.isEmpty ? nil : sharePassword
+        await run(handleError: { error in
+            if LinkShareError.needsPassword(error) {
+                self.sharePasswordRequired = true
+                self.submitError = password == nil ? "This share needs a password." : "Wrong password for this share."
+                return true
+            }
+            guard (error as? ApiError)?.status == 404 else { return false }
+            self.submitError = "Couldn\u{2019}t find that share on this server. Check the link and the server URL."
+            return true
+        }, {
+            try await self.service.signInWithLinkShare(serverURL: url, hash: hash, password: password)
+        })
     }
 
     private func submitPassword(url: String) async {

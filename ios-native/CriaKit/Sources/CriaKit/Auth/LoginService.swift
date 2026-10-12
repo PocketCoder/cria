@@ -32,7 +32,7 @@ private struct LoginResponse: Decodable {
 
 /// Unauthenticated login calls. Ported from `src/api/login.ts` and `LoginScreen.tsx`.
 public struct LoginService: Sendable {
-    private let core: HTTPCore
+    let core: HTTPCore
 
     public init(core: HTTPCore = HTTPCore()) {
         self.core = core

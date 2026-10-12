@@ -1,42 +1,38 @@
 import CriaKit
 import SwiftUI
 
-/// Settings > General: language, timezone, date and time style, default project, week start, Quick Add, Ramble
-/// tagging, completed tasks and discoverability. Server-backed rows save through `SettingsModel`; date and time style are device-local.
+/// Settings > General: timezone, date and time style, default project, week start, Quick Add, Ramble tagging, completed
+/// tasks and discoverability. Server-backed rows save through `SettingsModel`; date and time style are device-local.
+/// No language row: iOS only switches an app's language when it ships translations, and this one is English only. The
+/// server's stored language is left as it is.
 struct GeneralSettingsSection: View {
     let model: SettingsModel
     @ObservedObject var prefs: PreferencesModel
     let projects: [ProjectRecord]
+    /// False for a link-share session, which has no account settings to save.
+    var serverEditable = true
     @AppStorage("cria.taskList.showDone") private var showDone = true
 
     var body: some View {
         Section("General") {
-            localeRows.disabled(!model.loaded)
+            timezoneRow.disabled(!canSave)
             formatRows
             taskRows
-            discoverabilityRows.disabled(!model.loaded)
+            discoverabilityRows.disabled(!canSave)
         }
         .task { await AIStatus.shared.refresh() }
     }
 
-    private var localeRows: some View {
-        Group {
-            Picker(selection: Binding(
-                get: { model.general.language },
-                set: { code in Task { await model.setLanguage(code) } }
-            )) {
-                ForEach(SettingsOptions.languages(including: model.general.language)) { Text($0.label).tag($0.code) }
+    private var canSave: Bool { model.loaded && serverEditable }
+
+    private var timezoneRow: some View {
+        NavigationLink {
+            TimezonePickerView(model: model)
+        } label: {
+            LabeledContent {
+                Text(model.general.timezone.replacingOccurrences(of: "_", with: " "))
             } label: {
-                SettingsLabel("Language", symbol: "character.bubble", token: .plum500)
-            }
-            NavigationLink {
-                TimezonePickerView(model: model)
-            } label: {
-                LabeledContent {
-                    Text(model.general.timezone.replacingOccurrences(of: "_", with: " "))
-                } label: {
-                    SettingsLabel("Timezone", symbol: "globe", token: .sky500)
-                }
+                SettingsLabel("Timezone", symbol: "globe", token: .sky500)
             }
         }
     }
@@ -71,7 +67,7 @@ struct GeneralSettingsSection: View {
             } label: {
                 SettingsLabel("Default project", symbol: "tray", token: .sky500)
             }
-            .disabled(!model.loaded)
+            .disabled(!canSave)
             Picker(selection: Binding(
                 get: { model.general.weekStart },
                 set: { day in Task { await model.setWeekStart(day) } }
@@ -80,7 +76,7 @@ struct GeneralSettingsSection: View {
             } label: {
                 SettingsLabel("Week starts on", symbol: "calendar", token: .coral500)
             }
-            .disabled(!model.loaded)
+            .disabled(!canSave)
             Picker(selection: Binding(
                 get: { model.general.quickAddMagicMode },
                 set: { mode in Task { await model.setQuickAddMode(mode) } }
@@ -91,7 +87,7 @@ struct GeneralSettingsSection: View {
             } label: {
                 SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
             }
-            .disabled(!model.loaded)
+            .disabled(!canSave)
             // Read by RambleSheet when it builds the prompt. Tags need the magic's syntax, so it is off with it.
             if AIStatus.shared.isOfferable {
                 Toggle(isOn: $prefs.value.rambleChoosesTags) {

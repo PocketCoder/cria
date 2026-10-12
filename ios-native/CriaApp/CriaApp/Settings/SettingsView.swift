@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var model: SettingsModel
     @StateObject private var prefs: PreferencesModel
     @State private var projects: [ProjectRecord] = []
+    /// A link-share session has no account: the account screens and server-backed preferences would only fail.
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @Environment(\.dismiss) private var dismiss
 
     init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
@@ -21,21 +23,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                accountCard
+                if isLinkShare {
+                    linkShareNotice
+                } else {
+                    accountCard
+                }
                 loadStatus
-                GeneralSettingsSection(model: model, prefs: prefs, projects: projects)
+                GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
                 AppearanceSettingsSection(prefs: prefs)
                 CustomiseSettingsSection(prefs: prefs)
                 NotificationSettingsSection(services: services, model: model, onClose: { dismiss() }, prefs: prefs)
                 PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
-                accountSection
+                if !isLinkShare { accountSection }
                 syncSection
                 storageSection
                 aboutSection
                 if let message = model.errorMessage {
                     Section { Text(message).foregroundStyle(Color(.destructive)) }
                 }
-                signOutSection
+                SignOutSettingsSection(services: services, version: Self.version, onSignOut: onSignOut)
             }
             .criaSurface()
             .navigationTitle("Settings")
@@ -89,6 +95,9 @@ struct SettingsView: View {
             NavigationLink { ApiTokensView(services: services) } label: {
                 SettingsLabel("API tokens", symbol: "key", token: .fleece500)
             }
+            NavigationLink { CaldavTokensView(services: services, username: model.username) } label: {
+                SettingsLabel("CalDAV", symbol: "calendar.badge.plus", token: .meadow500)
+            }
             NavigationLink { TeamsView(services: services) } label: {
                 SettingsLabel("Teams", symbol: "person.2", token: .sky700)
             }
@@ -101,6 +110,15 @@ struct SettingsView: View {
             NavigationLink { DataSettingsView(services: services) } label: {
                 SettingsLabel("Data", symbol: "externaldrive", token: .fleece500)
             }
+        }
+    }
+
+    private var linkShareNotice: some View {
+        Section {
+            Label("Signed in with a share link", systemImage: "link")
+                .font(Theme.rowTitle)
+        } footer: {
+            Text("Only the shared project is available. Account settings need a full sign-in.").font(Theme.caption)
         }
     }
 
@@ -142,7 +160,7 @@ struct SettingsView: View {
         }
     }
 
-    private static var version: String {
+    static var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
         guard let build = info?["CFBundleVersion"] as? String, build != short else { return short }
@@ -155,16 +173,6 @@ struct SettingsView: View {
             if !model.server.isEmpty {
                 LabeledContent("Server", value: model.server)
             }
-        }
-    }
-
-    private var signOutSection: some View {
-        Section {
-            Button(role: .destructive) { onSignOut(false) } label: {
-                Text("Sign out").frame(maxWidth: .infinity)
-            }
-        } footer: {
-            Text("Cria \(Self.version) ").frame(maxWidth: .infinity)
         }
     }
 }

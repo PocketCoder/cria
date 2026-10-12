@@ -39,14 +39,20 @@ final class AppModel {
         await session.hydrate()
         status = await session.status
         // Only ever set here: a Keychain that is not readable yet (before first unlock) must not blank the widget.
-        if case .authenticated = status { SignedInFlag.set(true) }
+        if case .authenticated(let credentials) = status {
+            SignedInFlag.set(true)
+            LinkShareSessionFlag.set(credentials.authMethod == .linkShare)
+        }
         await startServicesIfNeeded()
     }
 
     func signedIn(_ result: SignInResult) async throws {
         try await session.signIn(result.credentials)
         status = await session.status
-        if case .authenticated = status { SignedInFlag.set(true) }
+        if case .authenticated = status {
+            SignedInFlag.set(true)
+            LinkShareSessionFlag.set(result.credentials.authMethod == .linkShare)
+        }
         await startServicesIfNeeded()
     }
 
@@ -54,6 +60,7 @@ final class AppModel {
     func signOut(wipeLocalData: Bool = false) async {
         // First, so the widget, extensions and an in-flight reminder pass stop treating the account as signed in.
         SignedInFlag.set(false)
+        LinkShareSessionFlag.set(false)
         await services?.stop()
         services = nil
         await session.signOut()
