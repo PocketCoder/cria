@@ -41,6 +41,15 @@ public struct GanttMonth: Equatable, Sendable {
     public let width: Double
 }
 
+/// One header tick: a day number at day zoom, the first day of each week at week zoom.
+public struct GanttTick: Equatable, Sendable {
+    public let day: Int
+    /// Day of the month.
+    public let label: String
+    public let left: Double
+    public let isWeekend: Bool
+}
+
 public struct GanttPlacement: Equatable, Sendable {
     public let taskLocalId: String
     public let resolved: GanttDays
@@ -126,6 +135,42 @@ public enum GanttGeometry {
     private static func monthKey(_ day: Int) -> MonthKey {
         let parts = TaskDayCalendar.utc.dateComponents([.year, .month], from: Date(timeIntervalSince1970: Double(day) * 86_400))
         return MonthKey(year: parts.year ?? 1970, month: (parts.month ?? 1) - 1)
+    }
+
+    /// Chart height: the header and one row per bar, but never shorter than `minimum` (the visible area), so the
+    /// grid and the today line reach the bottom of the screen even with few or no bars.
+    public static func chartHeight(rowCount: Int, minimum: Double) -> Double {
+        max(GanttMetrics.headerHeight + Double(max(rowCount, 0)) * GanttMetrics.rowHeight, minimum)
+    }
+
+    /// Calendar weekday (1 is Sunday) of a day number. Day 0, 1970-01-01, was a Thursday.
+    public static func weekday(of day: Int) -> Int {
+        ((day + 4) % 7 + 7) % 7 + 1
+    }
+
+    /// Header ticks: every day at day zoom, else the first day of each week (`firstWeekday` uses the calendar's
+    /// numbering, 1 for Sunday).
+    public static func dayTicks(
+        low: Int, totalDays: Int, dayWidth: Double, weekly: Bool, firstWeekday: Int = 2
+    ) -> [GanttTick] {
+        guard totalDays > 0 else { return [] }
+        return (0..<totalDays).compactMap { index in
+            let day = low + index
+            let weekday = weekday(of: day)
+            if weekly && weekday != firstWeekday { return nil }
+            let date = Date(timeIntervalSince1970: Double(day) * 86_400)
+            let dayOfMonth = TaskDayCalendar.utc.component(.day, from: date)
+            return GanttTick(
+                day: day, label: String(dayOfMonth), left: Double(index) * dayWidth, isWeekend: weekday == 1 || weekday == 7
+            )
+        }
+    }
+
+    /// The day under an x position in the chart, clamped to the visible range. Used to place a dropped task.
+    public static func day(atX xPosition: Double, range: GanttDayRange, dayWidth: Double) -> Int {
+        guard dayWidth > 0 else { return range.today }
+        let offset = Int((xPosition / dayWidth).rounded(.down))
+        return min(max(range.low + offset, range.low), range.high)
     }
 
     /// Bar geometry for each visible row, so bars and arrows share coordinates.

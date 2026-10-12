@@ -18,14 +18,17 @@ private struct KanbanDropTarget: ViewModifier {
     }
 }
 
-/// One column: header with count and menu, cards, and an inline add box. A filter-mode column is read-only: no
-/// dragging, no add box, no menu.
+/// One column: a quiet header with the count and menu, the cards, then the add row straight after the last card.
+/// The column is as tall as its content and scrolls only when that is taller than the screen. A filter-mode column
+/// is read-only: no dragging, no add row, no menu.
 struct KanbanColumnView: View {
     let services: AppServices
     let view: ViewRecord
     let column: KanbanColumn
     /// Every column of the board, for the cards' "Move to" menu.
     let columns: [KanbanColumn]
+    /// Labels by task local id.
+    let labels: [String: [LabelRecord]]
     let readOnly: Bool
     let onDrop: (String, String?) -> Void
     /// Moves a card to the end of another column (the "Move to" menu).
@@ -36,21 +39,22 @@ struct KanbanColumnView: View {
     @State private var failure: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(column.tasks, id: \.localId) { task in
-                        card(task)
-                    }
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+                ForEach(column.tasks, id: \.localId) { task in
+                    card(task)
                 }
+                if !readOnly { addRow }
             }
-            if !readOnly { addRow }
+            .padding(12)
+            .background(Color(.foreground).opacity(0.05), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.bottom, 12)
         }
-        .padding(8)
-        .frame(width: 300)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(.foreground).opacity(0.06), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
+        // The whole height takes drops, not just the cards, so a short column is still easy to drop on.
+        .contentShape(Rectangle())
         .modifier(KanbanDropTarget(enabled: !readOnly) { taskId in
             onDrop(taskId, nil)
             return true
@@ -64,10 +68,10 @@ struct KanbanColumnView: View {
 
     @ViewBuilder private func card(_ task: TaskRecord) -> some View {
         if readOnly {
-            KanbanCardView(services: services, task: task)
+            KanbanCardView(services: services, task: task, labels: labels[task.localId] ?? [])
         } else {
             KanbanCardView(
-                services: services, task: task,
+                services: services, task: task, labels: labels[task.localId] ?? [],
                 moveTargets: columns.filter { $0.bucket.localId != column.bucket.localId },
                 onMove: { target in onMoveTo(task.localId, target) }
             )
@@ -82,33 +86,38 @@ struct KanbanColumnView: View {
 
     private var addRow: some View {
         HStack(spacing: 8) {
-            Image(systemName: "plus").foregroundStyle(Color(.primary))
+            Image(systemName: "plus").foregroundStyle(Color(.primary)).accessibilityHidden(true)
             TextField("Add task", text: $draft)
-                .font(.subheadline.weight(.medium))
+                .font(Theme.rowSubtitle)
+                .submitLabel(.done)
                 .onSubmit { addTask() }
         }
         .padding(.horizontal, 12)
-        .frame(height: 44)
+        .frame(minHeight: 40)
     }
 
     private var header: some View {
-        HStack {
-            Text(column.bucket.title).font(Theme.headline)
+        HStack(spacing: 6) {
+            Text(column.bucket.title)
+                .font(Theme.rowSubtitle.weight(.semibold))
+                .foregroundStyle(Color(.foreground))
+                .lineLimit(1)
             Text(countText)
-                .font(Theme.chip)
-                .padding(.horizontal, 8)
-                .frame(height: Theme.chipHeight)
-                .background(Color(.foreground).opacity(0.06), in: Capsule())
+                .font(Theme.caption)
+                .monospacedDigit()
                 .foregroundStyle(column.atLimit ? Color(.destructive) : Color(.mutedForeground))
+                .accessibilityLabel(column.atLimit ? "\(countText), full" : "\(column.tasks.count) tasks")
             roleBadge
-            Spacer()
+            Spacer(minLength: 4)
             if !readOnly { columnMenu }
         }
+        .padding(.leading, 4)
+        .frame(minHeight: 32)
     }
 
     private var columnMenu: some View {
         let roles = Kanban.roles(of: column.bucket, in: view)
-        return Menu("Column", systemImage: "ellipsis") {
+        return Menu {
             Button("Edit column", systemImage: "pencil") { onEdit() }
             // The roles are stored by server id, so a column that has not synced yet cannot take one.
             if column.bucket.serverId != nil {
@@ -119,8 +128,14 @@ struct KanbanColumnView: View {
                     onSetRole(.defaultColumn)
                 }
             }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(Theme.rowSubtitle.weight(.semibold))
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(width: 36, height: 32)
+                .contentShape(Rectangle())
         }
-        .labelStyle(.iconOnly)
+        .accessibilityLabel("Column options")
     }
 
     private var countText: String {
@@ -130,10 +145,16 @@ struct KanbanColumnView: View {
     @ViewBuilder private var roleBadge: some View {
         let roles = Kanban.roles(of: column.bucket, in: view)
         if roles.isDone {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(.success)).accessibilityLabel("Done column")
+            Image(systemName: "checkmark.circle.fill")
+                .font(Theme.caption)
+                .foregroundStyle(Color(.success))
+                .accessibilityLabel("Done column")
         }
         if roles.isDefault {
-            Image(systemName: "flag.fill").foregroundStyle(Color(.primary)).accessibilityLabel("Default column")
+            Image(systemName: "flag.fill")
+                .font(Theme.caption)
+                .foregroundStyle(Color(.primary))
+                .accessibilityLabel("Default column")
         }
     }
 

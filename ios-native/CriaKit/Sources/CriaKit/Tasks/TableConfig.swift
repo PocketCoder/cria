@@ -47,6 +47,15 @@ public enum TableSort {
     /// Vikunja's default sort.
     public static let defaultKeys = [TableSortKey(column: .index, direction: .desc)]
 
+    /// The direction a column starts in when picked from the Sort menu: dates and text ascending (soonest, A to Z),
+    /// numbers descending (newest id, highest priority, most done, latest change).
+    public static func defaultDirection(for column: TableViewColumn) -> SortDirection {
+        switch column {
+        case .dueDate, .startDate, .endDate, .title, .project, .done: return .asc
+        case .index, .priority, .percentDone, .updated, .created, .doneAt, .labels, .assignees: return .desc
+        }
+    }
+
     /// Advances a column one step: none, then descending, then ascending, then none. `additive` keeps the other
     /// keys and their priority; otherwise the column becomes the only key.
     public static func cycle(_ keys: [TableSortKey], column: TableViewColumn, additive: Bool) -> [TableSortKey] {
@@ -135,5 +144,57 @@ public enum TableConfigCodec {
                   let direction = SortDirection(rawValue: String(pieces[1])) else { return nil }
             return TableSortKey(column: column, direction: direction)
         }
+    }
+}
+
+/// Cell text for the table view, shared by the wide grid and the compact iPhone rows.
+public enum TableCells {
+    /// Vikunja's priority names, indexed by priority.
+    public static let priorityNames = ["None", "Low", "Medium", "High", "Urgent", "Do now"]
+
+    /// The name for a priority, or nil for none (0) and out-of-range values.
+    public static func priorityName(_ priority: Int) -> String? {
+        guard priority > 0, priority < priorityNames.count else { return nil }
+        return priorityNames[priority]
+    }
+
+    /// Short text for one cell, or nil when the cell is empty. Title, done and labels are drawn as their own
+    /// controls, so they have no text here; assignees are not loaded into table rows.
+    public static func text(
+        _ task: TaskRecord, _ column: TableViewColumn, projectTitle: String?, now: Date, display: DateDisplay = .standard
+    ) -> String? {
+        func date(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let label = DueDates.label(iso, now: now, display: display)
+            return label.isEmpty ? nil : label
+        }
+        switch column {
+        case .index: return task.serverId.map { "#\($0)" }
+        case .project: return projectTitle.flatMap { $0.isEmpty ? nil : $0 }
+        case .priority: return priorityName(task.priority)
+        case .percentDone: return task.percentDone > 0 ? "\(Int((task.percentDone * 100).rounded()))%" : nil
+        case .dueDate: return date(task.dueDate)
+        case .startDate: return date(task.startDate)
+        case .endDate: return date(task.endDate)
+        case .updated: return date(task.updatedAt)
+        case .created: return date(task.createdAt)
+        case .doneAt: return task.done ? date(task.doneAt) : nil
+        case .title, .done, .labels, .assignees: return nil
+        }
+    }
+
+    /// The text for the sort in force, such as "Due Date, earliest first", or nil for no sort.
+    public static func sortSummary(_ keys: [TableSortKey]) -> String? {
+        guard let key = keys.first else { return nil }
+        let order: String
+        switch key.column {
+        case .dueDate, .startDate, .endDate, .updated, .created, .doneAt:
+            order = key.direction == .asc ? "earliest first" : "latest first"
+        case .title, .project:
+            order = key.direction == .asc ? "A to Z" : "Z to A"
+        default:
+            order = key.direction == .asc ? "lowest first" : "highest first"
+        }
+        return "\(key.column.label), \(order)"
     }
 }

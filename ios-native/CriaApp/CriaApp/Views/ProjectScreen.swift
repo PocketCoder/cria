@@ -1,59 +1,59 @@
 import CriaKit
 import SwiftUI
 
-/// A project with its views: a switcher in the toolbar (segmented on wide screens, a menu on iPhone) and the
-/// selected view's content below.
+/// A project with its views: the project's name as a large title, an open count and a row of view pills under
+/// it, then the selected view. List-shaped views carry the header in their scroll content (like Today); the board
+/// and the timeline pin it above.
 struct ProjectScreen: View {
     let services: AppServices
     let projectLocalId: String
     let title: String
-    @State private var live: LiveValue<[ViewRecord]>
+    @State private var live: LiveValue<ProjectScreenData>
     @State private var selectedId: String?
     @State private var managing = false
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(services: AppServices, projectLocalId: String, title: String) {
         self.services = services
         self.projectLocalId = projectLocalId
         self.title = title
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.views, .projects]) { reading in
-                try reading.views(forProject: projectLocalId)
+        _live = State(initialValue: LiveValue(initial: ProjectScreenData()) {
+            observeStore(store, kinds: [.views, .projects, .tasks]) { reading in
+                try ProjectScreenData(
+                    views: reading.views(forProject: projectLocalId),
+                    project: reading.project(localId: projectLocalId),
+                    openCount: reading.tasks(matching: TaskQuery(projectLocalId: projectLocalId, includeDone: false)).count
+                )
             }
         })
     }
 
-    private var views: [ViewRecord] { live.value }
+    private var views: [ViewRecord] { live.value.views }
 
     private var current: ViewRecord? {
         views.first { $0.localId == selectedId } ?? views.first
     }
 
     private var canManage: Bool {
-        let serverId = (try? services.store.project(localId: projectLocalId))?.serverId
-        return ViewManagement.canManageViews(projectServerId: serverId)
+        ViewManagement.canManageViews(projectServerId: live.value.project?.serverId)
+    }
+
+    private var header: ProjectHeader {
+        ProjectHeader(
+            views: views,
+            selectedId: current?.localId,
+            colour: Color(hexString: live.value.project?.hexColor),
+            openCount: live.value.openCount,
+            canManage: canManage,
+            onSelect: { id in withAnimation(.snappy) { selectedId = id } },
+            onManage: { managing = true }
+        )
     }
 
     var body: some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if views.count > 1 {
-                    switcher
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(.grouped))
-                }
-            }
-            .navigationTitle(title)
-            .toolbar {
-                if canManage {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Manage views", systemImage: "rectangle.3.group") { managing = true }
-                    }
-                }
-            }
+            .navigationTitle(live.value.project?.title ?? title)
+            .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $managing) {
                 ManageViewsSheet(services: services, projectLocalId: projectLocalId, views: views) { deletedId in
                     selectedId = ViewManagement.viewAfterDelete(views.map(\.slot), deletedId: deletedId)
@@ -66,45 +66,22 @@ struct ProjectScreen: View {
         if let view = current {
             switch view.viewKind {
             case .kanban:
-                KanbanBoardView(services: services, view: view).id(view.localId)
+                PinnedProjectHeader(header: header) {
+                    KanbanBoardView(services: services, view: view)
+                }
+                .id(view.localId)
             case .table:
-                TableViewScreen(services: services, projectLocalId: projectLocalId).id(view.localId)
+                TableViewScreen(services: services, projectLocalId: projectLocalId, header: header).id(view.localId)
             case .gantt:
-                GanttScreen(services: services, projectLocalId: projectLocalId).id(view.localId)
+                PinnedProjectHeader(header: header) {
+                    GanttScreen(services: services, projectLocalId: projectLocalId)
+                }
+                .id(view.localId)
             case .list:
-                TaskListView(services: services, source: .project(projectLocalId), title: title).id(view.localId)
+                ProjectListView(services: services, projectLocalId: projectLocalId, header: header).id(view.localId)
             }
         } else {
-            TaskListView(services: services, source: .project(projectLocalId), title: title)
-        }
-    }
-
-    private var selection: Binding<String> {
-        Binding(get: { current?.localId ?? "" }, set: { selectedId = $0 })
-    }
-
-    /// Segmented on wide screens; a menu on iPhone, where four or more segment labels would truncate.
-    @ViewBuilder private var switcher: some View {
-        if sizeClass == .compact {
-            Menu {
-                Picker("View", selection: selection) {
-                    ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(current.map { ViewManagement.label($0.slot) } ?? "View")
-                    Image(systemName: "chevron.up.chevron.down").font(.caption)
-                }
-                .frame(maxWidth: .infinity, minHeight: 36)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel("View")
-            .accessibilityValue(current.map { ViewManagement.label($0.slot) } ?? "")
-        } else {
-            Picker("View", selection: selection) {
-                ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
-            }
-            .pickerStyle(.segmented)
+            ProjectListView(services: services, projectLocalId: projectLocalId, header: header)
         }
     }
 }

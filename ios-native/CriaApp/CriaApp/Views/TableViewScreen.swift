@@ -1,21 +1,23 @@
 import CriaKit
 import SwiftUI
 
-/// The table view: a horizontally scrolling grid with sortable headers on wide screens, and the shared task
-/// rows (sorted the same way) on a compact iPhone. Column and sort choices persist like the desktop's.
+/// The table view. On iPhone each task is a row with its title and the chosen columns as chips; on wide screens it
+/// is a horizontally scrolling grid with sortable headers. Both sort from the same Sort menu, and the column and
+/// sort choices persist like the desktop's.
 struct TableViewScreen: View {
     let services: AppServices
     let projectLocalId: String
+    let header: ProjectHeader
     @State private var live: LiveValue<[TaskListItem]>
     @AppStorage("cria.tableViewColumns") private var columnsText = ""
     @AppStorage("cria.tableViewSortBy") private var sortText = ""
     @State private var pickingColumns = false
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dateDisplay) private var dateDisplay
 
-    init(services: AppServices, projectLocalId: String) {
+    init(services: AppServices, projectLocalId: String, header: ProjectHeader) {
         self.services = services
         self.projectLocalId = projectLocalId
+        self.header = header
         let store = services.store
         _live = State(initialValue: LiveValue(initial: []) {
             observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
@@ -27,146 +29,128 @@ struct TableViewScreen: View {
     private var visible: Set<TableViewColumn> { TableConfigCodec.decodeColumns(columnsText) }
     private var sortKeys: [TableSortKey] { TableConfigCodec.decodeSort(sortText) }
 
-    private var rows: [TaskListItem] {
-        let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
-        // The compact list shows no columns, so every column counts for sorting there ("Sort by Priority" must work).
-        let sortable = sizeClass == .compact ? Set(TableViewColumn.allCases) : visible
-        let sorted = TableSort.sorted(live.value.map(\.task), keys: sortKeys, visible: sortable)
-        return sorted.compactMap { byId[$0.localId] }
-    }
-
-    var body: some View {
-        Group {
-            if sizeClass == .compact { compactList } else { grid }
-        }
-        .overlay {
-            if live.value.isEmpty {
-                ContentUnavailableView("No tasks", systemImage: "tablecells", description: Text("Nothing here yet."))
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu("Table options", systemImage: "slider.horizontal.3") {
-                    // The compact list shows no columns, so there is nothing to pick.
-                    if sizeClass != .compact { Button("Columns", systemImage: "tablecells") { pickingColumns = true } }
-                    sortMenu
-                }
-            }
-        }
-        .sheet(isPresented: $pickingColumns) { columnPicker }
-        .task { await live.run() }
-    }
-
-    private var compactList: some View {
-        List(rows, id: \.task.localId) { item in
-            TaskRowLink(services: services, item: item)
-        }
-            .criaSurface()
-    }
-
-    private var grid: some View {
-        ScrollView([.horizontal, .vertical]) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                GridRow {
-                    ForEach(shownColumns, id: \.self) { column in header(column) }
-                }
-                Divider()
-                ForEach(rows, id: \.task.localId) { item in
-                    GridRow {
-                        ForEach(shownColumns, id: \.self) { column in
-                            cell(item, column).frame(minWidth: width(column), alignment: .leading)
-                        }
-                    }
-                }
-            }
-            .padding(16)
-        }
+    /// Every column the user can show. Assignees are left out until table rows load them.
+    private var availableColumns: [TableViewColumn] {
+        TableViewColumn.allCases.filter { $0 != .assignees }
     }
 
     private var shownColumns: [TableViewColumn] {
         availableColumns.filter { visible.contains($0) }
     }
 
-    /// Assignees are left out until table rows load them: the column would always be empty.
-    private var availableColumns: [TableViewColumn] {
-        TableViewColumn.allCases.filter { $0 != .assignees }
+    /// Sorting uses every sortable column, shown or not, so the Sort menu always does something.
+    private var rows: [TaskListItem] {
+        let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
+        let titles = Dictionary(live.value.map { ($0.task.projectLocalId, $0.projectTitle ?? "") }, uniquingKeysWith: { first, _ in first })
+        let sorted = TableSort.sorted(
+            live.value.map(\.task), keys: sortKeys, visible: Set(TableViewColumn.allCases), projectTitle: { titles[$0] ?? "" }
+        )
+        return sorted.compactMap { byId[$0.localId] }
     }
 
-    private func width(_ column: TableViewColumn) -> CGFloat {
-        switch column {
-        case .title: return 240
-        case .index, .done, .priority: return 40
-        default: return 100
+    var body: some View {
+        Group {
+            if sizeClass == .regular {
+                PinnedProjectHeader(header: header) {
+                    TableGridView(
+                        rows: rows, columns: shownColumns, sortKeys: sortKeys,
+                        onHeaderTap: { column in
+                            sortText = TableConfigCodec.encodeSort(TableSort.cycle(sortKeys, column: column, additive: false))
+                        }
+                    )
+                }
+            } else {
+                compactList
+            }
         }
-    }
-
-    private func header(_ column: TableViewColumn) -> some View {
-        let key = sortKeys.first { $0.column == column }
-        return Button {
-            cycle(column)
-        } label: {
-            HStack(spacing: 4) {
-                Text(column.label).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-                if let key {
-                    Image(systemName: key.direction == .asc ? "arrow.up" : "arrow.down").font(Theme.footnote)
+        .overlay {
+            if live.value.isEmpty {
+                ContentUnavailableView {
+                    Label("No tasks yet", systemImage: "tablecells")
+                } description: {
+                    Text("Tap + to add the first one.")
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu("Table options", systemImage: "ellipsis.circle") {
+                    sortControls
+                    Button("Columns", systemImage: "tablecells") { pickingColumns = true }
                 }
             }
         }
-        .buttonStyle(.plain)
-        .disabled(!column.sortable)
-        .frame(minWidth: width(column), alignment: .leading)
+        .sheet(isPresented: $pickingColumns) { columnPicker }
+        .quickAdd(services: services, contextProjectId: projectLocalId)
+        .task { await live.run() }
     }
 
-    @ViewBuilder private func cell(_ item: TaskListItem, _ column: TableViewColumn) -> some View {
-        let task = item.task
-        switch column {
-        case .title:
-            NavigationLink(value: Route.task(task.localId)) {
-                Text(task.title).font(Theme.rowTitle).strikethrough(task.done).foregroundStyle(Color(.foreground))
+    private var compactList: some View {
+        List {
+            Section {} header: { header }
+            if !rows.isEmpty {
+                Section {
+                    ForEach(rows, id: \.task.localId) { item in
+                        TableCompactRow(services: services, item: item, columns: shownColumns)
+                    }
+                } header: {
+                    sortHeader
+                }
             }
-            .buttonStyle(.plain)
-        case .labels:
-            Text(item.labels.map(\.title).joined(separator: ", ")).font(Theme.caption)
-        case .done:
-            Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
-        default:
-            Text(text(for: task, column, projectTitle: item.projectTitle)).font(Theme.caption)
         }
+        .criaSurface()
+        .refreshable { await services.refresh() }
     }
 
-    private func text(for task: TaskRecord, _ column: TableViewColumn, projectTitle: String?) -> String {
-        switch column {
-        case .index: return task.serverId.map { "#\($0)" } ?? "\u{2014}"
-        case .project: return projectTitle ?? ""
-        case .priority: return task.priority > 0 ? String(task.priority) : ""
-        case .percentDone: return "\(Int((task.percentDone * 100).rounded()))%"
-        case .dueDate: return dateText(task.dueDate)
-        case .startDate: return dateText(task.startDate)
-        case .endDate: return dateText(task.endDate)
-        case .updated: return dateText(task.updatedAt)
-        case .created: return dateText(task.createdAt)
-        case .doneAt: return dateText(task.doneAt)
-        case .assignees: return ""
-        case .title, .labels, .done: return ""
+    /// The sort in force, as a menu that changes it.
+    private var sortHeader: some View {
+        Menu {
+            sortControls
+        } label: {
+            Label(TableCells.sortSummary(sortKeys) ?? "Not sorted", systemImage: "arrow.up.arrow.down")
+                .font(Theme.rowSubtitle)
+                .foregroundStyle(Color(.mutedForeground))
         }
+        .textCase(nil)
+        .accessibilityLabel("Sort")
+        .accessibilityValue(TableCells.sortSummary(sortKeys) ?? "Not sorted")
     }
 
-    private func dateText(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        return DueDates.label(iso, now: Date(), display: dateDisplay)
-    }
-
-    private func cycle(_ column: TableViewColumn) {
-        sortText = TableConfigCodec.encodeSort(TableSort.cycle(sortKeys, column: column, additive: false))
-    }
-
-    @ViewBuilder private var sortMenu: some View {
-        Menu("Sort by", systemImage: "arrow.up.arrow.down") {
-            ForEach(TableViewColumn.allCases.filter(\.sortable), id: \.self) { column in
-                Button(column.label) { cycle(column) }
+    @ViewBuilder private var sortControls: some View {
+        Picker("Sort by", selection: sortColumn) {
+            Text("No sort").tag(TableViewColumn?.none)
+            ForEach(availableColumns.filter(\.sortable), id: \.self) { column in
+                Text(column.label).tag(TableViewColumn?.some(column))
             }
-            Button("Clear sort", role: .destructive) { sortText = TableConfigCodec.encodeSort([]) }
         }
+        .pickerStyle(.menu)
+        if !sortKeys.isEmpty {
+            Picker("Order", selection: sortDirection) {
+                Label("Ascending", systemImage: "arrow.up").tag(SortDirection.asc)
+                Label("Descending", systemImage: "arrow.down").tag(SortDirection.desc)
+            }
+        }
+    }
+
+    private var sortColumn: Binding<TableViewColumn?> {
+        Binding(
+            get: { sortKeys.first?.column },
+            set: { column in
+                let keys = column.map { [TableSortKey(column: $0, direction: TableSort.defaultDirection(for: $0))] } ?? []
+                sortText = TableConfigCodec.encodeSort(keys)
+            }
+        )
+    }
+
+    private var sortDirection: Binding<SortDirection> {
+        Binding(
+            get: { sortKeys.first?.direction ?? .asc },
+            set: { direction in
+                guard let column = sortKeys.first?.column else { return }
+                sortText = TableConfigCodec.encodeSort([TableSortKey(column: column, direction: direction)])
+            }
+        )
     }
 
     private var columnPicker: some View {
@@ -177,7 +161,7 @@ struct TableViewScreen: View {
                     set: { isOn in toggle(column, isOn: isOn) }
                 ))
             }
-                .criaSurface()
+            .criaSurface()
             .navigationTitle("Columns")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -190,6 +174,8 @@ struct TableViewScreen: View {
     private func toggle(_ column: TableViewColumn, isOn: Bool) {
         var next = visible
         if isOn { next.insert(column) } else { next.remove(column) }
+        // An empty set would decode back to the defaults, so keep the title at least.
+        if next.isEmpty { next.insert(.title) }
         columnsText = TableConfigCodec.encodeColumns(next)
     }
 }

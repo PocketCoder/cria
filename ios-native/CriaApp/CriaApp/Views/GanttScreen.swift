@@ -2,7 +2,7 @@ import CriaKit
 import SwiftUI
 
 /// The Gantt view: a scrolling timeline with day and week zoom, task bars you drag to change dates, a today
-/// marker and dependency arrows. Tasks with no dates wait in a tray until scheduled.
+/// marker and dependency arrows. Tasks with no dates wait in a tray: tap one to open it, or drag it onto the chart.
 struct GanttScreen: View {
     let services: AppServices
     let projectLocalId: String
@@ -37,23 +37,29 @@ struct GanttScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if datedNodes.isEmpty && datelessNodes.isEmpty {
-                ContentUnavailableView("No tasks", systemImage: "chart.bar.xaxis", description: Text("Nothing here yet."))
+            if shown.nodes.isEmpty {
+                ContentUnavailableView {
+                    Label("No tasks yet", systemImage: "chart.bar.doc.horizontal")
+                } description: {
+                    Text("Tasks with a start and end date or a due date show on the timeline.")
+                }
             } else {
                 GanttChart(
                     services: services, data: shown, nodes: datedNodes, range: shown.dayRange(today: today),
-                    dayWidth: dayWidth
+                    dayWidth: dayWidth, weekZoom: weekZoom
                 )
-                if !datelessNodes.isEmpty { tray }
+                if !datelessNodes.isEmpty {
+                    GanttTray(services: services, nodes: datelessNodes, today: today)
+                }
             }
         }
         .background(Color(.background))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu("Gantt options", systemImage: "slider.horizontal.3") {
+                Menu("Gantt options", systemImage: "ellipsis.circle") {
                     Picker("Zoom", selection: $weekZoom) {
-                        Text("Day").tag(false)
-                        Text("Week").tag(true)
+                        Label("Days", systemImage: "calendar.day.timeline.left").tag(false)
+                        Label("Weeks", systemImage: "calendar").tag(true)
                     }
                     Toggle("Show done", isOn: $showDone)
                 }
@@ -61,121 +67,60 @@ struct GanttScreen: View {
         }
         .task { await live.run() }
     }
-
-    private var tray: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("No dates").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-            ScrollView(.horizontal) {
-                HStack {
-                    ForEach(datelessNodes, id: \.taskLocalId) { node in
-                        Button(node.title) { schedule(node) }
-                            .buttonStyle(.bordered)
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .background(Color(.muted))
-    }
-
-    /// Gives a dateless task a default week starting today.
-    private func schedule(_ node: GanttNode) {
-        let start = today
-        _ = try? services.store.setGanttDates(
-            taskLocalId: node.taskLocalId, start: start, end: start + GanttMetrics.defaultSpanDays - 1
-        )
-    }
 }
 
-/// The timeline itself: header, grid, today line, arrows and bars on one coordinate space.
-struct GanttChart: View {
+/// Tasks with no dates. Tapping one opens it to set dates; dragging one onto the chart schedules it from the day it
+/// lands on.
+struct GanttTray: View {
     let services: AppServices
-    let data: GanttData
     let nodes: [GanttNode]
-    let range: GanttDayRange
-    let dayWidth: Double
-    @State private var drag: GanttDrag?
-    @Environment(NavigationModel.self) private var navigation
-
-    private static let todayId = "gantt-today"
-
-    private var chartWidth: Double { Double(range.totalDays) * dayWidth }
-    private var chartHeight: Double { GanttMetrics.headerHeight + Double(nodes.count) * GanttMetrics.rowHeight }
-
-    private var placements: [GanttPlacement] {
-        GanttGeometry.placements(visible: nodes, range: range, drag: drag, chartWidth: chartWidth, dayWidth: dayWidth)
-    }
+    let today: Int
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView([.horizontal, .vertical]) {
-                ZStack(alignment: .topLeading) {
-                    Canvas { context, _ in
-                        drawBackground(&context)
-                        drawArrows(&context)
-                    }
-                    .frame(width: chartWidth, height: chartHeight)
-                    todayAnchor
-                    ForEach(Array(placements.enumerated()), id: \.element.taskLocalId) { index, place in
-                        GanttBar(
-                            place: place, node: nodes[index], dayWidth: dayWidth, drag: $drag,
-                            onOpen: { navigation.state.push(.task(place.taskLocalId)) },
-                            onCommit: { start, end in
-                                _ = try? services.store.setGanttDates(taskLocalId: place.taskLocalId, start: start, end: end)
-                            }
-                        )
-                        .offset(x: place.left, y: GanttMetrics.headerHeight + place.top)
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("No dates · tap to open, or drag onto the timeline")
+                .font(Theme.caption)
+                .foregroundStyle(Color(.mutedForeground))
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(nodes, id: \.taskLocalId) { node in chip(node) }
                 }
-                .frame(width: chartWidth, height: chartHeight, alignment: .topLeading)
             }
-            // Open on today, not the earliest date. Waiting a tick lets the content lay out first.
-            .task {
-                await Task.yield()
-                proxy.scrollTo(Self.todayId, anchor: UnitPoint(x: 0.5, y: 0))
-            }
-            .onChange(of: dayWidth) { _, _ in
-                proxy.scrollTo(Self.todayId, anchor: UnitPoint(x: 0.5, y: 0))
-            }
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.grouped))
+        .overlay(alignment: .top) { Divider() }
     }
 
-    /// An invisible one-day marker at today's column. Its layout frame (not an offset) is what `scrollTo` uses.
-    private var todayAnchor: some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: Double(range.today - range.low) * dayWidth, height: 1)
-            Color.clear.frame(width: dayWidth, height: 1).id(Self.todayId)
+    private func chip(_ node: GanttNode) -> some View {
+        NavigationLink(value: Route.task(node.taskLocalId)) {
+            Label(node.title, systemImage: "calendar.badge.plus")
+                .font(Theme.rowSubtitle)
+                .lineLimit(1)
+                .foregroundStyle(Color(.foreground))
+                .padding(.horizontal, 12)
+                .frame(minHeight: 36)
+                .background(Color(.cell), in: Capsule())
+                .contentShape(Capsule())
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .buttonStyle(.plain)
+        .draggable(KanbanPayload.make(node.taskLocalId))
+        .contextMenu {
+            Button("Schedule from today", systemImage: "calendar") { schedule(node) }
+        }
+        .accessibilityHint("Opens the task so you can set its dates")
+        .accessibilityAction(named: "Schedule from today") { schedule(node) }
     }
 
-    private func drawBackground(_ context: inout GraphicsContext) {
-        for month in GanttGeometry.monthGroups(low: range.low, totalDays: range.totalDays, dayWidth: dayWidth) {
-            context.draw(Text(month.label).font(Theme.caption), at: CGPoint(x: month.left + 6, y: 12), anchor: .leading)
-            let line = Path(CGRect(x: month.left, y: 0, width: 1, height: chartHeight))
-            context.fill(line, with: .color(.secondary.opacity(0.3)))
-        }
-        let todayX = Double(range.today - range.low) * dayWidth + dayWidth / 2
-        let marker = Path(CGRect(x: todayX - 1, y: 0, width: 2, height: chartHeight))
-        context.fill(marker, with: .color(Color(.primary)))
-    }
-
-    private func drawArrows(_ context: inout GraphicsContext) {
-        let rows = Dictionary(placements.map { ($0.taskLocalId, $0) }, uniquingKeysWith: { first, _ in first })
-        for edge in data.edges {
-            guard let from = rows[edge.fromLocalId], let target = rows[edge.toLocalId] else { continue }
-            var path = Path()
-            let startPoint = CGPoint(x: from.left + from.width, y: GanttMetrics.headerHeight + from.top + from.height / 2)
-            let endPoint = CGPoint(x: target.left, y: GanttMetrics.headerHeight + target.top + target.height / 2)
-            path.move(to: startPoint)
-            path.addCurve(
-                to: endPoint,
-                control1: CGPoint(x: startPoint.x + 20, y: startPoint.y),
-                control2: CGPoint(x: endPoint.x - 20, y: endPoint.y)
-            )
-            context.stroke(path, with: .color(Color(.mutedForeground)), lineWidth: 1.5)
-        }
+    /// Gives a dateless task a default span starting today.
+    private func schedule(_ node: GanttNode) {
+        _ = try? services.store.setGanttDates(
+            taskLocalId: node.taskLocalId, start: today, end: today + GanttMetrics.defaultSpanDays - 1
+        )
     }
 }
 

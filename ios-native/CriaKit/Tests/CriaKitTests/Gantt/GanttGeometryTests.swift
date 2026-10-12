@@ -72,6 +72,43 @@ final class GanttGeometryTests: XCTestCase {
         let narrow = GanttGeometry.placements(visible: nodes, range: range, drag: nil, chartWidth: 150)
         XCTAssertEqual(narrow[0].width, 150 - 2 * GanttMetrics.dayWidth)
     }
+
+    func testChartHeightFillsTheVisibleAreaWhenThereAreFewRows() {
+        // No dated tasks: the chart still fills the screen, so the today line is not a stub under the header.
+        XCTAssertEqual(GanttGeometry.chartHeight(rowCount: 0, minimum: 600), 600)
+        XCTAssertEqual(GanttGeometry.chartHeight(rowCount: 0, minimum: 0), GanttMetrics.headerHeight)
+        let tall = GanttMetrics.headerHeight + 30 * GanttMetrics.rowHeight
+        XCTAssertEqual(GanttGeometry.chartHeight(rowCount: 30, minimum: 600), tall)
+    }
+
+    func testWeekdayOfDayNumbers() {
+        XCTAssertEqual(GanttGeometry.weekday(of: 0), 5) // 1970-01-01, Thursday
+        XCTAssertEqual(GanttGeometry.weekday(of: 3), 1) // Sunday
+        XCTAssertEqual(GanttGeometry.weekday(of: -1), 4) // 1969-12-31, Wednesday
+        let monday = GanttTree.day(fromISO: "2026-10-12T00:00:00Z") ?? 0
+        XCTAssertEqual(GanttGeometry.weekday(of: monday), 2)
+    }
+
+    func testDayTicksLabelEveryDayOrEachWeekStart() {
+        // Day 0 is Thursday 1 January 1970.
+        let daily = GanttGeometry.dayTicks(low: 0, totalDays: 7, dayWidth: 10, weekly: false)
+        XCTAssertEqual(daily.map(\.label), ["1", "2", "3", "4", "5", "6", "7"])
+        XCTAssertEqual(daily.map(\.left), [0, 10, 20, 30, 40, 50, 60])
+        XCTAssertEqual(daily.filter(\.isWeekend).map(\.label), ["3", "4"])
+        let weekly = GanttGeometry.dayTicks(low: 0, totalDays: 14, dayWidth: 10, weekly: true)
+        XCTAssertEqual(weekly.map(\.label), ["5", "12"])
+        XCTAssertEqual(weekly.map(\.left), [40, 110])
+        let sundays = GanttGeometry.dayTicks(low: 0, totalDays: 14, dayWidth: 10, weekly: true, firstWeekday: 1)
+        XCTAssertEqual(sundays.map(\.label), ["4", "11"])
+        XCTAssertTrue(GanttGeometry.dayTicks(low: 0, totalDays: 0, dayWidth: 10, weekly: false).isEmpty)
+    }
+
+    func testDayAtXClampsToTheRange() {
+        XCTAssertEqual(GanttGeometry.day(atX: 0, range: range, dayWidth: 10), 90)
+        XCTAssertEqual(GanttGeometry.day(atX: 39.9, range: range, dayWidth: 10), 93)
+        XCTAssertEqual(GanttGeometry.day(atX: -50, range: range, dayWidth: 10), 90)
+        XCTAssertEqual(GanttGeometry.day(atX: 10_000, range: range, dayWidth: 10), 120)
+    }
 }
 
 final class GanttDataTests: XCTestCase {
@@ -92,5 +129,28 @@ final class GanttDataTests: XCTestCase {
         XCTAssertEqual(GanttTree.day(fromISO: updated.startDate), start)
         XCTAssertEqual(GanttTree.day(fromISO: updated.endDate), start + 4)
         XCTAssertEqual(try outboxEntries(store, entity: "task").count, 1)
+    }
+
+    /// A due date alone puts a task on the chart (a week-long bar ending on the due day), not in the no-dates tray.
+    func testDueDateOnlyTasksAreDrawnNotTrayed() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        for json in [
+            taskJSON(id: 1, title: "Due", dueDate: "2026-10-20T00:00:00Z"),
+            taskJSON(id: 2, title: "Timed", dueDate: "2026-10-21T15:30:00+01:00"),
+            taskJSON(id: 3, title: "Nothing")
+        ] {
+            try store.upsertTaskFromServer(try decodeFixture(TaskResponse.self, json), rawJSON: json)
+        }
+        let data = try store.ganttData(projectLocalId: project, includeDone: false)
+        let dated = GanttTree.visible(data.nodes, collapsed: [], showDateless: false)
+        XCTAssertEqual(dated.map(\.title).sorted(), ["Due", "Timed"])
+        let dueDay = GanttTree.day(fromISO: "2026-10-20T00:00:00Z") ?? 0
+        let range = data.dayRange(today: dueDay - 3)
+        let placements = GanttGeometry.placements(visible: dated, range: range, drag: nil, chartWidth: 100_000)
+        let due = try XCTUnwrap(placements.first { $0.taskLocalId == dated.first { $0.title == "Due" }?.taskLocalId })
+        XCTAssertEqual(due.resolved, GanttDays(start: dueDay - 6, end: dueDay, dateless: false))
+        XCTAssertGreaterThan(due.width, 0)
+        XCTAssertFalse(due.isPlaceholder)
     }
 }

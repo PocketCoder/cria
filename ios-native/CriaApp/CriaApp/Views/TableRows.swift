@@ -1,0 +1,205 @@
+import CriaKit
+import SwiftUI
+
+/// One task on the iPhone table: completion ring, title, then the shown columns as chips.
+struct TableCompactRow: View {
+    let services: AppServices
+    let item: TaskListItem
+    let columns: [TableViewColumn]
+    @Environment(\.dateDisplay) private var dateDisplay
+    @State private var failure: String?
+
+    private var task: TaskRecord { item.task }
+
+    var body: some View {
+        NavigationLink(value: Route.task(task.localId)) {
+            HStack(alignment: .top, spacing: 0) {
+                PriorityCheck(priority: task.priority, isDone: task.done) { toggle() }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(task.title)
+                        .font(Theme.rowTitle)
+                        .strikethrough(task.done)
+                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                        .lineLimit(2)
+                    if hasChips {
+                        ChipFlowLayout { chips }
+                    }
+                }
+                .padding(.vertical, 10)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+        }
+        .swipeActions(edge: .leading) {
+            Button(task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
+                .tint(Color(.meadow500))
+        }
+        .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failure ?? "")
+        }
+    }
+
+    private var chipColumns: [TableViewColumn] {
+        columns.filter { column in
+            switch column {
+            case .title, .done, .assignees: return false
+            case .labels: return !item.labels.isEmpty
+            default: return cellText(column) != nil
+            }
+        }
+    }
+
+    private var hasChips: Bool { !chipColumns.isEmpty }
+
+    @ViewBuilder private var chips: some View {
+        ForEach(chipColumns, id: \.self) { column in
+            if column == .labels {
+                ForEach(item.labels.prefix(3), id: \.localId) { label in
+                    CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
+                }
+            } else if let text = cellText(column) {
+                CriaChip(text: chipText(column, text), systemImage: Self.icon(column), tint: tint(column))
+            }
+        }
+    }
+
+    private func cellText(_ column: TableViewColumn) -> String? {
+        TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay)
+    }
+
+    /// Dates other than the due date say which date they are.
+    private func chipText(_ column: TableViewColumn, _ text: String) -> String {
+        switch column {
+        case .startDate: return "Starts \(text)"
+        case .endDate: return "Ends \(text)"
+        case .updated: return "Updated \(text)"
+        case .created: return "Created \(text)"
+        case .doneAt: return "Done \(text)"
+        default: return text
+        }
+    }
+
+    private func tint(_ column: TableViewColumn) -> Color {
+        switch column {
+        case .dueDate:
+            if let due = task.dueDate, !task.done, DueDates.isOverdue(due, now: Date()) { return Color(.destructive) }
+            return Color(.mutedForeground)
+        case .priority:
+            return ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground)
+        default:
+            return Color(.mutedForeground)
+        }
+    }
+
+    static func icon(_ column: TableViewColumn) -> String? {
+        switch column {
+        case .index: return "number"
+        case .project: return "folder"
+        case .priority: return "flag"
+        case .percentDone: return "chart.pie"
+        case .dueDate, .startDate, .endDate: return "calendar"
+        case .updated, .created: return "clock"
+        case .doneAt: return "checkmark"
+        case .title, .done, .labels, .assignees: return nil
+        }
+    }
+
+    private func toggle() {
+        do {
+            _ = try services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+        } catch {
+            failure = String(describing: error)
+        }
+    }
+}
+
+/// The wide-screen table: a grid with a header row whose titles sort, scrolling both ways.
+struct TableGridView: View {
+    let rows: [TaskListItem]
+    let columns: [TableViewColumn]
+    let sortKeys: [TableSortKey]
+    let onHeaderTap: (TableViewColumn) -> Void
+    @Environment(\.dateDisplay) private var dateDisplay
+
+    var body: some View {
+        ScrollView([.horizontal, .vertical]) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
+                // Padding goes on the cells: a modified GridRow would become one cell spanning the grid.
+                GridRow {
+                    ForEach(columns, id: \.self) { column in header(column).padding(.vertical, 10) }
+                }
+                Divider()
+                ForEach(rows, id: \.task.localId) { item in
+                    GridRow {
+                        ForEach(columns, id: \.self) { column in
+                            cell(item, column)
+                                .frame(minWidth: width(column), alignment: .leading)
+                                .padding(.vertical, 10)
+                        }
+                    }
+                    Divider()
+                }
+            }
+            .padding(.horizontal, 16)
+            .background(Color(.cell), in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+            .padding(16)
+        }
+    }
+
+    private func width(_ column: TableViewColumn) -> CGFloat {
+        switch column {
+        case .title: return 260
+        case .index, .done: return 44
+        case .priority, .percentDone: return 80
+        default: return 110
+        }
+    }
+
+    private func header(_ column: TableViewColumn) -> some View {
+        let key = sortKeys.first { $0.column == column }
+        return Button {
+            onHeaderTap(column)
+        } label: {
+            HStack(spacing: 4) {
+                Text(column.label).font(Theme.caption.weight(.semibold)).foregroundStyle(Color(.mutedForeground))
+                if let key {
+                    Image(systemName: key.direction == .asc ? "arrow.up" : "arrow.down")
+                        .font(Theme.footnote)
+                        .foregroundStyle(Color(.primary))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!column.sortable)
+        .frame(minWidth: width(column), alignment: .leading)
+        .accessibilityValue(key.map { $0.direction == .asc ? "Ascending" : "Descending" } ?? "")
+    }
+
+    @ViewBuilder private func cell(_ item: TaskListItem, _ column: TableViewColumn) -> some View {
+        let task = item.task
+        switch column {
+        case .title:
+            NavigationLink(value: Route.task(task.localId)) {
+                Text(task.title)
+                    .font(Theme.rowTitle)
+                    .strikethrough(task.done)
+                    .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                    .lineLimit(2)
+            }
+            .buttonStyle(.plain)
+        case .labels:
+            Text(item.labels.map(\.title).joined(separator: ", ")).font(Theme.caption).lineLimit(1)
+        case .done:
+            Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(task.done ? Color(.success) : Color(.mutedForeground))
+                .accessibilityLabel(task.done ? "Done" : "Not done")
+        default:
+            Text(TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay) ?? "")
+                .font(Theme.caption)
+                .foregroundStyle(Color(.foreground))
+        }
+    }
+}

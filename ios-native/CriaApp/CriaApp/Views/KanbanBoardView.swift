@@ -17,7 +17,7 @@ enum KanbanPayload {
 struct KanbanBoardView: View {
     let services: AppServices
     let view: ViewRecord
-    @State private var live: LiveValue<[KanbanColumn]>
+    @State private var live: LiveValue<KanbanBoardData>
     @State private var editing: BucketEdit?
     @State private var newBucketTitle = ""
     @State private var addingBucket = false
@@ -29,38 +29,51 @@ struct KanbanBoardView: View {
         self.view = view
         let store = services.store
         let viewId = view.localId
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.tasks, .views, .projects]) { reading in
-                try reading.kanbanColumns(viewLocalId: viewId)
+        _live = State(initialValue: LiveValue(initial: KanbanBoardData()) {
+            observeStore(store, kinds: [.tasks, .views, .projects, .labels]) { (reading: CriaStore) throws -> KanbanBoardData in
+                let columns = try reading.kanbanColumns(viewLocalId: viewId)
+                var labels: [String: [LabelRecord]] = [:]
+                for item in try reading.attachRowData(columns.flatMap(\.tasks)) where !item.labels.isEmpty {
+                    labels[item.task.localId] = item.labels
+                }
+                return KanbanBoardData(columns: columns, labels: labels)
             }
         })
     }
 
+    private var columns: [KanbanColumn] { live.value.columns }
     private var readOnly: Bool { Kanban.isFilterMode(view) }
+
+    /// About 85% of the screen, so the next column peeks in, within 280 to 340 points.
+    private static func columnWidth(_ available: CGFloat) -> CGFloat {
+        min(max(available * 0.85, 280), 340)
+    }
 
     var body: some View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 12) {
-                ForEach(live.value, id: \.bucket.localId) { column in
+                ForEach(columns, id: \.bucket.localId) { column in
                     KanbanColumnView(
                         services: services,
                         view: view,
                         column: column,
-                        columns: live.value,
+                        columns: columns,
+                        labels: live.value.labels,
                         readOnly: readOnly,
                         onDrop: { taskId, beforeId in drop(taskId, into: column, before: beforeId) },
                         onMoveTo: { taskId, target in drop(taskId, into: target, before: nil) },
-                        onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: live.value.count > 1) },
+                        onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: columns.count > 1) },
                         onSetRole: { role in setRole(role, of: column.bucket) }
                     )
+                    .containerRelativeFrame(.horizontal) { length, _ in Self.columnWidth(length) }
                 }
                 if !readOnly { addBucketButton }
             }
             .scrollTargetLayout()
-            .padding(.vertical, 12)
         }
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
+        .scrollIndicators(.hidden)
         .background(Color(.grouped))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if readOnly {
@@ -96,16 +109,25 @@ struct KanbanBoardView: View {
     }
 
     private var addBucketButton: some View {
-        Button("Add column", systemImage: "plus") { addingBucket = true }
-            .buttonStyle(.bordered)
-            .frame(width: 160)
+        Button { addingBucket = true } label: {
+            Label("Add column", systemImage: "plus")
+                .font(Theme.rowSubtitle.weight(.medium))
+                .foregroundStyle(Color(.primary))
+                .padding(.horizontal, 16)
+                .frame(minHeight: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color(.primary).opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func addBucket() {
         let title = newBucketTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         newBucketTitle = ""
         guard !title.isEmpty else { return }
-        let last = live.value.last?.bucket.position ?? 0
+        let last = columns.last?.bucket.position ?? 0
         let input = BucketInput(title: title, viewLocalId: view.localId, position: last + Position.baseStep)
         do {
             _ = try services.store.createBucket(input)
@@ -142,6 +164,12 @@ struct KanbanBoardView: View {
             failure = String(describing: error)
         }
     }
+}
+
+/// The board's columns, plus each card's labels for the chips.
+struct KanbanBoardData: Equatable, Sendable {
+    var columns: [KanbanColumn] = []
+    var labels: [String: [LabelRecord]] = [:]
 }
 
 struct BucketEdit: Identifiable {
