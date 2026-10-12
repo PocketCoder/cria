@@ -67,6 +67,7 @@ struct RootView: View {
             }
             .environment(\.dateDisplay, DateDisplay(dateFormat: preferences.dateFormat, timeFormat: preferences.timeFormat))
             .environment(\.playsCompletionSound, preferences.playSoundWhenDone)
+            .environment(\.preferences, preferences)
             .onReceive(NotificationCenter.default.publisher(for: .criaPreferencesChanged)) { _ in
                 preferences = PreferencesStore().load()
             }

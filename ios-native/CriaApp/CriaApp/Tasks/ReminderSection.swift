@@ -5,19 +5,26 @@ private let presets: [(title: String, period: Int)] = [
     ("At due time", 0), ("5 minutes before", -300), ("1 hour before", -3600), ("1 day before", -86_400)
 ]
 
-/// Reminders for a task. Reminders ride the task update, so each change is queued like any edit. TaskDetailView
-/// observes the reminders and shows failures, so neither hangs off a lazily created row. The date and time pickers
-/// for a custom reminder show only after "Custom…" in the Add menu.
+/// The due date, its repeat and the reminders, together. Reminders ride the task update, so each change is queued
+/// like any edit. TaskDetailView observes the reminders, shows failures and presents the date sheet, so none of
+/// them hangs off a lazily created row. The pickers for a custom reminder show only after "Custom…" in the Add menu.
 struct ReminderSection: View {
     @Environment(\.dateDisplay) private var dateDisplay
     let services: AppServices
     let task: TaskRecord
     let reminders: [ReminderRecord]
     let state: TaskDetailPresentation
+    let onEditDue: () -> Void
+    let applyRepeat: (TaskPatch) -> Void
+    let onCustomRepeat: () -> Void
     @State private var custom: Date?
 
     var body: some View {
-        Section("Reminders") {
+        Section("Due & reminders") {
+            DateValueRow(title: "Due", systemImage: "calendar", iso: task.dueDate, action: onEditDue)
+            if task.dueDate != nil || task.repeatAfter > 0 || task.repeatMode != 0 {
+                RepeatRow(task: task, apply: applyRepeat, onCustom: onCustomRepeat)
+            }
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
             ForEach(Array(reminders.enumerated()), id: \.offset) { _, reminder in
                 Label { Text(reminder.summary(display: dateDisplay)) } icon: { Image(systemName: "bell").foregroundStyle(Color(.coral500)) }

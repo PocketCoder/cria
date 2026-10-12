@@ -42,6 +42,8 @@ public struct LocalPreferences: Equatable, Sendable {
     public var photoLabel: String
     /// "Let Ramble choose projects and labels": the on-device model files and tags each task from the existing names.
     public var rambleChoosesTags: Bool
+    /// Order of the task screen's sections. Follows the account (frontend_settings.cria).
+    public var taskDetailOrder: [TaskDetailSection]
 
     public static let `default` = LocalPreferences()
 
@@ -57,7 +59,8 @@ public struct LocalPreferences: Equatable, Sendable {
         weeklyRoundupTime: String = "09:00",
         photoProjectId: String? = nil,
         photoLabel: String = "shopping",
-        rambleChoosesTags: Bool = false
+        rambleChoosesTags: Bool = false,
+        taskDetailOrder: [TaskDetailSection] = TaskDetailSection.defaultOrder
     ) {
         self.colorScheme = colorScheme
         self.dateFormat = dateFormat
@@ -71,6 +74,7 @@ public struct LocalPreferences: Equatable, Sendable {
         self.photoProjectId = photoProjectId
         self.photoLabel = photoLabel
         self.rambleChoosesTags = rambleChoosesTags
+        self.taskDetailOrder = taskDetailOrder
     }
 
     /// Reads values leniently: a missing or unknown value falls back to the default for that field only.
@@ -99,6 +103,7 @@ public struct LocalPreferences: Equatable, Sendable {
         photoProjectId = text("photoProjectId").flatMap { $0.isEmpty ? nil : $0 }
         photoLabel = text("photoLabel") ?? base.photoLabel
         rambleChoosesTags = flag("rambleChoosesTags", base.rambleChoosesTags)
+        taskDetailOrder = text("taskDetailOrder").map(TaskDetailSection.order(from:)) ?? base.taskDetailOrder
     }
 
     var values: JSONBody {
@@ -113,7 +118,8 @@ public struct LocalPreferences: Equatable, Sendable {
             "weeklyRoundupEnabled": .bool(weeklyRoundupEnabled),
             "weeklyRoundupTime": .string(weeklyRoundupTime),
             "photoLabel": .string(photoLabel),
-            "rambleChoosesTags": .bool(rambleChoosesTags)
+            "rambleChoosesTags": .bool(rambleChoosesTags),
+            "taskDetailOrder": .string(TaskDetailSection.text(of: taskDetailOrder))
         ]
         if let photoProjectId { body["photoProjectId"] = .string(photoProjectId) }
         return body

@@ -3,14 +3,18 @@ import SwiftUI
 
 private let priorityNames = ["None", "Low", "Medium", "High", "Urgent", "Do now"]
 
-/// Project, due date, priority, repeat and progress of a task. `apply` saves a patch and returns false (after
-/// reporting it) when the save failed.
+/// Project, priority and progress of a task. `apply` saves a patch and returns false (after reporting it) when the
+/// save failed.
 struct TaskPropertiesSection: View {
     let task: TaskRecord
     /// Projects the task can move to; includes its current one even when archived.
     let projects: [ProjectRecord]
+    /// Progress follows the subtasks unless set by hand.
+    let hasSubtasks: Bool
     let apply: (TaskPatch) -> Bool
-    let onCustomRepeat: () -> Void
+    let onFollowSubtasks: () -> Void
+    /// Bumped when the hand-set flag changes, so the row re-reads it.
+    @State private var manualRevision = 0
 
     var body: some View {
         Section {
@@ -18,9 +22,6 @@ struct TaskPropertiesSection: View {
                 ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
             } label: {
                 Label("Project", systemImage: "folder")
-            }
-            DateFieldRow(title: "Due", iso: task.dueDate) { value in
-                _ = apply(TaskPatch(dueDate: value))
             }
             Picker(selection: Binding(get: { task.priority }, set: { _ = apply(TaskPatch(priority: $0)) })) {
                 ForEach(priorityNames.indices, id: \.self) { Text(priorityNames[$0]).tag($0) }
@@ -30,13 +31,28 @@ struct TaskPropertiesSection: View {
                         .foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
                 }
             }
-            RepeatRow(task: task, apply: { _ = apply($0) }, onCustom: onCustomRepeat)
-            PercentDoneRow(stored: task.percentDone) { value in
+            PercentDoneRow(stored: task.percentDone, followsSubtasks: followsSubtasks) { value in
                 var patch = TaskPatch()
                 patch.percentDone = value
-                return apply(patch)
+                guard apply(patch) else { return false }
+                // A value set by hand wins over the subtasks until the user hands it back.
+                ProgressOverride.setManual(task.localId, true)
+                manualRevision += 1
+                return true
+            }
+            if hasSubtasks && !followsSubtasks {
+                Button("Follow subtasks", systemImage: "arrow.triangle.branch") {
+                    onFollowSubtasks()
+                    manualRevision += 1
+                }
+                .font(Theme.rowSubtitle)
             }
         }
+    }
+
+    private var followsSubtasks: Bool {
+        _ = manualRevision
+        return hasSubtasks && !ProgressOverride.isManual(task.localId)
     }
 
     private func moveTask(to projectLocalId: String) {
@@ -46,31 +62,40 @@ struct TaskPropertiesSection: View {
     }
 }
 
-/// Start and end dates.
-struct TaskScheduleSection: View {
-    let task: TaskRecord
-    let apply: (TaskPatch) -> Bool
+/// Which date the date sheet is editing.
+enum TaskDateField: String, Identifiable {
+    case due, start, end
+    var id: String { rawValue }
 
-    var body: some View {
-        Section("Schedule") {
-            DateFieldRow(title: "Start", iso: task.startDate) { value in
-                var patch = TaskPatch()
-                patch.startDate = value
-                _ = apply(patch)
-            }
-            DateFieldRow(title: "End", iso: task.endDate) { value in
-                var patch = TaskPatch()
-                patch.endDate = value
-                _ = apply(patch)
-            }
+    var title: String {
+        switch self {
+        case .due: return "Due date"
+        case .start: return "Start date"
+        case .end: return "End date"
         }
     }
 }
 
-/// Progress in 10% steps, as in Vikunja-web. The slider moves a local draft and writes once when the finger lifts;
-/// the draft stays on screen until the stored value catches up, so the thumb never jumps back while the write lands.
+/// Start and end dates, each a one-line row that opens the date sheet.
+struct TaskScheduleSection: View {
+    let task: TaskRecord
+    let onEdit: (TaskDateField) -> Void
+
+    var body: some View {
+        Section("Schedule") {
+            DateValueRow(title: "Start", systemImage: "calendar.badge.clock", iso: task.startDate) { onEdit(.start) }
+            DateValueRow(title: "End", systemImage: "calendar.badge.checkmark", iso: task.endDate) { onEdit(.end) }
+        }
+    }
+}
+
+/// Progress in 10% steps, as in Vikunja-web, on one line. The slider moves a local draft and writes once when the
+/// finger lifts; the draft stays on screen until the stored value catches up, so the thumb never jumps back while the
+/// write lands.
 struct PercentDoneRow: View {
     let stored: Double
+    /// Shows that the value comes from the subtasks.
+    var followsSubtasks = false
     /// Saves the value; false when the save failed.
     let commit: (Double) -> Bool
     @State private var draft: Double?
@@ -78,14 +103,24 @@ struct PercentDoneRow: View {
 
     var body: some View {
         let shown = draft ?? stored
-        VStack(alignment: .leading) {
-            Text("Done: \(Int((shown * 100).rounded()))%").font(Theme.caption)
+        HStack(spacing: 12) {
+            Label { Text("Done") } icon: {
+                Image(systemName: followsSubtasks ? "chart.pie.fill" : "chart.pie")
+                    .foregroundStyle(followsSubtasks ? Color(.primary) : Color(.mutedForeground))
+            }
+            .fixedSize()
+            .accessibilityHidden(true)
             Slider(
                 value: Binding(get: { shown }, set: { draft = Self.snapped($0) }),
                 in: 0...1, step: 0.1,
                 onEditingChanged: finishDrag
             )
+            .accessibilityLabel(followsSubtasks ? "Done, from subtasks" : "Done")
             .accessibilityValue("\(Int((shown * 100).rounded())) percent")
+            Text("\(Int((shown * 100).rounded()))%")
+                .font(Theme.rowSubtitle.monospacedDigit())
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(minWidth: 40, alignment: .trailing)
         }
         .onChange(of: stored) { _, _ in
             // The write landed (or another change arrived): show the stored value again.

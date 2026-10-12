@@ -245,6 +245,7 @@ extension CriaStore {
                 throw CriaStoreError.notFound(localId)
             }
             try connection.enqueue(.task, localId: localId, operation: .update, payload: CriaStore.taskPayload(record), at: now)
+            if patch.done != nil { try CriaStore.refreshParentProgress(connection, childLocalId: localId, now: now) }
             return record
         }
     }
@@ -261,6 +262,7 @@ extension CriaStore {
             )
             guard connection.changesCount > 0 else { return }
             try connection.enqueue(.task, localId: localId, operation: .delete, payload: [:], at: now)
+            try CriaStore.refreshParentProgress(connection, childLocalId: localId, now: now)
             if undoWindow > 0 {
                 try connection.execute(
                     sql: "UPDATE outbox SET next_attempt_at = ? WHERE id = ?",
@@ -290,6 +292,7 @@ extension CriaStore {
             }
             let stillDirty = record.serverId == nil || queued
             try connection.execute(sql: "UPDATE tasks SET dirty = ? WHERE local_id = ?", arguments: [stillDirty, localId])
+            try CriaStore.refreshParentProgress(connection, childLocalId: localId, now: isoNow())
             return true
         }
     }

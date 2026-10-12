@@ -55,6 +55,12 @@ func firstQuickAddDate(in raw: String, avoiding claimed: [Range<Int>], now: Date
     }
 }
 
+/// The date a typed phrase names ("fri 5pm", "next week", "30 May"), as an ISO value the task fields take, or nil
+/// when it names none. The date sheet's "Type a date" field reads through this.
+public func parseDatePhrase(_ text: String, now: Date = Date(), calendar: Calendar = .cria) -> String? {
+    firstQuickAddDate(in: text, avoiding: [], now: now, calendar: calendar)?.iso
+}
+
 private func dateCandidates(_ text: NSString, now: Date, calendar: Calendar) -> [QuickAddDateMatch] {
     guard let regex = RegexCache.regex(datePattern, options: [.caseInsensitive]) else { return [] }
     var found: [QuickAddDateMatch] = []

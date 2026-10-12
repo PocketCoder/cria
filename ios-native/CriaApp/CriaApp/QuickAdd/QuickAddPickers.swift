@@ -12,35 +12,20 @@ enum QuickAddPickerSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
-/// The due date chip: day presets, a full date (and optional time) picker, or no date. `onPick("")` clears it.
-struct QuickAddDateMenu: View {
+/// The due date chip. Tapping opens the date sheet (type a date, presets, calendar, time).
+struct QuickAddDateChip: View {
     let dueISO: String
-    let onPick: (String) -> Void
-    let onCustom: () -> Void
+    let onTap: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
-        Menu {
-            ForEach(QuickAddDatePreset.allCases, id: \.self) { preset in
-                Button(preset.title, systemImage: symbol(preset)) { onPick(preset.iso(now: Date())) }
-            }
-            Button("Pick date…", systemImage: "calendar") { onCustom() }
-            Button("No date", systemImage: "calendar.badge.minus", role: .destructive) { onPick("") }
-        } label: {
+        Button(action: onTap) {
             CriaChip(
-                text: dueISO.isEmpty ? "Due" : DueDates.label(dueISO, now: Date(), display: dateDisplay),
+                text: dueISO.isEmpty ? "Date" : DueDates.label(dueISO, now: Date(), display: dateDisplay),
                 systemImage: "calendar", tint: Color(.sky700)
             )
         }
-    }
-
-    private func symbol(_ preset: QuickAddDatePreset) -> String {
-        switch preset {
-        case .today: return "star"
-        case .tomorrow: return "sunrise"
-        case .thisWeekend: return "sofa"
-        case .nextWeek: return "arrow.forward.circle"
-        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -162,11 +147,7 @@ struct QuickAddPickerSheetView: View {
     var body: some View {
         switch which {
         case .date:
-            QuickAddDateTimeSheet(
-                title: "Due date", initial: dueStart, initiallyTimed: DueDates.hasTimeOfDay(dueISO)
-            ) { date, timed in
-                onDue(timed ? DueDates.timedISO(date) : DueDates.allDayISO(for: date))
-            }
+            DateSheet(title: "Date", iso: dueISO.isEmpty ? nil : dueISO) { iso, _ in onDue(iso) }
         case .labels:
             QuickAddLabelPicker(services: services, selected: $labelTitles)
         case .reminder:
@@ -177,13 +158,6 @@ struct QuickAddPickerSheetView: View {
                 if !reminders.contains(reminder) { reminders.append(reminder) }
             }
         }
-    }
-
-    /// The set due date, else today; an all-day date opens at 09:00 so turning the time on starts somewhere useful.
-    private var dueStart: Date {
-        let day = dueISO.isEmpty ? Date() : DueDates.pickerDate(dueISO) ?? Date()
-        if DueDates.hasTimeOfDay(dueISO) { return day }
-        return Calendar.cria.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
     }
 
     /// An hour before a timed due date when that is still ahead, else the next whole hour.

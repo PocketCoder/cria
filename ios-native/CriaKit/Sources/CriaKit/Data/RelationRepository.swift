@@ -50,6 +50,9 @@ extension CriaStore {
                 payload: ["other_task_local_id": otherTaskLocalId, "kind": kind.rawValue],
                 at: now
             )
+            if kind == .subtask || kind == .parenttask {
+                try CriaStore.refreshParentProgress(connection, childLocalId: kind == .subtask ? otherTaskLocalId : taskLocalId, now: now)
+            }
         }
     }
 
@@ -85,6 +88,11 @@ extension CriaStore {
             payload["other_task_local_id"] = relation.otherTaskLocalId
             payload["other_task_server_id"] = relation.otherTaskServerId
             try connection.enqueue(.taskRelation, localId: taskLocalId, operation: .remove, payload: payload, at: now)
+            // One subtask fewer: the parent's share of done subtasks changes.
+            let parent = kind == .subtask ? taskLocalId : kind == .parenttask ? relation.otherTaskLocalId : nil
+            if let parent, !ProgressOverride.isManual(parent) {
+                try CriaStore.refreshProgress(connection, parentLocalId: parent, now: now)
+            }
         }
     }
 }

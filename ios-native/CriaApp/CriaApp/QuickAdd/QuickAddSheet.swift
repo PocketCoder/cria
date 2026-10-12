@@ -280,7 +280,7 @@ extension QuickAddSheet {
     private var pickers: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                QuickAddDateMenu(dueISO: dueISO, onPick: { setDue($0) }, onCustom: { pickerSheet = .date })
+                QuickAddDateChip(dueISO: dueISO) { pickerSheet = .date }
                 Menu {
                     Picker("Priority", selection: priorityPick) {
                         ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }

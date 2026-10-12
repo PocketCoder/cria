@@ -26,12 +26,14 @@ struct TaskDetailView: View {
     @State private var didLoad = false
     @State private var showLabels = false
     @State private var editingRepeat = false
+    @State private var editingDate: TaskDateField?
     @State private var expandingDescription = false
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
     /// Nil when shown inside a sheet, outside the shell's environment: the delete then goes ahead without Undo.
     @Environment(UndoCenter.self) private var undo: UndoCenter?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.preferences) private var preferences
 
     private enum Field: Hashable { case title }
 
@@ -117,6 +119,9 @@ struct TaskDetailView: View {
                 }
             }
         }
+        .sheet(item: $editingDate) { field in
+            if let task = live.value.task { dateSheet(field, task: task) }
+        }
         .navigationDestination(isPresented: $expandingDescription) {
             DescriptionEditorView(
                 services: services, taskLocalId: taskLocalId, initialHTML: descriptionDraft.baselineHTML
@@ -159,24 +164,10 @@ struct TaskDetailView: View {
                     expandingDescription = true
                 }
             }
-            TaskPropertiesSection(task: task, projects: moveChoices, apply: apply) { editingRepeat = true }
-            TaskScheduleSection(task: task, apply: apply)
-            AssigneesSection(services: services, taskLocalId: taskLocalId, assignees: feeds.assignees.value, state: sheets)
-            Section {
-                FlowLabels(labels: live.value.labels)
-            } header: {
-                HStack {
-                    Text("Labels")
-                    Spacer()
-                    Button("Edit") { showLabels = true }.textCase(nil)
-                }
+            // The order is the user's (Settings > Task layout); the title stays first and Delete last.
+            ForEach(preferences.taskDetailOrder) { kind in
+                section(kind, task: task)
             }
-            AttachmentsSection(
-                services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets
-            )
-            ReminderSection(services: services, task: task, reminders: feeds.reminders.value, state: sheets)
-            RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
-            CommentsSection(services: services, comments: feeds.comments.value, state: sheets)
             Section {
                 // No confirmation: the Undo toast takes the delete back.
                 Button(role: .destructive, action: deleteTask) {
@@ -248,5 +239,71 @@ struct TaskDetailView: View {
             return visible
         }
         return visible + [current]
+    }
+}
+
+extension TaskDetailView {
+    @ViewBuilder
+    fileprivate func section(_ kind: TaskDetailSection, task: TaskRecord) -> some View {
+        switch kind {
+        case .details:
+            TaskPropertiesSection(
+                task: task, projects: moveChoices,
+                hasSubtasks: feeds.relations.value.contains { $0.kind == "subtask" },
+                apply: apply
+            ) {
+                sheets.attempt { try services.store.followSubtaskProgress(taskLocalId: taskLocalId) }
+            }
+        case .when:
+            ReminderSection(
+                services: services, task: task, reminders: feeds.reminders.value, state: sheets,
+                onEditDue: { editingDate = .due }, applyRepeat: { apply($0) }, onCustomRepeat: { editingRepeat = true }
+            )
+        case .schedule:
+            TaskScheduleSection(task: task) { editingDate = $0 }
+        case .subtasks:
+            RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
+        case .labels:
+            Section {
+                FlowLabels(labels: live.value.labels)
+            } header: {
+                HStack {
+                    Text("Labels")
+                    Spacer()
+                    Button("Edit") { showLabels = true }.textCase(nil)
+                }
+            }
+        case .assignees:
+            AssigneesSection(services: services, taskLocalId: taskLocalId, assignees: feeds.assignees.value, state: sheets)
+        case .attachments:
+            AttachmentsSection(
+                services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets
+            )
+        case .comments:
+            CommentsSection(services: services, comments: feeds.comments.value, state: sheets)
+        }
+    }
+
+    /// The date sheet for one field. The due date carries the repeat too, saved in the same patch.
+    fileprivate func dateSheet(_ field: TaskDateField, task: TaskRecord) -> some View {
+        let current: String? = switch field {
+        case .due: task.dueDate
+        case .start: task.startDate
+        case .end: task.endDate
+        }
+        let repeatValue = field == .due ? RepeatValue(after: task.repeatAfter, mode: task.repeatMode) : nil
+        return DateSheet(title: field.title, iso: current, repeatValue: repeatValue) { iso, chosenRepeat in
+            var patch = TaskPatch()
+            switch field {
+            case .due: patch.dueDate = iso
+            case .start: patch.startDate = iso
+            case .end: patch.endDate = iso
+            }
+            if let chosenRepeat, chosenRepeat != repeatValue {
+                patch.repeatAfter = chosenRepeat.after
+                patch.repeatMode = chosenRepeat.mode
+            }
+            apply(patch)
+        }
     }
 }

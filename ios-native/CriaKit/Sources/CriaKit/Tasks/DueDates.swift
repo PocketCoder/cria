@@ -77,6 +77,11 @@ public enum DueDates {
         return format(date, day, calendar: calendar, locale: locale) + " " + time
     }
 
+    /// Time of day alone, in the user's 12 or 24 hour style: "17:30", "5:30 PM".
+    public static func timeLabel(_ date: Date, calendar: Calendar = .cria, display: DateDisplay = .standard) -> String {
+        format(date, display.timePattern, calendar: calendar, locale: calendar.locale ?? .current)
+    }
+
     // MARK: Writing
 
     /// All-day value for the calendar day `date` falls on locally: UTC midnight of that day.

@@ -7,6 +7,8 @@ public enum SyncedPreferences {
     static let dateFormat = "dateFormat"
     static let timeFormat = "timeFormat"
     static let playSound = "playSoundWhenDone"
+    /// Cria-only, so desktop leaves it alone; the iOS task screen reads it.
+    static let taskDetailOrder = "taskDetailOrder"
 
     /// Server values laid over the local prefs. Unknown or missing values leave the local one alone.
     public static func applying(_ cria: JSONBody, to prefs: LocalPreferences) -> LocalPreferences {
@@ -15,6 +17,7 @@ public enum SyncedPreferences {
         if let raw = cria[dateFormat]?.stringValue, let value = DateFormatPreference(rawValue: raw) { next.dateFormat = value }
         if let raw = cria[timeFormat]?.stringValue, let value = TimeFormatPreference(rawValue: raw) { next.timeFormat = value }
         if case .bool(let value)? = cria[playSound] { next.playSoundWhenDone = value }
+        if let raw = cria[taskDetailOrder]?.stringValue { next.taskDetailOrder = TaskDetailSection.order(from: raw) }
         return next
     }
 
@@ -25,6 +28,9 @@ public enum SyncedPreferences {
         if old.dateFormat != new.dateFormat { cria[dateFormat] = .string(new.dateFormat.rawValue) }
         if old.timeFormat != new.timeFormat { cria[timeFormat] = .string(new.timeFormat.rawValue) }
         if old.playSoundWhenDone != new.playSoundWhenDone { cria[playSound] = .bool(new.playSoundWhenDone) }
+        if old.taskDetailOrder != new.taskDetailOrder {
+            cria[taskDetailOrder] = .string(TaskDetailSection.text(of: new.taskDetailOrder))
+        }
         return cria.isEmpty ? nil : SettingsChange(cria: cria)
     }
 }

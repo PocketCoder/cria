@@ -38,7 +38,6 @@ struct DateFieldRow: View {
                     .tint(Color(.primary))
             }
         }
-        .frame(minHeight: 56)
     }
 
     private func removeMenu(current: Date, timed: Bool) -> some View {
