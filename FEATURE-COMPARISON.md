@@ -58,7 +58,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Projects | Project background images | ✅ | Upload + Unsplash + remove (`ProjectBackgroundModal`), shown faintly in the desktop and iPhone headers; cached in the blob store (works offline) |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
 | Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. Per-view settings panel edits the filter and, for boards, bucket mode |
-| Projects | Filter-mode kanban buckets | 🟡 | Configured in the view manager; board renders one read-only column per filter from local data (no drag between buckets). Switching back to manual relies on the next pull to restore buckets |
+| Projects | Filter-mode kanban buckets | ✅ | Configured in the view manager; board renders one read-only column per filter from local data. No drag between buckets, by design: columns are saved searches, as in Vikunja-web. Switching back to manual relies on the next pull to restore buckets |
 
 ### Labels
 
