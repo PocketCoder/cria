@@ -16,6 +16,7 @@ struct ShellView: View {
     @State private var navigation = NavigationModel()
     @State private var addRequest: QuickAddRequest?
     @State private var conflictPrompt = ConflictPrompt()
+    @State private var undoCenter = UndoCenter()
 
     var body: some View {
         // An inset, not a VStack: a view stacked above the TabView kept its navigation bars off the top edge, which
@@ -24,11 +25,14 @@ struct ShellView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 SyncBanner(services: services, conflicts: conflictPrompt)
             }
+            .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
             .environment(navigation)
+            .environment(undoCenter)
             .tint(Color(.primary))
             .onChange(of: pendingURL) { _, _ in openPendingURL() }
             .task { openPendingURL() }
             .task { await conflictPrompt.run(store: services.store) }
+            .task { undoCenter.attach(services) }
             .sheet(item: $addRequest) { request in
                 QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
             }
