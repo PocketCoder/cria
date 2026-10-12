@@ -6,6 +6,7 @@ struct TableCompactRow: View {
     let services: AppServices
     let item: TaskListItem
     let columns: [TableViewColumn]
+    let extras: TableExtras
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.colorScheme) private var colorScheme
     @State private var failure: String?
@@ -52,6 +53,8 @@ struct TableCompactRow: View {
             switch column {
             case .title, .done, .assignees: return false
             case .labels: return !item.labels.isEmpty
+            // No chip for a task with no comments.
+            case .commentCount: return (extras.commentCount(task) ?? 0) > 0
             default: return cellText(column) != nil
             }
         }
@@ -82,7 +85,7 @@ struct TableCompactRow: View {
             switch column {
             case .dueDate: return "due \(text)"
             case .priority: return "\(text) priority"
-            case .startDate, .endDate, .updated, .created, .doneAt: return chipText(column, text)
+            case .startDate, .endDate, .updated, .created, .doneAt, .createdBy, .commentCount: return chipText(column, text)
             default: return "\(column.label) \(text)"
             }
         }
@@ -90,10 +93,10 @@ struct TableCompactRow: View {
     }
 
     private func cellText(_ column: TableViewColumn) -> String? {
-        TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay)
+        TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay, extras: extras)
     }
 
-    /// Dates other than the due date say which date they are.
+    /// Dates other than the due date say which date they are; the creator and comment count say what they are.
     private func chipText(_ column: TableViewColumn, _ text: String) -> String {
         switch column {
         case .startDate: return "Starts \(text)"
@@ -101,6 +104,8 @@ struct TableCompactRow: View {
         case .updated: return "Updated \(text)"
         case .created: return "Created \(text)"
         case .doneAt: return "Done \(text)"
+        case .createdBy: return "By \(text)"
+        case .commentCount: return extras.commentCount(task) == 1 ? "1 comment" : "\(text) comments"
         default: return text
         }
     }
@@ -126,6 +131,8 @@ struct TableCompactRow: View {
         case .dueDate, .startDate, .endDate: return "calendar"
         case .updated, .created: return "clock"
         case .doneAt: return "checkmark"
+        case .createdBy: return "person"
+        case .commentCount: return "bubble.left"
         case .title, .done, .labels, .assignees: return nil
         }
     }
@@ -144,6 +151,7 @@ struct TableGridView: View {
     let rows: [TaskListItem]
     let columns: [TableViewColumn]
     let sortKeys: [TableSortKey]
+    let extras: TableExtras
     let onHeaderTap: (TableViewColumn) -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
@@ -176,7 +184,8 @@ struct TableGridView: View {
         switch column {
         case .title: return 260
         case .index, .done: return 44
-        case .priority, .percentDone: return 80
+        case .priority, .percentDone, .commentCount: return 80
+        case .createdBy: return 130
         default: return 110
         }
     }
@@ -223,6 +232,13 @@ struct TableGridView: View {
             Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(task.done ? Color(.success) : Color(.mutedForeground))
                 .accessibilityLabel(task.done ? "Done" : "Not done")
+        case .createdBy, .commentCount:
+            // Unknown (not yet read from the server) shows a dash rather than a blank that reads as none.
+            let text = TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay, extras: extras)
+            Text(text ?? "–")
+                .font(Theme.caption)
+                .foregroundStyle(text == nil ? Color(.mutedForeground) : Color(.foreground))
+                .accessibilityLabel("\(column.label): \(text ?? "unknown")")
         default:
             let text = TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay)
             Text(text ?? "")

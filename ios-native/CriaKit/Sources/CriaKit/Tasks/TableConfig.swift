@@ -1,10 +1,10 @@
 import Foundation
 
-/// Table view columns, in Vikunja's fixed render order. Ported from `useTableConfig.ts`. Comments and
-/// created-by have no local data, so those columns are omitted.
+/// Table view columns, in Vikunja's fixed render order. Ported from `useTableConfig.ts`, plus the comment count the
+/// desktop leaves out (read from the server while the column is shown, see `TableCommentCounts`).
 public enum TableViewColumn: String, CaseIterable, Sendable {
     case index, done, project, title, priority, labels, assignees
-    case dueDate, startDate, endDate, percentDone, updated, created, doneAt
+    case dueDate, startDate, endDate, percentDone, updated, created, createdBy, doneAt, commentCount
 
     public var label: String {
         switch self {
@@ -21,7 +21,9 @@ public enum TableViewColumn: String, CaseIterable, Sendable {
         case .percentDone: return "% Done"
         case .updated: return "Updated"
         case .created: return "Created"
+        case .createdBy: return "Created By"
         case .doneAt: return "Done At"
+        case .commentCount: return "Comments"
         }
     }
 
@@ -51,8 +53,8 @@ public enum TableSort {
     /// numbers descending (newest id, highest priority, most done, latest change).
     public static func defaultDirection(for column: TableViewColumn) -> SortDirection {
         switch column {
-        case .dueDate, .startDate, .endDate, .title, .project, .done: return .asc
-        case .index, .priority, .percentDone, .updated, .created, .doneAt, .labels, .assignees: return .desc
+        case .dueDate, .startDate, .endDate, .title, .project, .done, .createdBy: return .asc
+        case .index, .priority, .percentDone, .updated, .created, .doneAt, .commentCount, .labels, .assignees: return .desc
         }
     }
 
@@ -81,7 +83,8 @@ public enum TableSort {
 
     /// Stable multi-column sort over sortable, visible columns. Nil values sort last in either direction.
     public static func sorted(
-        _ tasks: [TaskRecord], keys: [TableSortKey], visible: Set<TableViewColumn>, projectTitle: (String) -> String = { _ in "" }
+        _ tasks: [TaskRecord], keys: [TableSortKey], visible: Set<TableViewColumn>,
+        projectTitle: (String) -> String = { _ in "" }, extras: TableExtras = TableExtras()
     ) -> [TaskRecord] {
         let active = keys.filter { $0.column.sortable && visible.contains($0.column) }
         guard !active.isEmpty else { return tasks }
@@ -89,7 +92,7 @@ public enum TableSort {
         let ordered = keyed.sorted { left, right in
             for key in active {
                 let result = SortValue.compare(
-                    value(left.task, key.column, projectTitle), value(right.task, key.column, projectTitle),
+                    value(left.task, key.column, projectTitle, extras), value(right.task, key.column, projectTitle, extras),
                     direction: key.direction
                 )
                 if result != 0 { return result < 0 }
@@ -99,7 +102,9 @@ public enum TableSort {
         return ordered.map(\.task)
     }
 
-    private static func value(_ task: TaskRecord, _ column: TableViewColumn, _ projectTitle: (String) -> String) -> SortValue? {
+    private static func value(
+        _ task: TaskRecord, _ column: TableViewColumn, _ projectTitle: (String) -> String, _ extras: TableExtras
+    ) -> SortValue? {
         switch column {
         case .index: return task.serverId.map { .number(Double($0)) }
         case .done: return .number(task.done ? 1 : 0)
@@ -113,6 +118,8 @@ public enum TableSort {
         case .doneAt: return SortValue.date(task.doneAt)
         case .updated: return SortValue.date(task.updatedAt)
         case .created: return SortValue.date(task.createdAt)
+        case .createdBy: return extras.createdBy(task).map { .text($0.lowercased()) }
+        case .commentCount: return extras.commentCount(task).map { .number(Double($0)) }
         case .labels, .assignees: return nil
         }
     }
@@ -159,9 +166,11 @@ public enum TableCells {
     }
 
     /// Short text for one cell, or nil when the cell is empty. Title, done and labels are drawn as their own
-    /// controls, so they have no text here; assignees are not loaded into table rows.
+    /// controls, so they have no text here; assignees are not loaded into table rows. Creator and comment count come
+    /// from `extras` and are nil while unknown.
     public static func text(
-        _ task: TaskRecord, _ column: TableViewColumn, projectTitle: String?, now: Date, display: DateDisplay = .standard
+        _ task: TaskRecord, _ column: TableViewColumn, projectTitle: String?, now: Date, display: DateDisplay = .standard,
+        extras: TableExtras = TableExtras()
     ) -> String? {
         func date(_ iso: String?) -> String? {
             guard let iso else { return nil }
@@ -179,6 +188,8 @@ public enum TableCells {
         case .updated: return date(task.updatedAt)
         case .created: return date(task.createdAt)
         case .doneAt: return task.done ? date(task.doneAt) : nil
+        case .createdBy: return extras.createdBy(task)
+        case .commentCount: return extras.commentCount(task).map(String.init)
         case .title, .done, .labels, .assignees: return nil
         }
     }
@@ -190,11 +201,36 @@ public enum TableCells {
         switch key.column {
         case .dueDate, .startDate, .endDate, .updated, .created, .doneAt:
             order = key.direction == .asc ? "earliest first" : "latest first"
-        case .title, .project:
+        case .title, .project, .createdBy:
             order = key.direction == .asc ? "A to Z" : "Z to A"
         default:
             order = key.direction == .asc ? "lowest first" : "highest first"
         }
         return "\(key.column.label), \(order)"
+    }
+}
+
+/// Table values that are not on the task row: who the signed-in user is (for "You") and comment counts by task
+/// server id. Empty by default, which leaves both columns unknown.
+public struct TableExtras: Equatable, Sendable {
+    public var currentUserId: Int?
+    public var commentCounts: [Int: Int]
+
+    public init(currentUserId: Int? = nil, commentCounts: [Int: Int] = [:]) {
+        self.currentUserId = currentUserId
+        self.commentCounts = commentCounts
+    }
+
+    /// "You" for the signed-in user, else the creator's display name, username or "#id"; nil when the creator is
+    /// unknown (a task made here and not yet re-read from the server).
+    public func createdBy(_ task: TaskRecord, names: UserNameDirectory = .shared) -> String? {
+        guard let id = task.createdById, id > 0 else { return nil }
+        if id == currentUserId { return "You" }
+        return names.name(for: id) ?? names.username(for: id) ?? "#\(id)"
+    }
+
+    /// The task's comment count, or nil while it is not known.
+    public func commentCount(_ task: TaskRecord) -> Int? {
+        task.serverId.flatMap { commentCounts[$0] }
     }
 }

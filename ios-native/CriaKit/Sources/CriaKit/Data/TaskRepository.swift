@@ -22,6 +22,8 @@ public struct TaskRecord: Equatable, Sendable {
     public internal(set) var repeatMode: Int
     public internal(set) var updatedAt: String
     public internal(set) var createdAt: String?
+    /// The creator's server user id, from the pull. Nil for tasks created here and not yet re-read.
+    public internal(set) var createdById: Int?
 
     init(row: Row) {
         localId = row["local_id"]
@@ -43,6 +45,7 @@ public struct TaskRecord: Equatable, Sendable {
         repeatMode = row["repeat_mode"]
         updatedAt = row["updated_at"]
         createdAt = row["created_at"]
+        createdById = row["created_by_id"]
     }
 }
 
@@ -115,7 +118,7 @@ extension CriaStore {
     static let taskColumns = """
         local_id, server_id, project_local_id, title, description, done, done_at, due_date, \
         start_date, end_date, priority, percent_done, hex_color, position, is_favorite, \
-        repeat_after, repeat_mode, updated_at, created_at
+        repeat_after, repeat_mode, updated_at, created_at, created_by_id
         """
 
     /// Same order as `listTasksForProject` in `src/db/tasks.ts`. Positions are local per view, so no server sort.
@@ -316,7 +319,7 @@ extension CriaStore {
                 payload.dueDate, payload.startDate, payload.endDate, payload.priority ?? 0,
                 payload.percentDone ?? 0, payload.hexColor, payload.position, payload.isFavorite ?? false,
                 payload.repeatAfter ?? 0, payload.repeatMode ?? 0, payload.identifier, payload.updated ?? now,
-                payload.created, payload.createdBy?.id, now, rawJSON, localId
+                payload.created, CriaStore.rememberCreator(payload.createdBy), now, rawJSON, localId
             ]
             try connection.execute(sql: """
                 UPDATE tasks SET project_local_id = ?, title = ?, description = ?, done = ?, done_at = ?,
@@ -328,6 +331,13 @@ extension CriaStore {
                 """, arguments: StatementArguments(arguments))
             return localId
         }
+    }
+
+    /// The creator's id for the row, after noting their name and username for the table's Created By column.
+    static func rememberCreator(_ creator: TaskResponse.CreatedBy?) -> Int? {
+        guard let id = creator?.id else { return nil }
+        UserNameDirectory.shared.remember([(id, creator?.name)], usernames: [(id, creator?.username)])
+        return id
     }
 
     /// Fields compared for conflicts. Mirrors the TypeScript conflict field list for tasks.

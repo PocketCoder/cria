@@ -7,16 +7,22 @@ import SwiftUI
 struct TableViewScreen: View {
     let services: AppServices
     let projectLocalId: String
+    /// The table view being shown, so comment counts read through it. Nil picks the project's table view.
+    let viewLocalId: String?
     let header: ProjectHeader
     @State private var live: LiveValue<[TaskListItem]>
+    @State private var currentUserId: Int?
+    /// Comment counts by task server id, read from the server while the Comments column is shown. Memory only.
+    @State private var commentCounts: [Int: Int] = [:]
     @AppStorage("cria.tableViewColumns") private var columnsText = ""
     @AppStorage("cria.tableViewSortBy") private var sortText = ""
     @State private var pickingColumns = false
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    init(services: AppServices, projectLocalId: String, header: ProjectHeader) {
+    init(services: AppServices, projectLocalId: String, viewLocalId: String? = nil, header: ProjectHeader) {
         self.services = services
         self.projectLocalId = projectLocalId
+        self.viewLocalId = viewLocalId
         self.header = header
         let store = services.store
         _live = State(initialValue: LiveValue(initial: []) {
@@ -28,6 +34,8 @@ struct TableViewScreen: View {
 
     private var visible: Set<TableViewColumn> { TableConfigCodec.decodeColumns(columnsText) }
     private var sortKeys: [TableSortKey] { TableConfigCodec.decodeSort(sortText) }
+    private var extras: TableExtras { TableExtras(currentUserId: currentUserId, commentCounts: commentCounts) }
+    private var showsComments: Bool { visible.contains(.commentCount) }
 
     /// Every column the user can show. Assignees are left out until table rows load them.
     private var availableColumns: [TableViewColumn] {
@@ -43,7 +51,8 @@ struct TableViewScreen: View {
         let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
         let titles = Dictionary(live.value.map { ($0.task.projectLocalId, $0.projectTitle ?? "") }, uniquingKeysWith: { first, _ in first })
         let sorted = TableSort.sorted(
-            live.value.map(\.task), keys: sortKeys, visible: Set(TableViewColumn.allCases), projectTitle: { titles[$0] ?? "" }
+            live.value.map(\.task), keys: sortKeys, visible: Set(TableViewColumn.allCases),
+            projectTitle: { titles[$0] ?? "" }, extras: extras
         )
         return sorted.compactMap { byId[$0.localId] }
     }
@@ -53,7 +62,7 @@ struct TableViewScreen: View {
             if sizeClass == .regular {
                 PinnedProjectHeader(header: header) {
                     TableGridView(
-                        rows: rows, columns: shownColumns, sortKeys: sortKeys,
+                        rows: rows, columns: shownColumns, sortKeys: sortKeys, extras: extras,
                         onHeaderTap: { column in
                             sortText = TableConfigCodec.encodeSort(TableSort.cycle(sortKeys, column: column, additive: false))
                         }
@@ -84,6 +93,16 @@ struct TableViewScreen: View {
         .sheet(isPresented: $pickingColumns) { columnPicker }
         .quickAdd(services: services, contextProjectId: projectLocalId)
         .task { await live.run() }
+        .task { currentUserId = await services.signedInUser()?.id }
+        .task(id: showsComments) { await loadCommentCounts() }
+    }
+
+    /// Reads comment counts in the background while the Comments column is shown; the table never waits on it.
+    private func loadCommentCounts() async {
+        guard showsComments else { return }
+        let result = await services.tableCommentCounts(projectLocalId: projectLocalId, viewLocalId: viewLocalId)
+        guard !Task.isCancelled else { return }
+        commentCounts = result.counts
     }
 
     private var compactList: some View {
@@ -92,7 +111,7 @@ struct TableViewScreen: View {
             if !rows.isEmpty {
                 Section {
                     ForEach(rows, id: \.task.localId) { item in
-                        TableCompactRow(services: services, item: item, columns: shownColumns)
+                        TableCompactRow(services: services, item: item, columns: shownColumns, extras: extras)
                     }
                 } header: {
                     sortHeader
@@ -100,7 +119,10 @@ struct TableViewScreen: View {
             }
         }
         .criaSurface()
-        .refreshable { await services.refresh() }
+        .refreshable {
+            await services.refresh()
+            await loadCommentCounts()
+        }
     }
 
     /// The sort in force, as a menu that changes it.

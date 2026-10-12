@@ -92,7 +92,8 @@ struct ProjectScreen: View {
                 }
                 .id(view.localId)
             case .table:
-                TableViewScreen(services: services, projectLocalId: projectLocalId, header: header).id(view.localId)
+                TableViewScreen(services: services, projectLocalId: projectLocalId, viewLocalId: view.localId, header: header)
+                    .id(view.localId)
             case .gantt:
                 PinnedProjectHeader(header: header) {
                     GanttScreen(services: services, projectLocalId: projectLocalId)

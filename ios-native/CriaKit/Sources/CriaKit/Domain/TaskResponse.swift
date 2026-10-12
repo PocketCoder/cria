@@ -5,6 +5,8 @@ import Foundation
 public struct TaskResponse: Decodable, Equatable, Sendable {
     public struct CreatedBy: Decodable, Equatable, Sendable {
         public let id: Int?
+        public let username: String?
+        public let name: String?
     }
 
     public let id: Int

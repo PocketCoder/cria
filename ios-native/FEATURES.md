@@ -51,7 +51,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Kanban done and default column | Vikunja | Stored on the view. |
 | Kanban for filter views | Vikunja | Read-only by design: each column is a saved search, so a card shows wherever it matches and is not dragged between columns (as in Vikunja-web). |
 | Table view | Vikunja for the tasks | Tap a row to open it; swipe to complete. |
-| Table: visible columns and sort keys | This device | `@AppStorage` (`cria.tableViewColumns`, `cria.tableViewSortBy`), shared by all tables. Comments and created-by columns are not offered. |
+| Table: visible columns and sort keys | This device | `@AppStorage` (`cria.tableViewColumns`, `cria.tableViewSortBy`), shared by all tables. Created By shows You, a name or a username. Comments counts come from the server while online (needs a Vikunja with the `comment_count` expand), else from comments already synced to this phone. |
 | Gantt | Vikunja for dates | Drag a bar or its edges to change start and end; no-date tasks sit in a tray and can be dragged on or scheduled from today. Relation arrows and a today line are drawn. |
 | Gantt: zoom (days or weeks), show done | This device | `@AppStorage` (`cria.gantt.weekZoom`, `cria.gantt.showDone`). |
 

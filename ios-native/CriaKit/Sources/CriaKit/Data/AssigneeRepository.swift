@@ -16,42 +16,65 @@ public struct AssigneeRecord: Equatable, Sendable, Identifiable {
     }
 }
 
-/// Display names of people seen in assignee lists and user searches. The assignee table (shared with the desktop
-/// schema) keeps only the username, so names live here, on this device, keyed by user id.
+/// Display names and usernames of people seen in assignee lists, task creators and user searches. The schema (shared
+/// with the desktop) keeps only an assignee's username, so names live here, on this device, keyed by user id.
 public final class UserNameDirectory: @unchecked Sendable {
     public static let shared = UserNameDirectory()
     private static let key = "cria.userNames"
+    private static let usernameKey = "cria.usernames"
     private let lock = NSLock()
     private var names: [Int: String]
+    private var usernames: [Int: String]
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        let stored = defaults.dictionary(forKey: Self.key) as? [String: String] ?? [:]
-        names = Dictionary(uniqueKeysWithValues: stored.compactMap { key, value in Int(key).map { ($0, value) } })
+        names = Self.load(defaults, key: Self.key)
+        usernames = Self.load(defaults, key: Self.usernameKey)
     }
 
     public func name(for userId: Int) -> String? {
         lock.withLock { names[userId] }
     }
 
-    /// Drops every name, here and on disk (signing out with "delete data").
-    func forget() {
-        lock.withLock { names = [:] }
-        defaults.removeObject(forKey: Self.key)
+    /// The person's username, when one has been seen. Prefer `name(for:)` for display.
+    public func username(for userId: Int) -> String? {
+        lock.withLock { usernames[userId] }
     }
 
-    func remember(_ pairs: [(Int, String?)]) {
-        let changed: [String: String]? = lock.withLock {
-            var dirty = false
-            for (id, name) in pairs {
-                guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty, names[id] != name else { continue }
-                names[id] = name
-                dirty = true
-            }
-            return dirty ? Dictionary(uniqueKeysWithValues: names.map { (String($0.key), $0.value) }) : nil
+    /// Drops every name, here and on disk (signing out with "delete data").
+    func forget() {
+        lock.withLock {
+            names = [:]
+            usernames = [:]
         }
-        if let changed { defaults.set(changed, forKey: Self.key) }
+        defaults.removeObject(forKey: Self.key)
+        defaults.removeObject(forKey: Self.usernameKey)
+    }
+
+    /// Stores display names (and, optionally, usernames) by user id. Nil and blank values are ignored.
+    func remember(_ pairs: [(Int, String?)], usernames usernamePairs: [(Int, String?)] = []) {
+        let changed: (names: [String: String]?, usernames: [String: String]?) = lock.withLock {
+            (Self.merge(pairs, into: &names), Self.merge(usernamePairs, into: &usernames))
+        }
+        if let names = changed.names { defaults.set(names, forKey: Self.key) }
+        if let usernames = changed.usernames { defaults.set(usernames, forKey: Self.usernameKey) }
+    }
+
+    /// Merges `pairs` and returns the whole map in its stored form when anything changed.
+    private static func merge(_ pairs: [(Int, String?)], into map: inout [Int: String]) -> [String: String]? {
+        var dirty = false
+        for (id, value) in pairs {
+            guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty, map[id] != value else { continue }
+            map[id] = value
+            dirty = true
+        }
+        return dirty ? Dictionary(uniqueKeysWithValues: map.map { (String($0.key), $0.value) }) : nil
+    }
+
+    private static func load(_ defaults: UserDefaults, key: String) -> [Int: String] {
+        let stored = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        return Dictionary(uniqueKeysWithValues: stored.compactMap { key, value in Int(key).map { ($0, value) } })
     }
 }
 
