@@ -110,28 +110,30 @@ struct BrowseView: View {
         .sheet(item: $editor) { target in
             ProjectEditorSheet(services: services, target: target, projects: live.value.projects)
         }
-        .confirmationDialog(
+        // Alerts, not confirmation dialogs: on iOS 26 those are popovers, anchored away from the swiped row.
+        .alert(
             "Delete project and its tasks?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
-        ) {
+            presenting: pendingDelete
+        ) { project in
             Button("Delete", role: .destructive) {
-                if let project = pendingDelete {
-                    do {
-                        try services.store.deleteProject(localId: project.localId)
-                    } catch {
-                        fail("Could not delete", error)
-                    }
+                do {
+                    try services.store.deleteProject(localId: project.localId)
+                } catch {
+                    fail("Could not delete", error)
                 }
-                pendingDelete = nil
             }
+            Button("Cancel", role: .cancel) {}
+        } message: { project in
+            Text(project.title)
         }
-        .confirmationDialog(
+        .alert(
             "Delete filter?",
             isPresented: Binding(get: { pendingFilterDelete != nil }, set: { if !$0 { pendingFilterDelete = nil } }),
-            titleVisibility: .visible, presenting: pendingFilterDelete
+            presenting: pendingFilterDelete
         ) { filter in
             Button("Delete", role: .destructive) { Task { await deleteFilter(filter) } }
+            Button("Cancel", role: .cancel) {}
         } message: { filter in
             Text(filter.title)
         }
@@ -192,44 +194,50 @@ struct FilterEditorTarget: Identifiable {
     var id: Int { record?.serverId ?? 0 }
 }
 
+/// A project in the tree. The colour dot sits in the label's icon column, so a root project lines up with Inbox and
+/// Favourites; children indent by depth only. The expand chevron sits at the trailing end.
 struct ProjectRowView: View {
     let row: ProjectTreeRow
     let openCount: Int
     let onToggle: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            if row.hasChildren {
-                Button(action: onToggle) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color(.mutedForeground))
-                        .rotationEffect(.degrees(row.isExpanded ? 90 : 0))
-                        .animation(.spring(duration: 0.24, bounce: 0.25), value: row.isExpanded)
-                        .frame(width: 24, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
-            } else {
-                Spacer().frame(width: 24)
-            }
+        HStack(spacing: 4) {
             NavigationLink(value: Route.project(row.project.localId)) {
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(Color(hexString: row.project.hexColor) ?? Color(.mutedForeground))
-                        .frame(width: 12, height: 12)
-                    Text(row.project.title).font(Theme.rowTitle)
+                HStack(spacing: 8) {
+                    Label {
+                        Text(row.project.title).font(Theme.rowTitle)
+                    } icon: {
+                        Circle()
+                            .fill(Color(hexString: row.project.hexColor) ?? Color(.mutedForeground))
+                            .frame(width: 12, height: 12)
+                    }
                     if row.project.isFavorite {
                         Image(systemName: "star.fill").font(Theme.footnote).foregroundStyle(Color(.warning))
                     }
-                    Spacer()
+                    Spacer(minLength: 0)
                     if openCount > 0 {
                         Text("\(openCount)").font(Theme.rowTitle).foregroundStyle(Color(.mutedForeground))
                     }
                 }
             }
+            if row.hasChildren { toggle }
         }
         .padding(.leading, CGFloat(row.depth) * 22)
+    }
+
+    /// Beside the link, not inside it, so a tap here expands or collapses instead of opening the project.
+    private var toggle: some View {
+        Button(action: onToggle) {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(.mutedForeground))
+                .rotationEffect(.degrees(row.isExpanded ? 180 : 0))
+                .animation(.spring(duration: 0.24, bounce: 0.25), value: row.isExpanded)
+                .frame(width: 32, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(row.isExpanded ? "Collapse \(row.project.title)" : "Expand \(row.project.title)")
     }
 }

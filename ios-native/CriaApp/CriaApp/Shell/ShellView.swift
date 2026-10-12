@@ -18,23 +18,25 @@ struct ShellView: View {
     @State private var conflictPrompt = ConflictPrompt()
 
     var body: some View {
-        VStack(spacing: 0) {
-            SyncBanner(services: services, conflicts: conflictPrompt)
-            tabs
-        }
-        .environment(navigation)
-        .tint(Color(.primary))
-        .onChange(of: pendingURL) { _, _ in openPendingURL() }
-        .task { openPendingURL() }
-        .task { await conflictPrompt.run(store: services.store) }
-        .sheet(item: $addRequest) { request in
-            QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
-        }
-        .sheet(
-            isPresented: $conflictPrompt.isPresented,
-            onDismiss: { conflictPrompt.sheetDismissed() },
-            content: { ConflictSheet(services: services, prompt: conflictPrompt) }
-        )
+        // An inset, not a VStack: a view stacked above the TabView kept its navigation bars off the top edge, which
+        // left an empty band above every large title. An empty banner is zero high, so the inset is zero too.
+        tabs
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SyncBanner(services: services, conflicts: conflictPrompt)
+            }
+            .environment(navigation)
+            .tint(Color(.primary))
+            .onChange(of: pendingURL) { _, _ in openPendingURL() }
+            .task { openPendingURL() }
+            .task { await conflictPrompt.run(store: services.store) }
+            .sheet(item: $addRequest) { request in
+                QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
+            }
+            .sheet(
+                isPresented: $conflictPrompt.isPresented,
+                onDismiss: { conflictPrompt.sheetDismissed() },
+                content: { ConflictSheet(services: services, prompt: conflictPrompt) }
+            )
     }
 
     /// Three tabs plus a search-role tab: on iOS 26 the system detaches Search into its own glass circle. Tab

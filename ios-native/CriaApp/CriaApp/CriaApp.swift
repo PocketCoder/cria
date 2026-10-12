@@ -1,6 +1,7 @@
 import CoreSpotlight
 import CriaKit
 import SwiftUI
+import UIKit
 import UserNotifications
 
 @main
@@ -34,6 +35,7 @@ struct CriaApp: App {
 struct RootView: View {
     let model: AppModel
     @State private var preferences = PreferencesStore().load()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         content
@@ -57,7 +59,12 @@ struct RootView: View {
             } message: {
                 Text(model.wipeError ?? "")
             }
-            .preferredColorScheme(Self.scheme(preferences.colorScheme))
+            // Set on the windows, not with `preferredColorScheme`: going back to System with that left open sheets dark.
+            .onChange(of: preferences.colorScheme, initial: true) { _, scheme in Self.applyInterfaceStyle(scheme) }
+            // A window that was not up yet at the first apply (cold launch) picks it up when the scene activates.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Self.applyInterfaceStyle(preferences.colorScheme) }
+            }
             .environment(\.dateDisplay, DateDisplay(dateFormat: preferences.dateFormat, timeFormat: preferences.timeFormat))
             .environment(\.playsCompletionSound, preferences.playSoundWhenDone)
             .onReceive(NotificationCenter.default.publisher(for: .criaPreferencesChanged)) { _ in
@@ -65,11 +72,17 @@ struct RootView: View {
             }
     }
 
-    private static func scheme(_ preference: ColorSchemePreference) -> ColorScheme? {
-        switch preference {
-        case .system: nil
+    /// Overrides the style of every window, so presented sheets follow too and System really returns to the device's.
+    @MainActor
+    private static func applyInterfaceStyle(_ preference: ColorSchemePreference) {
+        let style: UIUserInterfaceStyle = switch preference {
+        case .system: .unspecified
         case .light: .light
         case .dark: .dark
+        }
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows { window.overrideUserInterfaceStyle = style }
         }
     }
 

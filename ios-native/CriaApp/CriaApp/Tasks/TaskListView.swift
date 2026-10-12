@@ -158,10 +158,12 @@ struct TaskRowLink: View {
                 .frame(width: 360)
                 .background(Color(.cell))
         }
-        .confirmationDialog("Delete task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+        // An alert, not a confirmation dialog: on iOS 26 that is a popover, and from a swipe it pointed away from the row.
+        .alert("Delete task?", isPresented: $confirmingDelete) {
             Button("Delete", role: .destructive) {
                 attempt { try services.store.deleteTask(localId: item.task.localId) }
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(item.task.title)
         }

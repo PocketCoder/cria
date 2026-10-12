@@ -81,12 +81,14 @@ struct SmartViewScreen: View {
         .sheet(isPresented: $addPresented) {
             QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: selectedDay)
         }
-        .confirmationDialog(
+        // An alert, not a confirmation dialog: on iOS 26 that is a popover, anchored away from the header button.
+        .alert(
             rescheduleTitle,
             isPresented: Binding(get: { rescheduling != nil }, set: { if !$0 { rescheduling = nil } }),
-            titleVisibility: .visible, presenting: rescheduling
+            presenting: rescheduling
         ) { group in
             Button("Move to today") { rescheduleOverdue(group) }
+            Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("Tasks with a due time keep it.")
         }

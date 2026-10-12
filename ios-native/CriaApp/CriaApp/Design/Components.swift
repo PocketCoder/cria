@@ -116,27 +116,58 @@ private struct BurstView: View {
     }
 }
 
-/// Floating add button: solid primary circle (glass is reserved for bars and toolbar buttons).
+/// A shortcut offered when the floating add button is pressed and held.
+struct FabMenuItem {
+    let title: String
+    let systemImage: String
+    var isDisabled = false
+    let action: () -> Void
+}
+
+/// Floating add button: solid primary circle (glass is reserved for bars and toolbar buttons). With menu items, a tap
+/// still adds a task and a press and hold offers the items.
 struct CriaFab: View {
     /// Height the button covers above the bottom safe area: 60pt circle plus 16pt padding, and a little air.
     static let clearance: CGFloat = 84
 
     let action: () -> Void
+    var menuItems: [FabMenuItem] = []
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
-                .frame(width: 60, height: 60)
-                .foregroundStyle(Color(.primaryForeground))
-                .background(Color(.primary), in: Circle())
-                .shadow(color: Color(.primary).opacity(0.4), radius: 12, y: 6)
+        Group {
+            if menuItems.isEmpty {
+                Button(action: action) { face }
+                    .buttonStyle(.plain)
+            } else {
+                Menu {
+                    ForEach(menuItems.indices, id: \.self) { index in
+                        let item = menuItems[index]
+                        Button(item.title, systemImage: item.systemImage, action: item.action)
+                            .disabled(item.isDisabled)
+                    }
+                } label: {
+                    face
+                } primaryAction: {
+                    action()
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .accessibilityHint("Touch and hold for more ways to add")
+            }
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("Add task")
         .accessibilityIdentifier("fab.add")
         .padding(.trailing, 21)
         .padding(.bottom, 16)
+    }
+
+    private var face: some View {
+        Image(systemName: "plus")
+            .font(.system(size: 24, weight: .semibold))
+            .frame(width: 60, height: 60)
+            .foregroundStyle(Color(.primaryForeground))
+            .background(Color(.primary), in: Circle())
+            .shadow(color: Color(.primary).opacity(0.4), radius: 12, y: 6)
     }
 }
 
@@ -178,9 +209,9 @@ extension View {
 
     /// FAB pinned bottom-trailing, above the tab bar. For list screens only (not Search or task detail). The extra
     /// bottom margin lets the last row scroll clear of the button.
-    func criaFab(_ action: @escaping () -> Void) -> some View {
+    func criaFab(menu: [FabMenuItem] = [], _ action: @escaping () -> Void) -> some View {
         contentMargins(.bottom, CriaFab.clearance, for: .scrollContent)
-            .overlay(alignment: .bottomTrailing) { CriaFab(action: action) }
+            .overlay(alignment: .bottomTrailing) { CriaFab(action: action, menuItems: menu) }
     }
 
     /// Prominent button: Liquid Glass on iOS 26, filled primary capsule before.

@@ -45,22 +45,25 @@ struct OutboxView: View {
                 Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { syncNow() }
             }
         }
-        .confirmationDialog(
+        // Alerts, not confirmation dialogs: on iOS 26 those are popovers, anchored away from the row or button.
+        .alert(
             "Discard this change?",
             isPresented: Binding(get: { pendingDiscard != nil }, set: { if !$0 { pendingDiscard = nil } }),
-            titleVisibility: .visible,
             presenting: pendingDiscard
         ) { row in
             Button("Discard", role: .destructive) { perform { try services.store.discardOutboxOp(id: row.id) } }
+            Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("It will not be sent to the server. The item on this device stays as it is. Use this when the first "
                  + "change is stuck and holds up the rest.")
         }
-        .confirmationDialog("Retry all failed changes?", isPresented: $confirmRetryAll, titleVisibility: .visible) {
+        .alert("Retry all failed changes?", isPresented: $confirmRetryAll) {
             Button("Retry all") { retryAll() }
+            Button("Cancel", role: .cancel) {}
         }
-        .confirmationDialog("Discard all failed changes?", isPresented: $confirmDiscardAll, titleVisibility: .visible) {
+        .alert("Discard all failed changes?", isPresented: $confirmDiscardAll) {
             Button("Discard all", role: .destructive) { perform { try services.store.clearDeadLetters() } }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("They will not be sent to the server. The items on this device stay as they are.")
         }

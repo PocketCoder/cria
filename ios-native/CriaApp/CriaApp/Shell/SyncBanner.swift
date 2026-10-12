@@ -42,6 +42,11 @@ struct SyncBanner: View {
         .font(Theme.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
+        // Zero high when there is nothing to say, so the shell's top inset adds no space.
+        .padding(.vertical, hasContent ? 6 : 0)
+        .background {
+            if hasContent { Rectangle().fill(.bar).ignoresSafeArea(edges: .top) }
+        }
         .animation(.easeInOut(duration: 0.2), value: layoutKey)
         .task { await followStatus() }
         .task {
@@ -95,6 +100,8 @@ struct SyncBanner: View {
     private var isOffline: Bool {
         !isOnline || (!errors.isEmpty && errors.allSatisfy { isOfflineError(StepFailure(message: $0.message)) })
     }
+
+    private var hasContent: Bool { layoutKey.contains(true) }
 
     private var layoutKey: [Bool] {
         [isOffline, showStep && step != nil, !errors.isEmpty, !conflicts.conflicts.isEmpty && !conflicts.isShowing, failed.value > 0]

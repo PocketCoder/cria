@@ -26,6 +26,9 @@ struct QuickAddSheet: View {
     @State private var labelTitles: [String] = []
     @State private var errorMessage: String?
     @FocusState private var focused: Bool
+    /// Height of the field, chips and hint, so the sheet hugs them above the keyboard.
+    @State private var contentHeight: CGFloat = 260
+    @State private var detent: PresentationDetent = .height(260 + QuickAddSheet.navigationBarAllowance)
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     private var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode) }
@@ -55,6 +58,9 @@ struct QuickAddSheet: View {
                 aiRow
             }
             .padding()
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fitContent($0) }
+            // Pinned to the top: the stack sat centred in the sheet, with empty space above and below.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .navigationTitle("New task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -76,9 +82,22 @@ struct QuickAddSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([fittedDetent, .large], selection: $detent)
         .task { await aiStatus.refresh() }
         .task { await adoptServerDefault() }
+    }
+
+    /// The inline navigation bar and grabber above the content.
+    private static let navigationBarAllowance: CGFloat = 64
+
+    private var fittedDetent: PresentationDetent { .height(contentHeight + Self.navigationBarAllowance) }
+
+    /// Follows the content as chips and the preview come and go, unless the sheet was pulled up to full height.
+    private func fitContent(_ height: CGFloat) {
+        guard height > 0, abs(height - contentHeight) > 1 else { return }
+        let wasFitted = detent != .large
+        contentHeight = height
+        if wasFitted { detent = fittedDetent }
     }
 
     private var hint: some View {
@@ -277,10 +296,12 @@ struct QuickAddButton: ViewModifier {
     let services: AppServices
     var contextProjectId: String?
     @State private var sheet: AddSheet?
+    private var aiStatus: AIStatus { AIStatus.shared }
 
     func body(content: Content) -> some View {
         content
-            .criaFab { sheet = .quickAdd }
+            .criaFab(menu: fabMenu) { sheet = .quickAdd }
+            .task { await aiStatus.refresh() }
             .sheet(item: $sheet) { which in
                 switch which {
                 case .quickAdd:
@@ -294,6 +315,19 @@ struct QuickAddButton: ViewModifier {
                     ShoppingPhotoSheet(services: services)
                 }
             }
+    }
+
+    /// Press and hold on +: the same Ramble and photo sheets as Browse's Add menu, with Ramble only where the on-device
+    /// model is offered.
+    private var fabMenu: [FabMenuItem] {
+        var items: [FabMenuItem] = []
+        if aiStatus.isOfferable {
+            items.append(FabMenuItem(title: "Ramble", systemImage: "waveform", isDisabled: aiStatus.notReadyMessage != nil) {
+                sheet = .ramble
+            })
+        }
+        items.append(FabMenuItem(title: "List from photo", systemImage: "camera") { sheet = .photo })
+        return items
     }
 
     /// Present the next sheet after the current one has gone, or SwiftUI drops the request.

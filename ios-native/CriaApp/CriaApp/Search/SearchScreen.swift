@@ -2,14 +2,18 @@ import CriaKit
 import SwiftUI
 
 /// Search tab: offline results for tasks, projects, labels and saved filters, with the same row actions as lists.
-/// Typing `#label`, `!3` or a date narrows the tasks (see `parseSearchQuery`).
+/// Typing `#label`, `!3`, a date or words like "due tomorrow", "overdue" or "high priority" narrows the tasks (see
+/// `parseSearchQuery`); the filters it found show as chips above the results.
 struct SearchScreen: View {
     let services: AppServices
     @State private var text = ""
     @State private var results = SearchResults()
 
+    @Environment(\.dateDisplay) private var dateDisplay
+
     var body: some View {
         List {
+            filterChips
             if !results.projects.isEmpty {
                 Section("Projects") {
                     ForEach(results.projects, id: \.localId) { project in
@@ -57,9 +61,32 @@ struct SearchScreen: View {
 
     @ViewBuilder private var overlay: some View {
         if text.trimmingCharacters(in: .whitespaces).isEmpty {
-            ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Works offline."))
+            ContentUnavailableView(
+                "Search", systemImage: "magnifyingglass",
+                description: Text("Try ‘due tomorrow’ or ‘overdue high priority’. Works offline.")
+            )
         } else if results.isEmpty {
             ContentUnavailableView.search(text: text)
+        }
+    }
+
+    /// What the query was understood as, so a phrase like "due tomorrow" visibly became a filter.
+    @ViewBuilder private var filterChips: some View {
+        let chips = SearchFilterChips.chips(for: parseSearchQuery(text), display: dateDisplay)
+        if !chips.isEmpty {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(chips) { chip in
+                            CriaChip(text: chip.text, systemImage: chip.systemImage, tint: chip.tint)
+                        }
+                    }
+                }
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Filters: " + chips.map(\.text).joined(separator: ", "))
+            }
         }
     }
 

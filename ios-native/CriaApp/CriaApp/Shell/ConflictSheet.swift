@@ -44,7 +44,8 @@ final class ConflictPrompt {
     }
 }
 
-/// One section per conflict: the task, then each field as "Yours" and "Server", and a choice of one side.
+/// One section per conflict: the whole task side by side, "Yours" (as on this device now) and "Server", with the rows
+/// that differ highlighted, and a choice of one side.
 struct ConflictSheet: View {
     let services: AppServices
     let prompt: ConflictPrompt
@@ -57,6 +58,7 @@ struct ConflictSheet: View {
                 ForEach(prompt.conflicts, id: \.id) { conflict in
                     ConflictSection(
                         conflict: conflict,
+                        current: currentTask(conflict),
                         onKeepMine: { resolve { try services.store.resolveConflictKeepMine(id: conflict.id) } },
                         onUseTheirs: { resolve { try services.store.resolveConflictUseTheirs(id: conflict.id) } }
                     )
@@ -90,6 +92,11 @@ struct ConflictSheet: View {
         }
     }
 
+    private func currentTask(_ conflict: ConflictRecord) -> TaskRecord? {
+        guard conflict.entityType == "task" else { return nil }
+        return try? services.store.task(localId: conflict.entityLocalId)
+    }
+
     private func resolve(_ action: () throws -> Void) {
         do {
             try action()
@@ -101,21 +108,39 @@ struct ConflictSheet: View {
 
 private struct ConflictSection: View {
     let conflict: ConflictRecord
+    /// The task as it is on this device now (`localSnapshot` is the last-synced server copy, not the edit).
+    let current: TaskRecord?
     let onKeepMine: () -> Void
     let onUseTheirs: () -> Void
+    @Environment(\.dateDisplay) private var dateDisplay
+    @ScaledMetric(relativeTo: .footnote) private var labelWidth: CGFloat = 76
+
+    /// Projects and labels keep the per-field diff; only tasks are shown whole.
+    private var yours: ConflictTaskSide? {
+        guard conflict.entityType == "task" else { return nil }
+        return current.map(ConflictTaskSide.init(task:)) ?? ConflictTaskSide(json: conflict.localSnapshot)
+    }
+
+    private var server: ConflictTaskSide? {
+        conflict.entityType == "task" ? ConflictTaskSide(json: conflict.remoteSnapshot) : nil
+    }
 
     var body: some View {
         Section {
             Text(intro)
                 .font(Theme.rowSubtitle)
                 .foregroundStyle(Color(.mutedForeground))
-            ForEach(conflict.diff, id: \.field) { diff in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(diff.label).font(Theme.caption.weight(.semibold))
-                    LabeledContent("Yours", value: diff.local)
-                    LabeledContent("Server", value: diff.remote)
+            if let yours = yours, let server = server {
+                columns(label: "", yours: Text("Yours"), server: Text("Server"))
+                    .font(Theme.caption.weight(.semibold))
+                    .foregroundStyle(Color(.mutedForeground))
+                ForEach(ConflictField.allCases) { field in
+                    fieldRow(field, yours: yours, server: server)
                 }
-                .lineLimit(3)
+            } else {
+                ForEach(conflict.diff, id: \.field) { diff in
+                    columns(label: diff.label, yours: Text(diff.local), server: Text(diff.remote))
+                }
             }
             HStack {
                 Button("Keep mine", action: onKeepMine)
@@ -127,15 +152,48 @@ private struct ConflictSection: View {
         } header: {
             Text(title ?? "Task")
         } footer: {
-            Text("Found \(found)")
+            Text("Highlighted rows differ. Found \(found).")
         }
     }
 
-    /// The task's title as it was on this device.
+    private func fieldRow(_ field: ConflictField, yours: ConflictTaskSide, server: ConflictTaskSide) -> some View {
+        let differs = !yours.matches(server, on: field)
+        let mine = yours.text(field, display: dateDisplay)
+        let theirs = server.text(field, display: dateDisplay)
+        return columns(
+            label: field.label,
+            yours: value(mine, swatch: field == .colour ? yours.swatch : nil),
+            server: value(theirs, swatch: field == .colour ? server.swatch : nil)
+        )
+        .fontWeight(differs ? .semibold : .regular)
+        .listRowBackground(differs ? Color(.warning).opacity(0.16) : nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(field.label): yours \(mine), server \(theirs)\(differs ? ", differs" : "")")
+    }
+
+    private func value(_ text: String, swatch: Color?) -> Text {
+        guard let swatch else { return Text(text) }
+        return Text(Image(systemName: "circle.fill")).foregroundStyle(swatch) + Text(" " + text)
+    }
+
+    private func columns(label: String, yours: Text, server: Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .font(Theme.caption)
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(width: labelWidth, alignment: .leading)
+            yours.frame(maxWidth: .infinity, alignment: .leading)
+            server.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(Theme.rowSubtitle)
+        .lineLimit(4)
+    }
+
+    /// The title as it is on this device.
     private var title: String? {
         let object = try? JSONSerialization.jsonObject(with: Data(conflict.localSnapshot.utf8)) as? [String: Any]
-        let text = (object?["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text?.isEmpty == false ? text : nil
+        let text = (yours?.title ?? (object?["title"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 
     private var intro: AttributedString {
@@ -146,6 +204,6 @@ private struct ConflictSection: View {
 
     private var found: String {
         guard let date = DueDates.parse(conflict.detectedAt) else { return conflict.detectedAt }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return DueDates.fullLabel(date, display: dateDisplay)
     }
 }
