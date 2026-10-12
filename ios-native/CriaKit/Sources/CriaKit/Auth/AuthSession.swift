@@ -20,6 +20,9 @@ public actor AuthSession: SessionProviding {
     private let onSignOut: @Sendable () async -> Void
     private var consecutiveAuthFailures = 0
     private var refreshTask: Task<String?, Never>?
+    /// A refreshed session the Keychain did not take. The server has already rotated the refresh token, so the old
+    /// one on disk is dead: keep retrying the save, or the next cold launch would be signed out.
+    private var unsavedCredentials = false
 
     /// `onSignOut` clears per-user state (cached user row, background cache) once credentials are gone.
     public init(store: CredentialStore = CredentialStore(), core: HTTPCore = HTTPCore(),
@@ -66,12 +69,23 @@ public actor AuthSession: SessionProviding {
         guard case .authenticated(var credentials) = status else { return }
         credentials.token = token
         credentials.refreshToken = refreshToken ?? credentials.refreshToken
-        // In-memory state wins even if the Keychain is briefly unavailable; the next success persists it.
-        try? store.save(credentials)
+        // In-memory state wins even if the Keychain is briefly unavailable; `snapshot()` retries the save.
         status = .authenticated(credentials)
+        persistIfNeeded(force: true)
+    }
+
+    private func persistIfNeeded(force: Bool = false) {
+        guard force || unsavedCredentials, case .authenticated(let credentials) = status else { return }
+        do {
+            try store.save(credentials)
+            unsavedCredentials = false
+        } catch {
+            unsavedCredentials = true
+        }
     }
 
     public func signOut() async {
+        unsavedCredentials = false
         store.clear()
         consecutiveAuthFailures = 0
         status = .unauthenticated
@@ -81,6 +95,7 @@ public actor AuthSession: SessionProviding {
     // MARK: SessionProviding
 
     public func snapshot() -> (serverURL: String, token: String)? {
+        persistIfNeeded()
         guard case .authenticated(let credentials) = status else { return nil }
         return (credentials.serverURL, credentials.token)
     }
