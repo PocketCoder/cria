@@ -6,38 +6,23 @@ private let presets: [(title: String, period: Int)] = [
 ]
 
 /// Reminders and recurrence for a task. Reminders ride the task update, so each change is queued like any edit.
+/// TaskDetailView observes the reminders and shows failures, so neither hangs off a lazily created row.
 struct ReminderSection: View {
     @Environment(\.dateDisplay) private var dateDisplay
     let services: AppServices
     let task: TaskRecord
-    @State private var live: LiveValue<[ReminderRecord]>
+    let reminders: [ReminderRecord]
+    let state: TaskDetailPresentation
     @State private var custom = Date().addingTimeInterval(3600)
-    @State private var failure: String?
-
-    init(services: AppServices, task: TaskRecord) {
-        self.services = services
-        self.task = task
-        let store = services.store
-        let localId = task.localId
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.tasks]) { reading in
-                try reading.reminders(forTask: localId)
-            }
-        })
-    }
 
     var body: some View {
         Section("Reminders") {
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
-            ForEach(Array(live.value.enumerated()), id: \.offset) { _, reminder in
+            ForEach(Array(reminders.enumerated()), id: \.offset) { _, reminder in
                 Label { Text(reminder.summary(display: dateDisplay)) } icon: { Image(systemName: "bell").foregroundStyle(Color(.coral500)) }
                     .swipeActions {
                         Button("Delete", role: .destructive) {
-                            do {
-                                try services.store.removeReminder(taskLocalId: task.localId, reminder)
-                            } catch {
-                                failure = String(describing: error)
-                            }
+                            state.attempt { try services.store.removeReminder(taskLocalId: task.localId, reminder) }
                         }
                     }
             }
@@ -52,33 +37,21 @@ struct ReminderSection: View {
                 Label("Add reminder", systemImage: "bell.badge").foregroundStyle(Color(.primary))
             }
             DatePicker(selection: $custom) { Label("Custom", systemImage: "clock") }
-            // The observer and the alert hang off one row, not the Section: modifiers on a Section inside a Form can
-            // be applied once per row.
             Button { add(ReminderInput(triggerAt: DueDates.timedISO(custom))) } label: {
                 Label("Add custom reminder", systemImage: "plus").foregroundStyle(Color(.primary))
             }
-                .task { await live.run() }
-                .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-                    Button("OK", role: .cancel) {}
-                } message: {
-                    Text(failure ?? "")
-                }
         }
     }
 
     private func add(_ input: ReminderInput) {
-        do {
-            try services.store.addReminder(taskLocalId: task.localId, input)
-        } catch {
-            failure = String(describing: error)
-        }
+        state.attempt { try services.store.addReminder(taskLocalId: task.localId, input) }
     }
 }
 
-/// The Repeat row of task details: `repeat` icon, current value, menu.
+/// The Repeat row of task details: `repeat` icon, current value, menu. `apply` saves the patch and reports failures.
 struct RepeatRow: View {
-    let services: AppServices
     let task: TaskRecord
+    let apply: (TaskPatch) -> Void
 
     var body: some View {
         Picker(selection: Binding<RepeatChoice>(
@@ -98,7 +71,7 @@ struct RepeatRow: View {
         var patch = TaskPatch()
         patch.repeatAfter = choice.repeatAfter
         patch.repeatMode = choice.repeatMode
-        _ = try? services.store.updateTask(localId: task.localId, patch: patch)
+        apply(patch)
     }
 }
 

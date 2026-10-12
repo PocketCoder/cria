@@ -16,6 +16,8 @@ struct BrowseView: View {
     @State private var pendingDelete: ProjectRecord?
     @State private var sharing: ProjectShareTarget?
     @State private var failure: String?
+    @State private var failureTitle = "Could not delete"
+    @State private var pendingFilterDelete: SavedFilterRecord?
     @State private var showRamble = false
     @State private var showPhoto = false
     private var aiStatus: AIStatus { AIStatus.shared }
@@ -42,8 +44,13 @@ struct BrowseView: View {
         do {
             try await services.deleteSavedFilter(serverId: filter.serverId)
         } catch {
-            failure = String(describing: error)
+            fail("Could not delete", error)
         }
+    }
+
+    private func fail(_ title: String, _ error: any Error) {
+        failureTitle = title
+        failure = String(describing: error)
     }
 
     private var collapsed: Set<String> { ProjectTree.decodeCollapsed(collapsedJSON) }
@@ -90,7 +97,7 @@ struct BrowseView: View {
             FilterEditorSheet(services: services, existing: target.record)
         }
         .task { await aiStatus.refresh() }
-        .alert("Could not delete", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+        .alert(failureTitle, isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(failure ?? "")
@@ -109,9 +116,24 @@ struct BrowseView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                if let project = pendingDelete { try? services.store.deleteProject(localId: project.localId) }
+                if let project = pendingDelete {
+                    do {
+                        try services.store.deleteProject(localId: project.localId)
+                    } catch {
+                        fail("Could not delete", error)
+                    }
+                }
                 pendingDelete = nil
             }
+        }
+        .confirmationDialog(
+            "Delete filter?",
+            isPresented: Binding(get: { pendingFilterDelete != nil }, set: { if !$0 { pendingFilterDelete = nil } }),
+            titleVisibility: .visible, presenting: pendingFilterDelete
+        ) { filter in
+            Button("Delete", role: .destructive) { Task { await deleteFilter(filter) } }
+        } message: { filter in
+            Text(filter.title)
         }
         .task { await live.run() }
     }
@@ -126,14 +148,19 @@ extension BrowseView {
                     openCount: live.value.openCounts[row.project.localId] ?? 0,
                     onToggle: { toggle(row.project.localId) }
                 )
-                .swipeActions(edge: .trailing) {
-                    Button("Delete", role: .destructive) { pendingDelete = row.project }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
+                    Button("Delete") { pendingDelete = row.project }.tint(Color(.destructive))
                     Button("Edit") { editor = .edit(row.project) }.tint(Color(.sky500))
                     Button("Share") { sharing = ProjectShareTarget(project: row.project) }.tint(Color(.primary))
                 }
                 .swipeActions(edge: .leading) {
                     Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
-                        try? services.store.setProjectFavorite(localId: row.project.localId, isFavorite: !row.project.isFavorite)
+                        do {
+                            try services.store.setProjectFavorite(localId: row.project.localId, isFavorite: !row.project.isFavorite)
+                        } catch {
+                            fail("Could not save", error)
+                        }
                     }
                     .tint(Color(.marigold500))
                 }
@@ -150,10 +177,8 @@ extension BrowseView {
                             Image(systemName: "line.3.horizontal.decrease.circle").foregroundStyle(Color(.primary))
                         }
                     }
-                    .swipeActions(edge: .trailing) {
-                        Button("Delete", role: .destructive) {
-                            Task { await deleteFilter(filter) }
-                        }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("Delete") { pendingFilterDelete = filter }.tint(Color(.destructive))
                         Button("Edit") { filterEditor = FilterEditorTarget(record: filter) }.tint(Color(.info))
                     }
                 }

@@ -1,13 +1,15 @@
 import CriaKit
 import SwiftUI
 
-/// Small tinted capsule for due date, project and labels: 22pt high, 12pt medium, 13% fill.
+/// Small tinted capsule for due date, project and labels: at least 22pt high (growing with Dynamic Type), 12pt
+/// medium, 13% fill.
 struct CriaChip: View {
     let text: String
     var systemImage: String?
     var dot: Color?
     var tint: Color = Color(.mutedForeground)
     var filled = false
+    @ScaledMetric(relativeTo: .caption) private var minHeight = Theme.chipHeight
 
     var body: some View {
         HStack(spacing: 4) {
@@ -17,7 +19,8 @@ struct CriaChip: View {
         }
         .font(Theme.chip)
         .padding(.horizontal, 8)
-        .frame(height: Theme.chipHeight)
+        .padding(.vertical, 2)
+        .frame(minHeight: minHeight)
         .foregroundStyle(filled ? Color(.primaryForeground) : tint)
         .background(filled ? tint : tint.opacity(0.13), in: Capsule())
     }
@@ -115,6 +118,9 @@ private struct BurstView: View {
 
 /// Floating add button: solid primary circle (glass is reserved for bars and toolbar buttons).
 struct CriaFab: View {
+    /// Height the button covers above the bottom safe area: 60pt circle plus 16pt padding, and a little air.
+    static let clearance: CGFloat = 84
+
     let action: () -> Void
 
     var body: some View {
@@ -170,9 +176,11 @@ extension View {
             .listRowBackground(Color(.cell))
     }
 
-    /// FAB pinned bottom-trailing, above the tab bar. For list screens only (not Search or task detail).
+    /// FAB pinned bottom-trailing, above the tab bar. For list screens only (not Search or task detail). The extra
+    /// bottom margin lets the last row scroll clear of the button.
     func criaFab(_ action: @escaping () -> Void) -> some View {
-        overlay(alignment: .bottomTrailing) { CriaFab(action: action) }
+        contentMargins(.bottom, CriaFab.clearance, for: .scrollContent)
+            .overlay(alignment: .bottomTrailing) { CriaFab(action: action) }
     }
 
     /// Prominent button: Liquid Glass on iOS 26, filled primary capsule before.

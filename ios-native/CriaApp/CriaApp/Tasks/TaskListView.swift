@@ -10,6 +10,7 @@ struct TaskListView: View {
     @AppStorage("cria.taskList.showDone") private var showDone = true
     @AppStorage("cria.taskList.sort") private var sortIndex = 0
     @State private var optimistic = OptimisticOrder()
+    @State private var failure: String?
 
     init(services: AppServices, source: TaskListSource, title: String) {
         self.services = services
@@ -56,8 +57,12 @@ struct TaskListView: View {
         rows.move(fromOffsets: indices, toOffset: destination)
         optimistic.set(rows.map(\.task.localId), over: showDone ? stored : live.value.filter { !$0.task.done }.map(\.task.localId))
         let openIds = rows.filter { !$0.task.done }.map(\.task.localId)
-        guard let viewId = try? services.store.listViewLocalId(projectLocalId: projectId) else { return }
-        try? services.store.applyListReorder(orderedIds: openIds, movedId: moved.localId, viewLocalId: viewId)
+        do {
+            guard let viewId = try services.store.listViewLocalId(projectLocalId: projectId) else { return }
+            try services.store.applyListReorder(orderedIds: openIds, movedId: moved.localId, viewLocalId: viewId)
+        } catch {
+            failure = String(describing: error)
+        }
     }
 
     var body: some View {
@@ -89,6 +94,11 @@ struct TaskListView: View {
             }
         }
         .quickAdd(services: services, contextProjectId: contextProjectId)
+        .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failure ?? "")
+        }
         .task { await live.run() }
     }
 
@@ -112,11 +122,14 @@ struct TaskListView: View {
     }
 }
 
-/// A task row that opens the detail screen, with the shared swipe actions: done, star and delete.
+/// A task row that opens the detail screen, with the shared swipe actions: done, star and delete. Delete asks first
+/// and is never a full swipe; failed writes show an alert.
 struct TaskRowLink: View {
     let services: AppServices
     let item: TaskListItem
     var showProject = false
+    @State private var confirmingDelete = false
+    @State private var failure: String?
 
     var body: some View {
         NavigationLink(value: Route.task(item.task.localId)) {
@@ -126,10 +139,10 @@ struct TaskRowLink: View {
             Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
                 .tint(Color(.meadow500))
         }
-        .swipeActions(edge: .trailing) {
-            Button("Delete", systemImage: "trash", role: .destructive) {
-                try? services.store.deleteTask(localId: item.task.localId)
-            }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
+            Button("Delete", systemImage: "trash") { confirmingDelete = true }
+                .tint(Color(.destructive))
             Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
                 .tint(Color(.marigold500))
         }
@@ -138,28 +151,48 @@ struct TaskRowLink: View {
             Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
             Button("Due tomorrow", systemImage: "sunrise") { dueTomorrow() }
             Divider()
-            Button("Delete", systemImage: "trash", role: .destructive) {
-                try? services.store.deleteTask(localId: item.task.localId)
-            }
+            Button("Delete", systemImage: "trash", role: .destructive) { confirmingDelete = true }
         } preview: {
             TaskRowView(item: item, showProject: true) {}
                 .padding()
                 .frame(width: 360)
                 .background(Color(.cell))
         }
+        .confirmationDialog("Delete task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                attempt { try services.store.deleteTask(localId: item.task.localId) }
+            }
+        } message: {
+            Text(item.task.title)
+        }
+        .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failure ?? "")
+        }
+    }
+
+    private func attempt(_ work: () throws -> Void) {
+        do {
+            try work()
+        } catch {
+            failure = String(describing: error)
+        }
     }
 
     private func toggleStar() {
         let patch = TaskPatch(isFavorite: !item.task.isFavorite)
-        _ = try? services.store.updateTask(localId: item.task.localId, patch: patch)
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
     }
 
     private func dueTomorrow() {
         let day = Calendar.cria.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-        _ = try? services.store.updateTask(localId: item.task.localId, patch: TaskPatch(dueDate: DueDates.allDayISO(for: day)))
+        let patch = TaskPatch(dueDate: DueDates.allDayISO(for: day))
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
     }
 
     private func toggle() {
-        _ = try? services.store.updateTask(localId: item.task.localId, patch: TaskPatch(done: !item.task.done))
+        let patch = TaskPatch(done: !item.task.done)
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
     }
 }

@@ -1,72 +1,44 @@
 import CriaKit
 import PhotosUI
-import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Attachments of a task. Picking a photo or file only queues it locally; the outbox uploads it when online.
+/// Attachments of a task. Picking a photo or file only queues it locally; the outbox uploads it when online. The
+/// pickers, the preview and the delete confirmation are presented by TaskDetailView through `state`.
 struct AttachmentsSection: View {
     let services: AppServices
     let taskLocalId: String
-    @State private var live: LiveValue<[AttachmentRecord]>
-    @State private var photo: PhotosPickerItem?
-    @State private var showFiles = false
-    @State private var showCamera = false
-    @State private var preview: URL?
-    @State private var errorText: String?
+    let attachments: [AttachmentRecord]
+    let state: TaskDetailPresentation
 
-    init(services: AppServices, taskLocalId: String) {
-        self.services = services
-        self.taskLocalId = taskLocalId
-        let store = services.store
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.tasks, .outbox]) { reading in
-                try reading.attachments(forTask: taskLocalId)
-            }
-        })
+    private var actions: AttachmentActions {
+        AttachmentActions(services: services, taskLocalId: taskLocalId, state: state)
     }
 
     var body: some View {
         Section("Attachments") {
-            ForEach(live.value, id: \.localId) { attachment in
+            ForEach(attachments, id: \.localId) { attachment in
                 row(attachment)
             }
-            PhotosPicker(selection: $photo, matching: .images) {
+            Button { state.choosingPhoto = true } label: {
                 Label("Add photo", systemImage: "photo").foregroundStyle(Color(.primary))
             }
-            addFileButton
+            Button { state.choosingFile = true } label: {
+                Label("Add file", systemImage: "paperclip").foregroundStyle(Color(.primary))
+            }
             if CameraPicker.isAvailable {
-                Button("Take photo", systemImage: "camera") { showCamera = true }
+                Button("Take photo", systemImage: "camera") { state.takingPhoto = true }
             }
-            PasteButton(supportedContentTypes: [.image]) { providers in pasteImage(providers) }
-            if let errorText { Text(errorText).font(Theme.caption).foregroundStyle(Color(.destructive)) }
+            PasteButton(supportedContentTypes: [.image]) { providers in actions.pasteImage(providers) }
+            if let errorText = state.attachmentError {
+                Text(errorText).font(Theme.caption).foregroundStyle(Color(.destructive))
+            }
         }
-    }
-
-    /// Everything that presents something, and the observer, hangs off this one row rather than the Section: modifiers
-    /// on a Section inside a Form can be applied once per row.
-    private var addFileButton: some View {
-        Button { showFiles = true } label: {
-            Label("Add file", systemImage: "paperclip").foregroundStyle(Color(.primary))
-        }
-            .task { await live.run() }
-            .onChange(of: photo) { _, item in
-                guard let item else { return }
-                Task { await attachPhoto(item) }
-            }
-            .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in
-                if case .success(let url) = result { attachFile(url) }
-            }
-            .fullScreenCover(isPresented: $showCamera) {
-                CameraPicker { data in queue(name: "camera-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg", data: data) }
-                    .ignoresSafeArea()
-            }
-            .quickLookPreview($preview)
     }
 
     private func row(_ attachment: AttachmentRecord) -> some View {
         Button {
-            open(attachment)
+            actions.open(attachment)
         } label: {
             HStack {
                 Image(systemName: attachment.pending ? "arrow.up.circle" : "doc")
@@ -78,41 +50,55 @@ struct AttachmentsSection: View {
                 }
             }
         }
-        .swipeActions {
-            Button("Delete", role: .destructive) { remove(attachment) }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
+            Button("Delete", systemImage: "trash") { state.deletingAttachment = attachment }
+                .tint(Color(.destructive))
         }
     }
+}
 
-    private func open(_ attachment: AttachmentRecord) {
+/// Attachment work shared by the section rows and the pickers TaskDetailView presents. Errors land in
+/// `state.attachmentError`, shown under the section.
+@MainActor
+struct AttachmentActions {
+    let services: AppServices
+    let taskLocalId: String
+    let state: TaskDetailPresentation
+
+    func open(_ attachment: AttachmentRecord) {
         guard !attachment.pending else { return }
         Task {
             do {
-                preview = try await services.downloadAttachment(attachment)
+                state.preview = try await services.downloadAttachment(attachment)
             } catch {
-                errorText = "Could not open \(attachment.fileName)"
+                state.attachmentError = "Could not open \(attachment.fileName)"
             }
         }
     }
 
-    private func remove(_ attachment: AttachmentRecord) {
+    func remove(_ attachment: AttachmentRecord) {
         Task {
             do {
                 try await services.deleteAttachment(attachment, taskLocalId: taskLocalId)
             } catch {
-                errorText = "Could not delete \(attachment.fileName)"
+                state.attachmentError = "Could not delete \(attachment.fileName)"
             }
         }
     }
 
-    private func attachPhoto(_ item: PhotosPickerItem) async {
-        defer { photo = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+    func attachPhoto(_ item: PhotosPickerItem) async {
+        defer { state.photo = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            state.attachmentError = "Could not read the photo"
+            return
+        }
         let type = item.supportedContentTypes.first
         let name = "photo-\(Int(Date().timeIntervalSince1970)).\(type?.preferredFilenameExtension ?? "jpg")"
         queue(name: name, mime: type?.preferredMIMEType ?? "image/jpeg", data: data)
     }
 
-    private func pasteImage(_ providers: [NSItemProvider]) {
+    func pasteImage(_ providers: [NSItemProvider]) {
         guard let provider = providers.first else { return }
         Task {
             guard let data = await Self.loadImageData(from: provider),
@@ -129,20 +115,23 @@ struct AttachmentsSection: View {
         }
     }
 
-    private func attachFile(_ url: URL) {
+    func attachFile(_ url: URL) {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
+        guard let data = try? Data(contentsOf: url) else {
+            state.attachmentError = "Could not read \(url.lastPathComponent)"
+            return
+        }
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
         queue(name: url.lastPathComponent, mime: mime, data: data)
     }
 
-    private func queue(name: String, mime: String, data: Data) {
+    func queue(name: String, mime: String, data: Data) {
         do {
             try services.attachFile(taskLocalId: taskLocalId, fileName: name, mime: mime, data: data)
-            errorText = nil
+            state.attachmentError = nil
         } catch {
-            errorText = "Could not attach \(name)"
+            state.attachmentError = "Could not attach \(name)"
         }
     }
 }

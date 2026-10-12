@@ -46,6 +46,12 @@ public extension CriaStore {
 
     /// The remembered capture project if it still exists, else the first real project (never Favourites, a saved
     /// filter or an archived project, which the server would reject). Nil with no projects.
+    /// Only the remembered default project, without falling back to the first project.
+    public func rememberedCaptureProjectId(defaults: UserDefaults = CriaPaths.sharedDefaults()) throws -> String? {
+        guard let saved = defaults.string(forKey: Self.capturePrefKey) else { return nil }
+        return ProjectTree.visible(try projects()).contains { $0.localId == saved } ? saved : nil
+    }
+
     public func captureProjectId(defaults: UserDefaults = CriaPaths.sharedDefaults()) throws -> String? {
         let all = ProjectTree.visible(try projects())
         if let saved = defaults.string(forKey: Self.capturePrefKey), all.contains(where: { $0.localId == saved }) { return saved }

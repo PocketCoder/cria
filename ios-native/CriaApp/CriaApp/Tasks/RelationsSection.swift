@@ -8,45 +8,40 @@ private let kindTitles: [String: String] = [
 ]
 
 /// Subtasks, parent and other relations of a task. Add and remove write through the store and queue the server call.
+/// A related task that exists locally opens on tap, as in the web client.
 struct RelationsSection: View {
     let services: AppServices
     let taskLocalId: String
-    @State private var live: LiveValue<[RelationRecord]>
-    @State private var showPicker = false
-
-    init(services: AppServices, taskLocalId: String) {
-        self.services = services
-        self.taskLocalId = taskLocalId
-        let store = services.store
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.tasks]) { reading in
-                try reading.relations(forTask: taskLocalId)
-            }
-        })
-    }
+    let relations: [RelationRecord]
+    let state: TaskDetailPresentation
 
     var body: some View {
         Section("Relations") {
-            ForEach(live.value, id: \.identity) { relation in
-                HStack {
-                    Image(systemName: relation.otherDone ? "checkmark.circle.fill" : "circle")
-                    VStack(alignment: .leading) {
-                        Text(relation.otherTitle)
-                        Text(kindTitles[relation.kind] ?? relation.kind).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            ForEach(relations, id: \.identity) { relation in
+                Group {
+                    if let otherId = relation.otherTaskLocalId {
+                        NavigationLink(value: Route.task(otherId)) { relationLabel(relation) }
+                    } else {
+                        relationLabel(relation)
                     }
                 }
                 .swipeActions {
                     Button("Remove", role: .destructive) {
-                        try? services.store.removeRelation(taskLocalId: taskLocalId, relation: relation)
+                        state.attempt { try services.store.removeRelation(taskLocalId: taskLocalId, relation: relation) }
                     }
                 }
             }
-            // The observer and sheet hang off this one row, not the Section (a Section modifier in a Form can run per row).
-            Button("Add relation", systemImage: "link.badge.plus") { showPicker = true }
-                .task { await live.run() }
-                .sheet(isPresented: $showPicker) {
-                    RelationPickerSheet(services: services, taskLocalId: taskLocalId)
-                }
+            Button("Add relation", systemImage: "link.badge.plus") { state.addingRelation = true }
+        }
+    }
+
+    private func relationLabel(_ relation: RelationRecord) -> some View {
+        HStack {
+            Image(systemName: relation.otherDone ? "checkmark.circle.fill" : "circle")
+            VStack(alignment: .leading) {
+                Text(relation.otherTitle)
+                Text(kindTitles[relation.kind] ?? relation.kind).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
         }
     }
 }
@@ -64,6 +59,7 @@ struct RelationPickerSheet: View {
     @State private var kind = TaskRelationKind.subtask
     @State private var search = ""
     @State private var candidates: [TaskRecord] = []
+    @State private var failure: String?
 
     var body: some View {
         NavigationStack {
@@ -72,10 +68,7 @@ struct RelationPickerSheet: View {
                     ForEach(TaskRelationKind.pickable, id: \.self) { Text(kindTitles[$0.rawValue] ?? $0.rawValue).tag($0) }
                 }
                 ForEach(filtered, id: \.localId) { task in
-                    Button(task.title) {
-                        try? services.store.addRelation(taskLocalId: taskLocalId, otherTaskLocalId: task.localId, kind: kind)
-                        dismiss()
-                    }
+                    Button(task.title) { add(task) }
                 }
             }
                 .criaSurface()
@@ -84,6 +77,20 @@ struct RelationPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .task { candidates = (try? services.store.tasks(matching: TaskQuery(includeDone: false))) ?? [] }
+            .alert("Could not add relation", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(failure ?? "")
+            }
+        }
+    }
+
+    private func add(_ task: TaskRecord) {
+        do {
+            try services.store.addRelation(taskLocalId: taskLocalId, otherTaskLocalId: task.localId, kind: kind)
+            dismiss()
+        } catch {
+            failure = String(describing: error)
         }
     }
 

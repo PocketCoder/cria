@@ -6,6 +6,8 @@ struct TaskDetailData: Equatable, Sendable {
     var labels: [LabelRecord] = []
     var allLabels: [LabelRecord] = []
     var projects: [ProjectRecord] = []
+    /// The task's own project, even when archived (the visible list leaves it out).
+    var currentProject: ProjectRecord?
 }
 
 private let priorityNames = ["None", "Low", "Medium", "High", "Urgent", "Do now"]
@@ -16,12 +18,13 @@ struct TaskDetailView: View {
     let services: AppServices
     let taskLocalId: String
     @State private var live: LiveValue<TaskDetailData>
+    @State private var feeds: TaskDetailFeeds
+    @State private var sheets = TaskDetailPresentation()
     @State private var title = ""
     /// The title as last loaded from the store. Only a difference from this is the user's edit, so a title that
     /// changed elsewhere (another device, a pull) is never written back over.
     @State private var loadedTitle = ""
     @State private var percentDraft: Double?
-    @State private var saveError: String?
     @State private var didLoad = false
     @State private var showLabels = false
     @FocusState private var focus: Field?
@@ -35,14 +38,18 @@ struct TaskDetailView: View {
         let store = services.store
         _live = State(initialValue: LiveValue(initial: TaskDetailData()) {
             observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
-                TaskDetailData(
-                    task: try reading.task(localId: taskLocalId),
+                let task = try reading.task(localId: taskLocalId)
+                let all = try reading.projects()
+                return TaskDetailData(
+                    task: task,
                     labels: try reading.labels(forTask: taskLocalId),
                     allLabels: try reading.labels(),
-                    projects: ProjectTree.visible(try reading.projects())
+                    projects: ProjectTree.visible(all),
+                    currentProject: all.first { $0.localId == task?.projectLocalId }
                 )
             }
         })
+        _feeds = State(initialValue: TaskDetailFeeds(store: store, taskLocalId: taskLocalId))
     }
 
     var body: some View {
@@ -53,7 +60,7 @@ struct TaskDetailView: View {
                 ContentUnavailableView("Task not found", systemImage: "questionmark.circle")
             }
         }
-        .navigationTitle(projectTitle)
+        .navigationTitle(live.value.currentProject?.title ?? "Task")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let task = live.value.task {
@@ -65,24 +72,24 @@ struct TaskDetailView: View {
                 }
             }
         }
+        // The section feeds run here, not on a Form row, so they keep updating whichever rows are on screen.
         .task { await live.run() }
+        .task { await feeds.comments.run() }
+        .task { await feeds.attachments.run() }
+        .task { await feeds.relations.run() }
+        .task { await feeds.reminders.run() }
+        .task { await AIStatus.shared.refresh() }
+        // The periodic pull does not fetch comments: read this task's thread once when the screen opens.
+        .task { await services.refreshTaskDetail(localId: taskLocalId) }
         .onChange(of: live.value.task?.localId, initial: true) { _, _ in loadDrafts() }
         .onChange(of: focus) { _, _ in saveText() }
         .onChange(of: live.value.task?.title) { _, newTitle in followServerTitle(newTitle) }
         .onDisappear(perform: saveText)
-        .alert("Could not save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(saveError ?? "")
-        }
         .sheet(isPresented: $showLabels) {
             LabelPickerSheet(services: services, taskLocalId: taskLocalId, selected: live.value.labels, all: live.value.allLabels)
         }
-    }
-
-    private var projectTitle: String {
-        guard let task = live.value.task else { return "Task" }
-        return live.value.projects.first { $0.localId == task.projectLocalId }?.title ?? "Task"
+        .modifier(TaskDetailSheets(services: services, taskLocalId: taskLocalId, state: sheets))
+        .modifier(TaskDetailDialogs(services: services, taskLocalId: taskLocalId, state: sheets, onDeleteTask: deleteTask))
     }
 
     private func form(_ task: TaskRecord) -> some View {
@@ -116,27 +123,31 @@ struct TaskDetailView: View {
                     Button("Edit") { showLabels = true }.textCase(nil)
                 }
             }
-            AttachmentsSection(services: services, taskLocalId: taskLocalId)
-            ReminderSection(services: services, task: task)
-            RelationsSection(services: services, taskLocalId: taskLocalId)
-            CommentsSection(services: services, taskLocalId: taskLocalId)
+            AttachmentsSection(
+                services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets
+            )
+            ReminderSection(services: services, task: task, reminders: feeds.reminders.value, state: sheets)
+            RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
+            CommentsSection(services: services, comments: feeds.comments.value, state: sheets)
             Section {
-                Button(role: .destructive) {
-                    // Nothing may be saved onto a task that is going away.
-                    didLoad = false
-                    do {
-                        try services.store.deleteTask(localId: task.localId)
-                        dismiss()
-                    } catch {
-                        didLoad = true
-                        saveError = String(describing: error)
-                    }
-                } label: {
+                Button(role: .destructive) { sheets.deletingTask = true } label: {
                     Text("Delete task").frame(maxWidth: .infinity)
                 }
             }
         }
             .criaSurface()
+    }
+
+    private func deleteTask() {
+        // Nothing may be saved onto a task that is going away.
+        didLoad = false
+        do {
+            try services.store.deleteTask(localId: taskLocalId)
+            dismiss()
+        } catch {
+            didLoad = true
+            sheets.failure = String(describing: error)
+        }
     }
 
     private func descriptionLink(_ task: TaskRecord) -> some View {
@@ -152,7 +163,7 @@ struct TaskDetailView: View {
             if (task.description ?? "").isEmpty {
                 Text("Add description").font(Theme.rowSubtitle).foregroundStyle(Color(.mutedForeground))
             } else {
-                RichTextView(html: task.description ?? "").frame(minHeight: 44, maxHeight: 140)
+                RichTextView(html: task.description ?? "", services: services).frame(minHeight: 44, maxHeight: 140)
             }
         }
     }
@@ -175,7 +186,7 @@ struct TaskDetailView: View {
     private func detailsSection(_ task: TaskRecord) -> some View {
         Section {
             Picker(selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
-                ForEach(live.value.projects, id: \.localId) { Text($0.title).tag($0.localId) }
+                ForEach(moveChoices, id: \.localId) { Text($0.title).tag($0.localId) }
             } label: {
                 Label("Project", systemImage: "folder")
             }
@@ -190,7 +201,7 @@ struct TaskDetailView: View {
                         .foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
                 }
             }
-            RepeatRow(services: services, task: task)
+            RepeatRow(task: task) { apply($0) }
             VStack(alignment: .leading) {
                 Text("Done: \(Int((task.percentDone * 100).rounded()))%").font(Theme.caption)
                 // One write when the finger lifts, not one (and one outbox op) per 0.1 step while dragging.
@@ -230,11 +241,16 @@ struct TaskDetailView: View {
     }
 
     private func apply(_ patch: TaskPatch) {
-        do {
-            _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
-        } catch {
-            saveError = String(describing: error)
+        sheets.attempt { _ = try services.store.updateTask(localId: taskLocalId, patch: patch) }
+    }
+
+    /// Projects the task can move to, plus its current one when archived, so the picker never shows a blank value.
+    private var moveChoices: [ProjectRecord] {
+        let visible = live.value.projects
+        guard let current = live.value.currentProject, !visible.contains(where: { $0.localId == current.localId }) else {
+            return visible
         }
+        return visible + [current]
     }
 
     private func moveTask(to projectLocalId: String) {
@@ -247,139 +263,5 @@ struct TaskDetailView: View {
         var patch = TaskPatch()
         patch.percentDone = value
         apply(patch)
-    }
-}
-
-/// A date row: calendar icon, then the date and time as separate pills (a compact picker draws each). "Add" until a
-/// date is set. The server cannot clear a date through the task update (same as the web client), so there is no
-/// remove action.
-struct DateFieldRow: View {
-    let title: String
-    let iso: String?
-    let onChange: (String) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Label(title, systemImage: "calendar")
-            Spacer(minLength: 8)
-            if let iso, let current = DueDates.pickerDate(iso) {
-                let timed = DueDates.hasTimeOfDay(iso)
-                DatePicker("\(title) date", selection: Binding(get: { current }, set: { write($0, timed: timed) }),
-                           displayedComponents: [.date])
-                    .labelsHidden()
-                if timed {
-                    DatePicker("\(title) time", selection: Binding(get: { current }, set: { write($0, timed: true) }),
-                               displayedComponents: [.hourAndMinute])
-                        .labelsHidden()
-                    Button("Remove time", systemImage: "xmark.circle.fill") { write(current, timed: false) }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(Color(.mutedForeground))
-                        .buttonStyle(.plain)
-                } else {
-                    Button("Add time") { setTimed(current: current) }
-                        .font(Theme.chip)
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.small)
-                }
-            } else {
-                Button("Add") { onChange(DueDates.allDayISO(for: Date())) }
-                    .font(Theme.chip)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.small)
-                    .tint(Color(.primary))
-            }
-        }
-        .frame(minHeight: 56)
-    }
-
-    private func write(_ date: Date, timed: Bool) {
-        onChange(timed ? DueDates.timedISO(date) : DueDates.allDayISO(for: date))
-    }
-
-    private func setTimed(current: Date) {
-        let nine = Calendar.cria.date(bySettingHour: 9, minute: 0, second: 0, of: current) ?? current
-        write(nine, timed: true)
-    }
-}
-
-struct FlowLabels: View {
-    let labels: [LabelRecord]
-
-    var body: some View {
-        if labels.isEmpty {
-            Text("No labels").foregroundStyle(Color(.mutedForeground))
-        } else {
-            HStack {
-                ForEach(labels, id: \.localId) { label in
-                    CriaChip(text: label.title, systemImage: "tag", tint: Color(hexString: label.hexColor) ?? Color(.info))
-                }
-            }
-        }
-    }
-}
-
-/// Toggle existing labels on the task, or create one by typing its name.
-struct LabelPickerSheet: View {
-    let services: AppServices
-    let taskLocalId: String
-    let selected: [LabelRecord]
-    let all: [LabelRecord]
-    @Environment(\.dismiss) private var dismiss
-    @State private var newTitle = ""
-    @State private var failure: String?
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        TextField("New label", text: $newTitle).submitLabel(.done).onSubmit(create)
-                        Button("Add", action: create).disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                }
-                Section {
-                    ForEach(all, id: \.localId) { label in
-                        Button {
-                            do {
-                                try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
-                            } catch {
-                                failure = String(describing: error)
-                            }
-                        } label: {
-                            HStack {
-                                Text(label.title).foregroundStyle(Color(.foreground))
-                                Spacer()
-                                if selected.contains(where: { $0.localId == label.localId }) {
-                                    Image(systemName: "checkmark").foregroundStyle(Color(.primary))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-                .criaSurface()
-            .navigationTitle("Labels")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(failure ?? "")
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func create() {
-        let name = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        do {
-            try services.store.applyLabels(byTitle: [name], toTask: taskLocalId)
-            newTitle = ""
-        } catch {
-            failure = String(describing: error)
-        }
     }
 }

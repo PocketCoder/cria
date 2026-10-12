@@ -1,78 +1,30 @@
 import CriaKit
 import SwiftUI
 
-/// Comment thread for a task: add, edit and delete write through the store, which queues the server calls.
+/// Comment thread for a task: add, edit and delete write through the store, which queues the server calls. The
+/// composer, the edit sheet and the delete confirmation are presented by TaskDetailView through `state`.
 struct CommentsSection: View {
     let services: AppServices
-    let taskLocalId: String
-    @State private var live: LiveValue<[CommentRecord]>
-    @State private var composing = false
-    @State private var editing: CommentRecord?
+    let comments: [CommentRecord]
+    let state: TaskDetailPresentation
     @State private var summary: String?
     @State private var summarising = false
-    @State private var failure: String?
-
-    init(services: AppServices, taskLocalId: String) {
-        self.services = services
-        self.taskLocalId = taskLocalId
-        let store = services.store
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.comments]) { reading in
-                try reading.comments(forTask: taskLocalId)
-            }
-        })
-    }
 
     var body: some View {
         Section("Comments") {
-            ForEach(live.value, id: \.localId) { comment in
+            ForEach(comments, id: \.localId) { comment in
                 row(comment)
             }
-            // Observers, sheets and the alert hang off this one row, not the Section: modifiers on a Section inside a
-            // Form can be applied once per row, which would start the observer and present each sheet repeatedly.
-            addButton
+            Button { state.composingComment = true } label: {
+                Label("Add a comment", systemImage: "bubble.left").foregroundStyle(Color(.mutedForeground))
+            }
             summarySection
-        }
-    }
-
-    private var addButton: some View {
-        Button { composing = true } label: {
-            Label("Add a comment", systemImage: "bubble.left").foregroundStyle(Color(.mutedForeground))
-        }
-            .task { await live.run() }
-            .task { await AIStatus.shared.refresh() }
-            .sheet(isPresented: $composing) {
-                CommentComposerSheet(
-                    services: services, taskLocalId: taskLocalId, title: "New comment", initialHTML: ""
-                ) { html in
-                    attempt { _ = try services.store.createComment(taskLocalId: taskLocalId, comment: html) }
-                }
-            }
-            .sheet(item: $editing) { comment in
-                CommentComposerSheet(
-                    services: services, taskLocalId: taskLocalId, title: "Edit comment", initialHTML: comment.comment
-                ) { html in
-                    attempt { try services.store.updateComment(localId: comment.localId, comment: html) }
-                }
-            }
-            .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(failure ?? "")
-            }
-    }
-
-    private func attempt(_ work: () throws -> Void) {
-        do {
-            try work()
-        } catch {
-            failure = String(describing: error)
         }
     }
 
     @ViewBuilder
     private var summarySection: some View {
-        if AIStatus.shared.isOfferable && live.value.count >= 2 {
+        if AIStatus.shared.isOfferable && comments.count >= 2 {
             Button(summarising ? "Summarising…" : "Summarise thread", systemImage: "sparkles") {
                 Task { await summarise() }
             }
@@ -86,7 +38,7 @@ struct CommentsSection: View {
     private func summarise() async {
         summarising = true
         defer { summarising = false }
-        let thread = live.value.map {
+        let thread = comments.map {
             AIPrompts.ThreadComment(authorName: $0.authorName, comment: $0.comment, createdAt: $0.createdAt)
         }
         do {
@@ -105,17 +57,31 @@ struct CommentsSection: View {
                 .background(Color(.heather600).opacity(0.15), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(comment.authorName ?? "You").font(Theme.rowTitle)
-                RichTextView(html: comment.comment).frame(minHeight: 28)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(comment.authorName ?? "You").font(Theme.rowTitle)
+                    if let stamp = Self.timestamp(comment) {
+                        Text(stamp).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                    }
+                }
+                RichTextView(html: comment.comment, services: services).frame(minHeight: 28)
                 reactionBar(comment)
             }
         }
-        .swipeActions {
-            Button("Delete", role: .destructive) {
-                attempt { try services.store.deleteComment(localId: comment.localId) }
-            }
-            Button("Edit") { editing = comment }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
+            Button("Delete", systemImage: "trash") { state.deletingComment = comment }
+                .tint(Color(.destructive))
+            Button("Edit", systemImage: "pencil") { state.editingComment = comment }
         }
+    }
+
+    /// "3 hours ago", plus "edited" when the comment changed after it was posted (as the web client shows).
+    private static func timestamp(_ comment: CommentRecord) -> String? {
+        // Vikunja writes "no date" as year 1; a comment without a real creation time shows none.
+        guard let created = comment.createdAt.flatMap(DueDates.parse), created.timeIntervalSince1970 > 0 else { return nil }
+        let ago = created.formatted(.relative(presentation: .named))
+        let edited = comment.updatedAt.flatMap(DueDates.parse).map { $0.timeIntervalSince(created) >= 1 } ?? false
+        return edited ? "\(ago) · edited" : ago
     }
 
     private func initials(_ name: String) -> String {

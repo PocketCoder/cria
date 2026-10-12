@@ -4,6 +4,8 @@ import SwiftUI
 struct LoginView: View {
     @State var model: LoginViewModel
     @FocusState private var focus: Field?
+    /// The last server signed in to, to prefill next time. Only the URL: credentials stay in the Keychain.
+    @AppStorage("cria.login.lastServerURL") private var lastServerURL = ""
 
     private enum Field: Hashable {
         case server, token, username, password, totp
@@ -25,6 +27,8 @@ struct LoginView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .focused($focus, equals: .server)
+                    .submitLabel(.next)
+                    .onSubmit { focus = model.method == .token ? .token : .username }
                     .accessibilityIdentifier("login.server")
             } header: {
                 Text("Server")
@@ -48,6 +52,8 @@ struct LoginView: View {
                 switch model.method {
                 case .token:
                     SecureField("API token", text: $model.token)
+                        .submitLabel(.go)
+                        .onSubmit(submit)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focus, equals: .token)
@@ -61,9 +67,13 @@ struct LoginView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focus, equals: .username)
+                        .submitLabel(.next)
+                        .onSubmit { focus = .password }
                         .accessibilityIdentifier("login.username")
                     SecureField("Password", text: $model.password)
                         .textContentType(.password)
+                        .submitLabel(.go)
+                        .onSubmit(submit)
                         .focused($focus, equals: .password)
                         .accessibilityIdentifier("login.password")
                     if model.totpRequired {
@@ -81,10 +91,7 @@ struct LoginView: View {
             }
 
             Section {
-                Button {
-                    focus = nil
-                    Task { await model.submit() }
-                } label: {
+                Button(action: submit) {
                     HStack(spacing: 8) {
                         Text(model.totpRequired ? "Verify and sign in" : "Sign in")
                         if model.isSubmitting { ProgressView() }
@@ -100,6 +107,19 @@ struct LoginView: View {
         }
         .criaSurface()
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            if model.serverURL.isEmpty { model.serverURL = lastServerURL }
+        }
+    }
+
+    private func submit() {
+        guard !model.isSubmitting else { return }
+        focus = nil
+        Task {
+            await model.submit()
+            // Remember the server once it passed validation, whether or not the credentials did.
+            if model.serverURLError == nil { lastServerURL = model.serverURL.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
     }
 
     private var header: some View {

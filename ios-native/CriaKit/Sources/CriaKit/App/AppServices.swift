@@ -89,9 +89,10 @@ public final class AppServices: Sendable {
         store.bus.notify(.comments)
     }
 
-    /// The default project the app last learnt from the server (local id), for filing tasks while offline.
+    /// The default project the app last learnt from the server (local id), for filing tasks while offline. Nil when
+    /// none is known, so callers keep their own fallback rather than silently picking the first project.
     public func rememberedDefaultProjectLocalId() -> String? {
-        try? store.captureProjectId()
+        try? store.rememberedCaptureProjectId()
     }
 
     /// The user's default (inbox) project server id, or nil when offline or unset.

@@ -19,7 +19,7 @@ struct QuickAddSheet: View {
     @State private var line = ""
     @State private var projects: [ProjectRecord] = []
     @State private var projectId = ""
-    /// The server's default (inbox) project, read once the sheet opens; nil offline or when unset.
+    /// The server's default (inbox) project: the remembered one at once, then the server's when it answers.
     @State private var defaultServerId: Int?
     @State private var priority = 0
     @State private var dueISO = ""
@@ -66,7 +66,15 @@ struct QuickAddSheet: View {
                 }
             }
             .onAppear(perform: load)
-            .onChange(of: line) { old, new in lineChanged(from: old, to: new) }
+            .onChange(of: line) { old, new in
+                // A multi-line field inserts a newline on Return instead of calling onSubmit: strip it and submit.
+                if new.contains("\n") {
+                    line = new.replacingOccurrences(of: "\n", with: "")
+                    if canSubmit { submit() }
+                } else {
+                    lineChanged(from: old, to: new)
+                }
+            }
         }
         .presentationDetents([.medium, .large])
         .task { await aiStatus.refresh() }
@@ -179,6 +187,10 @@ struct QuickAddSheet: View {
 
     private func load() {
         projects = ProjectTree.visible((try? services.store.projects()) ?? [])
+        // Offline the server read never answers, so start on the remembered default (Inbox), not the first project.
+        if defaultServerId == nil, let remembered = services.rememberedDefaultProjectLocalId() {
+            defaultServerId = projects.first { $0.localId == remembered }?.serverId
+        }
         projectId = baseProjectId
         if line.isEmpty { line = initialLine }
         if dueISO.isEmpty, let initialDueDate { dueISO = DueDates.allDayISO(for: initialDueDate) }
