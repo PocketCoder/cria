@@ -2,12 +2,13 @@ import CriaKit
 import PhotosUI
 import SwiftUI
 
-/// The editor with its keyboard toolbar and the sheets it opens (mention picker, link prompt, photo picker).
+/// The editor with its formatting bar (the text view's accessory) and the sheets it opens (mention picker, link prompt, photo picker).
 struct EditorHost: View {
     let services: AppServices
     let taskLocalId: String
     let initialHTML: String
     let controller: EditorController
+    @State private var barActions = EditorBarActions()
     @State private var showMention = false
     @State private var mentionPicked = false
     /// Opened by typing "@" (as opposed to the toolbar button): cancelling must leave the "@" in the text.
@@ -18,9 +19,8 @@ struct EditorHost: View {
     @State private var showPhotoPicker = false
 
     var body: some View {
-        RichTextEditor(controller: controller, initialHTML: initialHTML)
-            .toolbar { ToolbarItemGroup(placement: .keyboard) { keyboardBar } }
-            // Presented from here, not from the keyboard toolbar: that toolbar is torn down when the keyboard hides,
+        RichTextEditor(controller: controller, initialHTML: initialHTML, imageProvider: imageProvider, barActions: barActions)
+            // Presented from here, not from the formatting bar: that bar is torn down when the keyboard hides,
             // which would dismiss the picker with it.
             .photosPicker(isPresented: $showPhotoPicker, selection: $photo, matching: .images)
             .sheet(isPresented: $showMention, onDismiss: {
@@ -45,45 +45,24 @@ struct EditorHost: View {
             .onAppear { configureController() }
     }
 
-    private var keyboardBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 18) {
-                barButton("bold", "Bold") { controller.toggleStyle(.bold) }
-                barButton("italic", "Italic") { controller.toggleStyle(.italic) }
-                barButton("underline", "Underline") { controller.toggleStyle(.underline) }
-                barButton("strikethrough", "Strikethrough") { controller.toggleStyle(.strike) }
-                barButton("textformat.size", "Heading") { controller.setBlock(.heading(2)) }
-                barButton("list.bullet", "Bulleted list") { controller.setBlock(.bullet) }
-                barButton("list.number", "Numbered list") { controller.setBlock(.ordered) }
-                barButton("checklist", "Task list") { controller.setBlock(.task(checked: false)) }
-                barButton("increase.indent", "Indent") { controller.changeIndent(by: 1) }
-                barButton("decrease.indent", "Outdent") { controller.changeIndent(by: -1) }
-                barButton("text.quote", "Quote") { controller.setBlock(.quote) }
-                barButton("chevron.left.forwardslash.chevron.right", "Code block") { controller.setBlock(.code) }
-                barButton("link", "Link") { showLink = true }
-                barButton("photo", "Image") { showPhotoPicker = true }
-                barButton("at", "Mention") { showMention = true }
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-
-    private func barButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol) }
-            .accessibilityLabel(label)
-    }
-
-    private func configureController() {
+    /// Passed into the editor so it is in place before the first HTML load.
+    private var imageProvider: EditorStyling.ImageProvider {
         let services = services
-        controller.imageProvider = { source in
+        return { source in
             let prefix = "cria://pending/"
             guard source.hasPrefix(prefix), let data = services.pendingBlobData(String(source.dropFirst(prefix.count))) else { return nil }
             return UIImage(data: data)
         }
+    }
+
+    private func configureController() {
         controller.onMentionTrigger = {
             mentionFromTyping = true
             showMention = true
         }
+        barActions.onLink = { showLink = true }
+        barActions.onPhoto = { showPhotoPicker = true }
+        barActions.onMention = { showMention = true }
     }
 
     private func addLink() {
@@ -102,7 +81,8 @@ struct EditorHost: View {
     }
 }
 
-/// Full-screen description editor. Saves when the screen closes, and only if the content changed.
+/// Full-screen description editor. Saves on Done, when the keyboard closes, when the screen closes and when the app
+/// leaves the foreground, and only if the content changed.
 struct DescriptionEditorView: View {
     let services: AppServices
     let taskLocalId: String
@@ -111,11 +91,21 @@ struct DescriptionEditorView: View {
     @State private var controller = EditorController()
     @State private var savedDocument: RichDocument?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         EditorHost(services: services, taskLocalId: taskLocalId, initialHTML: initialHTML, controller: controller)
             .navigationTitle("Description")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        save()
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear { controller.onEndEditing = { save() } }
             .onDisappear(perform: save)
             // An app suspended mid-edit can be killed without ever calling onDisappear.
             .onChange(of: scenePhase) { _, phase in
@@ -124,7 +114,8 @@ struct DescriptionEditorView: View {
     }
 
     private func save() {
-        let document = controller.currentDocument()
+        // No document means the text view is gone without a capture: leave the stored description alone.
+        guard let document = controller.currentDocument() else { return }
         guard document != (savedDocument ?? RichDocument(html: initialHTML)) else { return }
         savedDocument = document
         onSave(document.blocks.isEmpty ? "" : document.html())
@@ -160,13 +151,12 @@ struct CommentComposerSheet: View {
     }
 
     private func cancel() {
-        let changed = controller.currentDocument() != RichDocument(html: initialHTML)
+        let changed = controller.currentDocument().map { $0 != RichDocument(html: initialHTML) } ?? false
         if changed { confirmingDiscard = true } else { dismiss() }
     }
 
     private func send() {
-        let document = controller.currentDocument()
-        if !document.blocks.isEmpty { onSend(document.html()) }
+        if let document = controller.currentDocument(), !document.blocks.isEmpty { onSend(document.html()) }
         dismiss()
     }
 }

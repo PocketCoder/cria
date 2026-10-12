@@ -29,7 +29,9 @@ struct TableViewScreen: View {
 
     private var rows: [TaskListItem] {
         let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
-        let sorted = TableSort.sorted(live.value.map(\.task), keys: sortKeys, visible: visible)
+        // The compact list shows no columns, so every column counts for sorting there ("Sort by Priority" must work).
+        let sortable = sizeClass == .compact ? Set(TableViewColumn.allCases) : visible
+        let sorted = TableSort.sorted(live.value.map(\.task), keys: sortKeys, visible: sortable)
         return sorted.compactMap { byId[$0.localId] }
     }
 
@@ -45,7 +47,8 @@ struct TableViewScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("Table options", systemImage: "slider.horizontal.3") {
-                    Button("Columns", systemImage: "tablecells") { pickingColumns = true }
+                    // The compact list shows no columns, so there is nothing to pick.
+                    if sizeClass != .compact { Button("Columns", systemImage: "tablecells") { pickingColumns = true } }
                     sortMenu
                 }
             }
@@ -81,7 +84,12 @@ struct TableViewScreen: View {
     }
 
     private var shownColumns: [TableViewColumn] {
-        TableViewColumn.allCases.filter { visible.contains($0) }
+        availableColumns.filter { visible.contains($0) }
+    }
+
+    /// Assignees are left out until table rows load them: the column would always be empty.
+    private var availableColumns: [TableViewColumn] {
+        TableViewColumn.allCases.filter { $0 != .assignees }
     }
 
     private func width(_ column: TableViewColumn) -> CGFloat {
@@ -163,7 +171,7 @@ struct TableViewScreen: View {
 
     private var columnPicker: some View {
         NavigationStack {
-            List(TableViewColumn.allCases, id: \.self) { column in
+            List(availableColumns, id: \.self) { column in
                 Toggle(column.label, isOn: Binding(
                     get: { visible.contains(column) },
                     set: { isOn in toggle(column, isOn: isOn) }

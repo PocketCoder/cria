@@ -12,7 +12,8 @@ enum KanbanPayload {
     }
 }
 
-/// A kanban board: a horizontally paging scroll of bucket columns. Cards drag within and across columns.
+/// A kanban board: a horizontally paging scroll of bucket columns. Cards drag within and across columns. A
+/// filter-mode board (columns defined by filters) is read-only.
 struct KanbanBoardView: View {
     let services: AppServices
     let view: ViewRecord
@@ -35,6 +36,8 @@ struct KanbanBoardView: View {
         })
     }
 
+    private var readOnly: Bool { Kanban.isFilterMode(view) }
+
     var body: some View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 12) {
@@ -43,11 +46,15 @@ struct KanbanBoardView: View {
                         services: services,
                         view: view,
                         column: column,
+                        columns: live.value,
+                        readOnly: readOnly,
                         onDrop: { taskId, beforeId in drop(taskId, into: column, before: beforeId) },
-                        onEdit: { editing = BucketEdit(bucket: column.bucket) }
+                        onMoveTo: { taskId, target in drop(taskId, into: target, before: nil) },
+                        onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: live.value.count > 1) },
+                        onSetRole: { role in setRole(role, of: column.bucket) }
                     )
                 }
-                addBucketButton
+                if !readOnly { addBucketButton }
             }
             .scrollTargetLayout()
             .padding(.vertical, 12)
@@ -55,6 +62,18 @@ struct KanbanBoardView: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
         .background(Color(.grouped))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if readOnly {
+                Text("This board is managed by filters, so cards and columns cannot be changed here.")
+                    .font(Theme.caption)
+                    .foregroundStyle(Color(.mutedForeground))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.grouped))
+            }
+        }
         .task { await live.run() }
         .alert("Column full", isPresented: $limitNotice) {
             Button("OK", role: .cancel) {}
@@ -95,13 +114,25 @@ struct KanbanBoardView: View {
         }
     }
 
-    private func drop(_ taskId: String, into column: KanbanColumn, before beforeId: String?) {
-        var order = column.tasks.map(\.localId).filter { $0 != taskId }
-        if let beforeId, let index = order.firstIndex(of: beforeId) {
-            order.insert(taskId, at: index)
-        } else {
-            order.append(taskId)
+    private func setRole(_ role: KanbanBucketRole, of bucket: BucketRecord) {
+        guard let serverId = bucket.serverId else { return }
+        let roles = Kanban.roles(of: bucket, in: view)
+        // Choosing the column that already has the role clears it, as in the web app.
+        let update: ViewUpdate
+        switch role {
+        case .done: update = ViewUpdate(doneBucketServerId: .some(roles.isDone ? nil : serverId))
+        case .defaultColumn: update = ViewUpdate(defaultBucketServerId: .some(roles.isDefault ? nil : serverId))
         }
+        do {
+            _ = try services.store.updateView(localId: view.localId, update)
+        } catch {
+            failure = String(describing: error)
+        }
+    }
+
+    private func drop(_ taskId: String, into column: KanbanColumn, before beforeId: String?) {
+        guard !readOnly else { return }
+        let order = Kanban.orderAfterDrop(order: column.tasks.map(\.localId), moving: taskId, onto: beforeId)
         do {
             let result = try services.store.moveCard(
                 taskLocalId: taskId, viewLocalId: view.localId, target: column, orderedIds: order
@@ -115,190 +146,12 @@ struct KanbanBoardView: View {
 
 struct BucketEdit: Identifiable {
     let bucket: BucketRecord
+    /// False for the last column: the server refuses to delete a view's only bucket.
+    let canDelete: Bool
     var id: String { bucket.localId }
 }
 
-/// One column: header with count and menu, cards, and an inline add box.
-struct KanbanColumnView: View {
-    let services: AppServices
-    let view: ViewRecord
-    let column: KanbanColumn
-    let onDrop: (String, String?) -> Void
-    let onEdit: () -> Void
-    @State private var draft = ""
-    @State private var failure: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(column.tasks, id: \.localId) { task in
-                        KanbanCardView(services: services, task: task)
-                            .draggable(KanbanPayload.make(task.localId))
-                            .dropDestination(for: String.self) { items, _ in
-                                guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)), taskId != task.localId else {
-                                    return false
-                                }
-                                onDrop(taskId, task.localId)
-                                return true
-                            }
-                    }
-                }
-            }
-            addRow
-        }
-        .padding(8)
-        .frame(width: 300)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(.foreground).opacity(0.06), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .dropDestination(for: String.self) { items, _ in
-            guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
-            onDrop(taskId, nil)
-            return true
-        }
-        .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(failure ?? "")
-        }
-    }
-
-    private var addRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "plus").foregroundStyle(Color(.primary))
-            TextField("Add task", text: $draft)
-                .font(.subheadline.weight(.medium))
-                .onSubmit { addTask() }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 44)
-    }
-
-    private var header: some View {
-        HStack {
-            Text(column.bucket.title).font(Theme.headline)
-            Text(countText)
-                .font(Theme.chip)
-                .padding(.horizontal, 8)
-                .frame(height: Theme.chipHeight)
-                .background(Color(.foreground).opacity(0.06), in: Capsule())
-                .foregroundStyle(column.atLimit ? Color(.destructive) : Color(.mutedForeground))
-            roleBadge
-            Spacer()
-            Menu("Column", systemImage: "ellipsis") {
-                Button("Edit column", systemImage: "pencil") { onEdit() }
-            }
-            .labelStyle(.iconOnly)
-        }
-    }
-
-    private var countText: String {
-        column.bucket.limit > 0 ? "\(column.tasks.count)/\(column.bucket.limit)" : "\(column.tasks.count)"
-    }
-
-    @ViewBuilder private var roleBadge: some View {
-        let roles = Kanban.roles(of: column.bucket, in: view)
-        if roles.isDone {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(.success))
-        }
-    }
-
-    private func addTask() {
-        let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft = ""
-        guard !title.isEmpty else { return }
-        // A full column takes no more cards (the drag path enforces the same limit).
-        guard !column.atLimit else {
-            failure = "This column has reached its limit."
-            draft = title
-            return
-        }
-        do {
-            let task = try services.store.createTask(TaskInput(title: title, projectLocalId: view.projectLocalId))
-            try services.store.setTaskBucket(
-                taskLocalId: task.localId, viewLocalId: view.localId, bucketLocalId: column.bucket.localId
-            )
-        } catch {
-            failure = String(describing: error)
-        }
-    }
-}
-
-struct KanbanCardView: View {
-    @Environment(\.dateDisplay) private var dateDisplay
-    let services: AppServices
-    let task: TaskRecord
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            PriorityCheck(priority: task.priority, isDone: task.done, size: 22) {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
-            }
-            NavigationLink(value: Route.task(task.localId)) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(task.title)
-                        .font(.system(size: 16, weight: .medium))
-                        .strikethrough(task.done)
-                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
-                        .multilineTextAlignment(.leading)
-                    if let due = task.dueDate, !task.done {
-                        CriaChip(
-                            text: DueDates.label(due, now: Date(), display: dateDisplay),
-                            systemImage: task.repeatAfter > 0 ? "repeat" : "calendar",
-                            tint: DueDates.isOverdue(due, now: Date()) ? Color(.destructive) : Color(.mutedForeground)
-                        )
-                    }
-                }
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.trailing, 12)
-        .background(Color(.cell), in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .shadow(color: Color(red: 20 / 255, green: 10 / 255, blue: 40 / 255).opacity(0.05), radius: 1, y: 1)
-    }
-}
-
-/// Rename a bucket, set its limit, or delete it.
-struct BucketEditSheet: View {
-    let services: AppServices
-    let edit: BucketEdit
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var limitText = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("Title", text: $title)
-                TextField("Limit (0 for none)", text: $limitText).keyboardType(.numberPad)
-                Button("Delete column", role: .destructive) {
-                    try? services.store.deleteBucket(localId: edit.bucket.localId)
-                    dismiss()
-                }
-            }
-                .criaSurface()
-            .navigationTitle("Edit column")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() } }
-            }
-        }
-        .presentationDetents([.medium])
-        .onAppear {
-            title = edit.bucket.title
-            limitText = String(edit.bucket.limit)
-        }
-    }
-
-    private func save() {
-        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let update = BucketUpdate(title: cleaned.isEmpty ? nil : cleaned, limit: Kanban.parseLimit(limitText))
-        _ = try? services.store.updateBucket(localId: edit.bucket.localId, update)
-        dismiss()
-    }
+/// The role a column can take for its view.
+enum KanbanBucketRole {
+    case done, defaultColumn
 }

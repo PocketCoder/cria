@@ -12,6 +12,21 @@ public struct BucketRecord: Equatable, Sendable {
     public let createdByServerId: Int?
     public let updatedAt: String
 
+    /// A bucket that is not stored: a filter-mode board's synthetic column.
+    public init(
+        localId: String, serverId: Int?, viewLocalId: String, title: String, position: Double?, limit: Int,
+        createdByServerId: Int?, updatedAt: String
+    ) {
+        self.localId = localId
+        self.serverId = serverId
+        self.viewLocalId = viewLocalId
+        self.title = title
+        self.position = position
+        self.limit = limit
+        self.createdByServerId = createdByServerId
+        self.updatedAt = updatedAt
+    }
+
     init(row: Row) {
         localId = row["local_id"]
         serverId = row["server_id"]
@@ -213,13 +228,24 @@ extension CriaStore {
         }
     }
 
-    /// Sets a task's position in its current bucket and queues a `task_position` update.
-    public func updateTaskPosition(taskLocalId: String, viewLocalId: String, position: Double) throws {
+    /// Sets a task's position in its current bucket and queues a `task_position` update. Pass `bucketLocalId` when the
+    /// task may have no assignment row yet (it is shown in the default bucket by fallback): the row is then created,
+    /// where a plain UPDATE would change nothing and the position would be lost.
+    public func updateTaskPosition(
+        taskLocalId: String, viewLocalId: String, position: Double, bucketLocalId: String? = nil
+    ) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            try connection.execute(
-                sql: "UPDATE task_buckets SET position = ? WHERE task_local_id = ? AND view_local_id = ?",
-                arguments: [position, taskLocalId, viewLocalId]
-            )
+            if let bucketLocalId {
+                try connection.execute(sql: """
+                    INSERT OR REPLACE INTO task_buckets (task_local_id, view_local_id, bucket_local_id, position)
+                    VALUES (?, ?, ?, ?)
+                    """, arguments: [taskLocalId, viewLocalId, bucketLocalId, position])
+            } else {
+                try connection.execute(
+                    sql: "UPDATE task_buckets SET position = ? WHERE task_local_id = ? AND view_local_id = ?",
+                    arguments: [position, taskLocalId, viewLocalId]
+                )
+            }
             try connection.enqueue(
                 .taskPosition,
                 localId: taskLocalId,

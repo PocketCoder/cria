@@ -21,10 +21,15 @@ final class EditorController {
     var imageProvider: EditorStyling.ImageProvider = { _ in nil }
     var onMentionTrigger: () -> Void = {}
     var onChange: () -> Void = {}
+    /// Called when the text view loses focus (keyboard dismissed), so hosts can save before the screen goes away.
+    var onEndEditing: () -> Void = {}
+    /// The document as it was when the text view was torn down, so a save that runs afterwards still has the content.
+    private var finalDocument: RichDocument?
 
     func attach(_ view: EditorTextView) {
         textView = view
         view.onToggleTask = { [weak self] paragraph in self?.toggleTask(paragraph) }
+        view.onBackspaceAtStart = { [weak self] in self?.handleBackspaceAtStart() ?? true }
     }
 
     /// Replaces the content with a document parsed from stored HTML.
@@ -38,9 +43,17 @@ final class EditorController {
         view.refreshMarkers()
     }
 
-    func currentDocument() -> RichDocument {
-        guard let view = textView else { return RichDocument() }
+    /// The current content, or nil when the text view is gone and nothing was captured (never an empty stand-in: a
+    /// caller that saved that would wipe the stored text).
+    func currentDocument() -> RichDocument? {
+        guard let view = textView else { return finalDocument }
         return RichDocumentText.document(from: view.textStorage)
+    }
+
+    /// Captures the content just before the text view is torn down.
+    func captureFinalDocument() {
+        guard let view = textView else { return }
+        finalDocument = RichDocumentText.document(from: view.textStorage)
     }
 
     // MARK: Delegate hooks
@@ -123,6 +136,22 @@ final class EditorController {
             edit { convert(paragraph, to: .paragraph, depth: 0) }
         }
         return false
+    }
+
+    /// Backspace at the very start of the document, where there is nothing to delete: a list or task line (or any other
+    /// text block) loses its formatting instead. Returns false when it did that.
+    private func handleBackspaceAtStart() -> Bool {
+        guard let view = textView else { return true }
+        guard let paragraph = EditorParagraphs.containing(0, in: view.textStorage) else {
+            // Empty document with a list kind armed for the next character.
+            guard kindFromTyping().isListItem else { return true }
+            edit { convert(nil, to: .paragraph, depth: 0) }
+            return false
+        }
+        switch paragraph.kind {
+        case .rule, .image: return true
+        default: return handleBackspace(deletingAt: -1)
+        }
     }
 
     func kindFromTyping() -> BlockKind {

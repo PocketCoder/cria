@@ -28,8 +28,8 @@ public enum TableViewColumn: String, CaseIterable, Sendable {
     /// Labels and assignees have no single sortable value.
     public var sortable: Bool { self != .labels && self != .assignees }
 
-    /// Vikunja's default visible set.
-    public static let defaultVisible: Set<TableViewColumn> = [.index, .done, .title, .labels, .assignees, .dueDate]
+    /// Vikunja's default visible set, minus assignees: they are not loaded into table rows yet, so the column would be empty.
+    public static let defaultVisible: Set<TableViewColumn> = [.index, .done, .title, .labels, .dueDate]
 }
 
 /// One active sort key. Order in the array is priority order.

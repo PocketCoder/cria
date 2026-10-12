@@ -57,6 +57,47 @@ final class KanbanDataTests: XCTestCase {
         XCTAssertGreaterThan(try outboxEntries(board.store, entity: "task_position").count, 0)
     }
 
+    func testMidpointMoveOfAnUnassignedCardCreatesItsRow() throws {
+        let board = try makeBoard()
+        let second = try seedSyncedTask(board.store, serverId: 2, title: "Second")
+        let third = try seedSyncedTask(board.store, serverId: 3, title: "Third")
+        try board.store.setTaskBucket(taskLocalId: second, viewLocalId: board.view, bucketLocalId: board.todo, position: 1024)
+        try board.store.setTaskBucket(taskLocalId: third, viewLocalId: board.view, bucketLocalId: board.todo, position: 2048)
+        // Shown in Todo only through the default-bucket fallback: it has no task_buckets row.
+        let first = try seedSyncedTask(board.store, serverId: 1, title: "First")
+        let before = try board.store.kanbanColumns(viewLocalId: board.view)
+        XCTAssertEqual(titles(before.first), ["Second", "Third", "First"])
+        try board.store.moveCard(
+            taskLocalId: first, viewLocalId: board.view, target: before[0], orderedIds: [second, first, third]
+        )
+        let after = try board.store.kanbanColumns(viewLocalId: board.view)
+        XCTAssertEqual(titles(after.first), ["Second", "First", "Third"])
+        XCTAssertEqual(try board.store.bucketAssignments(forView: board.view).count, 3)
+    }
+
+    func testFilterModeBoardBuildsReadOnlyColumnsFromFilters() throws {
+        let board = try makeBoard()
+        let hot = try seedSyncedTask(board.store, serverId: 1, title: "Hot")
+        try seedSyncedTask(board.store, serverId: 2, title: "Cold")
+        try runSQL(board.store, "UPDATE tasks SET priority = 4 WHERE local_id = ?", [hot])
+        let config = """
+            [{"title":"Urgent","filter":{"filter":"priority >= 3","filter_include_nulls":false}},
+             {"title":"Everything","filter":{"filter":""}}]
+            """
+        _ = try board.store.updateView(
+            localId: board.view, ViewUpdate(bucketConfigurationMode: .filter, bucketConfiguration: .some(config))
+        )
+        let columns = try board.store.kanbanColumns(viewLocalId: board.view)
+        XCTAssertEqual(columns.map(\.bucket.title), ["Urgent", "Everything"])
+        XCTAssertEqual(titles(columns[0]), ["Hot"])
+        XCTAssertEqual(Set(titles(columns[1])), ["Hot", "Cold"])
+        let result = try board.store.moveCard(
+            taskLocalId: hot, viewLocalId: board.view, target: columns[1], orderedIds: [hot]
+        )
+        XCTAssertEqual(result, .readOnly)
+        XCTAssertEqual(try outboxEntries(board.store, entity: "task_bucket").count, 0)
+    }
+
     func testDropIntoAFullColumnIsBlocked() throws {
         let board = try makeBoard()
         let task = try seedSyncedTask(board.store, serverId: 1, title: "One")
@@ -70,6 +111,22 @@ final class KanbanDataTests: XCTestCase {
             taskLocalId: other, viewLocalId: board.view, target: full[1], orderedIds: [other, task]
         )
         XCTAssertEqual(result, .blockedByLimit)
+    }
+
+    func testDropOrderMovesACardDownByOne() {
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b", "c"], moving: "a", onto: "b"), ["b", "a", "c"])
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b", "c"], moving: "a", onto: "c"), ["b", "c", "a"])
+    }
+
+    func testDropOrderMovesACardUpBeforeTheTarget() {
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b", "c"], moving: "c", onto: "a"), ["c", "a", "b"])
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b", "c"], moving: "b", onto: "a"), ["b", "a", "c"])
+    }
+
+    func testDropOrderFromAnotherColumnGoesBeforeTheTargetOrToTheEnd() {
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b"], moving: "x", onto: "b"), ["a", "x", "b"])
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b"], moving: "x", onto: nil), ["a", "b", "x"])
+        XCTAssertEqual(Kanban.orderAfterDrop(order: ["a", "b"], moving: "a", onto: nil), ["b", "a"])
     }
 
     func testParseLimitAndAtLimit() {

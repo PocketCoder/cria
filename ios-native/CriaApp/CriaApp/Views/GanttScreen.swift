@@ -8,6 +8,8 @@ struct GanttScreen: View {
     let projectLocalId: String
     @State private var live: LiveValue<GanttData>
     @AppStorage("cria.gantt.weekZoom") private var weekZoom = false
+    /// Off by default, as in the web app: finished tasks clutter the timeline.
+    @AppStorage("cria.gantt.showDone") private var showDone = false
 
     init(services: AppServices, projectLocalId: String) {
         self.services = services
@@ -22,11 +24,15 @@ struct GanttScreen: View {
 
     private var dayWidth: Double { weekZoom ? GanttMetrics.weekZoomDayWidth : GanttMetrics.dayWidth }
     private var today: Int { GanttTree.localDay(of: Date()) }
+    /// The loaded data without finished tasks unless "Show done" is on. The range and arrows follow what is shown.
+    private var shown: GanttData {
+        showDone ? live.value : GanttData(nodes: live.value.nodes.filter { !$0.done }, edges: live.value.edges)
+    }
     private var datedNodes: [GanttNode] {
-        GanttTree.visible(live.value.nodes, collapsed: [], showDateless: false)
+        GanttTree.visible(shown.nodes, collapsed: [], showDateless: false)
     }
     private var datelessNodes: [GanttNode] {
-        live.value.nodes.filter { $0.startDay == nil && $0.endDay == nil }
+        shown.nodes.filter { $0.startDay == nil && $0.endDay == nil }
     }
 
     var body: some View {
@@ -35,7 +41,7 @@ struct GanttScreen: View {
                 ContentUnavailableView("No tasks", systemImage: "chart.bar.xaxis", description: Text("Nothing here yet."))
             } else {
                 GanttChart(
-                    services: services, data: live.value, nodes: datedNodes, range: live.value.dayRange(today: today),
+                    services: services, data: shown, nodes: datedNodes, range: shown.dayRange(today: today),
                     dayWidth: dayWidth
                 )
                 if !datelessNodes.isEmpty { tray }
@@ -49,6 +55,7 @@ struct GanttScreen: View {
                         Text("Day").tag(false)
                         Text("Week").tag(true)
                     }
+                    Toggle("Show done", isOn: $showDone)
                 }
             }
         }
@@ -88,6 +95,9 @@ struct GanttChart: View {
     let range: GanttDayRange
     let dayWidth: Double
     @State private var drag: GanttDrag?
+    @Environment(NavigationModel.self) private var navigation
+
+    private static let todayId = "gantt-today"
 
     private var chartWidth: Double { Double(range.totalDays) * dayWidth }
     private var chartHeight: Double { GanttMetrics.headerHeight + Double(nodes.count) * GanttMetrics.rowHeight }
@@ -97,23 +107,47 @@ struct GanttChart: View {
     }
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            ZStack(alignment: .topLeading) {
-                Canvas { context, _ in
-                    drawBackground(&context)
-                    drawArrows(&context)
-                }
-                .frame(width: chartWidth, height: chartHeight)
-                ForEach(Array(placements.enumerated()), id: \.element.taskLocalId) { index, place in
-                    GanttBar(place: place, node: nodes[index], dayWidth: dayWidth, drag: $drag) { start, end in
-                        _ = try? services.store.setGanttDates(taskLocalId: place.taskLocalId, start: start, end: end)
+        ScrollViewReader { proxy in
+            ScrollView([.horizontal, .vertical]) {
+                ZStack(alignment: .topLeading) {
+                    Canvas { context, _ in
+                        drawBackground(&context)
+                        drawArrows(&context)
                     }
-                    .offset(x: place.left, y: GanttMetrics.headerHeight + place.top)
+                    .frame(width: chartWidth, height: chartHeight)
+                    todayAnchor
+                    ForEach(Array(placements.enumerated()), id: \.element.taskLocalId) { index, place in
+                        GanttBar(
+                            place: place, node: nodes[index], dayWidth: dayWidth, drag: $drag,
+                            onOpen: { navigation.state.push(.task(place.taskLocalId)) },
+                            onCommit: { start, end in
+                                _ = try? services.store.setGanttDates(taskLocalId: place.taskLocalId, start: start, end: end)
+                            }
+                        )
+                        .offset(x: place.left, y: GanttMetrics.headerHeight + place.top)
+                    }
                 }
+                .frame(width: chartWidth, height: chartHeight, alignment: .topLeading)
             }
-            .frame(width: chartWidth, height: chartHeight, alignment: .topLeading)
+            // Open on today, not the earliest date. Waiting a tick lets the content lay out first.
+            .task {
+                await Task.yield()
+                proxy.scrollTo(Self.todayId, anchor: UnitPoint(x: 0.5, y: 0))
+            }
+            .onChange(of: dayWidth) { _, _ in
+                proxy.scrollTo(Self.todayId, anchor: UnitPoint(x: 0.5, y: 0))
+            }
         }
-        .defaultScrollAnchor(.leading)
+    }
+
+    /// An invisible one-day marker at today's column. Its layout frame (not an offset) is what `scrollTo` uses.
+    private var todayAnchor: some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: Double(range.today - range.low) * dayWidth, height: 1)
+            Color.clear.frame(width: dayWidth, height: 1).id(Self.todayId)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func drawBackground(_ context: inout GraphicsContext) {
@@ -147,26 +181,36 @@ struct GanttChart: View {
 
 /// One task bar. Dragging the body moves it; the end handles resize. A plain tap opens the task.
 struct GanttBar: View {
+    /// Handles are 16pt each, so a bar narrower than this has no room for them beside its body.
+    private static let minimumWidthForHandles: Double = 48
+
     let place: GanttPlacement
     let node: GanttNode
     let dayWidth: Double
     @Binding var drag: GanttDrag?
+    let onOpen: () -> Void
     let onCommit: (Int, Int) -> Void
+    /// When a gesture last moved the bar. A tap within `tapSuppression` of it is the lift of that drag, not a tap.
+    /// A time stamp rather than a flag, so a gesture that is cancelled (no `onEnded`) cannot block taps for good.
+    @State private var lastDragAt: Date?
+    private static let tapSuppression: TimeInterval = 0.5
 
     var body: some View {
         let fill = Color(hexString: place.color) ?? Color(.primary)
-        NavigationLink(value: Route.task(place.taskLocalId)) {
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 6).fill(fill.opacity(place.isPlaceholder ? 0.35 : 0.9))
-                Text(node.title)
-                    .font(Theme.caption)
-                    .foregroundStyle(Color(.primaryForeground))
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-            }
-            .frame(width: place.width, height: place.height)
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 6).fill(fill.opacity(place.isPlaceholder ? 0.35 : 0.9))
+            Text(node.title)
+                .font(Theme.caption)
+                .foregroundStyle(Color(.primaryForeground))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
         }
-        .buttonStyle(.plain)
+        .frame(width: place.width, height: place.height)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let lastDragAt, Date().timeIntervalSince(lastDragAt) < Self.tapSuppression { return }
+            onOpen()
+        }
         // A long press first, so a scroll that starts on a bar scrolls instead of moving it and changing its dates.
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.25)
@@ -178,11 +222,17 @@ struct GanttBar: View {
         )
         .overlay(alignment: .leading) { handle(.resizeStart) }
         .overlay(alignment: .trailing) { handle(.resizeEnd) }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(node.title), \(place.label)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onOpen() }
     }
 
-    private func handle(_ mode: GanttDragMode) -> some View {
-        Color.clear.frame(width: 16, height: place.height).contentShape(Rectangle()).gesture(dragGesture(mode))
+    /// The resize handle, shown only when the bar is wide enough that it does not cover the whole bar.
+    @ViewBuilder private func handle(_ mode: GanttDragMode) -> some View {
+        if place.width > Self.minimumWidthForHandles {
+            Color.clear.frame(width: 16, height: place.height).contentShape(Rectangle()).gesture(dragGesture(mode))
+        }
     }
 
     /// Global space: the bar follows the finger, so a gesture measured in the bar's own space would see its
@@ -194,6 +244,7 @@ struct GanttBar: View {
     }
 
     private func update(_ mode: GanttDragMode, translation: Double) {
+        lastDragAt = Date()
         drag = GanttDrag(
             taskLocalId: place.taskLocalId, mode: mode, originalStart: place.resolved.start,
             originalEnd: place.resolved.end, deltaDays: Int((translation / dayWidth).rounded())
@@ -203,6 +254,7 @@ struct GanttBar: View {
     private func finish() {
         defer { drag = nil }
         guard let finished = drag else { return }
+        lastDragAt = Date()
         let days = GanttGeometry.apply(finished)
         if days.start != finished.originalStart || days.end != finished.originalEnd {
             onCommit(days.start, days.end)

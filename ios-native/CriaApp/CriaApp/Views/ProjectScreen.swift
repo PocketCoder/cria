@@ -10,6 +10,7 @@ struct ProjectScreen: View {
     @State private var live: LiveValue<[ViewRecord]>
     @State private var selectedId: String?
     @State private var managing = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(services: AppServices, projectLocalId: String, title: String) {
         self.services = services
@@ -78,10 +79,32 @@ struct ProjectScreen: View {
         }
     }
 
-    private var switcher: some View {
-        Picker("View", selection: Binding(get: { current?.localId ?? "" }, set: { selectedId = $0 })) {
-            ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
+    private var selection: Binding<String> {
+        Binding(get: { current?.localId ?? "" }, set: { selectedId = $0 })
+    }
+
+    /// Segmented on wide screens; a menu on iPhone, where four or more segment labels would truncate.
+    @ViewBuilder private var switcher: some View {
+        if sizeClass == .compact {
+            Menu {
+                Picker("View", selection: selection) {
+                    ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(current.map { ViewManagement.label($0.slot) } ?? "View")
+                    Image(systemName: "chevron.up.chevron.down").font(.caption)
+                }
+                .frame(maxWidth: .infinity, minHeight: 36)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("View")
+            .accessibilityValue(current.map { ViewManagement.label($0.slot) } ?? "")
+        } else {
+            Picker("View", selection: selection) {
+                ForEach(views, id: \.localId) { Text(ViewManagement.label($0.slot)).tag($0.localId) }
+            }
+            .pickerStyle(.segmented)
         }
-        .pickerStyle(.segmented)
     }
 }

@@ -22,21 +22,28 @@ private final class SpeechEngine: @unchecked Sendable {
         request.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
         self.request = request
         let input = engine.inputNode
+        // A tap left by an earlier failed start would crash `installTap`, so clear the bus first.
+        input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
             request.append(buffer)
         }
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            self.request = nil
+            throw error
+        }
         task = recognizer.recognitionTask(with: request) { result, error in
             onUpdate(result?.bestTranscription.formattedString, result?.isFinal == true || error != nil)
         }
     }
 
     func stop() {
-        if engine.isRunning {
-            engine.stop()
-            engine.inputNode.removeTap(onBus: 0)
-        }
+        if engine.isRunning { engine.stop() }
+        // Always: a start that threw after installing the tap leaves it behind with the engine stopped.
+        engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
         task?.finish()
         request = nil
@@ -65,6 +72,8 @@ final class SpeechCapture {
     private var session = UUID()
     /// After `stop()` the recogniser still delivers its last words; they are kept until it says it is final.
     private var awaitingFinal = false
+    /// True from `start()` until it settles, so a second tap during the permission prompt does not start twice.
+    private var isStarting = false
 
     var isListening: Bool { state == .listening }
     /// Listening, or finishing the last words. The transcript may still change.
@@ -83,7 +92,9 @@ final class SpeechCapture {
     }
 
     func start() async {
-        guard !isListening else { return }
+        guard !isListening, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         awaitingFinal = false
         session = UUID()
         transcript = ""

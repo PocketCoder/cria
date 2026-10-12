@@ -8,6 +8,8 @@ final class EditorTextView: UITextView {
     private let overlay = MarkerOverlay()
     private var checkboxTap = UITapGestureRecognizer()
     var onToggleTask: ((EditorParagraph) -> Void)?
+    /// Backspace with the caret at the very start. Returns false when it handled the key (cleared list formatting).
+    var onBackspaceAtStart: (() -> Bool)?
 
     init() {
         let storage = NSTextStorage()
@@ -30,8 +32,17 @@ final class EditorTextView: UITextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        overlay.frame = CGRect(x: 0, y: 0, width: max(bounds.width, contentSize.width), height: max(bounds.height, contentSize.height))
+        // This runs every scroll frame. Redraw only when the overlay's size changes (width or content height);
+        // text edits redraw through `refreshMarkers`.
+        let size = CGSize(width: max(bounds.width, contentSize.width), height: max(bounds.height, contentSize.height))
+        guard overlay.frame.size != size else { return }
+        overlay.frame = CGRect(origin: .zero, size: size)
         overlay.setNeedsDisplay()
+    }
+
+    override func deleteBackward() {
+        if selectedRange == NSRange(location: 0, length: 0), let onBackspaceAtStart, !onBackspaceAtStart() { return }
+        super.deleteBackward()
     }
 
     func refreshMarkers() {
