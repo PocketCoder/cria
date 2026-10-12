@@ -62,14 +62,14 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | M7 command palette (Cmd+K) | ✅ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
-| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
+| M10 stretch — attachments, comments, Gantt | ✅ attachments, Gantt; ✅ comments (full read/write + reactions). Notes dropped: Vikunja has no notes, and Cria only builds on what it stores |
 | **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅ |
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
 | Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased |
 | Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ on `dev`, unreleased; tokens + motion in `src/styles/globals.css` |
 | Native glass: macOS sidebar material, iOS 26 Liquid Glass tab bar | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
-**Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
+**Next up:** the native iOS app (`ios-native/`, see below). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
