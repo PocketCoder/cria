@@ -8,6 +8,8 @@ struct SearchScreen: View {
     let services: AppServices
     @State private var text = ""
     @State private var results = SearchResults()
+    /// Each found subtask's parent title, for the "Subtask of" caption.
+    @State private var parentTitles: [String: String] = [:]
 
     @Environment(\.dateDisplay) private var dateDisplay
 
@@ -40,7 +42,10 @@ struct SearchScreen: View {
             if !results.tasks.isEmpty {
                 Section("Tasks") {
                     ForEach(results.tasks, id: \.task.localId) { item in
-                        TaskRowLink(services: services, item: item, showProject: true)
+                        TaskRowLink(
+                            services: services, item: item, showProject: true,
+                            tree: TaskRowTree(parentTitle: parentTitles[item.task.localId])
+                        )
                     }
                 }
             }
@@ -99,6 +104,7 @@ struct SearchScreen: View {
 
     private func search() {
         results = (try? services.store.search(text)) ?? SearchResults()
+        parentTitles = (try? TaskListNesting.parentTitles(services.store, for: results.tasks)) ?? [:]
     }
 }
 

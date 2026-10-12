@@ -11,6 +11,8 @@ struct KanbanCardView: View {
     /// Columns the card can be moved to without dragging (empty on a read-only board).
     var moveTargets: [KanbanColumn] = []
     var onMove: (KanbanColumn) -> Void = { _ in }
+    /// Deletes the card with an Undo toast; nil on a read-only board.
+    var onDelete: (() -> Void)?
 
     static let radius: CGFloat = 14
 
@@ -48,11 +50,18 @@ struct KanbanCardView: View {
                     }
                 }
             }
+            if let onDelete {
+                Divider()
+                Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+            }
         }
         // Dragging is not available to VoiceOver, so each column is also an action on the card.
         .accessibilityActions {
             ForEach(moveTargets, id: \.bucket.localId) { target in
                 Button("Move to \(target.bucket.title)") { onMove(target) }
+            }
+            if let onDelete {
+                Button("Delete") { onDelete() }
             }
         }
     }

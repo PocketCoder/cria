@@ -35,6 +35,8 @@ struct KanbanColumnView: View {
     let onMoveTo: (String, KanbanColumn) -> Void
     let onEdit: () -> Void
     let onSetRole: (KanbanBucketRole) -> Void
+    /// Optional so a row shown inside a sheet (no shell environment) still deletes, without the Undo toast.
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var draft = ""
     @State private var failure: String?
 
@@ -73,7 +75,8 @@ struct KanbanColumnView: View {
             KanbanCardView(
                 services: services, task: task, labels: labels[task.localId] ?? [],
                 moveTargets: columns.filter { $0.bucket.localId != column.bucket.localId },
-                onMove: { target in onMoveTo(task.localId, target) }
+                onMove: { target in onMoveTo(task.localId, target) },
+                onDelete: { delete(task) }
             )
             .draggable(KanbanPayload.make(task.localId))
             .modifier(KanbanDropTarget(enabled: true) { taskId in
@@ -155,6 +158,19 @@ struct KanbanColumnView: View {
                 .font(Theme.caption)
                 .foregroundStyle(Color(.primary))
                 .accessibilityLabel("Default column")
+        }
+    }
+
+    /// Deletes straight away; the Undo toast takes it back.
+    private func delete(_ task: TaskRecord) {
+        do {
+            if let undo {
+                try undo.deleteTask(localId: task.localId, title: task.title)
+            } else {
+                try services.store.deleteTask(localId: task.localId)
+            }
+        } catch {
+            failure = String(describing: error)
         }
     }
 

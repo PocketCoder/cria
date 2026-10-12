@@ -6,7 +6,7 @@ struct SmartViewScreen: View {
     let services: AppServices
     let title: String
     let view: SmartView
-    @State private var live: LiveValue<[TaskGroup]>
+    @State private var live: LiveValue<SmartViewData>
     @State private var selectedDay = Calendar.cria.startOfDay(for: Date())
     @State private var addPresented = false
     @State private var rescheduling: TaskGroup?
@@ -17,20 +17,22 @@ struct SmartViewScreen: View {
         self.title = title
         self.view = view
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: []) {
-            observeStore(store, kinds: [.tasks, .labels, .projects, .savedFilters]) { reading in
-                try reading.smartGroups(view)
+        _live = State(initialValue: LiveValue(initial: SmartViewData()) {
+            observeStore(store, kinds: [.tasks, .labels, .projects, .savedFilters]) { (reading: CriaStore) throws -> SmartViewData in
+                let groups = try reading.smartGroups(view)
+                let parents = try TaskListNesting.parentTitles(reading, for: groups.flatMap(\.items))
+                return SmartViewData(groups: groups, parentTitles: parents)
             }
         })
     }
 
-    private var isEmpty: Bool { live.value.allSatisfy { $0.items.isEmpty } }
-    private var openCount: Int { live.value.reduce(0) { $0 + $1.items.count } }
+    private var isEmpty: Bool { live.value.groups.allSatisfy { $0.items.isEmpty } }
+    private var openCount: Int { live.value.groups.reduce(0) { $0 + $1.items.count } }
 
     private var groups: [TaskGroup] {
-        guard view == .upcoming else { return live.value.filter { !$0.items.isEmpty } }
+        guard view == .upcoming else { return live.value.groups.filter { !$0.items.isEmpty } }
         let from = Self.dayKey(selectedDay)
-        return live.value.filter { $0.key >= from && !$0.items.isEmpty }
+        return live.value.groups.filter { $0.key >= from && !$0.items.isEmpty }
     }
 
     private static func dayKey(_ date: Date) -> String {
@@ -56,7 +58,10 @@ struct SmartViewScreen: View {
             ForEach(groups, id: \.key) { group in
                 Section {
                     ForEach(group.items, id: \.task.localId) { item in
-                        TaskRowLink(services: services, item: item, showProject: true)
+                        TaskRowLink(
+                            services: services, item: item, showProject: true,
+                            tree: TaskRowTree(parentTitle: live.value.parentTitles[item.task.localId])
+                        )
                     }
                 } header: {
                     groupHeader(group)
@@ -106,7 +111,7 @@ struct SmartViewScreen: View {
     }
 
     @ViewBuilder private var nothingPlanned: some View {
-        if view == .upcoming && !live.value.contains(where: { $0.key == Self.dayKey(selectedDay) && !$0.items.isEmpty }) {
+        if view == .upcoming && !live.value.groups.contains(where: { $0.key == Self.dayKey(selectedDay) && !$0.items.isEmpty }) {
             Section {
                 Button { addPresented = true } label: {
                     Label("Nothing planned", systemImage: "plus").foregroundStyle(Color(.mutedForeground))
@@ -120,7 +125,7 @@ struct SmartViewScreen: View {
     @ViewBuilder private var header: some View {
         if view == .upcoming {
             Section {
-                WeekStrip(selected: $selectedDay, busyDays: Set(live.value.filter { !$0.items.isEmpty }.map(\.key)))
+                WeekStrip(selected: $selectedDay, busyDays: Set(live.value.groups.filter { !$0.items.isEmpty }.map(\.key)))
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
             } header: {
                 subtitleText
@@ -178,6 +183,12 @@ struct SmartViewScreen: View {
         ) ?? now
         return DueDates.timedISO(moved)
     }
+}
+
+/// A smart view's date groups, plus each shown subtask's parent title for the caption (these lists do not nest).
+struct SmartViewData: Sendable {
+    var groups: [TaskGroup] = []
+    var parentTitles: [String: String] = [:]
 }
 
 /// Inbox needs the default project id from the server. Offline it falls back to the one remembered from the last

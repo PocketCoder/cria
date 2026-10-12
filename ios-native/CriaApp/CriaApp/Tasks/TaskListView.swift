@@ -1,25 +1,28 @@
 import CriaKit
 import SwiftUI
 
-/// A live task list for a project, favourites or label. Rows update from database changes.
+/// A live task list for a project, favourites or label. Rows update from database changes. Subtasks sit under their
+/// parent when both are in the list, and a parent's children can be collapsed.
 struct TaskListView: View {
     let services: AppServices
     let source: TaskListSource
     let title: String
-    @State private var live: LiveValue<[TaskListItem]>
+    @State private var live: LiveValue<TaskListSnapshot>
     @AppStorage("cria.taskList.showDone") private var showDone = true
     @AppStorage("cria.taskList.sort") private var sortIndex = 0
     @State private var optimistic = OptimisticOrder()
     @State private var failure: String?
+    /// Parents whose subtasks are hidden, for this screen only.
+    @State private var collapsed: Set<String> = []
 
     init(services: AppServices, source: TaskListSource, title: String) {
         self.services = services
         self.source = source
         self.title = title
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: []) {
+        _live = State(initialValue: LiveValue(initial: TaskListSnapshot()) {
             observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
-                try reading.taskItems(source, includeDone: true)
+                try TaskListNesting.snapshot(reading, items: reading.taskItems(source, includeDone: true))
             }
         })
     }
@@ -30,7 +33,8 @@ struct TaskListView: View {
 
     /// Rows in display order: sorted by the chosen rule, then any pending drag order on top.
     private var visible: [TaskListItem] {
-        let shown = showDone ? live.value : live.value.filter { !$0.task.done }
+        let all = live.value.items
+        let shown = showDone ? all : all.filter { !$0.task.done }
         let manual = ListReorder.isEnabled(sort: sortRule, hasFilter: false)
         guard !manual else { return applyOptimistic(shown) }
         let byId = Dictionary(shown.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
@@ -42,9 +46,13 @@ struct TaskListView: View {
         return optimistic.resolve(items.map(\.task.localId)).compactMap { byId[$0] }
     }
 
+    /// Rows nested under their parents, before collapsing.
+    private var nested: [NestedTaskItem] { TaskTree.nest(visible, children: live.value.children) }
+
+    /// Reordering is off while any subtask is nested: a drag would have to move whole subtrees.
     private var canReorder: Bool {
         guard case .project = source else { return false }
-        return ListReorder.isEnabled(sort: sortRule, hasFilter: false)
+        return ListReorder.isEnabled(sort: sortRule, hasFilter: false) && !nested.contains(where: \.hasChildren)
     }
 
     /// Moves a row, then writes the position. Done tasks stay put: only the open order is persisted.
@@ -53,9 +61,10 @@ struct TaskListView: View {
         guard let first = indices.first, case .project(let projectId) = source else { return }
         let moved = rows[first].task
         guard !moved.done else { return }
-        let stored = live.value.map(\.task.localId)
+        let all = live.value.items
+        let stored = all.map(\.task.localId)
         rows.move(fromOffsets: indices, toOffset: destination)
-        optimistic.set(rows.map(\.task.localId), over: showDone ? stored : live.value.filter { !$0.task.done }.map(\.task.localId))
+        optimistic.set(rows.map(\.task.localId), over: showDone ? stored : all.filter { !$0.task.done }.map(\.task.localId))
         let openIds = rows.filter { !$0.task.done }.map(\.task.localId)
         do {
             guard let viewId = try services.store.listViewLocalId(projectLocalId: projectId) else { return }
@@ -67,8 +76,11 @@ struct TaskListView: View {
 
     var body: some View {
         List {
-            ForEach(visible, id: \.task.localId) { item in
-                TaskRowLink(services: services, item: item, showProject: showsProject)
+            ForEach(TaskListNesting.visible(nested, collapsed: collapsed)) { row in
+                TaskRowLink(
+                    services: services, item: row.item, showProject: showsProject,
+                    tree: TaskListNesting.tree(for: row, progress: live.value.progress, collapsed: $collapsed)
+                )
             }
             .onMove(perform: canReorder ? { move($0, $1) } : nil)
         }
@@ -122,26 +134,28 @@ struct TaskListView: View {
     }
 }
 
-/// A task row that opens the detail screen, with the shared swipe actions: done, star and delete. Delete asks first
-/// and is never a full swipe; failed writes show an alert.
+/// A task row that opens the detail screen, with the shared swipe actions: done, star and delete. Delete goes
+/// straight through with an Undo toast (never a full swipe); failed writes show an alert.
 struct TaskRowLink: View {
     let services: AppServices
     let item: TaskListItem
     var showProject = false
-    @State private var confirmingDelete = false
+    var tree = TaskRowTree()
+    /// Optional so a row shown inside a sheet (no shell environment) still deletes, without the Undo toast.
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var failure: String?
 
     var body: some View {
         NavigationLink(value: Route.task(item.task.localId)) {
-            TaskRowView(item: item, showProject: showProject) { toggle() }
+            TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
         }
         .swipeActions(edge: .leading) {
             Button(item.task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
                 .tint(Color(.meadow500))
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
-            Button("Delete", systemImage: "trash") { confirmingDelete = true }
+            // Not `.destructive`: that role animates the row away before the write, even when it fails.
+            Button("Delete", systemImage: "trash") { delete() }
                 .tint(Color(.destructive))
             Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
                 .tint(Color(.marigold500))
@@ -150,22 +164,23 @@ struct TaskRowLink: View {
             Button(item.task.done ? "Mark as not done" : "Complete", systemImage: "checkmark.circle") { toggle() }
             Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
             Button("Due tomorrow", systemImage: "sunrise") { dueTomorrow() }
+            if let collapsed = tree.isCollapsed {
+                Button(collapsed ? "Show subtasks" : "Hide subtasks", systemImage: "list.bullet.indent") {
+                    tree.onToggleCollapsed()
+                }
+            }
             Divider()
-            Button("Delete", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+            Button("Delete", systemImage: "trash", role: .destructive) { delete() }
         } preview: {
             TaskRowView(item: item, showProject: true) {}
                 .padding()
                 .frame(width: 360)
                 .background(Color(.cell))
         }
-        // An alert, not a confirmation dialog: on iOS 26 that is a popover, and from a swipe it pointed away from the row.
-        .alert("Delete task?", isPresented: $confirmingDelete) {
-            Button("Delete", role: .destructive) {
-                attempt { try services.store.deleteTask(localId: item.task.localId) }
+        .accessibilityActions {
+            if let collapsed = tree.isCollapsed {
+                Button(collapsed ? "Show subtasks" : "Hide subtasks") { tree.onToggleCollapsed() }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(item.task.title)
         }
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
@@ -179,6 +194,16 @@ struct TaskRowLink: View {
             try work()
         } catch {
             failure = String(describing: error)
+        }
+    }
+
+    private func delete() {
+        attempt {
+            if let undo {
+                try undo.deleteTask(localId: item.task.localId, title: item.task.title)
+            } else {
+                try services.store.deleteTask(localId: item.task.localId)
+            }
         }
     }
 
