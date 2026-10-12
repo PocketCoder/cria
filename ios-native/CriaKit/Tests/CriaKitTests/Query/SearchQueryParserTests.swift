@@ -115,4 +115,26 @@ final class SearchQueryParserTests: XCTestCase {
         XCTAssertEqual(try parse("in 2 weeks").dueDateStart, "2026-06-23T00:00:00.000Z")
         XCTAssertEqual(try parse("2026-07-01").dueDateEnd, "2026-07-01T23:59:59.999Z")
     }
+
+    // MARK: Natural language
+
+    func testTasksDueTomorrowIsJustADateFilter() throws {
+        let query = try parse("tasks due tomorrow")
+        XCTAssertEqual(query.text, "")
+        XCTAssertNotNil(query.dueDateStart)
+    }
+
+    func testOverdueHighPriority() throws {
+        let query = try parse("overdue high priority")
+        XCTAssertEqual(query.text, "")
+        XCTAssertTrue(query.onlyOpen)
+        XCTAssertNil(query.dueDateStart)
+        XCTAssertNotNil(query.dueDateEnd)
+        XCTAssertEqual(query.minimumPriority, 3)
+    }
+
+    func testFillerWordsStayWithoutAFilter() throws {
+        XCTAssertEqual(try parse("show the tasks").text, "show the tasks")
+        XCTAssertEqual(try parse("dentist due friday").text, "dentist")
+    }
 }

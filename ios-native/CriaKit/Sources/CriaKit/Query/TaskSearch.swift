@@ -30,17 +30,25 @@ extension CriaStore {
     private static func appendStructuredFilters(
         _ query: SearchQuery, conditions: inout [String], arguments: inout [(any DatabaseValueConvertible)?]
     ) {
+        // Compared as instants: server dates carry the server's offset and the bounds are UTC.
         if let start = query.dueDateStart, !start.isEmpty {
-            conditions.append("t.due_date >= ?")
+            conditions.append("julianday(t.due_date) >= julianday(?)")
             arguments.append(start)
         }
         if let end = query.dueDateEnd, !end.isEmpty {
-            conditions.append("t.due_date <= ?")
+            conditions.append("julianday(t.due_date) <= julianday(?)")
             arguments.append(end)
         }
         if let priority = query.priority {
             conditions.append("t.priority = ?")
             arguments.append(priority)
+        }
+        if let minimum = query.minimumPriority {
+            conditions.append("t.priority >= ?")
+            arguments.append(minimum)
+        }
+        if query.onlyOpen {
+            conditions.append("t.done = 0")
         }
         if let label = query.labelTitle, !label.isEmpty {
             conditions.append("""
