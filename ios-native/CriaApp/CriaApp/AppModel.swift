@@ -81,6 +81,7 @@ final class AppModel {
         try? await Task.sleep(nanoseconds: 600_000_000)
         do {
             try LocalDataWipe.wipe(root: CriaPaths.dataDirectory())
+            LocalDataWipe.forgetAccount()
             wipeError = nil
         } catch {
             wipeError = String(describing: error)

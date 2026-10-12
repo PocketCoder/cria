@@ -35,6 +35,12 @@ public final class UserNameDirectory: @unchecked Sendable {
         lock.withLock { names[userId] }
     }
 
+    /// Drops every name, here and on disk (signing out with "delete data").
+    func forget() {
+        lock.withLock { names = [:] }
+        defaults.removeObject(forKey: Self.key)
+    }
+
     func remember(_ pairs: [(Int, String?)]) {
         let changed: [String: String]? = lock.withLock {
             var dirty = false
