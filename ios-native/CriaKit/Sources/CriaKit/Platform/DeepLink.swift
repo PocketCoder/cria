@@ -36,6 +36,7 @@ public enum DeepLink: Equatable, Sendable {
 
     public static func taskURL(localId: String) -> URL? { URL(string: "\(scheme)://task/\(localId)") }
     public static func projectURL(localId: String) -> URL? { URL(string: "\(scheme)://project/\(localId)") }
+    public static var todayURL: URL? { URL(string: "\(scheme)://today") }
 
     /// Where the link goes in the shell.
     public enum Destination: Equatable, Sendable {

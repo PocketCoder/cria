@@ -1,6 +1,7 @@
 import CriaKit
 import Foundation
 import Observation
+import UserNotifications
 import WidgetKit
 
 /// Top-level app state: owns the auth session, and once signed in the local store and sync services.
@@ -37,25 +38,34 @@ final class AppModel {
         defer { isStarting = false }
         await session.hydrate()
         status = await session.status
+        // Only ever set here: a Keychain that is not readable yet (before first unlock) must not blank the widget.
+        if case .authenticated = status { SignedInFlag.set(true) }
         await startServicesIfNeeded()
     }
 
     func signedIn(_ result: SignInResult) async throws {
         try await session.signIn(result.credentials)
         status = await session.status
+        if case .authenticated = status { SignedInFlag.set(true) }
         await startServicesIfNeeded()
     }
 
     /// `wipeLocalData` also deletes the database, queued blobs and cached backgrounds.
     func signOut(wipeLocalData: Bool = false) async {
+        // First, so the widget, extensions and an in-flight reminder pass stop treating the account as signed in.
+        SignedInFlag.set(false)
         await services?.stop()
         services = nil
         await session.signOut()
         status = await session.status
-        // The previous account's task titles must not stay in system search or on the Home Screen.
+        // The previous account's task titles must not stay in system search, Notification Centre or on the Home Screen.
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
         await SpotlightIndexer.clear()
-        WidgetCenter.shared.reloadAllTimelines()
         if wipeLocalData { await wipeLocalFiles() }
+        // After any wipe, so the widget does not read the old database one last time.
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// Gives the views that still hold the store a moment to go away before the files are deleted, so the database is

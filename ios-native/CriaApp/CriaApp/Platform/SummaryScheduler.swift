@@ -31,13 +31,16 @@ enum SummaryScheduler {
         let tasks = (try? store.tasks(matching: TaskQuery()))?.map {
             SummaryTask(title: $0.title, dueDate: $0.dueDate, done: $0.done, doneAt: $0.doneAt)
         } ?? []
-        let planned = allowed ? Summaries.plan(config, tasks: tasks, now: Date()) : []
+        let planned = allowed && SignedInFlag.isSignedIn() ? Summaries.plan(config, tasks: tasks, now: Date()) : []
         center.removePendingNotificationRequests(withIdentifiers: Summaries.identifiers)
         for item in planned {
+            if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
             content.title = item.message.title
             content.body = item.message.body
             content.sound = .default
+            // A tap opens Today.
+            if let today = DeepLink.todayURL { content.userInfo = [NotificationRouter.linkKey: today.absoluteString] }
             let parts = Calendar.cria.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
             try? await center.add(UNNotificationRequest(identifier: item.identifier, content: content, trigger: trigger))

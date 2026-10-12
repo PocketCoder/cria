@@ -1,6 +1,7 @@
 import CoreSpotlight
 import CriaKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct CriaApp: App {
@@ -9,6 +10,8 @@ struct CriaApp: App {
 
     init() {
         Theme.applyNavigationAppearance()
+        // Before launch finishes, so a tap on a notification that started the app is delivered.
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
     }
 
     var body: some Scene {
@@ -35,6 +38,11 @@ struct RootView: View {
     var body: some View {
         content
             .onOpenURL { model.pendingURL = $0 }
+            .onChange(of: NotificationRouter.shared.pendingURL, initial: true) { _, url in
+                guard let url else { return }
+                NotificationRouter.shared.pendingURL = nil
+                model.pendingURL = url
+            }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 let key = CSSearchableItemActivityIdentifier
                 if let identifier = activity.userInfo?[key] as? String {

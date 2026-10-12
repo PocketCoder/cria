@@ -18,6 +18,7 @@ struct AddTaskIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let title = String(taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).prefix(250))
         if title.isEmpty { return .result(dialog: "A task needs a title.") }
+        guard SignedInFlag.isSignedIn() else { return .result(dialog: "Sign in to Cria first.") }
         let store = CriaStore(database: try CriaPaths.openDatabase())
         guard try store.captureTask(title: title) != nil else {
             return .result(dialog: "Open Cria and sign in first.")

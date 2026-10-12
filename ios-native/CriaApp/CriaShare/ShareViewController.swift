@@ -26,6 +26,7 @@ final class ShareViewController: UIViewController {
     }
 
     private func save() async {
+        guard SignedInFlag.isSignedIn() else { return finish("Sign in to Cria first.", success: false) }
         let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
         let providers = items.flatMap { $0.attachments ?? [] }
         // Only a real title counts: for shared plain text `attributedContentText` is the whole text.
