@@ -59,7 +59,6 @@ struct SmartViewScreen: View {
 
     var body: some View {
         List {
-            if drawsOwnTitle { titleRow }
             header
             // Every group shown is on or after the selected day, so an empty selected day comes first.
             nothingPlanned
@@ -144,8 +143,9 @@ struct SmartViewScreen: View {
         }
     }
 
-    /// The screen title and its subtitle, aligned with the cards' leading edge.
-    private var titleRow: some View {
+    /// The screen title and its subtitle. A section header, not a row: iOS 26 clips a row to its rounded card, which
+    /// cut into the subtitle's first and last letters.
+    private var titleHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(Theme.wordmark)
@@ -153,10 +153,8 @@ struct SmartViewScreen: View {
                 .accessibilityAddTraits(.isHeader)
             subtitleText
         }
+        .textCase(nil)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 0, trailing: 0))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
     }
 
     @ViewBuilder private var header: some View {
@@ -164,8 +162,12 @@ struct SmartViewScreen: View {
             Section {
                 WeekStrip(selected: $selectedDay, busyDays: Set(live.value.groups.filter { !$0.items.isEmpty }.map(\.key)))
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+            } header: {
+                if drawsOwnTitle { titleHeader }
             }
-        } else if subtitle != nil && !drawsOwnTitle {
+        } else if drawsOwnTitle {
+            Section {} header: { titleHeader }
+        } else if subtitle != nil {
             Section {} header: { subtitleText }
         }
     }
