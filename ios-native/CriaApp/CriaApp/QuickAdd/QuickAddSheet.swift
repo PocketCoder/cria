@@ -33,7 +33,9 @@ struct QuickAddSheet: View {
     /// Clearing the line after "Add another" must not take the project back out with the typed `+project`.
     @State private var skipNextFollow = false
     @State private var errorMessage: String?
-    @FocusState private var focused: Bool
+    @FocusState private var focused: QuickAddFocus?
+    /// Plain-text description, saved as a paragraph.
+    @State private var note = ""
     /// Height of the field, chips and hint, so the sheet hugs them above the keyboard.
     @State private var contentHeight: CGFloat = 260
     @State private var detent: PresentationDetent = .height(260 + QuickAddSheet.navigationBarAllowance)
@@ -49,69 +51,68 @@ struct QuickAddSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                TextField("Buy milk tomorrow *errand !2", text: $line, axis: .vertical)
-                    .font(.title2)
-                    .focused($focused)
-                    .submitLabel(.done)
-                    .onSubmit(submit)
-                if !line.isEmpty {
-                    Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.rowTitle)
-                }
-                pickers
-                chips
-                if let errorMessage {
-                    Text(errorMessage).foregroundStyle(Color(.destructive)).font(Theme.caption)
-                }
-                QuickAddHint()
-                QuickAddAIRow(onRamble: onRamble, onPhoto: onPhoto, close: { dismiss() })
-                addAnotherRow
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Task name", text: $line, axis: .vertical)
+                .font(.title3.weight(.semibold))
+                .focused($focused, equals: .title)
+                .submitLabel(.done)
+                .onSubmit(submit)
+            TextField("Description", text: $note, axis: .vertical)
+                .font(Theme.rowSubtitle)
+                .foregroundStyle(Color(.mutedForeground))
+                .lineLimit(1...4)
+                .focused($focused, equals: .description)
+            if !line.isEmpty && parsedSomething {
+                Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.caption)
             }
-            .padding()
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fitContent($0) }
-            // Pinned to the top: the stack sat centred in the sheet, with empty space above and below.
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .navigationTitle("New task")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", systemImage: "arrow.up", action: submit)
-                        .disabled(!canSubmit)
-                        .modifier(CriaProminentToolbarButton())
-                }
+            pickers
+            addedLine
+            if let errorMessage {
+                Text(errorMessage).foregroundStyle(Color(.destructive)).font(Theme.caption)
             }
-            .onAppear(perform: load)
-            .onChange(of: line) { old, new in
-                // A multi-line field inserts a newline on Return instead of calling onSubmit: strip it and submit.
-                if new.contains("\n") {
-                    line = new.replacingOccurrences(of: "\n", with: "")
-                    if canSubmit { submit() }
-                } else if skipNextFollow {
-                    skipNextFollow = false
-                } else {
-                    lineChanged(from: old, to: new)
-                }
-            }
-            // Relative reminders follow the due date, so they go when it does.
-            .onChange(of: dueISO) { _, new in
-                if new.isEmpty { reminders.removeAll { $0.needsDueDate } }
-            }
-            .sheet(item: $pickerSheet, onDismiss: { focused = true }, content: { which in
-                QuickAddPickerSheetView(
-                    which: which, services: services, dueISO: dueISO, labelTitles: $labelTitles, reminders: $reminders,
-                    onDue: { setDue($0) }
-                )
-            })
+            Divider().padding(.horizontal, -16)
+            bottomBar
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .padding(.bottom, 10)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fitContent($0) }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .presentationDragIndicator(.visible)
+        .onAppear(perform: load)
+        .onChange(of: line) { old, new in
+            // A multi-line field inserts a newline on Return instead of calling onSubmit: strip it and submit.
+            if new.contains("\n") {
+                line = new.replacingOccurrences(of: "\n", with: "")
+                if canSubmit { submit() }
+            } else if skipNextFollow {
+                skipNextFollow = false
+            } else {
+                lineChanged(from: old, to: new)
+            }
+        }
+        // Relative reminders follow the due date, so they go when it does.
+        .onChange(of: dueISO) { _, new in
+            if new.isEmpty { reminders.removeAll { $0.needsDueDate } }
+        }
+        .sheet(item: $pickerSheet, onDismiss: { focused = .title }, content: { which in
+            QuickAddPickerSheetView(
+                which: which, services: services, dueISO: dueISO, labelTitles: $labelTitles, reminders: $reminders,
+                onDue: { setDue($0) }
+            )
+        })
         .presentationDetents([fittedDetent, .large], selection: $detent)
         .task { await aiStatus.refresh() }
         .task { await adoptServerDefault() }
     }
 
-    /// The inline navigation bar and grabber above the content.
-    private static let navigationBarAllowance: CGFloat = 64
+    /// True when the typed line holds Quick Add Magic tokens, so the preview is worth showing.
+    private var parsedSomething: Bool {
+        parsed.title != line.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The grabber above the content.
+    private static let navigationBarAllowance: CGFloat = 16
 
     private var fittedDetent: PresentationDetent { .height(contentHeight + Self.navigationBarAllowance) }
 
@@ -123,69 +124,8 @@ struct QuickAddSheet: View {
         if wasFitted { detent = fittedDetent }
     }
 
-    private var addAnotherRow: some View {
-        Toggle(isOn: $addAnother) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Add another").font(Theme.rowTitle)
-                if let addedTitle {
-                    Text("Added ‘\(addedTitle)’").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-                }
-            }
-        }
-        .tint(Color(.primary))
-    }
-
     private var canSubmit: Bool {
         canSubmitQuickAdd(title: parsed.title, projectTitle: typedProjectTitle, projectLocalId: projectId.isEmpty ? nil : projectId)
-    }
-
-    private var pickers: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Menu {
-                    Picker("Project", selection: projectPick) {
-                        ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
-                    }
-                } label: {
-                    let chip = resolveProjectChip(parsedProjectTitle: typedProjectTitle, projects: projects, projectLocalId: projectId)
-                    CriaChip(text: chip.title ?? "Project", systemImage: "folder", tint: Color(.primary))
-                }
-                QuickAddDateMenu(dueISO: dueISO, onPick: { setDue($0) }, onCustom: { pickerSheet = .date })
-                Menu {
-                    Picker("Priority", selection: priorityPick) {
-                        ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
-                    }
-                } label: {
-                    CriaChip(text: priority == 0 ? "Priority" : "P\(priority)", systemImage: "flag", tint: Color(.marigold700))
-                }
-                Button { pickerSheet = .labels } label: {
-                    CriaChip(
-                        text: labelTitles.isEmpty ? "Labels" : "\(labelTitles.count) label\(labelTitles.count == 1 ? "" : "s")",
-                        systemImage: "tag", tint: Color(.meadow700)
-                    )
-                }
-                .buttonStyle(.plain)
-                QuickAddReminderMenu(reminders: $reminders, hasDueDate: !dueISO.isEmpty, onCustom: { pickerSheet = .reminder })
-            }
-        }
-    }
-
-    @ViewBuilder private var chips: some View {
-        if !labelTitles.isEmpty || parsed.repeatAfter != nil || parsed.repeatMode != nil {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    ForEach(labelTitles, id: \.self) { title in
-                        Button { pickerSheet = .labels } label: {
-                            CriaChip(text: title, systemImage: "tag", tint: Color(.meadow700))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if parsed.repeatAfter != nil || parsed.repeatMode != nil {
-                        CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
-                    }
-                }
-            }
-        }
     }
 
     /// Picker bindings that mark their field as set by hand, so the typed line stops changing it.
@@ -214,7 +154,7 @@ struct QuickAddSheet: View {
         projectId = baseProjectId
         if line.isEmpty { line = initialLine }
         if dueISO.isEmpty, let initialDueDate { dueISO = DueDates.allDayISO(for: initialDueDate) }
-        focused = true
+        focused = .title
     }
 
     /// A date chosen with the picker ("" for no date) wins over a typed one.
@@ -247,13 +187,16 @@ struct QuickAddSheet: View {
             dueDate: dueISO.isEmpty ? nil : dueISO, priority: priority,
             repeatAfter: result.repeatAfter, repeatMode: result.repeatMode
         )
-        guard let input = buildQuickAddInput(
+        guard let built = buildQuickAddInput(
             title: result.title, projectTitle: typedProjectTitle, projects: projects,
             selectedProjectId: projectId.isEmpty ? nil : projectId, fallbackProjectId: baseProjectId, fields: fields
         ) else {
             errorMessage = "Choose a project first."
             return
         }
+        var input = built
+        let description = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !description.isEmpty { input.description = Self.paragraphHTML(description) }
         do {
             try services.store.persistQuickAdd(
                 input, labelTitles: labelTitles, assigneeUsernames: result.assigneeUsernames, reminders: reminders
@@ -274,66 +217,120 @@ struct QuickAddSheet: View {
         reminders = []
         picked.subtract([.due, .priority])
         errorMessage = nil
+        note = ""
         addedTitle = title
-        focused = true
+        focused = .title
     }
 }
 
-/// Which tokens the typed line understands.
-private struct QuickAddHint: View {
-    var body: some View {
-        Text(text).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-    }
-
-    private var text: AttributedString {
-        func token(_ text: String, _ tint: Color) -> AttributedString {
-            var piece = AttributedString(text)
-            piece.font = Theme.caption.bold()
-            piece.foregroundColor = tint
-            return piece
+extension QuickAddSheet {
+    /// Project on the left; Ramble and send on the right, as in Todoist's add sheet.
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            Menu {
+                Picker("Project", selection: projectPick) {
+                    ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
+                }
+            } label: {
+                let chip = resolveProjectChip(parsedProjectTitle: typedProjectTitle, projects: projects, projectLocalId: projectId)
+                HStack(spacing: 6) {
+                    Image(systemName: "tray").imageScale(.small)
+                    Text(chip.title ?? "Project").lineLimit(1)
+                    Image(systemName: "chevron.down").imageScale(.small).foregroundStyle(Color(.mutedForeground))
+                }
+                .font(Theme.rowSubtitle.weight(.medium))
+                .foregroundStyle(Color(.foreground))
+            }
+            .accessibilityLabel("Project")
+            Spacer(minLength: 8)
+            if let onRamble, aiStatus.isOfferable {
+                Button { dismiss(); onRamble() } label: {
+                    Image(systemName: "waveform")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 40, height: 40)
+                        .foregroundStyle(Color(.primary))
+                        .background(Color(.primarySoft), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(aiStatus.notReadyMessage != nil)
+                .accessibilityLabel("Ramble")
+            }
+            Button(action: submit) {
+                Image(systemName: "arrow.up")
+                    .font(.body.weight(.bold))
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(Color(.primaryForeground))
+                    .background(canSubmit ? Color(.primary) : Color(.mutedForeground).opacity(0.4), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmit)
+            .accessibilityLabel(addAnother ? "Add and keep open" : "Add task")
         }
-        var out = AttributedString("Type ")
-        out += token("*label", Color(.meadow700))
-        out += AttributedString(", ")
-        out += token("+project", Color(.primary))
-        out += AttributedString(", ")
-        out += token("!1–5", Color(.marigold700))
-        out += AttributedString(" or a day like ")
-        out += token("tomorrow", Color(.sky700))
-        out += AttributedString(".")
-        return out
     }
-}
 
-/// Hands off to Ramble (where the on-device model is offered) or the photo import.
-private struct QuickAddAIRow: View {
-    var onRamble: (() -> Void)?
-    var onPhoto: (() -> Void)?
-    let close: () -> Void
-    private var aiStatus: AIStatus { AIStatus.shared }
-
-    var body: some View {
-        if onPhoto != nil || onRamble != nil {
-            Divider()
-            HStack(spacing: 10) {
-                if let onRamble, aiStatus.isOfferable {
-                    aiButton("Ramble", symbol: "mic") { close(); onRamble() }
-                }
-                if let onPhoto {
-                    aiButton("From photo", symbol: "camera") { close(); onPhoto() }
-                }
+    private var addedLine: some View {
+        Group {
+            if let addedTitle {
+                Text("Added ‘\(addedTitle)’").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
         }
     }
 
-    private func aiButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .foregroundStyle(Color(.primary))
-                .background(Color(.primarySoft), in: Capsule())
+    /// One row of compact chips. Picked labels show as their own chips, and the ••• chip holds the rest.
+    private var pickers: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                QuickAddDateMenu(dueISO: dueISO, onPick: { setDue($0) }, onCustom: { pickerSheet = .date })
+                Menu {
+                    Picker("Priority", selection: priorityPick) {
+                        ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
+                    }
+                } label: {
+                    CriaChip(text: priority == 0 ? "Priority" : "P\(priority)", systemImage: "flag", tint: Color(.marigold700))
+                }
+                QuickAddReminderMenu(reminders: $reminders, hasDueDate: !dueISO.isEmpty, onCustom: { pickerSheet = .reminder })
+                Button { pickerSheet = .labels } label: {
+                    CriaChip(
+                        text: labelTitles.isEmpty ? "Labels" : labelTitles.joined(separator: ", "),
+                        systemImage: "tag", tint: Color(.meadow700)
+                    )
+                }
+                .buttonStyle(.plain)
+                if parsed.repeatAfter != nil || parsed.repeatMode != nil {
+                    CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
+                }
+                moreMenu
+            }
+            .padding(.vertical, 2)
         }
-        .buttonStyle(.plain)
     }
+
+    private var moreMenu: some View {
+        Menu {
+            Toggle("Keep open after adding", isOn: $addAnother)
+            if let onPhoto {
+                Button("List from photo", systemImage: "camera") { dismiss(); onPhoto() }
+            }
+            Section("Type to set") {
+                Text("*label  +project  !1–5  tomorrow 5pm")
+            }
+        } label: {
+            CriaChip(text: "•••", tint: Color(.mutedForeground))
+        }
+        .accessibilityLabel("More options")
+    }
+
+    /// Plain text as a paragraph, escaped, with line breaks kept.
+    static func paragraphHTML(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\n", with: "<br>")
+        return "<p>\(escaped)</p>"
+    }
+}
+
+enum QuickAddFocus: Hashable {
+    case title, description
 }
