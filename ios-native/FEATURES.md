@@ -1,6 +1,6 @@
 # Cria native iOS: feature reference
 
-Every user-facing feature of the SwiftUI app, and where its data lives. Derived from the code in `CriaApp/` and `CriaKit/` on `feature/swift-ios`; nothing here is taken on trust from the plan. Status of device checks is in [docs/SWIFT-IOS-PLAN.md](../docs/SWIFT-IOS-PLAN.md).
+Every user-facing feature of the SwiftUI app, and where its data lives. Derived from the code in `CriaApp/` and `CriaKit/` on `feature/swift-ios`; nothing here is taken on trust from the plan. The app is in daily use on an iPhone (iOS 26), which is where it is tested; problems found there are fixed as they come up.
 
 ## Where data lives
 
@@ -228,4 +228,3 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 - **English only.** There is no language setting: the interface is not translated. The account's language stays as set on the server (Vikunja-web and emails use it).
 - **Polling only.** No WebSocket live sync, and no network-reachability trigger; the 60 second tick and the outbox cover reconnects.
 - **Link-share sessions end when the token expires.** A share token cannot be refreshed, so the app signs out when it runs out.
-- **Device checks pending.** README and the plan list what has not been run on a device: notification permission and delivery, completion sound, camera, avatar upload, two-factor QR, session revoke, Liquid Glass tab bar, extension signing and App Group provisioning under a free Apple ID, Foundation Models output, Vision OCR, widget refresh timing, editor behaviour, Kanban and Gantt gestures.

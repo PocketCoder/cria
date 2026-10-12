@@ -26,4 +26,4 @@ SQLite database in the App Group container `group.io.cria.app`.
 - Font: `Fonts/Onest-Bold.ttf` (OFL) is bundled and listed under `UIAppFonts` in `project.yml`. It is used only for navigation large titles and the login wordmark.
 - Preferences: server-backed settings go through `SettingsModel` and `GeneralSettings` (single-field `SettingsChange`, never a full settings object). Local-only preferences live in `LocalPreferences` and reach views through `PreferencesModel` and the `\.dateDisplay` / `\.playsCompletionSound` environment values.
 - Summary notifications (morning summary, weekly round-up) are scheduled by `Platform/SummaryScheduler.swift` from the pure plan in `CriaKit/Settings/Summaries.swift`.
-- Not verified on a device yet: notification permission and delivery, completion sound, camera shutter, avatar upload, two-factor QR, session revoke, Liquid Glass tab bar.
+- Device testing: the alpha is in daily use on an iPhone (iOS 26) and is tested there as it is used; problems found are fixed as they come up.

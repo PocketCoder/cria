@@ -388,6 +388,8 @@ Sign-in, 60s sync, create/edit/delete offline, conflict modal, quick add (all ma
 
 ## Status
 
+Device testing (2026-10-12): the alpha `.ipa` is in daily use on an iPhone (iOS 26). The "awaiting a device check" notes below are covered by that use; problems found are fixed as they come up rather than tracked here.
+
 | Phase | Sections | Status |
 |---|---|---|
 | 0 Foundations | S-00 to S-02 | done (S-02 CI green on ca9e3ee) |
@@ -420,7 +422,7 @@ Fixed, app: sync queue screen; offline banner; notification taps open the task a
 
 Same bugs in the Tauri app (not changed here, as the plan keeps the Tauri app out of scope): label update verb (`src/sync/push/label.ts`), `percent_done` scaling (`src/sync/push/task.ts`, and the AGENTS.md "quirk" note is wrong), comment foreign key on task and project deletes (`src/sync/reconcile.ts`, `src/db/tasks.ts`), project identifier omitted from the project body (`src/sync/push/project.ts`), cover image dropped from the task body, offline failures using attempts (`src/sync/push.ts`), list reorder leaving tasks dirty (`src/db/tasks.ts`), "keep mine" not pushing (`src/db/conflicts.ts`).
 
-Still open: project and label conflicts are recorded only at push; avatar path may need `/avatar/{username}` on newer servers; CalDAV tokens. Done since: undo toast for deletes (outbox hold), assignees in task detail, subtasks nested in project lists, quick add date/label/reminder pickers, synced display prefs (`frontend_settings.cria`), authenticated server images, part-of-day times ("tomorrow morning" is 09:00, unlike desktop's all-day). Device checks needed for everything in the app layer (none of it can run in CI): conflict sheet, sync queue, notification taps, editor accessory bar, Gantt gestures, Kanban drop, widget sign-out state.
+Since closed: project and label conflicts (pull and push, every editable field), CalDAV tokens, label management, project backgrounds, link-share sign-in, sign out with data deletion, AI subtask suggestions and filter from text. Still open: live sync. Done since: undo toast for deletes (outbox hold), assignees in task detail, subtasks nested in project lists, quick add date/label/reminder pickers, synced display prefs (`frontend_settings.cria`), authenticated server images, part-of-day times ("tomorrow morning" is 09:00, unlike desktop's all-day). Device checks needed for everything in the app layer (none of it can run in CI): conflict sheet, sync queue, notification taps, editor accessory bar, Gantt gestures, Kanban drop, widget sign-out state.
 
 ## Nightly operation (native Sonnet 5.5)
 
