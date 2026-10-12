@@ -19,6 +19,12 @@ Two notes apply throughout:
 
 | Feature | Where it lives | Notes |
 |---|---|---|
+| Duplicate a task | Vikunja | Task detail ••• menu or a row's long press. Copies dates, priority, progress, colour, repeat, labels and reminders. |
+| Postpone (defer) presets | Vikunja | 1 day, 3 days, 1 week, next Monday, from the later of the due date and today. Task detail, row long press and the selection bar. |
+| Task colour | Vikunja | `hex_color`; palette or a custom colour. Shown as a dot on rows. |
+| Copy link to a task or comment | Vikunja | The server's web address; available once the task has synced. Share from the ••• menu. |
+| Row signals | Vikunja | Colour, attachments, checklist n/m, progress and repeats on task rows. |
+| Full-size images | This device | Tap an image in a description or comment: zoom, pan, Share or Save. |
 | Create, edit, complete, delete task | Vikunja | Offline-safe. Delete holds the push for 7 seconds so the Undo toast can cancel it. |
 | Title | Vikunja | Saved when editing ends. |
 | Description (rich text) | Vikunja | Stored as HTML. Native editor: bold, italic, underline, strikethrough, heading, bullet, numbered and task lists, indent, quote, code block, link, image, @mention. Sanitised on display. |
@@ -43,10 +49,18 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 
 | Feature | Where it lives | Notes |
 |---|---|---|
+| View settings | Vikunja | Manage views: title, filter (checked as you type) and, for boards, manual or filter columns. |
+| Kanban filter | This device | Text, minimum priority, labels, show done; per board (`cria.kanbanFilter.<view>`). Hides cards only. |
+| Gantt date range | This device | From, To, show undated tasks, Reset (`cria.gantt.filters`). |
+| Table cell editing | This device for the switch | Options > Edit cells: labels, assignees and dates edit in place. |
+| Last view per project | This device | A project opens on the view used last (`cria.projectView.<project>`). |
+| Project info | Vikunja | Identifier, parent, open and done counts, owner, dates. From the project header or Browse long press. |
+| Duplicate a project | Vikunja | Online only, from Browse long press or the info page. |
 | Project views (create, rename, delete, reorder; List, Gantt, Table, Board) | Vikunja | A project keeps at least one view. |
 | List view | Vikunja | Subtasks nested under parents. Pull to refresh. |
 | List: manual reorder (edit mode) | Vikunja | Per-view task position (`/tasks/{id}/position`). Only offered with the manual sort. |
-| List: sort choice and "Show completed" | This device | `@AppStorage` (`cria.taskList.sort`, `cria.taskList.showDone`), shared by all lists. |
+| Display options (group, sort, filters, show completed) | This device | Per view (each project, label, Favourites, Inbox, Today, Upcoming, saved filter) in `cria.display.configs`. Group by priority, due date, project or label; filter by priority, dates, label, project, assigned to me or unassigned. |
+| Select several tasks | Vikunja for the changes | Select beside the title; the bar completes, schedules, defers, moves, sets priority or deletes them together. |
 | Kanban cards and columns | Vikunja | Move a card by drag or "Move to" (bucket assignment, position). Add, rename, delete columns; set a column limit that blocks drops. |
 | Kanban done and default column | Vikunja | Stored on the view. |
 | Kanban for filter views | Vikunja | Read-only by design: each column is a saved search, so a card shows wherever it matches and is not dragged between columns (as in Vikunja-web). |
@@ -59,6 +73,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 
 | Feature | Where it lives | Notes |
 |---|---|---|
+| Today when everything is done | This device | "Pull something forward" from the next 7 days, and up to three suggestions. |
 | Today | Computed on this device from Vikunja tasks | Overdue first, then due today. "Reschedule" moves a group's overdue tasks to today; tasks with a due time keep it. |
 | Upcoming | Computed on this device from Vikunja tasks | One section per day, with a week strip. The strip starts on the Vikunja week-start setting. |
 | Inbox | Vikunja (the default project) | Open tasks in the default project chosen in Settings. |
@@ -80,6 +95,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Suggest subtasks | Vikunja for the subtasks | Task detail > Subtasks. The on-device model proposes an editable checklist; ticked lines become subtasks. Same device requirements as Ramble. |
 | Describe a filter | Vikunja for the filter | Saved-filter editor: describe it in words and the on-device model writes the query, retrying once if it does not parse. |
 | Ramble (speak or type a list, review, add) | Vikunja for the tasks | Needs iOS 26 on a device with Apple Intelligence; the button is hidden otherwise. The model runs on the device and writes dates in words for the parser to resolve. Speech recognition is on-device. |
+| Ramble in the background | This device | Keeps working when you switch apps and notifies when ready (iOS 26). Closing the sheet with rows not yet added asks first. |
 | "Let Ramble choose projects and labels" | This device | `rambleChoosesTags` in `LocalPreferences`. Not in the account sync. |
 | List from photo (OCR to tasks) | Vikunja for the tasks | Camera or library, Vision text recognition, review and edit, then add. Tidy-up with the on-device model when available. |
 | Photo capture defaults (project, label) | This device | Settings > Photo capture (`photoProjectId`, `photoLabel`). |
@@ -123,6 +139,10 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 
 | Feature | Where it lives | Notes |
 |---|---|---|
+| Reminder actions | Vikunja for Complete | Long-press a reminder notification: Complete (without opening the app) or Snooze 10 minutes. |
+| Relative reminders | Vikunja | Any offset before or after the due, start or end date; rows show when they fire. |
+| Notifications-off warning | This device | On a task's reminders, with a button to the iOS notification settings. |
+| Conflict notification | This device | When a sync finds conflicts while Cria is in the background; it opens the conflict sheet. |
 | Task reminders (the data) | Vikunja | See [Tasks](#tasks-and-task-detail). |
 | Phone alerts for reminders | This device | Scheduled with the OS (up to 64 pending) so they fire with the app closed. Tapping one opens the task. Permission is asked when there is something to schedule. |
 | Notifications master switch | This device | `notificationsEnabled`. Off clears every pending alert Cria scheduled. |
@@ -142,7 +162,8 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Conflicts | Vikunja | Detected on pull and before a push when the server copy changed since the last sync. Sheet shows Yours and Server per field; Keep mine or Use theirs. Task fields compared: title, description, done, dates, priority, percent done, colour, position. Projects: title, description, colour, parent, archived, favourite. Labels: title, description, colour. |
 | Undo | This device | Task delete only (5 second toast, 7 second hold in the outbox). |
 | Sign in | Vikunja | Server URL plus an API token, or username, password and a two-factor code. |
-| Credentials | This device | Keychain. The last server URL is remembered in `UserDefaults` (`cria.login.lastServerURL`). |
+| Credentials | This device | Keychain. Up to five recent servers show as chips on the login screen; Remember me keeps the username per server (never the password). Signing out with "delete data" forgets usernames but keeps the servers. |
+| Sign in with a share link | Vikunja | See Settings below. |
 | Sign out | This device | Clears pending alerts and Spotlight, and signals the widget and extensions. |
 | Sign out and delete data on this iPhone | This device | Also deletes the database, queued uploads, cached backgrounds, cached account settings, other people's names and temporary files. Warns how many changes have not synced. Device preferences stay. |
 | Sign in with a share link | Vikunja | Login > Share link: paste a project's share link (and its password). Account-only settings, the activity inbox, email settings, assigning people, project sharing and new saved filters are hidden. |
@@ -161,7 +182,7 @@ Settings opens from the gear in Browse.
 | Quick Add Magic | Vikunja | See [Quick add](#quick-add-and-ramble). |
 | Discoverable by email, by name | Vikunja | |
 | Date format, time format | Cria accounts | `dateFormat`, `timeFormat`. Shared with the desktop Cria app. |
-| Show completed | This device | `cria.taskList.showDone`, the same switch as the list menu. |
+| Show completed | This device | `cria.taskList.showDone`: the starting value for views whose Display options have not been changed. |
 | Let Ramble choose projects and labels | This device | Only shown when the on-device model is offered. |
 
 ### Appearance
