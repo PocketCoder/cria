@@ -71,8 +71,7 @@ public extension ApiClient {
 
     /// Image bytes for the user's current avatar.
     func avatarData(username: String) async throws -> Data {
-        let name = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
-        let response = try await send(.get, "/\(name)/avatar")
+        let response = try await avatarResponse(username: username)
         try response.requireSuccess()
         return response.data
     }
@@ -124,5 +123,37 @@ public extension ApiClient {
 
     func cancelDeletion(password: String) async throws {
         try await perform(.post, "/user/deletion/cancel", body: AccountRequests.passwordOnly(password))
+    }
+}
+
+/// A CalDAV app password (`/user/settings/token/caldav`). The token text is only returned once, on create.
+public struct CaldavToken: Equatable, Sendable, Identifiable {
+    public let id: Int
+    public let token: String?
+    public let created: String?
+
+    init?(_ value: JSONValue) {
+        guard let id = value["id"]?.intValue else { return nil }
+        self.id = id
+        token = value["token"]?.stringValue
+        created = value["created"]?.stringValue
+    }
+}
+
+public extension ApiClient {
+    func caldavTokens() async throws -> [CaldavToken] {
+        let rows: JSONValue = try await get("/user/settings/token/caldav")
+        guard case .array(let items) = rows else { return [] }
+        return items.compactMap(CaldavToken.init)
+    }
+
+    func createCaldavToken() async throws -> CaldavToken {
+        let row: JSONValue = try await put("/user/settings/token/caldav")
+        guard let token = CaldavToken(row) else { throw NetworkError("Unexpected CalDAV token response") }
+        return token
+    }
+
+    func deleteCaldavToken(id: Int) async throws {
+        try await perform(.delete, "/user/settings/token/caldav/\(id)")
     }
 }

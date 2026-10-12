@@ -45,6 +45,14 @@ extension AppServices {
         (try? await api.searchUsers(query)) ?? []
     }
 
+    /// As `searchUsers`, but a failed request throws, so the caller can tell "offline" from "nobody matches". Names
+    /// found are remembered for showing assignees.
+    public func searchUsersOrThrow(_ query: String) async throws -> [UserResponse] {
+        let users = try await api.searchUsers(query)
+        UserNameDirectory.shared.remember(users.map { ($0.id, $0.name) })
+        return users
+    }
+
     /// Pending attachments are discarded locally; uploaded ones are deleted on the server first, then locally.
     public func deleteAttachment(_ attachment: AttachmentRecord, taskLocalId: String) async throws {
         guard let serverId = attachment.serverId, !attachment.pending else {

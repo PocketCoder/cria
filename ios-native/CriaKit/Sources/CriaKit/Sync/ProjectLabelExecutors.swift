@@ -54,6 +54,7 @@ public struct ProjectExecutor: OutboxExecutor {
         case "update":
             if deleted { return }
             guard let serverId = project.serverId else { throw ApiError.blocked("Cannot update a project without server id") }
+            if try store.hasUnresolvedConflict(entityType: "project", localId: localId) { throw ApiError.conflictBlocked }
             if let lastSynced, let current = try? await api.send(.get, "/projects/\(serverId)"), current.isSuccess,
                try store.checkDivergence(lastSynced: lastSynced, serverPayload: current.data,
                                          fields: ["title", "description"], entityType: "project", localId: localId) {
@@ -130,6 +131,7 @@ public struct LabelExecutor: OutboxExecutor {
         case "update":
             if deleted { return }
             guard let serverId = label.serverId else { throw ApiError.blocked("Cannot update a label without server id") }
+            if try store.hasUnresolvedConflict(entityType: "label", localId: localId) { throw ApiError.conflictBlocked }
             if let lastSynced, let current = try? await api.send(.get, "/labels/\(serverId)"), current.isSuccess,
                try store.checkDivergence(lastSynced: lastSynced, serverPayload: current.data,
                                          fields: ["title", "description"], entityType: "label", localId: localId) {

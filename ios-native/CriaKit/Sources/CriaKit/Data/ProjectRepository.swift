@@ -58,7 +58,7 @@ extension CriaStore {
             let now = isoNow()
             let existing = try Row.fetchOne(
                 connection,
-                sql: "SELECT local_id, dirty, deleted FROM projects WHERE server_id = ?",
+                sql: "SELECT local_id, dirty, deleted, last_synced FROM projects WHERE server_id = ?",
                 arguments: [payload.id]
             )
             if let existing {
@@ -66,6 +66,12 @@ extension CriaStore {
                 let dirty: Bool = existing["dirty"]
                 let deleted: Bool = existing["deleted"]
                 if dirty {
+                    if !deleted {
+                        try CriaStore.recordConflictIfDiverged(
+                            connection, entityType: "project", localId: localId, lastSynced: existing["last_synced"],
+                            remoteJSON: rawJSON, fields: ["title", "description"], now: now
+                        )
+                    }
                     return deleted ? nil : localId
                 }
                 // A local delete still on its way to the server: do not bring the project back.

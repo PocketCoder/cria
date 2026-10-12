@@ -49,6 +49,7 @@ extension CriaStore {
     public func replaceTaskAssigneesFromServer(
         taskLocalId: String, _ assignees: [AssigneeResponse], in held: Database? = nil
     ) throws {
+        UserNameDirectory.shared.remember(assignees.map { ($0.id, $0.name) })
         try inWrite(held) { connection in
             guard try CriaStore.isClean(connection, taskLocalId: taskLocalId) else { return }
             var preserve = Set<Int>()

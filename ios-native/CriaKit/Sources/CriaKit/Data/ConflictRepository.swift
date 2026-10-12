@@ -82,7 +82,7 @@ extension CriaStore {
     /// Keep mine: the server's copy becomes the new baseline (`last_synced`), so the push's divergence check passes
     /// instead of recording the same conflict again, and an update is queued if none is, so the edit is sent.
     public func resolveConflictKeepMine(id: Int) throws {
-        try userWrite(announcing: [.conflicts, .outbox]) { connection in
+        try userWrite(announcing: [.conflicts, .outbox, .projects, .labels]) { connection in
             let now = isoNow()
             if let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]),
                case let conflict = ConflictRecord(row: row), conflict.entityType == "task" {
@@ -97,6 +97,18 @@ extension CriaStore {
                     try connection.enqueue(.task, localId: record.localId, operation: .update,
                                            payload: CriaStore.taskPayload(record), at: now)
                 }
+            } else if let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]),
+                      case let conflict = ConflictRecord(row: row),
+                      case let (table, entity)? = Self.syncedTable(conflict.entityType) {
+                try connection.execute(
+                    sql: "UPDATE \(table) SET last_synced = ? WHERE local_id = ?",
+                    arguments: [conflict.remoteSnapshot, conflict.entityLocalId]
+                )
+                let queued = try Bool.fetchOne(connection, sql: """
+                    SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = ? AND entity_local_id = ? AND op = 'update')
+                    """, arguments: [conflict.entityType, conflict.entityLocalId]) ?? false
+                // The executor reads the row, not the payload, so an empty payload sends the current state.
+                if !queued { try connection.enqueue(entity, localId: conflict.entityLocalId, operation: .update, payload: [:], at: now) }
             }
             try connection.execute(sql: "UPDATE conflicts SET resolved_at = ? WHERE id = ?", arguments: [now, id])
         }
@@ -105,7 +117,7 @@ extension CriaStore {
     /// Use theirs: overwrite the local row with the remote snapshot, clear dirty, drop the queued ops (they would
     /// push the state being overwritten), stamp `last_synced`, and resolve.
     public func resolveConflictUseTheirs(id: Int) throws {
-        try userWrite(announcing: [.conflicts, .tasks, .outbox]) { connection in
+        try userWrite(announcing: [.conflicts, .tasks, .projects, .labels, .outbox]) { connection in
             guard let row = try Row.fetchOne(connection, sql: "SELECT * FROM conflicts WHERE id = ?", arguments: [id]) else { return }
             let conflict = ConflictRecord(row: row)
             let now = isoNow()
@@ -117,8 +129,28 @@ extension CriaStore {
                     sql: "DELETE FROM outbox WHERE entity_type = 'task' AND entity_local_id = ?", arguments: [conflict.entityLocalId]
                 )
             }
-            // Project and label conflicts are only resolved as records for now, as in the TypeScript app.
+            if case let (table, _)? = Self.syncedTable(conflict.entityType),
+               let remote = try CriaStore.jsonObject(conflict.remoteSnapshot) {
+                // Projects and labels conflict on title and description only: take the server's, clear the edit.
+                try connection.execute(sql: """
+                    UPDATE \(table) SET title = ?, description = ?, last_synced = ?, synced_at = ?, dirty = 0 WHERE local_id = ?
+                    """, arguments: [remote["title"] as? String ?? "", remote["description"] as? String,
+                                     conflict.remoteSnapshot, now, conflict.entityLocalId])
+                try connection.execute(
+                    sql: "DELETE FROM outbox WHERE entity_type = ? AND entity_local_id = ? AND op = 'update'",
+                    arguments: [conflict.entityType, conflict.entityLocalId]
+                )
+            }
             try connection.execute(sql: "UPDATE conflicts SET resolved_at = ? WHERE id = ?", arguments: [now, id])
+        }
+    }
+
+    /// The table and outbox entity for project and label conflicts.
+    private static func syncedTable(_ entityType: String) -> (String, OutboxEntity)? {
+        switch entityType {
+        case "project": ("projects", .project)
+        case "label": ("labels", .label)
+        default: nil
         }
     }
 

@@ -225,4 +225,64 @@ final class ProductionReviewTests: XCTestCase {
         XCTAssertEqual(AppServices.apiPath(of: url, base: "https://vk.example"), "/tasks/3/attachments/9")
         XCTAssertNil(AppServices.apiPath(of: url, base: "https://other.example"))
     }
+
+    // MARK: Project and label conflicts, avatars, CalDAV
+
+    private func dirtyProject(_ store: CriaStore) throws -> String {
+        let json = #"{"id": 1, "title": "Work", "description": "a"}"#
+        let localId = try XCTUnwrap(store.upsertProjectFromServer(try decodeFixture(ProjectResponse.self, json), rawJSON: json))
+        try runSQL(store, "UPDATE projects SET title = 'Mine', dirty = 1 WHERE local_id = ?", [localId])
+        let theirs = #"{"id": 1, "title": "Theirs", "description": "a"}"#
+        try store.upsertProjectFromServer(try decodeFixture(ProjectResponse.self, theirs), rawJSON: theirs)
+        return localId
+    }
+
+    func testPullRecordsAProjectConflictAndUseTheirsTakesTheServerTitle() throws {
+        let store = try makeStore()
+        let localId = try dirtyProject(store)
+        let conflict = try XCTUnwrap(try store.unresolvedConflicts().first)
+        XCTAssertEqual(conflict.entityType, "project")
+        XCTAssertEqual(conflict.fields, ["title"])
+        try store.resolveConflictUseTheirs(id: conflict.id)
+        XCTAssertEqual(try store.projects().first { $0.localId == localId }?.title, "Theirs")
+        XCTAssertTrue(try store.unresolvedConflicts().isEmpty)
+    }
+
+    func testKeepMineOnAProjectQueuesItsUpdate() throws {
+        let store = try makeStore()
+        let localId = try dirtyProject(store)
+        let conflict = try XCTUnwrap(try store.unresolvedConflicts().first)
+        try store.resolveConflictKeepMine(id: conflict.id)
+        let ops = try store.outboxRows()
+        XCTAssertEqual(ops.map(\.entityType), ["project"])
+        XCTAssertEqual(ops.first?.entityLocalId, localId)
+        XCTAssertEqual(try store.projects().first { $0.localId == localId }?.title, "Mine")
+    }
+
+    func testAvatarTriesTheCurrentPathThenTheOldOne() async throws {
+        let transport = StubTransport { request, _ in
+            request.url?.path.hasPrefix("/api/v1/avatar/") == true ? (404, "{}", [:]) : (200, "PNG", ["Content-Type": "image/png"])
+        }
+        let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
+        let data = try await api.avatarData(username: "sam")
+        XCTAssertEqual(String(bytes: data, encoding: .utf8), "PNG")
+        XCTAssertEqual(transport.requests.compactMap { $0.url?.path }, ["/api/v1/avatar/sam", "/api/v1/sam/avatar"])
+    }
+
+    func testCaldavTokensDecode() async throws {
+        let transport = StubTransport { _, _ in (200, #"[{"id": 4, "created": "2026-01-01T00:00:00Z"}]"#, [:]) }
+        let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
+        let tokens = try await api.caldavTokens()
+        XCTAssertEqual(tokens.map(\.id), [4])
+        XCTAssertNil(tokens.first?.token)
+    }
+
+    func testUserNameDirectoryRemembersNames() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "names-\(UUID().uuidString)"))
+        let directory = UserNameDirectory(defaults: defaults)
+        directory.remember([(7, "Sam Smith"), (8, nil), (9, "  ")])
+        XCTAssertEqual(directory.name(for: 7), "Sam Smith")
+        XCTAssertNil(directory.name(for: 8))
+        XCTAssertEqual(UserNameDirectory(defaults: defaults).name(for: 7), "Sam Smith", "persists")
+    }
 }

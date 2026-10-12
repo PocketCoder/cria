@@ -357,16 +357,26 @@ extension CriaStore {
     static func recordConflictIfDiverged(
         _ connection: Database, localId: String, lastSynced: String?, remoteJSON: String, now: String
     ) throws {
+        try recordConflictIfDiverged(connection, entityType: "task", localId: localId, lastSynced: lastSynced,
+                                     remoteJSON: remoteJSON, fields: conflictFields, now: now)
+    }
+
+    /// A pull found a row with a pending local edit whose server copy also changed one of `fields` since the last
+    /// sync: record a conflict (once per pair of snapshots). Ported from `mergeFromServer` in `src/db/syncMerge.ts`.
+    static func recordConflictIfDiverged(
+        _ connection: Database, entityType: String, localId: String, lastSynced: String?, remoteJSON: String,
+        fields candidates: [String], now: String
+    ) throws {
         guard let lastSynced, lastSynced != remoteJSON else { return }
         let duplicate = try Int.fetchOne(connection, sql: """
             SELECT id FROM conflicts
-             WHERE entity_type = 'task' AND entity_local_id = ?
+             WHERE entity_type = ? AND entity_local_id = ?
                AND local_snapshot = ? AND remote_snapshot = ?
              LIMIT 1
-            """, arguments: [localId, lastSynced, remoteJSON])
+            """, arguments: [entityType, localId, lastSynced, remoteJSON])
         guard duplicate == nil else { return }
         guard let before = try jsonObject(lastSynced), let after = try jsonObject(remoteJSON) else { return }
-        let fields = conflictFields.filter { field in
+        let fields = candidates.filter { field in
             !conflictValuesEqual(field: field, before[field], after[field])
         }
         guard !fields.isEmpty else { return }
@@ -374,8 +384,8 @@ extension CriaStore {
         let fieldsJSON = String(bytes: fieldsData, encoding: .utf8) ?? "[]"
         try connection.execute(sql: """
             INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at)
-            VALUES ('task', ?, ?, ?, ?, ?)
-            """, arguments: [localId, fieldsJSON, lastSynced, remoteJSON, now])
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, arguments: [entityType, localId, fieldsJSON, lastSynced, remoteJSON, now])
     }
 
     static func jsonObject(_ text: String) throws -> [String: Any]? {

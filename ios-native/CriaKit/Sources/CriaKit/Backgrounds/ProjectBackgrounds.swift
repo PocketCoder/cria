@@ -14,12 +14,20 @@ public extension ApiClient {
 
     /// The user's avatar image bytes, or nil when the server has none to give.
     func avatar(username: String) async throws -> Data? {
-        let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
-        let response = try await send(.get, "/\(encoded)/avatar")
+        let response = try await avatarResponse(username: username)
         if response.status == 404 { return nil }
         try response.requireSuccess()
         guard (response.contentType ?? "").lowercased().hasPrefix("image/") else { return nil }
         return response.data
+    }
+
+    /// Current Vikunja serves avatars at `/avatar/{username}`; older releases at `/{username}/avatar`. The new path
+    /// is tried first and a 404 falls back to the old one.
+    func avatarResponse(username: String) async throws -> ApiResponse {
+        let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        let current = try await send(.get, "/avatar/\(encoded)")
+        guard current.status == 404 else { return current }
+        return try await send(.get, "/\(encoded)/avatar")
     }
 
     /// Whether the instance offers a background provider (`upload` or `unsplash`), from `/info`.
