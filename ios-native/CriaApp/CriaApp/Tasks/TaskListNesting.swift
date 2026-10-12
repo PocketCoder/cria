@@ -12,6 +12,8 @@ struct TaskListSnapshot: Equatable, Sendable {
     var items: [TaskListItem] = []
     var children: [String: [String]] = [:]
     var progress: [String: SubtaskProgress] = [:]
+    /// Task local id to the user ids assigned, for the Display sheet's assignee filter.
+    var assignees: [String: Set<Int>] = [:]
 }
 
 /// Where a row sits in a list: its depth, its subtask progress and, when its children are nested under it, whether
@@ -53,7 +55,12 @@ enum TaskListNesting {
             }
             if total > 0 { progress[item.task.localId] = SubtaskProgress(done: done, total: total) }
         }
-        return TaskListSnapshot(items: items, children: children, progress: progress)
+        return TaskListSnapshot(items: items, children: children, progress: progress, assignees: try reading.assigneeMap())
+    }
+
+    /// A section's rows nested under their parents, with the descendants of collapsed parents left out.
+    static func rows(_ items: [TaskListItem], children: [String: [String]], collapsed: Set<String>) -> [NestedTaskItem] {
+        visible(TaskTree.nest(items, children: children), collapsed: collapsed)
     }
 
     /// Drops the descendants of collapsed parents.

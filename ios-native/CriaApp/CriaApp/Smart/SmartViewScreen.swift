@@ -1,15 +1,20 @@
 import CriaKit
 import SwiftUI
 
-/// A smart view (Today, Upcoming, Inbox or a saved filter): sections of tasks that update from the database.
+/// A smart view (Today, Upcoming, Inbox or a saved filter): sections of tasks that update from the database. The
+/// Display sheet filters and sorts them (Inbox and saved filters can also be grouped), and Select starts multi-select.
 struct SmartViewScreen: View {
     let services: AppServices
     let title: String
     let view: SmartView
     @State private var live: LiveValue<SmartViewData>
+    @State private var display: DisplayModel
+    @State private var selection = TaskSelection()
+    /// Settings > General > Show completed: what a view does until its Display sheet says otherwise.
+    @AppStorage("cria.taskList.showDone") private var showDone = true
     @State private var selectedDay = Calendar.cria.startOfDay(for: Date())
     @State private var addPresented = false
-    @State private var rescheduling: TaskGroup?
+    @State private var rescheduling: DisplaySection?
     @State private var failure: String?
     /// Parents whose subtasks are showing, for this screen only.
     @State private var expanded: Set<String> = []
@@ -18,24 +23,45 @@ struct SmartViewScreen: View {
         self.services = services
         self.title = title
         self.view = view
+        _display = State(initialValue: DisplayModel(key: .smartView(view)))
         let store = services.store
         _live = State(initialValue: LiveValue(initial: SmartViewData()) {
             observeStore(store, kinds: [.tasks, .labels, .projects, .savedFilters]) { (reading: CriaStore) throws -> SmartViewData in
-                let groups = try reading.smartGroups(view)
+                // Completed tasks come too: the Display sheet decides whether they show.
+                let groups = try reading.smartGroups(view, includeDone: true)
                 let items = groups.flatMap(\.items)
                 let parents = try TaskListNesting.parentTitles(reading, for: items)
-                return SmartViewData(groups: groups, parentTitles: parents, nesting: try SmartNestingData.read(reading, items: items))
+                return SmartViewData(
+                    groups: groups, parentTitles: parents, nesting: try SmartNestingData.read(reading, items: items),
+                    assignees: try reading.assigneeMap(), loaded: true
+                )
             }
         })
     }
 
-    private var isEmpty: Bool { live.value.groups.allSatisfy { $0.items.isEmpty } }
-    private var openCount: Int { live.value.groups.reduce(0) { $0 + $1.items.count } }
+    private var hasAnyTasks: Bool { live.value.groups.contains { !$0.items.isEmpty } }
 
-    private var groups: [TaskGroup] {
-        guard view == .upcoming else { return live.value.groups.filter { !$0.items.isEmpty } }
+    /// Open tasks in the view, before any Display filter: what "left today" means.
+    private var openCount: Int {
+        live.value.groups.reduce(0) { total, group in total + group.items.filter { !$0.task.done }.count }
+    }
+
+    /// The groups after the Display options: filtered and sorted inside each day (or Today's overdue and due), or
+    /// regrouped when the sheet groups an Inbox or a saved filter.
+    private var allDisplayed: [DisplaySection] {
+        let raw = live.value.groups.map { DisplaySection(key: $0.key, label: $0.label, items: $0.items) }
+        let showCompleted = display.showsCompleted(default: showDone)
+        let context = display.context(assignees: live.value.assignees)
+        if display.config.groupBy != .none && !display.sections.groupings.isEmpty {
+            return DisplayEngine.sections(raw.flatMap(\.items), config: display.config, showCompleted: showCompleted, context: context)
+        }
+        return DisplayEngine.refined(raw, config: display.config, showCompleted: showCompleted, context: context)
+    }
+
+    private var groups: [DisplaySection] {
+        guard view == .upcoming else { return allDisplayed }
         let from = Self.dayKey(selectedDay)
-        return live.value.groups.filter { $0.key >= from && !$0.items.isEmpty }
+        return allDisplayed.filter { $0.key >= from }
     }
 
     private static func dayKey(_ date: Date) -> String {
@@ -53,16 +79,16 @@ struct SmartViewScreen: View {
         }
     }
 
-    /// Today and Upcoming are tab roots with no toolbar buttons, so the bar's empty button row sat above the large
-    /// title. They hide the bar and draw the title as the first row instead, level with Browse's buttons.
-    private var drawsOwnTitle: Bool { view == .today || view == .upcoming }
+    /// Today with nothing open: the empty state takes the place of the rows.
+    private var showsTodayEmpty: Bool { view == .today && live.value.loaded && openCount == 0 }
 
     var body: some View {
         List {
             header
+            if showsTodayEmpty { TodayEmptyView(services: services) }
             // Every group shown is on or after the selected day, so an empty selected day comes first.
             nothingPlanned
-            ForEach(groups, id: \.key) { group in
+            ForEach(groups) { group in
                 Section {
                     ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
                         TaskRowLink(services: services, item: row.item, showProject: row.depth == 0, tree: tree(for: row))
@@ -71,23 +97,31 @@ struct SmartViewScreen: View {
                     groupHeader(group)
                 }
             }
+            if hasAnyTasks && allDisplayed.isEmpty && display.hasFilters {
+                Section {
+                    DisplayNoMatchesRow(
+                        hasFilters: true, onReset: { display.update { $0.filters = DisplayFilters() } }, onShowCompleted: {}
+                    )
+                }
+            }
         }
         .criaSurface()
         .overlay {
-            if isEmpty && view == .today {
-                ContentUnavailableView {
-                    Label("All clear", systemImage: "party.popper").foregroundStyle(Color(.primary))
-                } description: {
-                    Text("Nothing left for today.")
-                }
-            } else if isEmpty && view != .upcoming {
+            if live.value.loaded && !hasAnyTasks && view != .upcoming && view != .today {
                 ContentUnavailableView("Nothing here", systemImage: "checkmark.circle")
             }
         }
         .navigationTitle(title)
-        .toolbar(drawsOwnTitle ? .hidden : .automatic, for: .navigationBar)
+        .toolbar {
+            DisplaySelectToolbar(
+                isCustomised: display.isCustomised, isSelecting: selection.isActive,
+                onDisplay: { display.sheetPresented = true }, onSelect: { selection.start() }, onDone: { selection.stop() }
+            )
+        }
         .refreshable { await services.refresh() }
         .quickAdd(services: services)
+        .displayOptions(display, services: services)
+        .taskSelection(selection, services: services)
         .sheet(isPresented: $addPresented) {
             QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: selectedDay)
         }
@@ -132,7 +166,7 @@ struct SmartViewScreen: View {
     }
 
     @ViewBuilder private var nothingPlanned: some View {
-        if view == .upcoming && !live.value.groups.contains(where: { $0.key == Self.dayKey(selectedDay) && !$0.items.isEmpty }) {
+        if view == .upcoming && !allDisplayed.contains(where: { $0.key == Self.dayKey(selectedDay) }) {
             Section {
                 Button { addPresented = true } label: {
                     Label("Nothing planned", systemImage: "plus").foregroundStyle(Color(.mutedForeground))
@@ -144,30 +178,14 @@ struct SmartViewScreen: View {
         }
     }
 
-    /// The screen title and its subtitle. A section header, not a row: iOS 26 clips a row to its rounded card, which
-    /// cut into the subtitle's first and last letters.
-    private var titleHeader: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(Theme.wordmark)
-                .foregroundStyle(Color(.foreground))
-                .accessibilityAddTraits(.isHeader)
-            subtitleText
-        }
-        .textCase(nil)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     @ViewBuilder private var header: some View {
         if view == .upcoming {
             Section {
-                WeekStrip(selected: $selectedDay, busyDays: Set(live.value.groups.filter { !$0.items.isEmpty }.map(\.key)))
+                WeekStrip(selected: $selectedDay, busyDays: Set(allDisplayed.map(\.key)))
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
             } header: {
-                if drawsOwnTitle { titleHeader }
+                subtitleText
             }
-        } else if drawsOwnTitle {
-            Section {} header: { titleHeader }
         } else if subtitle != nil {
             Section {} header: { subtitleText }
         }
@@ -182,7 +200,7 @@ struct SmartViewScreen: View {
         }
     }
 
-    @ViewBuilder private func groupHeader(_ group: TaskGroup) -> some View {
+    @ViewBuilder private func groupHeader(_ group: DisplaySection) -> some View {
         if view == .today && group.key == "overdue" {
             HStack {
                 Text(group.label).font(Theme.headline).foregroundStyle(Color(.destructive))
@@ -200,11 +218,11 @@ struct SmartViewScreen: View {
     }
 
     /// Moves each overdue task to today. A timed due date keeps its time of day; only the day changes.
-    private func rescheduleOverdue(_ group: TaskGroup) {
+    private func rescheduleOverdue(_ group: DisplaySection) {
         var failures: [String] = []
         for item in group.items {
             guard let iso = item.task.dueDate else { continue }
-            let patch = TaskPatch(dueDate: Self.movedToToday(iso))
+            let patch = TaskPatch(dueDate: TodaySuggestions.pulledForward(iso, now: Date()))
             do {
                 _ = try services.store.updateTask(localId: item.task.localId, patch: patch)
             } catch {
@@ -213,17 +231,6 @@ struct SmartViewScreen: View {
         }
         if !failures.isEmpty { failure = failures.joined(separator: "\n") }
     }
-
-    private static func movedToToday(_ iso: String) -> String {
-        let calendar = Calendar.cria
-        let now = Date()
-        guard DueDates.hasTimeOfDay(iso), let due = DueDates.parse(iso) else { return DueDates.allDayISO(for: now) }
-        let time = calendar.dateComponents([.hour, .minute, .second], from: due)
-        let moved = calendar.date(
-            bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: time.second ?? 0, of: now
-        ) ?? now
-        return DueDates.timedISO(moved)
-    }
 }
 
 /// A smart view's date groups, plus each shown subtask's parent title for the caption (these lists do not nest).
@@ -231,6 +238,10 @@ struct SmartViewData: Sendable {
     var groups: [TaskGroup] = []
     var parentTitles: [String: String] = [:]
     var nesting = SmartNestingData()
+    /// Task local id to the user ids assigned, for the Display sheet's assignee filter.
+    var assignees: [String: Set<Int>] = [:]
+    /// False until the first read, so an empty state does not flash before the tasks arrive.
+    var loaded = false
 }
 
 /// Inbox needs the default project id from the server. Offline it falls back to the one remembered from the last
