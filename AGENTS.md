@@ -488,6 +488,28 @@ depend on that data, not run once on `[]` mount — otherwise they fire before
 the data loads and never re-run. If wiring is genuinely out of scope, ship the
 control as 🟡 in FEATURE-COMPARISON.md, never ✅.
 
+## Native Swift iOS app (`ios-native/`)
+
+A SwiftUI port on `feature/swift-ios`, planned to replace the Tauri iOS build once parity is signed off
+(plan and status: [docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md)). `CriaKit/` is a Swift package with all
+logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
+XcodeGen. CI ([ci-swift.yml](.github/workflows/ci-swift.yml)) runs `swiftlint lint --strict`, `swift test` and a
+simulator build, then publishes an unsigned alpha `.ipa` (`io.cria.app.swift`) to SideStore.
+
+- Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
+- Same sync rules as above (silent upserts, outbox FIFO, pending-delete guard, settings merge-patch with v1
+  fallback). Where the Swift port deliberately differs from the TS spec because the TS behaviour is a bug, it says
+  so in a comment; the list is in the plan's "Review 2026-10-12" section (label update verb, `percent_done`
+  sent unscaled, comments deleted before their task, project identifier and cover image kept on push).
+- Dates: all date maths use `Calendar.cria` (Gregorian in the device zone), never `Calendar.current`. Server and
+  local timestamps can carry different offsets, so compare instants (`DueDates.parse`, `julianday()` in SQL),
+  never ISO text.
+- The app cannot be compiled on Linux. `CriaKit` can with a Swift toolchain if the Keychain (`Security`) and
+  Darwin notifications are stubbed; macOS CI is the gate.
+- Moving from the Tauri iOS app: the native app is a separate install (own bundle ID and App Group database) that
+  re-syncs everything from the server on sign-in. There is no import. Let the Tauri app finish syncing (empty
+  outbox) before switching, or its unsynced edits stay behind.
+
 ## Release channels and local dev
 
 Three identifiers, three macOS data dirs. No cross-talk.
