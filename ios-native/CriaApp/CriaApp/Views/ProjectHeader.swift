@@ -19,13 +19,15 @@ struct ProjectHeader: View {
     let canManage: Bool
     let onSelect: (String) -> Void
     let onManage: () -> Void
+    /// Opens the project's info page. Nil hides the Info pill (a project with no page to show).
+    var onInfo: (() -> Void)?
     /// The project's background, once loaded. Nil (no background, or not loaded yet) shows no banner.
     var background: UIImage?
     /// Shorter when pinned above a board or timeline, which need the height.
     var bannerHeight: CGFloat = 120
 
     /// One view and nothing to manage: a single pill would only repeat the title.
-    private var showsPills: Bool { views.count > 1 || canManage }
+    private var showsPills: Bool { views.count > 1 || canManage || onInfo != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -58,6 +60,7 @@ struct ProjectHeader: View {
             HStack(spacing: 8) {
                 ForEach(views, id: \.localId) { view in pill(view) }
                 if canManage { managePill }
+                if let onInfo { infoPill(onInfo) }
             }
         }
         .scrollIndicators(.hidden)
@@ -84,6 +87,15 @@ struct ProjectHeader: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Manage views")
+    }
+
+    private func infoPill(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label("Info", systemImage: "info.circle")
+                .modifier(PillStyle(selected: false))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Project info")
     }
 
     static func icon(_ kind: ViewKind) -> String {

@@ -17,6 +17,9 @@ struct BrowseView: View {
     @State private var editor: ProjectEditorTarget?
     @State private var pendingDelete: ProjectRecord?
     @State private var sharing: ProjectShareTarget?
+    @State private var infoTarget: ProjectShareTarget?
+    /// Title of the project being duplicated, while the server is copying it.
+    @State private var duplicatingTitle: String?
     @State private var failure: String?
     @State private var failureTitle = "Could not delete"
     @State private var pendingFilterDelete: SavedFilterRecord?
@@ -121,6 +124,16 @@ struct BrowseView: View {
         .sheet(item: $sharing) { target in
             ProjectSharingSheet(services: services, project: target.project)
         }
+        .sheet(item: $infoTarget) { target in
+            ProjectInfoSheet(services: services, projectLocalId: target.project.localId)
+        }
+        .overlay {
+            if let duplicatingTitle {
+                ProgressView("Duplicating \(duplicatingTitle)…")
+                    .padding(20)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
         .sheet(item: $editor) { target in
             ProjectEditorSheet(services: services, target: target, projects: live.value.projects)
         }
@@ -182,6 +195,7 @@ extension BrowseView {
                         Button("Share") { sharing = ProjectShareTarget(project: row.project) }.tint(Color(.primary))
                     }
                 }
+                .contextMenu { projectMenu(row.project) }
                 .swipeActions(edge: .leading) {
                     Button(row.project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
                         do {
@@ -193,6 +207,28 @@ extension BrowseView {
                     .tint(Color(.marigold500))
                 }
             }
+        }
+    }
+
+    /// The project's long-press menu. Duplicate calls the server directly, so it is not offered to a share link.
+    @ViewBuilder func projectMenu(_ project: ProjectRecord) -> some View {
+        Button("Info", systemImage: "info.circle") { infoTarget = ProjectShareTarget(project: project) }
+        Button("Edit", systemImage: "pencil") { editor = .edit(project) }
+        if !isLinkShare {
+            Button("Share", systemImage: "person.badge.plus") { sharing = ProjectShareTarget(project: project) }
+            Button("Duplicate", systemImage: "plus.square.on.square") { Task { await duplicate(project) } }
+        }
+    }
+
+    /// Online only. The server copies the project, then a pull brings the copy in.
+    func duplicate(_ project: ProjectRecord) async {
+        duplicatingTitle = project.title
+        defer { duplicatingTitle = nil }
+        do {
+            try await services.duplicateProject(localId: project.localId)
+        } catch {
+            failureTitle = "Could not duplicate"
+            failure = ProjectDuplicate.failureMessage(error)
         }
     }
 

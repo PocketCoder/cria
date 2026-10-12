@@ -27,6 +27,8 @@ struct KanbanColumnView: View {
     let column: KanbanColumn
     /// Every column of the board, for the cards' "Move to" menu.
     let columns: [KanbanColumn]
+    /// The cards to draw: the column's own, less any the board filter hides.
+    let shown: [TaskRecord]
     /// Labels by task local id.
     let labels: [String: [LabelRecord]]
     let readOnly: Bool
@@ -44,7 +46,7 @@ struct KanbanColumnView: View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 8) {
                 header
-                ForEach(column.tasks, id: \.localId) { task in
+                ForEach(shown, id: \.localId) { task in
                     card(task)
                 }
                 if !readOnly { addRow }

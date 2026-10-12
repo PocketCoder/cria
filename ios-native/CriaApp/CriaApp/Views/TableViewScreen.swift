@@ -17,6 +17,11 @@ struct TableViewScreen: View {
     @AppStorage("cria.tableViewColumns") private var columnsText = ""
     @AppStorage("cria.tableViewSortBy") private var sortText = ""
     @State private var pickingColumns = false
+    /// Off by default: label, assignee and date cells then open their picker when tapped. Kept on this device.
+    @AppStorage("cria.tableViewInlineEdit") private var inlineEdit = false
+    @State private var cellEdit: TableCellEdit?
+    @State private var editFailure: String?
+    @State private var assigneeFeed: LiveValue<[String: [AssigneeRecord]]>
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(services: AppServices, projectLocalId: String, viewLocalId: String? = nil, header: ProjectHeader) {
@@ -30,6 +35,9 @@ struct TableViewScreen: View {
                 try reading.taskItems(.project(projectLocalId), includeDone: true)
             }
         })
+        _assigneeFeed = State(initialValue: LiveValue(initial: [:]) {
+            observeStore(store, kinds: [.tasks]) { reading in try reading.assigneesByTask(projectLocalId: projectLocalId) }
+        })
     }
 
     private var visible: Set<TableViewColumn> { TableConfigCodec.decodeColumns(columnsText) }
@@ -37,9 +45,12 @@ struct TableViewScreen: View {
     private var extras: TableExtras { TableExtras(currentUserId: currentUserId, commentCounts: commentCounts) }
     private var showsComments: Bool { visible.contains(.commentCount) }
 
-    /// Every column the user can show. Assignees are left out until table rows load them.
-    private var availableColumns: [TableViewColumn] {
-        TableViewColumn.allCases.filter { $0 != .assignees }
+    /// Every column the user can show.
+    private var availableColumns: [TableViewColumn] { TableViewColumn.allCases }
+
+    /// Passed to rows only while "Edit cells" is on.
+    private var editAction: ((TableCellEdit) -> Void)? {
+        inlineEdit ? { cellEdit = $0 } : nil
     }
 
     private var shownColumns: [TableViewColumn] {
@@ -65,7 +76,9 @@ struct TableViewScreen: View {
                         rows: rows, columns: shownColumns, sortKeys: sortKeys, extras: extras,
                         onHeaderTap: { column in
                             sortText = TableConfigCodec.encodeSort(TableSort.cycle(sortKeys, column: column, additive: false))
-                        }
+                        },
+                        assignees: assigneeFeed.value,
+                        onEdit: editAction
                     )
                 }
             } else {
@@ -87,12 +100,22 @@ struct TableViewScreen: View {
                 Menu("Table options", systemImage: "ellipsis.circle") {
                     sortControls
                     Button("Columns", systemImage: "tablecells") { pickingColumns = true }
+                    Toggle("Edit cells", systemImage: "square.and.pencil", isOn: $inlineEdit)
                 }
             }
         }
         .sheet(isPresented: $pickingColumns) { columnPicker }
+        .sheet(item: $cellEdit) { edit in
+            TableCellEditSheet(services: services, edit: edit) { editFailure = $0 }
+        }
+        .alert("Could not save", isPresented: Binding(get: { editFailure != nil }, set: { if !$0 { editFailure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(editFailure ?? "")
+        }
         .quickAdd(services: services, contextProjectId: projectLocalId)
         .task { await live.run() }
+        .task { await assigneeFeed.run() }
         .task { currentUserId = await services.signedInUser()?.id }
         .task(id: showsComments) { await loadCommentCounts() }
     }
@@ -111,10 +134,17 @@ struct TableViewScreen: View {
             if !rows.isEmpty {
                 Section {
                     ForEach(rows, id: \.task.localId) { item in
-                        TableCompactRow(services: services, item: item, columns: shownColumns, extras: extras)
+                        TableCompactRow(
+                            services: services, item: item, columns: shownColumns, extras: extras,
+                            assignees: assigneeFeed.value[item.task.localId] ?? [], onEdit: editAction
+                        )
                     }
                 } header: {
                     sortHeader
+                } footer: {
+                    if inlineEdit && !shownColumns.contains(where: TableEditing.isEditable) {
+                        Text("Edit cells is on. Show the Labels, Assignees or a date column to edit it here.")
+                    }
                 }
             }
         }

@@ -10,6 +10,9 @@ struct GanttScreen: View {
     @AppStorage("cria.gantt.weekZoom") private var weekZoom = false
     /// Off by default, as in the web app: finished tasks clutter the timeline.
     @AppStorage("cria.gantt.showDone") private var showDone = false
+    /// Date range and the no-dates tray, kept on this device (see `GanttFilters`).
+    @AppStorage(GanttFilters.storageKey) private var filtersText = ""
+    @State private var filtering = false
 
     init(services: AppServices, projectLocalId: String) {
         self.services = services
@@ -28,11 +31,16 @@ struct GanttScreen: View {
     private var shown: GanttData {
         showDone ? live.value : GanttData(nodes: live.value.nodes.filter { !$0.done }, edges: live.value.edges)
     }
+    private var filters: GanttFilters { GanttFilters.from(stored: filtersText) }
+    /// The range the tasks alone would give. A date range chosen in the filters replaces it.
+    private var automaticRange: GanttDayRange { shown.dayRange(today: today) }
+    private var range: GanttDayRange { filters.range(automatic: automaticRange) }
     private var datedNodes: [GanttNode] {
-        GanttTree.visible(shown.nodes, collapsed: [], showDateless: false)
+        filters.visible(GanttTree.visible(shown.nodes, collapsed: [], showDateless: false), in: range)
     }
     private var datelessNodes: [GanttNode] {
-        shown.nodes.filter { $0.startDay == nil && $0.endDay == nil }
+        guard filters.showUndated else { return [] }
+        return shown.nodes.filter { $0.startDay == nil && $0.endDay == nil }
     }
 
     var body: some View {
@@ -45,7 +53,7 @@ struct GanttScreen: View {
                 }
             } else {
                 GanttChart(
-                    services: services, data: shown, nodes: datedNodes, range: shown.dayRange(today: today),
+                    services: services, data: shown, nodes: datedNodes, range: range,
                     dayWidth: dayWidth, weekZoom: weekZoom
                 )
                 if !datelessNodes.isEmpty {
@@ -62,8 +70,12 @@ struct GanttScreen: View {
                         Label("Weeks", systemImage: "calendar").tag(true)
                     }
                     Toggle("Show done", isOn: $showDone)
+                    Button("Filters", systemImage: "line.3.horizontal.decrease.circle") { filtering = true }
                 }
             }
+        }
+        .sheet(isPresented: $filtering) {
+            GanttFilterSheet(filters: Binding(get: { filters }, set: { filtersText = $0.stored }), automatic: automaticRange)
         }
         .task { await live.run() }
     }

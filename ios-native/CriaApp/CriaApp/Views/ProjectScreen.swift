@@ -12,6 +12,7 @@ struct ProjectScreen: View {
     @State private var live: LiveValue<ProjectScreenData>
     @State private var selectedId: String?
     @State private var managing = false
+    @State private var showingInfo = false
     @State private var background: UIImage?
     /// Bumped when the background changes elsewhere, to reload it.
     @State private var backgroundRevision = 0
@@ -21,6 +22,8 @@ struct ProjectScreen: View {
         self.services = services
         self.projectLocalId = projectLocalId
         self.title = title
+        // Opens on the view last used in this project, as Vikunja-web does (kept on this device).
+        _selectedId = State(initialValue: ProjectViewMemory.remembered(projectLocalId: projectLocalId))
         let store = services.store
         _live = State(initialValue: LiveValue(initial: ProjectScreenData()) {
             observeStore(store, kinds: [.views, .projects, .tasks]) { reading in
@@ -36,11 +39,23 @@ struct ProjectScreen: View {
     private var views: [ViewRecord] { live.value.views }
 
     private var current: ViewRecord? {
-        views.first { $0.localId == selectedId } ?? views.first
+        ProjectViewMemory.choose(remembered: selectedId, among: views)
+    }
+
+    /// Switches view and remembers the choice for next time.
+    private func select(_ localId: String?) {
+        selectedId = localId
+        if let localId { ProjectViewMemory.remember(localId, projectLocalId: projectLocalId) }
     }
 
     private var canManage: Bool {
         ViewManagement.canManageViews(projectServerId: live.value.project?.serverId)
+    }
+
+    /// The Info pill's action; none until the project has loaded.
+    private var infoAction: (() -> Void)? {
+        guard live.value.project != nil else { return nil }
+        return { showingInfo = true }
     }
 
     private var header: ProjectHeader {
@@ -50,8 +65,9 @@ struct ProjectScreen: View {
             colour: Color(hexString: live.value.project?.hexColor),
             openCount: live.value.openCount,
             canManage: canManage,
-            onSelect: { id in withAnimation(reduceMotion ? nil : .snappy) { selectedId = id } },
+            onSelect: { id in withAnimation(reduceMotion ? nil : .snappy) { select(id) } },
             onManage: { managing = true },
+            onInfo: infoAction,
             background: background
         )
     }
@@ -62,8 +78,11 @@ struct ProjectScreen: View {
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $managing) {
                 ManageViewsSheet(services: services, projectLocalId: projectLocalId, views: views) { deletedId in
-                    selectedId = ViewManagement.viewAfterDelete(views.map(\.slot), deletedId: deletedId)
+                    select(ViewManagement.viewAfterDelete(views.map(\.slot), deletedId: deletedId))
                 }
+            }
+            .sheet(isPresented: $showingInfo) {
+                ProjectInfoSheet(services: services, projectLocalId: projectLocalId)
             }
             .task { await live.run() }
             .task(id: "\(live.value.project?.serverId ?? 0)-\(backgroundRevision)") { await loadBackground() }

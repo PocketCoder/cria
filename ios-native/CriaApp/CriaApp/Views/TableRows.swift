@@ -7,6 +7,10 @@ struct TableCompactRow: View {
     let item: TaskListItem
     let columns: [TableViewColumn]
     let extras: TableExtras
+    /// The task's assignees, shown as a chip when the Assignees column is on.
+    var assignees: [AssigneeRecord] = []
+    /// Set while "Edit cells" is on: label, assignee and date chips then open their picker.
+    var onEdit: ((TableCellEdit) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.colorScheme) private var colorScheme
     @State private var failure: String?
@@ -37,6 +41,15 @@ struct TableCompactRow: View {
             .accessibilityValue(task.done ? "Done" : "")
         }
         .accessibilityAction(named: task.done ? "Mark not done" : "Mark done") { toggle() }
+        .accessibilityActions {
+            if let onEdit {
+                ForEach(columns.filter(TableEditing.isEditable), id: \.self) { column in
+                    Button("Edit \(column.label)") {
+                        if let edit = TableEditing.edit(column, task: task.localId) { onEdit(edit) }
+                    }
+                }
+            }
+        }
         .swipeActions(edge: .leading) {
             Button(task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
                 .tint(Color(.meadow500))
@@ -51,7 +64,8 @@ struct TableCompactRow: View {
     private var chipColumns: [TableViewColumn] {
         columns.filter { column in
             switch column {
-            case .title, .done, .assignees: return false
+            case .title, .done: return false
+            case .assignees: return !assignees.isEmpty
             case .labels: return !item.labels.isEmpty
             // No chip for a task with no comments.
             case .commentCount: return (extras.commentCount(task) ?? 0) > 0
@@ -60,11 +74,20 @@ struct TableCompactRow: View {
         }
     }
 
-    private var hasChips: Bool { !chipColumns.isEmpty }
+    /// The chips drawn: the filled ones, plus every editable column (empty or not) while cells are editable.
+    private var displayColumns: [TableViewColumn] {
+        columns.filter { chipColumns.contains($0) || (onEdit != nil && TableEditing.isEditable($0)) }
+    }
+
+    private var hasChips: Bool { !displayColumns.isEmpty }
 
     @ViewBuilder private var chips: some View {
-        ForEach(chipColumns, id: \.self) { column in
-            if column == .labels {
+        ForEach(displayColumns, id: \.self) { column in
+            if let onEdit, TableEditing.isEditable(column) {
+                TableEditCell(column: column, item: item, assignees: assignees, compact: true, onEdit: onEdit)
+            } else if column == .assignees {
+                CriaChip(text: assigneeNames, systemImage: "person", tint: Color(.mutedForeground))
+            } else if column == .labels {
                 ForEach(item.labels.prefix(3), id: \.localId) { label in
                     CriaChip(
                         text: label.title, systemImage: "tag",
@@ -81,6 +104,7 @@ struct TableCompactRow: View {
     private var spokenLabel: String {
         let parts = chipColumns.compactMap { column -> String? in
             if column == .labels { return "labels " + item.labels.map(\.title).joined(separator: ", ") }
+            if column == .assignees { return "assigned to " + assigneeNames }
             guard let text = cellText(column) else { return nil }
             switch column {
             case .dueDate: return "due \(text)"
@@ -91,6 +115,8 @@ struct TableCompactRow: View {
         }
         return ([task.title] + parts).joined(separator: ", ")
     }
+
+    private var assigneeNames: String { assignees.map(AssigneesSection.name).joined(separator: ", ") }
 
     private func cellText(_ column: TableViewColumn) -> String? {
         TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay, extras: extras)
@@ -153,6 +179,9 @@ struct TableGridView: View {
     let sortKeys: [TableSortKey]
     let extras: TableExtras
     let onHeaderTap: (TableViewColumn) -> Void
+    var assignees: [String: [AssigneeRecord]] = [:]
+    /// Set while "Edit cells" is on: label, assignee and date cells then open their picker.
+    var onEdit: ((TableCellEdit) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
@@ -215,7 +244,20 @@ struct TableGridView: View {
 
     @ViewBuilder private func cell(_ item: TaskListItem, _ column: TableViewColumn) -> some View {
         let task = item.task
+        if let onEdit, TableEditing.isEditable(column) {
+            TableEditCell(column: column, item: item, assignees: assignees[task.localId] ?? [], compact: false, onEdit: onEdit)
+        } else {
+            readCell(item, column)
+        }
+    }
+
+    @ViewBuilder private func readCell(_ item: TaskListItem, _ column: TableViewColumn) -> some View {
+        let task = item.task
         switch column {
+        case .assignees:
+            let names = (assignees[task.localId] ?? []).map(AssigneesSection.name).joined(separator: ", ")
+            Text(names).font(Theme.caption).lineLimit(1)
+                .accessibilityLabel(names.isEmpty ? "No assignees" : "Assignees: \(names)")
         case .title:
             NavigationLink(value: Route.task(task.localId)) {
                 Text(task.title)

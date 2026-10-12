@@ -2,16 +2,18 @@ import CriaKit
 import SwiftUI
 
 /// A project's List view, laid out like Today: the header (open count and view pills) in the list, open tasks in
-/// one inset-grouped section, completed ones in another, the shared rows and the floating add button. Subtasks sit
-/// under their parent within a section and can be collapsed; only top-level rows can be dragged.
+/// one inset-grouped section (or one per group when the Display sheet groups them), completed ones in another, the
+/// shared rows and the floating add button. Subtasks sit under their parent within a section and can be collapsed;
+/// only top-level rows can be dragged, and only in manual order with nothing grouped or filtered.
 struct ProjectListView: View {
     let services: AppServices
     let projectLocalId: String
     let header: ProjectHeader
     @State private var live: LiveValue<TaskListSnapshot>
-    /// Shared with the other task lists, so the choice follows the user between screens.
+    @State private var display: DisplayModel
+    @State private var selection = TaskSelection()
+    /// Settings > General > Show completed: what the list does until its Display sheet says otherwise.
     @AppStorage("cria.taskList.showDone") private var showDone = true
-    @AppStorage("cria.taskList.sort") private var sortIndex = 0
     @State private var optimistic = OptimisticOrder()
     @State private var editMode: EditMode = .inactive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +25,7 @@ struct ProjectListView: View {
         self.services = services
         self.projectLocalId = projectLocalId
         self.header = header
+        _display = State(initialValue: DisplayModel(key: .project(projectLocalId)))
         let store = services.store
         _live = State(initialValue: LiveValue(initial: TaskListSnapshot()) {
             observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
@@ -31,56 +34,65 @@ struct ProjectListView: View {
         })
     }
 
-    private var sortRule: SortRule? {
-        TaskSort.options.indices.contains(sortIndex) ? TaskSort.options[sortIndex].rule : nil
+    private var showCompleted: Bool { display.showsCompleted(default: showDone) }
+
+    private var filtered: [TaskListItem] {
+        DisplayEngine.filtered(live.value.items, display.config.filters, display.context(assignees: live.value.assignees))
     }
 
     /// Manual order: rows can be dragged, and the stored order is the display order.
-    private var isManual: Bool { ListReorder.isEnabled(sort: sortRule, hasFilter: false) }
+    private var isManual: Bool { display.config.sort.isManual && display.config.groupBy == .none && !display.hasFilters }
 
     private var openItems: [TaskListItem] {
-        let open = live.value.items.filter { !$0.task.done }
-        guard isManual else { return sorted(open) }
+        let open = filtered.filter { !$0.task.done }
+        guard isManual else { return DisplayEngine.sorted(open, by: display.config.sort) }
         let byId = Dictionary(open.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
         return optimistic.resolve(open.map(\.task.localId)).compactMap { byId[$0] }
     }
 
     private var doneItems: [TaskListItem] {
-        guard showDone else { return [] }
-        let done = live.value.items.filter(\.task.done)
-        return isManual ? done : sorted(done)
+        guard showCompleted else { return [] }
+        return DisplayEngine.sorted(filtered.filter(\.task.done), by: display.config.sort)
     }
 
-    private func sorted(_ items: [TaskListItem]) -> [TaskListItem] {
-        let byId = Dictionary(items.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
-        return TaskSort.sorted(items.map(\.task), by: sortRule).compactMap { byId[$0.localId] }
+    /// The open tasks, one section each when grouped (a label's tasks may appear under several).
+    private var openSections: [DisplaySection] {
+        DisplayEngine.grouped(
+            openItems, by: display.config.groupBy, context: display.context(assignees: live.value.assignees)
+        )
     }
 
-    /// Open rows nested under their parents, with collapsed children left out.
-    private var openRows: [NestedTaskItem] {
-        TaskListNesting.visible(TaskTree.nest(openItems, children: live.value.children), collapsed: collapsed)
-    }
-
-    private var doneRows: [NestedTaskItem] {
-        TaskListNesting.visible(TaskTree.nest(doneItems, children: live.value.children), collapsed: collapsed)
+    private func rows(_ items: [TaskListItem]) -> [NestedTaskItem] {
+        TaskListNesting.rows(items, children: live.value.children, collapsed: collapsed)
     }
 
     var body: some View {
         List {
             Section {} header: { header }
-            if !openItems.isEmpty {
+            ForEach(openSections) { section in
                 Section {
-                    ForEach(openRows) { row in
+                    ForEach(rows(section.items)) { row in
                         taskRow(row).moveDisabled(row.depth > 0)
                     }
                     .onMove(perform: isManual ? { move($0, $1) } : nil)
+                } header: {
+                    groupHeader(section.label)
                 }
             }
             if !doneItems.isEmpty {
                 Section {
-                    ForEach(doneRows) { row in taskRow(row) }
+                    ForEach(rows(doneItems)) { row in taskRow(row) }
                 } header: {
                     Text("Completed").font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
+                }
+            }
+            if display.hasFilters && !live.value.items.isEmpty && openItems.isEmpty && doneItems.isEmpty {
+                Section {
+                    DisplayNoMatchesRow(
+                        hasFilters: true,
+                        onReset: { display.update { $0.filters = DisplayFilters() } },
+                        onShowCompleted: {}
+                    )
                 }
             }
         }
@@ -90,12 +102,21 @@ struct ProjectListView: View {
         .refreshable { await services.refresh() }
         .toolbar { toolbar }
         .quickAdd(services: services, contextProjectId: projectLocalId)
+        .displayOptions(display, services: services)
+        .taskSelection(selection, services: services)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(failure ?? "")
         }
         .task { await live.run() }
+    }
+
+    @ViewBuilder private func groupHeader(_ label: String) -> some View {
+        if !label.isEmpty {
+            Text(label).font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
+                .accessibilityAddTraits(.isHeader)
+        }
     }
 
     private func taskRow(_ row: NestedTaskItem) -> some View {
@@ -111,14 +132,13 @@ struct ProjectListView: View {
                 Button("Done") { withAnimation(reduceMotion ? nil : .default) { editMode = .inactive } }
             }
         } else {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu("Options", systemImage: "ellipsis.circle") {
-                    Toggle("Show completed", isOn: $showDone)
-                    Picker("Sort", selection: $sortIndex) {
-                        ForEach(TaskSort.options.indices, id: \.self) { Text(TaskSort.options[$0].label).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                    if isManual && openItems.count > 1 {
+            DisplaySelectToolbar(
+                isCustomised: display.isCustomised, isSelecting: selection.isActive,
+                onDisplay: { display.sheetPresented = true }, onSelect: { selection.start() }, onDone: { selection.stop() }
+            )
+            if isManual && openItems.count > 1 && !selection.isActive {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Options", systemImage: "ellipsis.circle") {
                         Button("Reorder tasks", systemImage: "arrow.up.arrow.down") {
                             withAnimation(reduceMotion ? nil : .default) { editMode = .active }
                         }
@@ -136,7 +156,7 @@ struct ProjectListView: View {
             } description: {
                 Text("Tap + to add the first one.")
             }
-        } else if openItems.isEmpty && doneItems.isEmpty {
+        } else if openItems.isEmpty && doneItems.isEmpty && !display.hasFilters {
             ContentUnavailableView {
                 Label("All clear", systemImage: "party.popper").foregroundStyle(Color(.primary))
             } description: {
@@ -149,12 +169,12 @@ struct ProjectListView: View {
     /// top-level order is written; a row dropped inside another's subtasks lands after that parent. Completed tasks
     /// are not part of the manual order.
     private func move(_ indices: IndexSet, _ destination: Int) {
-        var rows = openRows
-        guard let first = indices.first, rows.indices.contains(first), rows[first].depth == 0 else { return }
-        let moved = rows[first].item.task
+        var shown = rows(openItems)
+        guard let first = indices.first, shown.indices.contains(first), shown[first].depth == 0 else { return }
+        let moved = shown[first].item.task
         let stored = live.value.items.filter { !$0.task.done }.map(\.task.localId)
-        rows.move(fromOffsets: indices, toOffset: destination)
-        let roots = rows.filter { $0.depth == 0 }.map(\.id)
+        shown.move(fromOffsets: indices, toOffset: destination)
+        let roots = shown.filter { $0.depth == 0 }.map(\.id)
         let rootSet = Set(roots)
         // Subtasks keep their stored order after the roots: nesting places them under their parent anyway.
         optimistic.set(roots + stored.filter { !rootSet.contains($0) }, over: stored)

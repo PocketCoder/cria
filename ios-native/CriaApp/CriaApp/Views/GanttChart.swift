@@ -93,7 +93,7 @@ struct GanttChart: View {
     /// An invisible one-day marker at today's column. Its layout frame (not an offset) is what `scrollTo` uses.
     private var todayAnchor: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: Double(range.today - range.low) * dayWidth, height: 1)
+            Color.clear.frame(width: max(0, Double(range.today - range.low)) * dayWidth, height: 1)
             Color.clear.frame(width: dayWidth, height: 1).id(Self.todayId)
         }
         .allowsHitTesting(false)
@@ -140,6 +140,8 @@ struct GanttChart: View {
     }
 
     private func drawToday(_ context: inout GraphicsContext, height: Double) {
+        // A date range chosen in the filters can leave today out of the chart.
+        guard (range.low...range.high).contains(range.today) else { return }
         let todayX = Double(range.today - range.low) * dayWidth + dayWidth / 2
         let marker = Path(CGRect(x: todayX - 1, y: GanttMetrics.headerHeight - 8, width: 2, height: height))
         context.fill(marker, with: .color(Color(.primary)))

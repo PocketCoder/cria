@@ -13,6 +13,7 @@ struct ManageViewsSheet: View {
     @State private var renaming: ViewRecord?
     @State private var renameDraft = ""
     @State private var message: String?
+    @State private var editing: ViewEditTarget?
 
     private var slots: [ViewSlot] { views.map(\.slot) }
 
@@ -32,6 +33,9 @@ struct ManageViewsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+            .sheet(item: $editing) { target in
+                ViewSettingsSheet(services: services, view: target.view)
+            }
             .alert("Rename view", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                 TextField("Title", text: $renameDraft)
                 Button("Save") { commitRename() }
@@ -46,14 +50,24 @@ struct ManageViewsSheet: View {
     }
 
     private func row(_ view: ViewRecord) -> some View {
-        VStack(alignment: .leading) {
-            Text(ViewManagement.label(view.slot))
-            if let hint = ViewManagement.kindHint(view.slot) {
-                Text(hint).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+        HStack {
+            VStack(alignment: .leading) {
+                Text(ViewManagement.label(view.slot))
+                if let hint = ViewManagement.kindHint(view.slot) {
+                    Text(hint).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                }
             }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 8)
+            // A button in the row, since a tap on the row itself does nothing while the list is in reorder mode.
+            Button { editing = ViewEditTarget(view: view) } label: {
+                Image(systemName: "slider.horizontal.3").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Edit \(ViewManagement.label(view.slot)) settings")
         }
-        .accessibilityElement(children: .combine)
         .accessibilityActions {
+            Button("Edit filter and settings") { editing = ViewEditTarget(view: view) }
             Button("Rename") { beginRename(view) }
             Button("Delete") { delete(view) }
         }
@@ -61,8 +75,9 @@ struct ManageViewsSheet: View {
             Button("Delete", systemImage: "trash", role: .destructive) { delete(view) }
             Button("Rename", systemImage: "pencil") { beginRename(view) }
         }
-        // Swipe actions are off while the list is in reorder mode, so the same two are on a long press.
+        // Swipe actions are off while the list is in reorder mode, so the same actions are on a long press.
         .contextMenu {
+            Button("Filter and settings", systemImage: "slider.horizontal.3") { editing = ViewEditTarget(view: view) }
             Button("Rename", systemImage: "pencil") { beginRename(view) }
             Button("Delete", systemImage: "trash", role: .destructive) { delete(view) }
         }
