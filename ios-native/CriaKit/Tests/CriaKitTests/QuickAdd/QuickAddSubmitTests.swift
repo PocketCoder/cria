@@ -167,4 +167,48 @@ final class QuickAddSubmitTests: XCTestCase {
         XCTAssertEqual(try store.labels(forTask: created.localId).map(\.title), ["garden"])
         XCTAssertEqual(try outboxEntries(store, entity: "task").map(\.operation), ["create"])
     }
+
+    func testPersistCreatesMissingLabelsAndAddsReminders() throws {
+        let store = try makeStore()
+        let home = try seedProject(store, title: "Home")
+        _ = try store.createLabel(title: "Errand")
+        let input = TaskInput(title: "Post parcel", projectLocalId: home, dueDate: "2026-05-28T09:00:00Z")
+        let created = try store.persistQuickAdd(
+            input, labelTitles: ["errand", "Urgent"],
+            reminders: [.beforeDue(seconds: 3_600), .beforeDue(seconds: 3_600), .atTime("2026-05-27T18:00:00Z")]
+        )
+
+        XCTAssertEqual(Set(try store.labels(forTask: created.localId).map(\.title)), ["Errand", "Urgent"])
+        XCTAssertEqual(try store.labels().filter { $0.title.lowercased() == "errand" }.count, 1)
+        let reminders = try store.reminders(forTask: created.localId)
+        XCTAssertEqual(reminders.count, 2)
+        let relative = reminders.first { $0.relativeTo == "due_date" }
+        XCTAssertEqual(relative?.relativePeriod, -3_600)
+        XCTAssertEqual(relative?.reminderAt.flatMap(DueDates.parse), DueDates.parse("2026-05-28T08:00:00Z"))
+        XCTAssertTrue(reminders.contains { $0.relativeTo == nil && $0.reminderAt == "2026-05-27T18:00:00Z" })
+    }
+
+    func testPersistDropsRelativeRemindersWithoutDueDate() throws {
+        let store = try makeStore()
+        let home = try seedProject(store, title: "Home")
+        let created = try store.persistQuickAdd(
+            TaskInput(title: "Someday", projectLocalId: home), labelTitles: [],
+            reminders: [.beforeDue(seconds: 0), .atTime("2026-06-01T08:00:00Z")]
+        )
+        XCTAssertEqual(try store.reminders(forTask: created.localId).map(\.reminderAt), ["2026-06-01T08:00:00Z"])
+    }
+
+    func testDatePresets() {
+        func day(_ preset: QuickAddDatePreset, _ now: Date = quickAddNow) -> String {
+            preset.iso(now: now, calendar: utcCalendar)
+        }
+        XCTAssertEqual(day(.today), "2026-05-27T00:00:00Z")
+        XCTAssertEqual(day(.tomorrow), "2026-05-28T00:00:00Z")
+        XCTAssertEqual(day(.thisWeekend), "2026-05-30T00:00:00Z")
+        XCTAssertEqual(day(.nextWeek), "2026-06-03T00:00:00Z")
+        let saturday = DueDates.parse("2026-05-30T10:00:00Z") ?? Date()
+        XCTAssertEqual(day(.thisWeekend, saturday), "2026-05-30T00:00:00Z")
+        XCTAssertEqual(QuickAddReminder.beforeDue(seconds: 86_400).input.period, -86_400)
+        XCTAssertFalse(QuickAddReminder.atTime("2026-05-30T10:00:00Z").needsDueDate)
+    }
 }

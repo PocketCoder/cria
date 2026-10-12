@@ -2,7 +2,8 @@ import CriaKit
 import SwiftUI
 
 /// Quick add: one line of text with Quick Add Magic, a live preview, and pickers that stay in step with the
-/// parsed tokens (`followParsed`). Creates the task through the store, so it is saved locally at once.
+/// parsed tokens (`followParsed`) until one is set by hand, after which the picker wins. Creates the task through the
+/// store, so it is saved locally at once. "Add another" keeps the sheet (and project) for the next task.
 struct QuickAddSheet: View {
     let services: AppServices
     let contextProjectId: String?
@@ -14,7 +15,6 @@ struct QuickAddSheet: View {
     var onRamble: (() -> Void)?
     var onPhoto: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dateDisplay) private var dateDisplay
     @AppStorage("cria.quickAddMagicMode") private var modeRaw = QuickAddMagicMode.default.rawValue
     @State private var line = ""
     @State private var projects: [ProjectRecord] = []
@@ -24,6 +24,14 @@ struct QuickAddSheet: View {
     @State private var priority = 0
     @State private var dueISO = ""
     @State private var labelTitles: [String] = []
+    @State private var reminders: [QuickAddReminder] = []
+    /// Fields set with a picker: the typed line no longer changes them.
+    @State private var picked: Set<QuickAddField> = []
+    @State private var pickerSheet: QuickAddPickerSheet?
+    @State private var addAnother = false
+    @State private var addedTitle: String?
+    /// Clearing the line after "Add another" must not take the project back out with the typed `+project`.
+    @State private var skipNextFollow = false
     @State private var errorMessage: String?
     @FocusState private var focused: Bool
     /// Height of the field, chips and hint, so the sheet hugs them above the keyboard.
@@ -32,6 +40,8 @@ struct QuickAddSheet: View {
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     private var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode) }
+    /// The typed `+project`, unless a project was picked over it.
+    private var typedProjectTitle: String? { picked.contains(.project) ? nil : parsed.projectTitle }
     private var aiStatus: AIStatus { AIStatus.shared }
 
     private var baseProjectId: String {
@@ -47,15 +57,16 @@ struct QuickAddSheet: View {
                     .submitLabel(.done)
                     .onSubmit(submit)
                 if !line.isEmpty {
-                    Text(QuickAddPreview.highlighted(parsed)).font(Theme.rowTitle)
+                    Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.rowTitle)
                 }
                 pickers
                 chips
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(Color(.destructive)).font(Theme.caption)
                 }
-                hint
-                aiRow
+                QuickAddHint()
+                QuickAddAIRow(onRamble: onRamble, onPhoto: onPhoto, close: { dismiss() })
+                addAnotherRow
             }
             .padding()
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fitContent($0) }
@@ -77,10 +88,22 @@ struct QuickAddSheet: View {
                 if new.contains("\n") {
                     line = new.replacingOccurrences(of: "\n", with: "")
                     if canSubmit { submit() }
+                } else if skipNextFollow {
+                    skipNextFollow = false
                 } else {
                     lineChanged(from: old, to: new)
                 }
             }
+            // Relative reminders follow the due date, so they go when it does.
+            .onChange(of: dueISO) { _, new in
+                if new.isEmpty { reminders.removeAll { $0.needsDueDate } }
+            }
+            .sheet(item: $pickerSheet, onDismiss: { focused = true }, content: { which in
+                QuickAddPickerSheetView(
+                    which: which, services: services, dueISO: dueISO, labelTitles: $labelTitles, reminders: $reminders,
+                    onDue: { setDue($0) }
+                )
+            })
         }
         .presentationDetents([fittedDetent, .large], selection: $detent)
         .task { await aiStatus.refresh() }
@@ -100,11 +123,169 @@ struct QuickAddSheet: View {
         if wasFitted { detent = fittedDetent }
     }
 
-    private var hint: some View {
-        Text(hintText).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+    private var addAnotherRow: some View {
+        Toggle(isOn: $addAnother) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Add another").font(Theme.rowTitle)
+                if let addedTitle {
+                    Text("Added ‘\(addedTitle)’").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                }
+            }
+        }
+        .tint(Color(.primary))
     }
 
-    private var hintText: AttributedString {
+    private var canSubmit: Bool {
+        canSubmitQuickAdd(title: parsed.title, projectTitle: typedProjectTitle, projectLocalId: projectId.isEmpty ? nil : projectId)
+    }
+
+    private var pickers: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Menu {
+                    Picker("Project", selection: projectPick) {
+                        ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
+                    }
+                } label: {
+                    let chip = resolveProjectChip(parsedProjectTitle: typedProjectTitle, projects: projects, projectLocalId: projectId)
+                    CriaChip(text: chip.title ?? "Project", systemImage: "folder", tint: Color(.primary))
+                }
+                QuickAddDateMenu(dueISO: dueISO, onPick: { setDue($0) }, onCustom: { pickerSheet = .date })
+                Menu {
+                    Picker("Priority", selection: priorityPick) {
+                        ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
+                    }
+                } label: {
+                    CriaChip(text: priority == 0 ? "Priority" : "P\(priority)", systemImage: "flag", tint: Color(.marigold700))
+                }
+                Button { pickerSheet = .labels } label: {
+                    CriaChip(
+                        text: labelTitles.isEmpty ? "Labels" : "\(labelTitles.count) label\(labelTitles.count == 1 ? "" : "s")",
+                        systemImage: "tag", tint: Color(.meadow700)
+                    )
+                }
+                .buttonStyle(.plain)
+                QuickAddReminderMenu(reminders: $reminders, hasDueDate: !dueISO.isEmpty, onCustom: { pickerSheet = .reminder })
+            }
+        }
+    }
+
+    @ViewBuilder private var chips: some View {
+        if !labelTitles.isEmpty || parsed.repeatAfter != nil || parsed.repeatMode != nil {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach(labelTitles, id: \.self) { title in
+                        Button { pickerSheet = .labels } label: {
+                            CriaChip(text: title, systemImage: "tag", tint: Color(.meadow700))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if parsed.repeatAfter != nil || parsed.repeatMode != nil {
+                        CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Picker bindings that mark their field as set by hand, so the typed line stops changing it.
+    private var projectPick: Binding<String> {
+        Binding(get: { projectId }, set: { projectId = $0; picked.insert(.project) })
+    }
+
+    private var priorityPick: Binding<Int> {
+        Binding(get: { priority }, set: { priority = $0; picked.insert(.priority) })
+    }
+
+    /// Starts on the server's default project, unless the user or a parsed `+project` has already picked another.
+    private func adoptServerDefault() async {
+        guard let serverId = await services.defaultProjectServerId() else { return }
+        let before = baseProjectId
+        defaultServerId = serverId
+        if !picked.contains(.project), projectId == before || projectId.isEmpty { projectId = baseProjectId }
+    }
+
+    private func load() {
+        projects = ProjectTree.visible((try? services.store.projects()) ?? [])
+        // Offline the server read never answers, so start on the remembered default (Inbox), not the first project.
+        if defaultServerId == nil, let remembered = services.rememberedDefaultProjectLocalId() {
+            defaultServerId = projects.first { $0.localId == remembered }?.serverId
+        }
+        projectId = baseProjectId
+        if line.isEmpty { line = initialLine }
+        if dueISO.isEmpty, let initialDueDate { dueISO = DueDates.allDayISO(for: initialDueDate) }
+        focused = true
+    }
+
+    /// A date chosen with the picker ("" for no date) wins over a typed one.
+    private func setDue(_ iso: String) {
+        dueISO = iso
+        picked.insert(.due)
+    }
+
+    /// Keeps the pickers in step with what the typed line parses to, except fields set by hand.
+    private func lineChanged(from old: String, to new: String) {
+        let before = parseQuickAddTask(old, mode: mode)
+        let after = parseQuickAddTask(new, mode: mode)
+        if !picked.contains(.priority) {
+            priority = followParsed(priority, before: before.priority, after: after.priority, empty: 0)
+        }
+        if !picked.contains(.due) {
+            dueISO = followParsed(dueISO, before: before.dueDate, after: after.dueDate, empty: "")
+        }
+        labelTitles = followParsedLabels(labelTitles, before: before.labelTitles, after: after.labelTitles)
+        if !picked.contains(.project) {
+            let beforeProject = before.projectTitle.flatMap { findProject(titled: $0, in: projects)?.localId }
+            let afterProject = after.projectTitle.flatMap { findProject(titled: $0, in: projects)?.localId }
+            projectId = followParsed(projectId, before: beforeProject, after: afterProject, empty: baseProjectId)
+        }
+    }
+
+    private func submit() {
+        let result = parsed
+        let fields = QuickAddFields(
+            dueDate: dueISO.isEmpty ? nil : dueISO, priority: priority,
+            repeatAfter: result.repeatAfter, repeatMode: result.repeatMode
+        )
+        guard let input = buildQuickAddInput(
+            title: result.title, projectTitle: typedProjectTitle, projects: projects,
+            selectedProjectId: projectId.isEmpty ? nil : projectId, fallbackProjectId: baseProjectId, fields: fields
+        ) else {
+            errorMessage = "Choose a project first."
+            return
+        }
+        do {
+            try services.store.persistQuickAdd(
+                input, labelTitles: labelTitles, assigneeUsernames: result.assigneeUsernames, reminders: reminders
+            )
+            if addAnother { startNext(after: input.title) } else { dismiss() }
+        } catch {
+            errorMessage = String(describing: error)
+        }
+    }
+
+    /// Clears the form for the next task, keeping the project, as desktop's add-and-keep-open does.
+    private func startNext(after title: String) {
+        skipNextFollow = true
+        line = ""
+        priority = 0
+        dueISO = ""
+        labelTitles = []
+        reminders = []
+        picked.subtract([.due, .priority])
+        errorMessage = nil
+        addedTitle = title
+        focused = true
+    }
+}
+
+/// Which tokens the typed line understands.
+private struct QuickAddHint: View {
+    var body: some View {
+        Text(text).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+    }
+
+    private var text: AttributedString {
         func token(_ text: String, _ tint: Color) -> AttributedString {
             var piece = AttributedString(text)
             piece.font = Theme.caption.bold()
@@ -122,16 +303,24 @@ struct QuickAddSheet: View {
         out += AttributedString(".")
         return out
     }
+}
 
-    @ViewBuilder private var aiRow: some View {
+/// Hands off to Ramble (where the on-device model is offered) or the photo import.
+private struct QuickAddAIRow: View {
+    var onRamble: (() -> Void)?
+    var onPhoto: (() -> Void)?
+    let close: () -> Void
+    private var aiStatus: AIStatus { AIStatus.shared }
+
+    var body: some View {
         if onPhoto != nil || onRamble != nil {
             Divider()
             HStack(spacing: 10) {
                 if let onRamble, aiStatus.isOfferable {
-                    aiButton("Ramble", symbol: "mic") { dismiss(); onRamble() }
+                    aiButton("Ramble", symbol: "mic") { close(); onRamble() }
                 }
                 if let onPhoto {
-                    aiButton("From photo", symbol: "camera") { dismiss(); onPhoto() }
+                    aiButton("From photo", symbol: "camera") { close(); onPhoto() }
                 }
             }
         }
@@ -146,201 +335,5 @@ struct QuickAddSheet: View {
                 .background(Color(.primarySoft), in: Capsule())
         }
         .buttonStyle(.plain)
-    }
-
-    private var canSubmit: Bool {
-        canSubmitQuickAdd(title: parsed.title, projectTitle: parsed.projectTitle, projectLocalId: projectId.isEmpty ? nil : projectId)
-    }
-
-    private var pickers: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 8) {
-            Menu {
-                Picker("Project", selection: $projectId) {
-                    ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
-                }
-            } label: {
-                let chip = resolveProjectChip(parsedProjectTitle: parsed.projectTitle, projects: projects, projectLocalId: projectId)
-                CriaChip(text: chip.title ?? "Project", systemImage: "folder", tint: Color(.primary))
-            }
-            Menu {
-                Picker("Priority", selection: $priority) {
-                    ForEach(0...5, id: \.self) { Text($0 == 0 ? "No priority" : "Priority \($0)").tag($0) }
-                }
-            } label: {
-                CriaChip(text: priority == 0 ? "Priority" : "P\(priority)", systemImage: "flag", tint: Color(.marigold700))
-            }
-            Menu {
-                Button("Today") { setDue(daysFromNow: 0) }
-                Button("Tomorrow") { setDue(daysFromNow: 1) }
-                Button("Next week") { setDue(daysFromNow: 7) }
-                Button("No date", role: .destructive) { dueISO = "" }
-            } label: {
-                CriaChip(
-                    text: dueISO.isEmpty ? "Due" : DueDates.label(dueISO, now: Date(), display: dateDisplay),
-                    systemImage: "calendar", tint: Color(.sky700)
-                )
-            }
-        }
-        }
-    }
-
-    @ViewBuilder private var chips: some View {
-        if !labelTitles.isEmpty || parsed.repeatAfter != nil || parsed.repeatMode != nil {
-            HStack {
-                ForEach(labelTitles, id: \.self) { CriaChip(text: $0, systemImage: "tag", tint: Color(.meadow700)) }
-                if parsed.repeatAfter != nil || parsed.repeatMode != nil {
-                    CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
-                }
-            }
-        }
-    }
-
-    /// Starts on the server's default project, unless the user or a parsed `+project` has already picked another.
-    private func adoptServerDefault() async {
-        guard let serverId = await services.defaultProjectServerId() else { return }
-        let before = baseProjectId
-        defaultServerId = serverId
-        if projectId == before || projectId.isEmpty { projectId = baseProjectId }
-    }
-
-    private func load() {
-        projects = ProjectTree.visible((try? services.store.projects()) ?? [])
-        // Offline the server read never answers, so start on the remembered default (Inbox), not the first project.
-        if defaultServerId == nil, let remembered = services.rememberedDefaultProjectLocalId() {
-            defaultServerId = projects.first { $0.localId == remembered }?.serverId
-        }
-        projectId = baseProjectId
-        if line.isEmpty { line = initialLine }
-        if dueISO.isEmpty, let initialDueDate { dueISO = DueDates.allDayISO(for: initialDueDate) }
-        focused = true
-    }
-
-    private func setDue(daysFromNow: Int) {
-        let day = Calendar.cria.date(byAdding: .day, value: daysFromNow, to: Date()) ?? Date()
-        dueISO = DueDates.allDayISO(for: day)
-    }
-
-    /// Keeps the pickers in step with what the typed line parses to.
-    private func lineChanged(from old: String, to new: String) {
-        let before = parseQuickAddTask(old, mode: mode)
-        let after = parseQuickAddTask(new, mode: mode)
-        priority = followParsed(priority, before: before.priority, after: after.priority, empty: 0)
-        dueISO = followParsed(dueISO, before: before.dueDate, after: after.dueDate, empty: "")
-        labelTitles = followParsedLabels(labelTitles, before: before.labelTitles, after: after.labelTitles)
-        let beforeProject = before.projectTitle.flatMap { findProject(titled: $0, in: projects)?.localId }
-        let afterProject = after.projectTitle.flatMap { findProject(titled: $0, in: projects)?.localId }
-        projectId = followParsed(projectId, before: beforeProject, after: afterProject, empty: baseProjectId)
-    }
-
-    private func submit() {
-        let result = parsed
-        let fields = QuickAddFields(
-            dueDate: dueISO.isEmpty ? nil : dueISO, priority: priority,
-            repeatAfter: result.repeatAfter, repeatMode: result.repeatMode
-        )
-        guard let input = buildQuickAddInput(
-            title: result.title, projectTitle: result.projectTitle, projects: projects,
-            selectedProjectId: projectId.isEmpty ? nil : projectId, fallbackProjectId: baseProjectId, fields: fields
-        ) else {
-            errorMessage = "Choose a project first."
-            return
-        }
-        do {
-            try services.store.persistQuickAdd(
-                input, labelTitles: labelTitles, assigneeUsernames: parsed.assigneeUsernames
-            )
-            dismiss()
-        } catch {
-            errorMessage = String(describing: error)
-        }
-    }
-}
-
-/// Colours the typed line by what each part became.
-enum QuickAddPreview {
-    static func highlighted(_ result: QuickAddResult) -> AttributedString {
-        var output = AttributedString()
-        for token in result.tokens {
-            var piece = AttributedString(token.text)
-            if let tint = tint(for: token.kind) {
-                piece.foregroundColor = tint
-                piece.font = Theme.rowTitle.weight(.semibold)
-            }
-            output += piece
-        }
-        return output
-    }
-
-    private static func tint(for kind: QuickAddTokenKind) -> Color? {
-        switch kind {
-        case .text: return nil
-        case .date: return Color(.sky700)
-        case .priority: return Color(.marigold700)
-        case .label: return Color(.meadow700)
-        case .assignee: return Color(.primary)
-        case .project: return Color(.primary)
-        case .recurrence: return Color(.mutedForeground)
-        }
-    }
-}
-
-/// Quick add shows the Ramble or photo sheet in its place, so the parent holds all three.
-private enum AddSheet: Identifiable {
-    case quickAdd, ramble, photo
-    var id: Int { hashValue }
-}
-
-/// Adds the floating + button that opens quick add, for the screens that list tasks.
-struct QuickAddButton: ViewModifier {
-    let services: AppServices
-    var contextProjectId: String?
-    @State private var sheet: AddSheet?
-    private var aiStatus: AIStatus { AIStatus.shared }
-
-    func body(content: Content) -> some View {
-        content
-            .criaFab(menu: fabMenu) { sheet = .quickAdd }
-            .task { await aiStatus.refresh() }
-            .sheet(item: $sheet) { which in
-                switch which {
-                case .quickAdd:
-                    QuickAddSheet(
-                        services: services, contextProjectId: contextProjectId,
-                        onRamble: { handOff(.ramble) }, onPhoto: { handOff(.photo) }
-                    )
-                case .ramble:
-                    RambleSheet(services: services)
-                case .photo:
-                    ShoppingPhotoSheet(services: services)
-                }
-            }
-    }
-
-    /// Press and hold on +: the same Ramble and photo sheets as Browse's Add menu, with Ramble only where the on-device
-    /// model is offered.
-    private var fabMenu: [FabMenuItem] {
-        var items: [FabMenuItem] = []
-        if aiStatus.isOfferable {
-            items.append(FabMenuItem(title: "Ramble", systemImage: "waveform", isDisabled: aiStatus.notReadyMessage != nil) {
-                sheet = .ramble
-            })
-        }
-        items.append(FabMenuItem(title: "List from photo", systemImage: "camera") { sheet = .photo })
-        return items
-    }
-
-    /// Present the next sheet after the current one has gone, or SwiftUI drops the request.
-    private func handOff(_ next: AddSheet) {
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(400))
-            sheet = next
-        }
-    }
-}
-
-extension View {
-    func quickAdd(services: AppServices, contextProjectId: String? = nil) -> some View {
-        modifier(QuickAddButton(services: services, contextProjectId: contextProjectId))
     }
 }

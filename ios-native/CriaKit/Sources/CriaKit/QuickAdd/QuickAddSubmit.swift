@@ -106,15 +106,71 @@ public func followParsedLabels(_ current: [String], before: [String], after: [St
     return mergeLabelTitles(current.filter { !gone.contains($0.lowercased()) }, after)
 }
 
+/// The day presets on the quick-add date chip.
+public enum QuickAddDatePreset: String, CaseIterable, Sendable {
+    case today, tomorrow, thisWeekend, nextWeek
+
+    public var title: String {
+        switch self {
+        case .today: return "Today"
+        case .tomorrow: return "Tomorrow"
+        case .thisWeekend: return "This weekend"
+        case .nextWeek: return "Next week"
+        }
+    }
+
+    /// All-day value for the preset's day. This weekend is the coming Saturday (today on a Saturday), as the typed
+    /// "this weekend" reads; next week is seven days on, as typed "next week".
+    public func iso(now: Date, calendar: Calendar = .cria) -> String {
+        let today = calendar.startOfDay(for: now)
+        let days: Int
+        switch self {
+        case .today: days = 0
+        case .tomorrow: days = 1
+        case .thisWeekend: days = (7 - calendar.component(.weekday, from: today) + 7) % 7
+        case .nextWeek: days = 7
+        }
+        return DueDates.allDayISO(for: calendar.date(byAdding: .day, value: days, to: today) ?? today, calendar: calendar)
+    }
+}
+
+/// A reminder chosen in quick add: an offset from the due date (0 = at the due time) or a fixed instant (ISO).
+public enum QuickAddReminder: Hashable, Sendable {
+    case beforeDue(seconds: Int)
+    case atTime(String)
+
+    /// The relative options need a due date to follow.
+    public var needsDueDate: Bool {
+        if case .beforeDue = self { return true }
+        return false
+    }
+
+    public var input: ReminderInput {
+        switch self {
+        case .beforeDue(let seconds): return ReminderInput(period: -seconds, relativeTo: .dueDate)
+        case .atTime(let iso): return ReminderInput(triggerAt: iso)
+        }
+    }
+}
+
 extension CriaStore {
-    /// Creates the task, then applies typed labels (best effort: a bad label never fails the create).
+    /// Creates the task, then applies the labels (typed and picked; a title with no label yet creates one) and the
+    /// reminders, best effort: a bad label or reminder never fails the create. Relative reminders are dropped when the
+    /// task has no due date to follow.
     /// Typed `@name` assignees are queued by username and resolved when the op is pushed (the user's id is not known
     /// offline), so they are never lost; a name that matches nobody is dropped at that point.
     @discardableResult
-    public func persistQuickAdd(_ input: TaskInput, labelTitles: [String], assigneeUsernames: [String] = []) throws -> TaskRecord {
+    public func persistQuickAdd(
+        _ input: TaskInput, labelTitles: [String], assigneeUsernames: [String] = [], reminders: [QuickAddReminder] = []
+    ) throws -> TaskRecord {
         let created = try createTask(input)
         if !labelTitles.isEmpty {
             try? applyLabels(byTitle: labelTitles, toTask: created.localId)
+        }
+        let hasDueDate = !(input.dueDate ?? "").isEmpty
+        var seen = Set<QuickAddReminder>()
+        for reminder in reminders where (hasDueDate || !reminder.needsDueDate) && seen.insert(reminder).inserted {
+            try? addReminder(taskLocalId: created.localId, reminder.input)
         }
         try? queueAssignees(assigneeUsernames, toTask: created.localId)
         return created

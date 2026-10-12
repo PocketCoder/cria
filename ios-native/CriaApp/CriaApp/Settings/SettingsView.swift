@@ -7,7 +7,7 @@ struct SettingsView: View {
     let services: AppServices
     let onSignOut: (_ wipeLocalData: Bool) -> Void
     @State private var model: SettingsModel
-    @StateObject private var prefs = PreferencesModel()
+    @StateObject private var prefs: PreferencesModel
     @State private var projects: [ProjectRecord] = []
     @Environment(\.dismiss) private var dismiss
 
@@ -15,6 +15,7 @@ struct SettingsView: View {
         self.services = services
         self.onSignOut = onSignOut
         _model = State(initialValue: SettingsModel(services: services))
+        _prefs = StateObject(wrappedValue: PreferencesModel(services: services))
     }
 
     var body: some View {
