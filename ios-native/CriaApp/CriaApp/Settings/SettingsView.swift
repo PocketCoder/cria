@@ -24,7 +24,7 @@ struct SettingsView: View {
                 loadStatus
                 GeneralSettingsSection(model: model, prefs: prefs, projects: projects)
                 AppearanceSettingsSection(prefs: prefs)
-                NotificationSettingsSection(services: services, model: model, prefs: prefs, onClose: { dismiss() })
+                NotificationSettingsSection(services: services, model: model, onClose: { dismiss() }, prefs: prefs)
                 PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
                 accountSection
                 syncSection
