@@ -374,4 +374,18 @@ final class QuickAddModeTests: XCTestCase {
         XCTAssertEqual(result.tokens, [QuickAddToken(kind: .text, start: 0, end: 12, text: "  Call  mum ")])
         XCTAssertEqual(parse("", mode: .disabled).tokens, [])
     }
+
+    func testPartOfDaySetsATime() {
+        let morning = parse("Call the bank tomorrow morning")
+        XCTAssertEqual(morning.title, "Call the bank")
+        XCTAssertEqual(utcParts(morning.dueDate)?.day, 28)
+        XCTAssertEqual(utcParts(morning.dueDate)?.hour, 9)
+        let evening = parse("Pack bags this evening")
+        XCTAssertEqual(evening.title, "Pack bags")
+        XCTAssertEqual(utcParts(evening.dueDate)?.day, 27)
+        XCTAssertEqual(utcParts(evening.dueDate)?.hour, 18)
+        let friday = parse("Gym friday in the afternoon")
+        XCTAssertEqual(friday.title, "Gym")
+        XCTAssertEqual(utcParts(friday.dueDate)?.hour, 14)
+    }
 }

@@ -14,6 +14,7 @@ public final class AppServices: Sendable {
     let blobs: FileBlobStore
     let puller: Puller
     private let currentUser = CurrentUserCache()
+    private let images = ImageDataCache()
     private let reactions = SerialQueue()
 
     public init(api: ApiClient, store: CriaStore, blobDirectory: URL, settings: UserSettingsService? = nil) async {
@@ -62,6 +63,25 @@ public final class AppServices: Sendable {
         if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
             UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
         }
+        // Colour scheme, date and time format and the completion sound follow the account, as on desktop. Applied once
+        // per launch, so a later read cannot revert a change made here before it was pushed.
+        if case .object(let frontend)? = user["settings"]?["frontend_settings"],
+           let cria = FrontendSettings.criaPrefs(of: frontend) {
+            let store = PreferencesStore()
+            let current = store.load()
+            let next = SyncedPreferences.applying(cria, to: current)
+            if next != current {
+                store.save(next)
+                NotificationCenter.default.post(name: .criaSyncedPreferencesApplied, object: nil)
+            }
+        }
+    }
+
+    /// Sends the synced display prefs that changed to the server (frontend_settings.cria). Offline it fails quietly;
+    /// the next change sends its own key again.
+    public func pushSyncedPreferences(from old: LocalPreferences, to new: LocalPreferences) async {
+        guard let change = SyncedPreferences.change(from: old, to: new), let settings else { return }
+        try? await settings.save(change)
     }
 
     public func stop() async {
@@ -108,6 +128,25 @@ public final class AppServices: Sendable {
     /// a quick add-then-remove reaches the server in that order; the user is read once and cached.
     public func toggleCommentReaction(commentLocalId: String, emoji: String) async {
         await reactions.run { [self] in await performReactionToggle(commentLocalId: commentLocalId, emoji: emoji) }
+    }
+
+    /// Bytes of an image in a description or comment that lives on the Vikunja server (an uploaded attachment), fetched
+    /// with the session token. Nil for any other address, offline, or on an error. Cached for the session.
+    public func serverImageData(_ url: URL) async -> Data? {
+        guard let base = await api.serverBase(), let path = Self.apiPath(of: url, base: base) else { return nil }
+        if let cached = await images.data(for: path) { return cached }
+        guard let response = try? await api.send(.get, path), response.isSuccess, !response.data.isEmpty else { return nil }
+        await images.store(response.data, for: path)
+        return response.data
+    }
+
+    /// The path under `/api/v1` when `url` is on the server at `base`, else nil (images elsewhere load on their own).
+    static func apiPath(of url: URL, base: String) -> String? {
+        guard let server = URL(string: base), url.host()?.lowercased() == server.host()?.lowercased(),
+              url.port == server.port else { return nil }
+        let full = url.path(percentEncoded: true)
+        guard let range = full.range(of: "/api/v1/") else { return nil }
+        return "/" + full[range.upperBound...]
     }
 
     /// The signed-in user, read once per session (nil until a read succeeds).
@@ -183,5 +222,24 @@ actor SerialQueue {
         }
         tail = next
         await next.value
+    }
+}
+
+/// Recently fetched server images, about 30 MB at most.
+actor ImageDataCache {
+    private var entries: [String: Data] = [:]
+    private var order: [String] = []
+    private let limit = 30_000_000
+
+    func data(for key: String) -> Data? { entries[key] }
+
+    func store(_ data: Data, for key: String) {
+        if entries[key] == nil { order.append(key) }
+        entries[key] = data
+        var total = entries.values.reduce(0) { $0 + $1.count }
+        while total > limit, let oldest = order.first {
+            order.removeFirst()
+            total -= entries.removeValue(forKey: oldest)?.count ?? 0
+        }
     }
 }

@@ -26,6 +26,9 @@ public struct TaskExecutor: OutboxExecutor {
     private func create(_ op: OutboxRow, _ task: PushTask, _ api: ApiClient, _ store: CriaStore) async throws {
         let localId = task.record.localId
         if task.deleted {
+            // A queued delete (possibly still in its undo window) cleans up; until then the row must stay so an undo
+            // can bring it back.
+            if try store.hasQueuedTaskDelete(localId: localId) { return }
             try store.removeTaskLocally(localId: localId)
             return
         }
@@ -171,6 +174,14 @@ extension CriaStore {
 
     func removeTaskLocally(localId: String) throws {
         try userWrite(announcing: [.tasks]) { try CriaStore.deleteTaskCascade($0, localId: localId) }
+    }
+
+    func hasQueuedTaskDelete(localId: String) throws -> Bool {
+        try database.writer.read { connection in
+            try Bool.fetchOne(connection, sql: """
+                SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND op = 'delete')
+                """, arguments: [localId]) ?? false
+        }
     }
 
     func requeueCreateIfMissing(_ record: TaskRecord) throws {

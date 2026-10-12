@@ -21,7 +21,7 @@ private let ordinal = "(?:st|nd|rd|th)?"
 private let datePattern = [
     #"\b(?:"#,
     #"(?:(?:next|this|on)\s+)?"#, weekdayWord,
-    #"|next\s+week|(?:this\s+)?weekend|today|tonight|tomorrow|tmrw|yesterday"#,
+    #"|next\s+week|(?:this\s+)?weekend|this\s+(?:morning|afternoon|evening)|today|tonight|tomorrow|tmrw|yesterday"#,
     #"|in\s+\d+\s+(?:minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?)"#,
     #"|\d{4}-\d{2}-\d{2}"#,
     "|", monthWord, #"\.?\s+\d{1,2}"#, ordinal, #"(?:,?\s+\d{4})?"#,
@@ -68,6 +68,11 @@ private func dateCandidates(_ text: NSString, now: Date, calendar: Calendar) -> 
            let merged = trailingTime(text, from: end, day: day, evening: evening, calendar: calendar) {
             value = .instant(merged.date)
             end = merged.end
+        } else if case .day(let day) = resolved,
+                  let part = partOfDay(text, from: end, phrase: phrase, day: day, calendar: calendar) {
+            // "tomorrow morning", "friday evening", "this afternoon": a time for the part of the day.
+            value = .instant(part.date)
+            end = part.end
         }
         let span = NSRange(location: match.range.location, length: end - match.range.location)
         found.append(QuickAddDateMatch(
@@ -101,6 +106,29 @@ private func standaloneTimeCandidates(_ text: NSString, now: Date, calendar: Cal
         ))
     }
     return found
+}
+
+/// Hours for "morning", "afternoon", "evening" and "night". The desktop app (chrono) makes these all-day; a time
+/// is more useful on a phone that reminds you, so these are the common working defaults.
+private let partOfDayHours = ["morning": 9, "afternoon": 14, "evening": 18, "night": 21]
+
+/// "morning" after a day phrase ("tomorrow morning", "friday in the evening"), or the part named inside "this morning".
+private func partOfDay(_ text: NSString, from offset: Int, phrase: String, day: Date,
+                       calendar: Calendar) -> (date: Date, end: Int)? {
+    let lower = phrase.lowercased()
+    if lower.hasPrefix("this "), let hour = partOfDayHours[String(lower.dropFirst(5)).trimmingCharacters(in: .whitespaces)],
+       let date = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) {
+        return (date, offset)
+    }
+    guard let regex = RegexCache.regex(#"^\s+(?:in\s+the\s+)?(morning|afternoon|evening|night)\b"#, options: [.caseInsensitive])
+    else { return nil }
+    let range = NSRange(location: offset, length: text.length - offset)
+    guard let match = regex.firstMatch(in: text as String, range: range) else { return nil }
+    let word = text.substring(with: match.range(at: 1)).lowercased()
+    guard let hour = partOfDayHours[word], let date = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) else {
+        return nil
+    }
+    return (date, match.range.location + match.range.length)
 }
 
 /// A day phrase starting right after `offset` (after spaces and an optional "on").
@@ -161,6 +189,7 @@ private func resolve(_ phrase: String, now: Date, calendar: Calendar) -> Resolve
     let today = calendar.startOfDay(for: now)
     switch first {
     case "today", "tonight": return .day(today)
+    case "this" where words.count == 2 && partOfDayHours[words[1]] != nil: return .day(today)
     case "weekend": return weekdayDate(7, isNext: false, today: today, calendar: calendar)
     case "tomorrow", "tmrw": return shifted(today, days: 1, calendar: calendar)
     case "yesterday": return shifted(today, days: -1, calendar: calendar)

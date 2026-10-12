@@ -165,4 +165,64 @@ final class ProductionReviewTests: XCTestCase {
         let ops = try store.outboxRows().map(\.entityType)
         XCTAssertEqual(ops.firstIndex(of: "task").map { $0 < (ops.firstIndex(of: "task_relation") ?? 0) }, true)
     }
+
+    // MARK: Undo, assignees, subtasks, synced prefs, images
+
+    func testUndoDeleteBringsBackASyncedTask() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let task = try seedSyncedTask(store, serverId: 5)
+        try store.deleteTask(localId: task, undoWindow: 6)
+        let head = try XCTUnwrap(try store.outboxHead())
+        XCTAssertNotNil(head.nextAttemptAt, "the delete waits out the undo window")
+        XCTAssertTrue(try store.undoDeleteTask(localId: task))
+        XCTAssertNotNil(try store.task(localId: task))
+        XCTAssertEqual(try store.outboxRows().count, 0)
+        XCTAssertEqual(try countRows(store, "SELECT dirty FROM tasks WHERE local_id = ?", [task]), 0)
+        XCTAssertFalse(try store.undoDeleteTask(localId: task))
+    }
+
+    func testAssigneesAddAndRemoveQueueOps() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let task = try seedSyncedTask(store, serverId: 5)
+        try store.addAssignee(taskLocalId: task, userId: 7, username: "sam")
+        XCTAssertEqual(try store.assignees(forTask: task).map(\.username), ["sam"])
+        try store.removeAssignee(taskLocalId: task, userId: 7)
+        XCTAssertTrue(try store.assignees(forTask: task).isEmpty)
+        XCTAssertEqual(try store.outboxRows().map(\.op), ["add", "remove"])
+    }
+
+    func testNestPutsSubtasksUnderTheirParent() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let parent = try seedSyncedTask(store, serverId: 1, title: "Parent")
+        let other = try seedSyncedTask(store, serverId: 2, title: "Other")
+        let child = try store.createSubtask(parentLocalId: parent, title: "Child")
+        let items = try store.taskItems(.project(try XCTUnwrap(try store.projects().first?.localId)))
+        let nested = TaskTree.nest(items, children: try store.subtaskMap())
+        let parentIndex = try XCTUnwrap(nested.firstIndex { $0.id == parent })
+        XCTAssertEqual(nested[parentIndex + 1].id, child.localId)
+        XCTAssertEqual(nested[parentIndex + 1].depth, 1)
+        XCTAssertTrue(nested[parentIndex].hasChildren)
+        XCTAssertEqual(nested.first { $0.id == other }?.depth, 0)
+        XCTAssertEqual(nested.count, items.count)
+    }
+
+    func testSyncedPreferencesApplyAndDiff() {
+        var prefs = LocalPreferences.default
+        prefs = SyncedPreferences.applying(["colorScheme": .string("dark"), "timeFormat": .string("12h")], to: prefs)
+        XCTAssertEqual(prefs.colorScheme, .dark)
+        XCTAssertEqual(prefs.timeFormat, .h12)
+        var changed = prefs
+        changed.colorScheme = .system
+        XCTAssertEqual(SyncedPreferences.change(from: prefs, to: changed)?.cria, ["colorScheme": .string("system")])
+        XCTAssertNil(SyncedPreferences.change(from: prefs, to: prefs))
+    }
+
+    func testServerImagePathOnlyForTheServer() throws {
+        let url = try XCTUnwrap(URL(string: "https://vk.example/api/v1/tasks/3/attachments/9"))
+        XCTAssertEqual(AppServices.apiPath(of: url, base: "https://vk.example"), "/tasks/3/attachments/9")
+        XCTAssertNil(AppServices.apiPath(of: url, base: "https://other.example"))
+    }
 }

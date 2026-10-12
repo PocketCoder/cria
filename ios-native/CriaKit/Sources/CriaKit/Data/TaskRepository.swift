@@ -249,15 +249,48 @@ extension CriaStore {
         }
     }
 
-    /// Soft delete. The row stays until the outbox drains, so the delete can be pushed.
-    public func deleteTask(localId: String) throws {
+    /// Soft delete. The row stays until the outbox drains, so the delete can be pushed. With an `undoWindow` the
+    /// delete op waits that long before it may be sent (it holds the queue head meanwhile), so `undoDeleteTask` can
+    /// still take it back.
+    public func deleteTask(localId: String, undoWindow: TimeInterval = 0) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
             let now = isoNow()
             try connection.execute(
-                sql: "UPDATE tasks SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ?",
+                sql: "UPDATE tasks SET deleted = 1, dirty = 1, updated_at = ? WHERE local_id = ? AND deleted = 0",
                 arguments: [now, localId]
             )
+            guard connection.changesCount > 0 else { return }
             try connection.enqueue(.task, localId: localId, operation: .delete, payload: [:], at: now)
+            if undoWindow > 0 {
+                try connection.execute(
+                    sql: "UPDATE outbox SET next_attempt_at = ? WHERE id = ?",
+                    arguments: [Date().addingTimeInterval(undoWindow).formatted(.iso8601), connection.lastInsertedRowID]
+                )
+            }
+        }
+    }
+
+    /// Takes back a delete that has not been sent yet. False when it already went (or never existed).
+    @discardableResult
+    public func undoDeleteTask(localId: String) throws -> Bool {
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
+            guard let opId = try Int.fetchOne(connection, sql: """
+                SELECT id FROM outbox WHERE entity_type = 'task' AND entity_local_id = ? AND op = 'delete' AND attempts = 0
+                 ORDER BY id DESC LIMIT 1
+                """, arguments: [localId]) else { return false }
+            try connection.execute(sql: "DELETE FROM outbox WHERE id = ?", arguments: [opId])
+            try connection.execute(sql: "UPDATE tasks SET deleted = 0 WHERE local_id = ?", arguments: [localId])
+            guard let record = try CriaStore.fetchTask(connection, localId: localId) else { return false }
+            let queued = try Bool.fetchOne(connection, sql: """
+                SELECT EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = ?)
+                """, arguments: [localId]) ?? false
+            if record.serverId == nil, !queued {
+                // Its create op already ran and stood down for the delete: queue it again.
+                try connection.enqueue(.task, localId: localId, operation: .create, payload: CriaStore.taskPayload(record), at: isoNow())
+            }
+            let stillDirty = record.serverId == nil || queued
+            try connection.execute(sql: "UPDATE tasks SET dirty = ? WHERE local_id = ?", arguments: [stillDirty, localId])
+            return true
         }
     }
 
