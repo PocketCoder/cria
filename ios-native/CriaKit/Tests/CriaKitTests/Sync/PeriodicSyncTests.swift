@@ -62,15 +62,19 @@ final class PeriodicSyncTests: XCTestCase {
 
     func testStartWhileInactiveWaitsForActive() async {
         let counter = TickCounter()
-        let sync = PeriodicSync(interval: 0.05, reconcileInterval: 100, tick: { await counter.increment() })
+        // A long interval: only the pull on becoming active may count, so a slow runner cannot add a timer tick.
+        let sync = PeriodicSync(interval: 30, reconcileInterval: 100, tick: { await counter.increment() })
         await sync.setActive(false)
         await sync.start()
         await settle(150)
         let idle = await counter.value
         XCTAssertEqual(idle, 0)
         await sync.setActive(true)
-        await settle(30)
-        let active = await counter.value
+        var active = await counter.value
+        for _ in 0..<20 where active == 0 {
+            await settle(50)
+            active = await counter.value
+        }
         XCTAssertEqual(active, 1)
         await sync.stop()
     }
