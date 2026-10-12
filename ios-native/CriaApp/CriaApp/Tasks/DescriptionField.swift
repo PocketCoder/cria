@@ -34,7 +34,7 @@ final class DescriptionDraft {
         let empty = (controller.textView?.textStorage.length ?? 0) == 0
         if empty != isEmpty { isEmpty = empty }
         // A checkbox tapped while not editing ends no editing session, so save now.
-        if controller.textView?.isFirstResponder != true { save() }
+        if !controller.isEditing { save() }
     }
 
     func save() {

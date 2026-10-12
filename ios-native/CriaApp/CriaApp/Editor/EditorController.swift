@@ -25,6 +25,10 @@ final class EditorController {
     var onEndEditing: () -> Void = {}
     /// The document as it was when the text view was torn down, so a save that runs afterwards still has the content.
     private var finalDocument: RichDocument?
+    /// A picker (mention, link, photo) is over the editor: the text view resigned only for it, so editing goes on.
+    var isHoldingFocus = false
+    /// The caret when the picker opened, put back when it closes.
+    var heldSelection: NSRange?
 
     func attach(_ view: EditorTextView) {
         textView = view

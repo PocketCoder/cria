@@ -67,6 +67,8 @@ final class EditorCoordinator: NSObject, UITextViewDelegate {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
+        // A picker the editor opened took the focus for a moment; editing goes on once it closes.
+        guard !controller.isHoldingFocus else { return }
         (textView as? EditorTextView)?.endInlineEditing()
         controller.onEndEditing()
     }

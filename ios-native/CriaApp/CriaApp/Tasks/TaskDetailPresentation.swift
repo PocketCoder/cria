@@ -21,7 +21,9 @@ final class TaskDetailPresentation {
     var deletingAttachment: AttachmentRecord?
     var attachmentError: String?
     var addingRelation = false
-    var deletingTask = false
+    var assigning = false
+    /// The user picked in the assign sheet, saved once the sheet has gone.
+    var pickedAssignee: UserResponse?
     var failure: String?
 
     /// True while the optional at `keyPath` holds a value; setting false clears it.
@@ -46,6 +48,7 @@ final class TaskDetailFeeds {
     let attachments: LiveValue<[AttachmentRecord]>
     let relations: LiveValue<[RelationRecord]>
     let reminders: LiveValue<[ReminderRecord]>
+    let assignees: LiveValue<[AssigneeRecord]>
 
     init(store: CriaStore, taskLocalId: String) {
         comments = LiveValue(initial: []) {
@@ -60,6 +63,9 @@ final class TaskDetailFeeds {
         reminders = LiveValue(initial: []) {
             observeStore(store, kinds: [.tasks]) { reading in try reading.reminders(forTask: taskLocalId) }
         }
+        assignees = LiveValue(initial: []) {
+            observeStore(store, kinds: [.tasks]) { reading in try reading.assignees(forTask: taskLocalId) }
+        }
     }
 }
 
@@ -72,6 +78,9 @@ struct TaskDetailSheets: ViewModifier {
     private var actions: AttachmentActions {
         AttachmentActions(services: services, taskLocalId: taskLocalId, state: state)
     }
+
+    /// Who is assigned now, so the search marks them.
+    let assigned: Set<Int>
 
     func body(content: Content) -> some View {
         content
@@ -92,6 +101,9 @@ struct TaskDetailSheets: ViewModifier {
             .sheet(isPresented: $state.addingRelation) {
                 RelationPickerSheet(services: services, taskLocalId: taskLocalId)
             }
+            .sheet(isPresented: $state.assigning, onDismiss: assignPicked) {
+                AssigneePickerSheet(services: services, assigned: assigned) { state.pickedAssignee = $0 }
+            }
             .photosPicker(isPresented: $state.choosingPhoto, selection: $state.photo, matching: .images)
             .onChange(of: state.photo) { _, item in
                 guard let item else { return }
@@ -109,22 +121,24 @@ struct TaskDetailSheets: ViewModifier {
             }
             .quickLookPreview($state.preview)
     }
+
+    /// After the sheet has gone, so a failure can show in the screen's alert.
+    private func assignPicked() {
+        guard let user = state.pickedAssignee else { return }
+        state.pickedAssignee = nil
+        state.attempt { try services.store.addAssignee(taskLocalId: taskLocalId, userId: user.id, username: user.username) }
+    }
 }
 
-/// Delete confirmations and the shared error alert of the task detail screen. Centred alerts, not confirmation
+/// Comment and attachment delete confirmations and the shared error alert of the task detail screen. Centred alerts, not confirmation
 /// dialogs: on iOS 26 a dialog is a popover anchored to the view it hangs off, which here is the whole screen.
 struct TaskDetailDialogs: ViewModifier {
     let services: AppServices
     let taskLocalId: String
     @Bindable var state: TaskDetailPresentation
-    let onDeleteTask: () -> Void
 
     func body(content: Content) -> some View {
         content
-            .alert("Delete task?", isPresented: $state.deletingTask) {
-                Button("Delete", role: .destructive, action: onDeleteTask)
-                Button("Cancel", role: .cancel) {}
-            }
             .alert("Delete this comment?", isPresented: state.isSet(\.deletingComment), presenting: state.deletingComment) { comment in
                 Button("Delete", role: .destructive) {
                     state.attempt { try services.store.deleteComment(localId: comment.localId) }

@@ -12,7 +12,7 @@ enum EditorMetrics {
 /// half of the editor; `CriaKit` only records meaning (block kind, styles, link, mention).
 @MainActor
 enum EditorStyling {
-    typealias ImageProvider = (String) -> UIImage?
+    typealias ImageProvider = @MainActor (String) -> UIImage?
 
     static func restyleAll(_ storage: NSMutableAttributedString, images: ImageProvider) {
         for paragraph in EditorParagraphs.all(in: storage) { style(paragraph, in: storage, images: images) }
@@ -44,6 +44,12 @@ enum EditorStyling {
         }
         guard let descriptor = base.fontDescriptor.withSymbolicTraits(traits) else { return base }
         return UIFont(descriptor: descriptor, size: base.pointSize)
+    }
+
+    /// Where an image's bytes come from: `src`, or `data-src` when `src` is only the "#" stand-in Vikunja-web writes.
+    static func source(of image: RichImage) -> String {
+        guard image.src.isEmpty || image.src == "#", let dataSrc = image.dataSrc, !dataSrc.isEmpty else { return image.src }
+        return dataSrc
     }
 
     static func styleSet(_ encoded: Any?) -> Set<InlineStyle> {
@@ -84,7 +90,7 @@ enum EditorStyling {
     }
 
     private static func attach(_ image: RichImage, at location: Int, in storage: NSMutableAttributedString, images: ImageProvider) {
-        let picture = images(image.src) ?? UIImage(systemName: "photo") ?? UIImage()
+        let picture = images(source(of: image)) ?? UIImage(systemName: "photo") ?? UIImage()
         let attachment = NSTextAttachment()
         attachment.image = picture
         let width = min(picture.size.width, EditorMetrics.imageMaxWidth)

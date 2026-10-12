@@ -29,6 +29,8 @@ struct TaskDetailView: View {
     @State private var expandingDescription = false
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
+    /// Nil when shown inside a sheet, outside the shell's environment: the delete then goes ahead without Undo.
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @Environment(\.scenePhase) private var scenePhase
 
     private enum Field: Hashable { case title }
@@ -86,6 +88,7 @@ struct TaskDetailView: View {
         .task { await feeds.attachments.run() }
         .task { await feeds.relations.run() }
         .task { await feeds.reminders.run() }
+        .task { await feeds.assignees.run() }
         .task { await AIStatus.shared.refresh() }
         // The periodic pull does not fetch comments: read this task's thread once when the screen opens.
         .task { await services.refreshTaskDetail(localId: taskLocalId) }
@@ -123,8 +126,10 @@ struct TaskDetailView: View {
                 apply(patch)
             }
         }
-        .modifier(TaskDetailSheets(services: services, taskLocalId: taskLocalId, state: sheets))
-        .modifier(TaskDetailDialogs(services: services, taskLocalId: taskLocalId, state: sheets, onDeleteTask: deleteTask))
+        .modifier(TaskDetailSheets(
+            services: services, taskLocalId: taskLocalId, state: sheets, assigned: Set(feeds.assignees.value.map(\.userId))
+        ))
+        .modifier(TaskDetailDialogs(services: services, taskLocalId: taskLocalId, state: sheets))
     }
 
     private func form(_ task: TaskRecord) -> some View {
@@ -154,6 +159,7 @@ struct TaskDetailView: View {
             }
             TaskPropertiesSection(task: task, projects: moveChoices, apply: apply) { editingRepeat = true }
             TaskScheduleSection(task: task, apply: apply)
+            AssigneesSection(services: services, taskLocalId: taskLocalId, assignees: feeds.assignees.value, state: sheets)
             Section {
                 FlowLabels(labels: live.value.labels)
             } header: {
@@ -170,7 +176,8 @@ struct TaskDetailView: View {
             RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
             CommentsSection(services: services, comments: feeds.comments.value, state: sheets)
             Section {
-                Button(role: .destructive) { sheets.deletingTask = true } label: {
+                // No confirmation: the Undo toast takes the delete back.
+                Button(role: .destructive, action: deleteTask) {
                     Text("Delete task").frame(maxWidth: .infinity)
                 }
             }
@@ -183,7 +190,11 @@ struct TaskDetailView: View {
         didLoad = false
         descriptionDraft.close()
         do {
-            try services.store.deleteTask(localId: taskLocalId)
+            if let undo {
+                try undo.deleteTask(localId: taskLocalId, title: live.value.task?.title ?? title)
+            } else {
+                try services.store.deleteTask(localId: taskLocalId)
+            }
             dismiss()
         } catch {
             didLoad = true

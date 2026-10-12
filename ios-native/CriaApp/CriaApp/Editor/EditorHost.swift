@@ -12,12 +12,14 @@ struct EditorHost: View {
     var inlineHeight: CGFloat?
     var onHeightChange: (@MainActor (CGFloat) -> Void)?
     @State private var barActions = EditorBarActions()
+    @State private var imageLoader = EditorImageLoader()
     @State private var showMention = false
-    @State private var mentionPicked = false
+    @State private var pickedMention: String?
     /// Opened by typing "@" (as opposed to the toolbar button): cancelling must leave the "@" in the text.
     @State private var mentionFromTyping = false
     @State private var showLink = false
     @State private var linkText = ""
+    @State private var pendingLink: String?
     @State private var photo: PhotosPickerItem?
     @State private var showPhotoPicker = false
 
@@ -27,22 +29,25 @@ struct EditorHost: View {
             inlineHeight: inlineHeight, onHeightChange: onHeightChange
         )
             // Presented from here, not from the formatting bar: that bar is torn down when the keyboard hides,
-            // which would dismiss the picker with it.
+            // which would dismiss the picker with it. Each picker holds the editing session open (see
+            // `EditorController.holdFocus`) and hands the keyboard back when it closes.
             .photosPicker(isPresented: $showPhotoPicker, selection: $photo, matching: .images)
-            .sheet(isPresented: $showMention, onDismiss: {
-                if mentionFromTyping, !mentionPicked { controller.insertLiteral("@") }
-                mentionPicked = false
-                mentionFromTyping = false
-            }, content: {
-                MentionPickerSheet(services: services) {
-                    mentionPicked = true
-                    controller.insertMention(username: $0)
-                }
-            })
+            .onChange(of: showPhotoPicker) { _, showing in
+                if !showing { controller.restoreFocus() }
+            }
+            .sheet(isPresented: $showMention, onDismiss: finishMention) {
+                MentionPickerSheet(services: services) { pickedMention = $0 }
+            }
             .alert("Add link", isPresented: $showLink) {
                 TextField("https://", text: $linkText).textInputAutocapitalization(.never).keyboardType(.URL)
-                Button("Add") { addLink() }
+                Button("Add") {
+                    pendingLink = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    linkText = ""
+                }
                 Button("Cancel", role: .cancel) {}
+            }
+            .onChange(of: showLink) { _, showing in
+                if !showing { finishLink() }
             }
             .onChange(of: photo) { _, item in
                 guard let item else { return }
@@ -54,26 +59,57 @@ struct EditorHost: View {
     /// Passed into the editor so it is in place before the first HTML load.
     private var imageProvider: EditorStyling.ImageProvider {
         let services = services
+        let loader = imageLoader
+        let controller = controller
         return { source in
-            let prefix = "cria://pending/"
-            guard source.hasPrefix(prefix), let data = services.pendingBlobData(String(source.dropFirst(prefix.count))) else { return nil }
-            return UIImage(data: data)
+            loader.image(for: source, services: services) { [weak controller] loaded in
+                controller?.refreshImages(source: loaded)
+            }
         }
     }
 
     private func configureController() {
         controller.onMentionTrigger = {
+            controller.holdFocus()
             mentionFromTyping = true
             showMention = true
         }
-        barActions.onLink = { showLink = true }
-        barActions.onPhoto = { showPhotoPicker = true }
-        barActions.onMention = { showMention = true }
+        barActions.onLink = {
+            controller.holdFocus()
+            showLink = true
+        }
+        barActions.onPhoto = {
+            controller.holdFocus()
+            showPhotoPicker = true
+        }
+        barActions.onMention = {
+            controller.holdFocus()
+            showMention = true
+        }
     }
 
-    private func addLink() {
-        controller.insertLink(linkText.trimmingCharacters(in: .whitespacesAndNewlines))
-        linkText = ""
+    private func finishMention() {
+        let picked = pickedMention
+        let typedAt = mentionFromTyping && picked == nil
+        pickedMention = nil
+        mentionFromTyping = false
+        let controller = controller
+        controller.restoreFocus {
+            if let picked {
+                controller.insertMention(username: picked)
+            } else if typedAt {
+                controller.insertLiteral("@")
+            }
+        }
+    }
+
+    private func finishLink() {
+        let link = pendingLink
+        pendingLink = nil
+        let controller = controller
+        controller.restoreFocus {
+            if let link { controller.insertLink(link) }
+        }
     }
 
     private func insertPhoto(_ item: PhotosPickerItem) async {
