@@ -110,6 +110,27 @@ public struct GeneralSettings: Equatable, Sendable {
         guard TimeZone(identifier: identifier) != nil else { return nil }
         return SettingsChange(settings: ["timezone": .string(identifier)])
     }
+
+    /// This value with every field a failed save changed (`previous` to `applied`) put back. Fields the save did not
+    /// touch keep their current value, so another save that landed in the meantime is not reverted with it.
+    public func undoing(applied: GeneralSettings, previous: GeneralSettings) -> GeneralSettings {
+        var result = self
+        func restore<Value: Equatable>(_ path: WritableKeyPath<GeneralSettings, Value>) {
+            if applied[keyPath: path] != previous[keyPath: path] { result[keyPath: path] = previous[keyPath: path] }
+        }
+        restore(\.name)
+        restore(\.emailRemindersEnabled)
+        restore(\.overdueRemindersEnabled)
+        restore(\.overdueRemindersTime)
+        restore(\.quickAddMagicMode)
+        restore(\.weekStart)
+        restore(\.defaultProjectId)
+        restore(\.discoverableByEmail)
+        restore(\.discoverableByName)
+        restore(\.language)
+        restore(\.timezone)
+        return result
+    }
 }
 
 public extension TimeZone {

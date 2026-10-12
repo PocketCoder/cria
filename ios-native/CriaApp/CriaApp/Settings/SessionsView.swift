@@ -5,6 +5,9 @@ import SwiftUI
 /// `SessionsSection.tsx`.
 struct SessionsView: View {
     let services: AppServices
+    /// Revoking this device's own session signs it out; the app then shows the sign-in screen.
+    let onSignOut: (_ wipeLocalData: Bool) -> Void
+    @Environment(\.dateDisplay) private var dateDisplay
     @State private var sessions: [UserSession] = []
     @State private var currentId: String?
     @State private var loaded = false
@@ -12,8 +15,9 @@ struct SessionsView: View {
     @State private var errorMessage: String?
     @State private var pending: UserSession?
 
-    init(services: AppServices) {
+    init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
         self.services = services
+        self.onSignOut = onSignOut
     }
 
     var body: some View {
@@ -72,7 +76,7 @@ struct SessionsView: View {
                 Text(detail(session)).font(Theme.caption).foregroundStyle(Color(.mutedForeground)).lineLimit(1)
             }
         }
-        .swipeActions(edge: .trailing) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(session.id == currentId ? "Sign out" : "Revoke", role: .destructive) { pending = session }
         }
         .accessibilityElement(children: .combine)
@@ -89,7 +93,7 @@ struct SessionsView: View {
         var parts: [String] = []
         if !session.ipAddress.isEmpty { parts.append(session.ipAddress) }
         if let active = session.lastActive, let date = SessionDates.parse(active) {
-            parts.append("active \(date.formatted(date: .abbreviated, time: .shortened))")
+            parts.append("active \(DueDates.fullLabel(date, display: dateDisplay))")
         }
         return parts.joined(separator: " · ")
     }
@@ -114,6 +118,10 @@ struct SessionsView: View {
         do {
             try await services.api.revokeSession(id: session.id)
             errorMessage = nil
+            if session.id == currentId {
+                onSignOut(false)
+                return
+            }
             await load()
         } catch {
             errorMessage = String(describing: error)

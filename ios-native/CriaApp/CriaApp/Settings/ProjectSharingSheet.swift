@@ -7,6 +7,14 @@ struct ProjectShareTarget: Identifiable {
     var id: String { project.localId }
 }
 
+/// A share removal waiting for the user's confirmation.
+private struct PendingRemoval: Identifiable {
+    let id = UUID()
+    let title: String
+    let confirmLabel: String
+    let action: @MainActor () async throws -> Void
+}
+
 /// Who a project is shared with: users, teams and link shares. Online only.
 struct ProjectSharingSheet: View {
     let services: AppServices
@@ -20,15 +28,13 @@ struct ProjectSharingSheet: View {
     @State private var serverURL = ""
     @State private var username = ""
     @State private var errorMessage: String?
+    @State private var pendingRemoval: PendingRemoval?
 
     private var projectId: Int { project.serverId ?? 0 }
 
     var body: some View {
         NavigationStack {
             List {
-                if projectId == 0 {
-                    Text("Sync this project before sharing it.").foregroundStyle(Color(.mutedForeground))
-                }
                 usersSection
                 teamsSection
                 linksSection
@@ -39,30 +45,54 @@ struct ProjectSharingSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { await load() }
+            .confirmationDialog(
+                "Remove this share?",
+                isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingRemoval
+            ) { removal in
+                Button(removal.confirmLabel, role: .destructive) { act(removal.action) }
+            } message: { removal in
+                Text(removal.title)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var unsyncedFooter: some View {
+        if projectId == 0 {
+            Text("This project has not synced to the server yet. Sharing works once it has.").font(Theme.caption)
         }
     }
 
     private var usersSection: some View {
-        Section("People") {
+        Section {
             ForEach(users) { share in
                 permissionRow(share.name ?? share.username, share.permission) { level in
                     act { try await services.api.updateProjectUser(projectId: projectId, username: share.username, permission: level) }
                 }
-                .swipeActions {
+                .swipeActions(allowsFullSwipe: false) {
                     Button("Remove", role: .destructive) {
-                        act { try await services.api.removeProjectUser(projectId: projectId, username: share.username) }
+                        pendingRemoval = PendingRemoval(
+                            title: "\(share.name ?? share.username) will lose access to this project.", confirmLabel: "Remove"
+                        ) { try await services.api.removeProjectUser(projectId: projectId, username: share.username) }
                     }
                 }
             }
             HStack {
                 TextField("Add by username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .disabled(projectId == 0)
                 Button("Add") {
                     let target = username
                     username = ""
                     act { try await services.api.addProjectUser(projectId: projectId, username: target, permission: .read) }
                 }
-                .disabled(username.isEmpty)
+                .disabled(username.isEmpty || projectId == 0)
             }
+        } header: {
+            Text("People")
+        } footer: {
+            unsyncedFooter
         }
     }
 
@@ -72,9 +102,11 @@ struct ProjectSharingSheet: View {
                 permissionRow(share.name, share.permission) { level in
                     act { try await services.api.updateProjectTeam(projectId: projectId, teamId: share.serverId, permission: level) }
                 }
-                .swipeActions {
+                .swipeActions(allowsFullSwipe: false) {
                     Button("Remove", role: .destructive) {
-                        act { try await services.api.removeProjectTeam(projectId: projectId, teamId: share.serverId) }
+                        pendingRemoval = PendingRemoval(
+                            title: "Members of \(share.name) will lose access to this project.", confirmLabel: "Remove"
+                        ) { try await services.api.removeProjectTeam(projectId: projectId, teamId: share.serverId) }
                     }
                 }
             }
@@ -92,7 +124,7 @@ struct ProjectSharingSheet: View {
     }
 
     private var linksSection: some View {
-        Section("Links") {
+        Section {
             ForEach(links) { share in
                 let url = ShareLinks.url(serverURL: serverURL, frontendURL: frontendURL, hash: share.hash)
                 ShareLink(item: url) {
@@ -102,15 +134,22 @@ struct ProjectSharingSheet: View {
                             .font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                     }
                 }
-                .swipeActions {
+                .swipeActions(allowsFullSwipe: false) {
                     Button("Delete", role: .destructive) {
-                        act { try await services.api.deleteLinkShare(projectId: projectId, shareId: share.id) }
+                        pendingRemoval = PendingRemoval(
+                            title: "Anyone with this link will lose access.", confirmLabel: "Delete link"
+                        ) { try await services.api.deleteLinkShare(projectId: projectId, shareId: share.id) }
                     }
                 }
             }
             Button("New link (read only)") {
                 act { try await services.api.createLinkShare(projectId: projectId, permission: .read, name: nil, password: nil) }
             }
+            .disabled(projectId == 0)
+        } header: {
+            Text("Links")
+        } footer: {
+            unsyncedFooter
         }
     }
 

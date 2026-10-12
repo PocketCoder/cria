@@ -3,12 +3,15 @@ import SwiftUI
 
 struct ChangePasswordView: View {
     let services: AppServices
+    /// Called when the user acknowledges that the password change ended every session, this one included.
+    let onSignOut: (_ wipeLocalData: Bool) -> Void
     @State private var oldPassword = ""
     @State private var newPassword = ""
     @State private var confirmation = ""
     @State private var message: String?
     @State private var succeeded = false
     @State private var busy = false
+    @State private var needsSignIn = false
 
     var body: some View {
         Form {
@@ -27,6 +30,11 @@ struct ChangePasswordView: View {
         }
         .criaSurface()
         .navigationTitle("Change password")
+        .alert("Password changed", isPresented: $needsSignIn) {
+            Button("OK") { onSignOut(false) }
+        } message: {
+            Text("The server ended all your sessions, including this one. You will need to sign in again.")
+        }
     }
 
     private func submit() async {
@@ -44,6 +52,7 @@ struct ChangePasswordView: View {
             oldPassword = ""
             newPassword = ""
             confirmation = ""
+            needsSignIn = true
         } catch {
             message = String(describing: error)
             succeeded = false

@@ -4,20 +4,21 @@ import SwiftUI
 /// Data export and account deletion. Ported from `DataTab.tsx`. Both need the account password.
 struct DataSettingsView: View {
     let services: AppServices
-    let onSignOut: (_ wipeLocalData: Bool) -> Void
+    @Environment(\.dateDisplay) private var dateDisplay
     @State private var status: ExportStatus?
     @State private var exportPassword = ""
     @State private var exporting = false
     @State private var exportFile: URL?
     @State private var exportError: String?
     @State private var deletionScheduled: String?
+    /// Shown after a request: Vikunja emails a confirmation link and deletes nothing until it is followed.
+    @State private var deletionNotice: String?
     @State private var deletePassword = ""
     @State private var confirmingDelete = false
     @State private var deleteError: String?
 
-    init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
+    init(services: AppServices) {
         self.services = services
-        self.onSignOut = onSignOut
     }
 
     var body: some View {
@@ -35,7 +36,7 @@ struct DataSettingsView: View {
         ) {
             Button("Delete account", role: .destructive) { Task { await requestDeletion() } }
         } message: {
-            Text("The server emails you to confirm. This device signs out and clears its local data.")
+            Text("The server emails you a link to confirm. Nothing is deleted until you follow it, and you stay signed in.")
         }
     }
 
@@ -72,6 +73,7 @@ struct DataSettingsView: View {
         } else {
             Section {
                 SecureField("Current password", text: $deletePassword)
+                if let deletionNotice { AccountFeedback(message: deletionNotice, succeeded: true) }
                 if let deleteError { Text(deleteError).font(Theme.caption).foregroundStyle(Color(.destructive)) }
             } header: {
                 Text("Delete account")
@@ -88,7 +90,7 @@ struct DataSettingsView: View {
     }
 
     private func display(_ stamp: String) -> String {
-        SessionDates.parse(stamp).map { $0.formatted(date: .abbreviated, time: .shortened) } ?? stamp
+        SessionDates.parse(stamp).map { DueDates.fullLabel($0, display: dateDisplay) } ?? stamp
     }
 
     private func load() async {
@@ -128,7 +130,10 @@ struct DataSettingsView: View {
             try await services.api.requestDeletion(password: deletePassword)
             deleteError = nil
             deletePassword = ""
-            onSignOut(true)
+            // No sign-out and no wipe: the account stays until the emailed link is followed, and unsynced changes
+            // still need to reach the server. Re-read the user so "deletion scheduled" shows if the server reports it.
+            deletionNotice = "We emailed you a confirmation link. Your account is deleted only once you follow it."
+            await load()
         } catch {
             deleteError = String(describing: error)
         }
@@ -140,6 +145,7 @@ struct DataSettingsView: View {
             deleteError = nil
             deletePassword = ""
             deletionScheduled = nil
+            deletionNotice = nil
         } catch {
             deleteError = String(describing: error)
         }

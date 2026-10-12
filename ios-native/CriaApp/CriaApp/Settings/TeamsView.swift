@@ -63,6 +63,7 @@ struct TeamDetailView: View {
     @State private var username = ""
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
+    @State private var memberToRemove: TeamMember?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -77,10 +78,8 @@ struct TeamDetailView: View {
                         Spacer()
                         if member.admin { CriaChip(text: "Admin", tint: Color(.primary)) }
                     }
-                    .swipeActions {
-                        Button("Remove", role: .destructive) {
-                            run { try await services.api.removeTeamMember(teamId: teamId, username: member.username) }
-                        }
+                    .swipeActions(allowsFullSwipe: false) {
+                        Button("Remove", role: .destructive) { memberToRemove = member }
                         Button(member.admin ? "Demote" : "Make admin") {
                             run { try await services.api.toggleTeamMemberAdmin(teamId: teamId, userId: member.serverId) }
                         }
@@ -103,6 +102,16 @@ struct TeamDetailView: View {
                     onChange()
                     dismiss()
                 }
+            }
+        }
+        .confirmationDialog(
+            "Remove this member?",
+            isPresented: Binding(get: { memberToRemove != nil }, set: { if !$0 { memberToRemove = nil } }),
+            titleVisibility: .visible,
+            presenting: memberToRemove
+        ) { member in
+            Button("Remove \(member.name ?? member.username)", role: .destructive) {
+                run { try await services.api.removeTeamMember(teamId: teamId, username: member.username) }
             }
         }
         .task { await load() }

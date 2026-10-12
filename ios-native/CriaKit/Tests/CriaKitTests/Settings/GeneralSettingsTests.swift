@@ -120,4 +120,17 @@ final class GeneralSettingsLanguageTests: XCTestCase {
         UserDefaults.standard.set("Nope/Nope", forKey: key)
         XCTAssertEqual(TimeZone.criaServerSetting, TimeZone.current)
     }
+
+    func testUndoingPutsBackOnlyTheFieldsTheFailedSaveChanged() throws {
+        let value = try decodeFixture(JSONValue.self, #"{"settings": {"week_start": 1, "timezone": "UTC"}}"#)
+        let previous = GeneralSettings(user: value)
+        var applied = previous
+        applied.weekStart = 0
+        // Another save landed while this one was in flight.
+        var current = applied
+        current.timezone = "Europe/London"
+        let undone = current.undoing(applied: applied, previous: previous)
+        XCTAssertEqual(undone.weekStart, 1)
+        XCTAssertEqual(undone.timezone, "Europe/London")
+    }
 }

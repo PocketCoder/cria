@@ -21,11 +21,13 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 accountCard
+                loadStatus
                 GeneralSettingsSection(model: model, prefs: prefs, projects: projects)
                 AppearanceSettingsSection(prefs: prefs)
-                NotificationSettingsSection(services: services, model: model, prefs: prefs)
+                NotificationSettingsSection(services: services, model: model, prefs: prefs, onClose: { dismiss() })
                 PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
                 accountSection
+                syncSection
                 storageSection
                 aboutSection
                 if let message = model.errorMessage {
@@ -42,8 +44,10 @@ struct SettingsView: View {
                 }
             }
             .task { projects = ProjectTree.visible((try? services.store.projects()) ?? []) }
-            // Also runs when a pushed screen (Account, ...) pops back, so the account card shows the saved name.
-            .onAppear { Task { await model.load() } }
+            // Once, not on every pop from a pushed screen: a reload then could race an in-flight save and revert it.
+            // The model is shared with the Account screen, so the card shows a saved name without a re-read.
+            .task { await model.loadIfNeeded() }
+            .refreshable { await model.load() }
         }
     }
 
@@ -59,7 +63,7 @@ struct SettingsView: View {
     private var accountCard: some View {
         Section {
             NavigationLink {
-                AccountSettingsView(services: services)
+                AccountSettingsView(services: services, model: model)
             } label: {
                 HStack(spacing: 14) {
                     Text(initials)
@@ -86,15 +90,45 @@ struct SettingsView: View {
             NavigationLink { TeamsView(services: services) } label: {
                 SettingsLabel("Teams", symbol: "person.2", token: .sky700)
             }
-            NavigationLink { SecuritySettingsView(services: services) } label: {
+            NavigationLink { SecuritySettingsView(services: services, onSignOut: onSignOut) } label: {
                 SettingsLabel("Security", symbol: "lock.shield", token: .coral500)
             }
-            NavigationLink { SessionsView(services: services) } label: {
+            NavigationLink { SessionsView(services: services, onSignOut: onSignOut) } label: {
                 SettingsLabel("Sessions", symbol: "iphone.and.arrow.forward", token: .llama500)
             }
-            NavigationLink { DataSettingsView(services: services, onSignOut: onSignOut) } label: {
+            NavigationLink { DataSettingsView(services: services) } label: {
                 SettingsLabel("Data", symbol: "externaldrive", token: .fleece500)
             }
+        }
+    }
+
+    /// Shown until the first load succeeds: the server-backed rows below are disabled meanwhile.
+    @ViewBuilder
+    private var loadStatus: some View {
+        if !model.loaded {
+            Section {
+                if let error = model.loadError {
+                    Text("Couldn\u{2019}t load your settings: \(error)").foregroundStyle(Color(.destructive))
+                    Button("Retry") { Task { await model.load() } }
+                } else {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Loading settings\u{2026}").foregroundStyle(Color(.mutedForeground))
+                    }
+                }
+            }
+        }
+    }
+
+    private var syncSection: some View {
+        Section {
+            NavigationLink { OutboxView(services: services) } label: {
+                SettingsLabel("Sync queue", symbol: "arrow.triangle.2.circlepath", token: .sky500)
+            }
+        } header: {
+            Text("Sync")
+        } footer: {
+            Text("Changes made on this device that are waiting to reach the server.").font(Theme.caption)
         }
     }
 

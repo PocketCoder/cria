@@ -6,16 +6,19 @@ import UIKit
 /// their own screen (`SessionsView`).
 struct SecuritySettingsView: View {
     let services: AppServices
+    let onSignOut: (_ wipeLocalData: Bool) -> Void
+    @State private var needsSignIn = false
 
-    init(services: AppServices) {
+    init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
         self.services = services
+        self.onSignOut = onSignOut
     }
 
     var body: some View {
         Form {
             Section {
                 NavigationLink {
-                    ChangePasswordView(services: services)
+                    ChangePasswordView(services: services, onSignOut: onSignOut)
                 } label: {
                     SettingsLabel("Change password", symbol: "key", token: .llama800)
                 }
@@ -23,10 +26,10 @@ struct SecuritySettingsView: View {
                 Text("Password")
             }
             EmailSections(services: services)
-            TotpSections(services: services)
+            TotpSections(services: services, needsSignIn: $needsSignIn)
             Section {
                 NavigationLink {
-                    SessionsView(services: services)
+                    SessionsView(services: services, onSignOut: onSignOut)
                 } label: {
                     SettingsLabel("Sessions", symbol: "iphone.and.arrow.forward", token: .sky500)
                 }
@@ -36,6 +39,11 @@ struct SecuritySettingsView: View {
         .tint(Color(.primary))
         .navigationTitle("Security")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Two-factor enabled", isPresented: $needsSignIn) {
+            Button("OK") { onSignOut(false) }
+        } message: {
+            Text("The server ended all your sessions, including this one. You will need to sign in again.")
+        }
     }
 }
 
@@ -105,6 +113,8 @@ private enum TotpPhase {
 
 private struct TotpSections: View {
     let services: AppServices
+    /// Set once two-factor is on: the server ends every session, so the parent asks the user to sign in again.
+    @Binding var needsSignIn: Bool
     @State private var phase = TotpPhase.loading
     @State private var status: TotpStatus?
     @State private var qrImage: UIImage?
@@ -231,6 +241,7 @@ private struct TotpSections: View {
             phase = .enabled
             qrImage = nil
             passcode = ""
+            needsSignIn = true
         } catch {
             errorMessage = String(describing: error)
         }

@@ -1,9 +1,14 @@
 import CriaKit
 import SwiftUI
 
-/// In-app notifications from the server, with mark-read. Tapping one marks it read.
+/// In-app notifications from the server, with mark-read. Tapping one marks it read and, when it refers to a task,
+/// opens that task.
 struct NotificationsView: View {
     let services: AppServices
+    /// Closes the Settings sheet, so the task opened through its `cria://` link is not hidden behind it.
+    let onClose: () -> Void
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dateDisplay) private var dateDisplay
     @State private var items: [AppNotification] = []
     @State private var errorMessage: String?
     @State private var loading = true
@@ -14,7 +19,7 @@ struct NotificationsView: View {
                 Text(errorMessage).foregroundStyle(Color(.destructive))
             }
             ForEach(items) { item in
-                Button { Task { await markRead(item) } } label: { row(item) }
+                Button { Task { await open(item) } } label: { row(item) }
                     .buttonStyle(.plain)
             }
             if items.isEmpty && !loading && errorMessage == nil {
@@ -37,7 +42,7 @@ struct NotificationsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.parsed.text).font(Theme.rowTitle).foregroundStyle(Color(.foreground))
                 if let created = item.created {
-                    Text(created).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                    Text(SettingsDate.label(created, display: dateDisplay)).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                 }
             }
         }
@@ -53,14 +58,33 @@ struct NotificationsView: View {
         loading = false
     }
 
-    private func markRead(_ item: AppNotification) async {
-        guard !item.isRead else { return }
-        try? await services.api.markNotificationRead(id: item.id)
-        await load()
+    /// Marks the notification read, then opens its task. A failed mark-read is shown and nothing opens.
+    private func open(_ item: AppNotification) async {
+        if !item.isRead {
+            do {
+                try await services.api.markNotificationRead(id: item.id)
+            } catch {
+                errorMessage = "Couldn\u{2019}t mark it read: \(error)"
+                return
+            }
+            await load()
+        }
+        guard let serverId = item.parsed.taskServerId else { return }
+        guard let localId = try? services.store.resolveTaskId(String(serverId)),
+              let url = DeepLink.taskURL(localId: localId) else {
+            errorMessage = "That task is not on this device yet. Pull to sync, then try again."
+            return
+        }
+        openURL(url)
+        onClose()
     }
 
     private func markAllRead() async {
-        try? await services.api.markAllNotificationsRead()
-        await load()
+        do {
+            try await services.api.markAllNotificationsRead()
+            await load()
+        } catch {
+            errorMessage = "Couldn\u{2019}t mark all read: \(error)"
+        }
     }
 }

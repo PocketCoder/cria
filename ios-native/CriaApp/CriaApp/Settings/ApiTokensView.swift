@@ -1,5 +1,6 @@
 import CriaKit
 import SwiftUI
+import UIKit
 
 /// API tokens: list, create with chosen permissions (the secret is shown once), delete.
 struct ApiTokensView: View {
@@ -8,12 +9,19 @@ struct ApiTokensView: View {
     @State private var errorMessage: String?
     @State private var creating = false
     @State private var secret: String?
+    @State private var copied = false
+    @State private var pendingDelete: ApiToken?
+    @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
         List {
             if let secret {
                 Section("New token (shown once)") {
                     Text(secret).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
+                    Button(copied ? "Copied" : "Copy token", systemImage: "doc.on.doc") {
+                        UIPasteboard.general.string = secret
+                        copied = true
+                    }
                 }
             }
             if let errorMessage {
@@ -22,11 +30,11 @@ struct ApiTokensView: View {
             ForEach(tokens) { token in
                 VStack(alignment: .leading) {
                     Text(token.title).font(Theme.rowTitle)
-                    Text(token.expiresAt.map { "Expires \($0)" } ?? "No expiry")
+                    Text(token.expiresAt.map { "Expires \(SettingsDate.label($0, display: dateDisplay))" } ?? "No expiry")
                         .font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                 }
-                .swipeActions {
-                    Button("Delete", role: .destructive) { Task { await delete(token) } }
+                .swipeActions(allowsFullSwipe: false) {
+                    Button("Delete", role: .destructive) { pendingDelete = token }
                 }
             }
         }
@@ -36,8 +44,19 @@ struct ApiTokensView: View {
         .sheet(isPresented: $creating) {
             NewApiTokenSheet(services: services) { created in
                 secret = created?.token
+                copied = false
                 Task { await load() }
             }
+        }
+        .confirmationDialog(
+            "Delete this token?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { token in
+            Button("Delete \(token.title)", role: .destructive) { Task { await delete(token) } }
+        } message: { _ in
+            Text("Anything using it will stop working.")
         }
         .task { await load() }
     }
@@ -70,6 +89,8 @@ private struct NewApiTokenSheet: View {
     @State private var groups: [PermissionGroup] = []
     @State private var selected = Set<String>()
     @State private var errorMessage: String?
+    @State private var routesError: String?
+    @State private var routesLoaded = false
 
     var body: some View {
         NavigationStack {
@@ -78,6 +99,7 @@ private struct NewApiTokenSheet: View {
                     TextField("Title", text: $title)
                     DatePicker("Expires", selection: $expiry, displayedComponents: .date)
                 }
+                routesSection
                 ForEach(groups, id: \.group) { group in
                     Section(group.group) {
                         ForEach(group.permissions, id: \.id) { option in
@@ -98,11 +120,30 @@ private struct NewApiTokenSheet: View {
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || selected.isEmpty)
                 }
             }
-            .task {
-                if let routes = try? await services.api.apiRoutes() {
-                    groups = ApiTokenPermissions.groups(fromRoutes: routes)
-                }
+            .task { await loadRoutes() }
+        }
+    }
+
+    /// The permission list comes from the server; without it nothing can be selected and Create stays off.
+    @ViewBuilder
+    private var routesSection: some View {
+        if let routesError {
+            Section {
+                Text("Couldn\u{2019}t load the permission list: \(routesError)").foregroundStyle(Color(.destructive))
+                Button("Retry") { Task { await loadRoutes() } }
             }
+        } else if !routesLoaded {
+            Section { ProgressView() }
+        }
+    }
+
+    private func loadRoutes() async {
+        routesError = nil
+        do {
+            groups = ApiTokenPermissions.groups(fromRoutes: try await services.api.apiRoutes())
+            routesLoaded = true
+        } catch {
+            routesError = String(describing: error)
         }
     }
 

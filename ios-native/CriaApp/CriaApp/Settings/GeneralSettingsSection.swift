@@ -11,10 +11,10 @@ struct GeneralSettingsSection: View {
 
     var body: some View {
         Section("General") {
-            localeRows
+            localeRows.disabled(!model.loaded)
             formatRows
             taskRows
-            discoverabilityRows
+            discoverabilityRows.disabled(!model.loaded)
         }
     }
 
@@ -70,6 +70,7 @@ struct GeneralSettingsSection: View {
             } label: {
                 SettingsLabel("Default project", symbol: "tray", token: .sky500)
             }
+            .disabled(!model.loaded)
             Picker(selection: Binding(
                 get: { model.general.weekStart },
                 set: { day in Task { await model.setWeekStart(day) } }
@@ -78,6 +79,7 @@ struct GeneralSettingsSection: View {
             } label: {
                 SettingsLabel("Week starts on", symbol: "calendar", token: .coral500)
             }
+            .disabled(!model.loaded)
             Picker(selection: Binding(
                 get: { model.general.quickAddMagicMode },
                 set: { mode in Task { await model.setQuickAddMode(mode) } }
@@ -88,6 +90,7 @@ struct GeneralSettingsSection: View {
             } label: {
                 SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
             }
+            .disabled(!model.loaded)
             Toggle(isOn: $showDone) {
                 SettingsLabel("Show completed", symbol: "checkmark.circle", token: .meadow500)
             }

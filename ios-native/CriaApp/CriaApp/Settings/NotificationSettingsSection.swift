@@ -8,6 +8,8 @@ import UserNotifications
 struct NotificationSettingsSection: View {
     let services: AppServices
     let model: SettingsModel
+    /// Closes the Settings sheet (used when a notification opens a task).
+    let onClose: () -> Void
     @ObservedObject var prefs: PreferencesModel
     @State private var status = UNAuthorizationStatus.notDetermined
     @Environment(\.scenePhase) private var scenePhase
@@ -29,7 +31,7 @@ struct NotificationSettingsSection: View {
                 SettingsLabel("Notifications", symbol: "bell.badge", token: .coral500)
             }
             summaryRows
-            NavigationLink { NotificationsView(services: services) } label: {
+            NavigationLink { NotificationsView(services: services, onClose: onClose) } label: {
                 SettingsLabel("Activity", symbol: "tray.full", token: .sky700)
             }
         } header: {
@@ -71,6 +73,13 @@ struct NotificationSettingsSection: View {
 
     private var emailSection: some View {
         Section("Email") {
+            emailRows
+        }
+        .disabled(!model.loaded)
+    }
+
+    private var emailRows: some View {
+        Group {
             Toggle(isOn: Binding(
                 get: { model.general.emailRemindersEnabled },
                 set: { value in
