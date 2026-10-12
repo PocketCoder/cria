@@ -46,9 +46,10 @@ final class ProductionReviewTests: XCTestCase {
     }
 
     func testViewFilterStringAndNullDecode() throws {
-        let plain = try decodeFixture(ViewResponse.self, #"{"id": 3, "title": "L", "project_id": 1, "view_kind": "list", "filter": "done = false"}"#)
+        let base = #""id": 3, "title": "L", "project_id": 1, "view_kind": "list""#
+        let plain = try decodeFixture(ViewResponse.self, "{\(base), \"filter\": \"done = false\"}")
         XCTAssertEqual(plain.filter, "done = false")
-        let none = try decodeFixture(ViewResponse.self, #"{"id": 3, "title": "L", "project_id": 1, "view_kind": "list", "filter": null}"#)
+        let none = try decodeFixture(ViewResponse.self, "{\(base), \"filter\": null}")
         XCTAssertNil(none.filter)
     }
 
@@ -115,8 +116,9 @@ final class ProductionReviewTests: XCTestCase {
         try seedProject(store)
         let task = try seedSyncedTask(store, serverId: 5)
         // 09:30Z written with a -04:00 offset, and a past reminder written with +02:00.
-        try runSQL(store, "INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, '2026-10-11T05:30:00-04:00', 0)", [task])
-        try runSQL(store, "INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, '2026-10-11T10:30:00+02:00', 0)", [task])
+        let insert = "INSERT INTO task_reminders (task_local_id, reminder_at, notified) VALUES (?, ?, 0)"
+        try runSQL(store, insert, [task, "2026-10-11T05:30:00-04:00"])
+        try runSQL(store, insert, [task, "2026-10-11T10:30:00+02:00"])
         let now = try XCTUnwrap(DueDates.parse("2026-10-11T09:00:00Z"))
         let upcoming = try store.upcomingReminders(after: now, limit: 60)
         XCTAssertEqual(upcoming.map(\.reminderAt), ["2026-10-11T05:30:00-04:00"])
