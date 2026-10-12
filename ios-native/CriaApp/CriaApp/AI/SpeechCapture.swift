@@ -52,7 +52,8 @@ private final class SpeechEngine: @unchecked Sendable {
     }
 }
 
-/// Live speech to text for Ramble, like Todoist's voice capture: tap the mic, talk, watch the words appear.
+/// Live speech to text for Ramble, like Todoist's voice capture: the sheet starts listening as it opens, the words
+/// appear as you talk, and the mic button pauses and resumes.
 @MainActor @Observable
 final class SpeechCapture {
     enum State: Equatable {
@@ -123,6 +124,19 @@ final class SpeechCapture {
         engine.stop()
         state = .idle
         awaitingFinal = true
+    }
+
+    /// Stops and waits briefly (up to about a second) for the recogniser's last words, so text read straight after
+    /// includes everything said.
+    func finish() async {
+        stop()
+        var waits = 0
+        while awaitingFinal && waits < 10 {
+            try? await Task.sleep(for: .milliseconds(100))
+            waits += 1
+        }
+        // Late words after this would rewrite text the caller has already used.
+        awaitingFinal = false
     }
 
     private func receive(_ text: String?, finished: Bool, session sender: UUID) {

@@ -40,6 +40,8 @@ public struct LocalPreferences: Equatable, Sendable {
     public var photoProjectId: String?
     /// Label photo capture tags tasks with; empty means none.
     public var photoLabel: String
+    /// "Let Ramble choose projects and labels": the on-device model files and tags each task from the existing names.
+    public var rambleChoosesTags: Bool
 
     public static let `default` = LocalPreferences()
 
@@ -54,7 +56,8 @@ public struct LocalPreferences: Equatable, Sendable {
         weeklyRoundupEnabled: Bool = true,
         weeklyRoundupTime: String = "09:00",
         photoProjectId: String? = nil,
-        photoLabel: String = "shopping"
+        photoLabel: String = "shopping",
+        rambleChoosesTags: Bool = false
     ) {
         self.colorScheme = colorScheme
         self.dateFormat = dateFormat
@@ -67,6 +70,7 @@ public struct LocalPreferences: Equatable, Sendable {
         self.weeklyRoundupTime = weeklyRoundupTime
         self.photoProjectId = photoProjectId
         self.photoLabel = photoLabel
+        self.rambleChoosesTags = rambleChoosesTags
     }
 
     /// Reads values leniently: a missing or unknown value falls back to the default for that field only.
@@ -94,6 +98,7 @@ public struct LocalPreferences: Equatable, Sendable {
         weeklyRoundupTime = clock("weeklyRoundupTime", base.weeklyRoundupTime)
         photoProjectId = text("photoProjectId").flatMap { $0.isEmpty ? nil : $0 }
         photoLabel = text("photoLabel") ?? base.photoLabel
+        rambleChoosesTags = flag("rambleChoosesTags", base.rambleChoosesTags)
     }
 
     var values: JSONBody {
@@ -107,7 +112,8 @@ public struct LocalPreferences: Equatable, Sendable {
             "morningSummaryTime": .string(morningSummaryTime),
             "weeklyRoundupEnabled": .bool(weeklyRoundupEnabled),
             "weeklyRoundupTime": .string(weeklyRoundupTime),
-            "photoLabel": .string(photoLabel)
+            "photoLabel": .string(photoLabel),
+            "rambleChoosesTags": .bool(rambleChoosesTags)
         ]
         if let photoProjectId { body["photoProjectId"] = .string(photoProjectId) }
         return body

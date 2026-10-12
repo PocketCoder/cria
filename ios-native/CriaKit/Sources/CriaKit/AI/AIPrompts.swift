@@ -7,6 +7,8 @@ public enum AIPrompts {
     /// On-device context is about 4K tokens; roughly 6K characters is safe.
     public static let maxInputChars = 6000
     static let maxNames = 50
+    /// Shorter lists when the model picks projects and labels itself: every name is read for every task.
+    static let autoTagMaxNames = 30
 
     public static func clip(_ text: String, max: Int = maxInputChars) -> String {
         text.count > max ? "\(text.prefix(max))…" : text
@@ -17,8 +19,8 @@ public enum AIPrompts {
         text.count > max ? "…\(text.suffix(max))" : text
     }
 
-    static func nameList(_ names: [String]) -> String {
-        let shown = names.prefix(maxNames).map { quickAddNeedsQuoting($0) ? "\"\($0)\"" : $0 }
+    static func nameList(_ names: [String], max: Int = maxNames) -> String {
+        let shown = names.prefix(max).map { quickAddNeedsQuoting($0) ? "\"\($0)\"" : $0 }
         return shown.isEmpty ? "(none)" : shown.joined(separator: ", ")
     }
 
@@ -77,12 +79,17 @@ public enum AIPrompts {
         public var labels: [String]
         public var now: Date
         public var mode: QuickAddMagicMode
+        /// "Let Ramble choose projects and labels": the model files and tags each task itself, from the given names
+        /// only. Has no effect with the magic disabled (there is no syntax to tag with).
+        public var autoTag: Bool
 
-        public init(projects: [String], labels: [String], now: Date = Date(), mode: QuickAddMagicMode = .default) {
+        public init(projects: [String], labels: [String], now: Date = Date(), mode: QuickAddMagicMode = .default,
+                    autoTag: Bool = false) {
             self.projects = projects
             self.labels = labels
             self.now = now
             self.mode = mode
+            self.autoTag = autoTag
         }
     }
 
@@ -122,8 +129,6 @@ public enum AIPrompts {
     public static func rambleInstructions(_ context: RambleContext) -> String {
         guard let prefixes = context.mode.prefixes else { return plainRamble(context.now) }
         let monthEnd = endOfMonth(context.now)
-        let project = prefixes.project
-        let label = prefixes.label
         let priority = prefixes.priority
         return """
             \(rambleIntro(context.now))
@@ -132,15 +137,7 @@ public enum AIPrompts {
             weekend). Keep every date the person mentions. Only for "end of the month/week" style deadlines, write the \
             month and day instead (\(monthEnd)).
             - A repeat in plain words (every week, daily, every monday).
-            - \(project)Project to file it in a project, but only when the person names it ("add it to Finance", \
-            "put that under Home Admin"). Only use these projects: \(nameList(context.projects)). Put quotes around \
-            names with spaces or any character other than letters, digits, - and _, like \(project)"Home Admin" or \
-            \(project)"Mum's".
-            - \(label)label to tag it, but only when the person names it. Existing labels: \(nameList(context.labels)).
-            - A project or label that merely fits the subject (a project called Flat or House suits anything about the \
-            home, landlord, rent, repairs or cleaning) is a suggestion, not a choice. Put suggestions after the whole \
-            task, separated by " ~ ", for example: Email the landlord tomorrow ~ \(project)Flat \(label)house. Suggest \
-            only existing projects and labels, only when one clearly fits, and never one the person already named.
+            \(tagRules(context, prefixes: prefixes))
             - \(priority)3 only if the person says it is important, \(priority)4 only if they say it is urgent. Most \
             tasks have no priority.
             \(rambleOutro)
@@ -151,6 +148,40 @@ public enum AIPrompts {
             Email the landlord tomorrow
             Renew car insurance \(monthEnd) \(priority)3
             Buy milk
+            """
+    }
+
+    /// The project and label lines. By default the model applies only what the person names and suggests the rest
+    /// after " ~ "; with `autoTag` it files and tags every task itself, choosing only from the listed names.
+    private static func tagRules(_ context: RambleContext, prefixes: QuickAddPrefixes) -> String {
+        let project = prefixes.project
+        let label = prefixes.label
+        let quoting = """
+            Put quotes around names with spaces or any character other than letters, digits, - and _, like \
+            \(project)"Home Admin" or \(project)"Mum's".
+            """
+        guard context.autoTag else {
+            return """
+                - \(project)Project to file it in a project, but only when the person names it ("add it to Finance", \
+                "put that under Home Admin"). Only use these projects: \(nameList(context.projects)). \(quoting)
+                - \(label)label to tag it, but only when the person names it. Existing labels: \(nameList(context.labels)).
+                - A project or label that merely fits the subject (a project called Flat or House suits anything about \
+                the home, landlord, rent, repairs or cleaning) is a suggestion, not a choice. Put suggestions after the \
+                whole task, separated by " ~ ", for example: Email the landlord tomorrow ~ \(project)Flat \(label)house. \
+                Suggest only existing projects and labels, only when one clearly fits, and never one the person already \
+                named.
+                """
+        }
+        let projects = nameList(context.projects, max: autoTagMaxNames)
+        let labels = nameList(context.labels, max: autoTagMaxNames)
+        return """
+            - \(project)Project to file it in the one project from this list that the person names or that fits the \
+            task best: \(projects). Leave it out when none fits. \(quoting)
+            - \(label)label to tag it with up to two labels from this list that the person names or that fit the \
+            task: \(labels). Leave them out when none fits.
+            - Use only the project and label names listed above, written exactly as shown. Never make one up. For \
+            example, with a project called Flat and a label called house, write: Email the landlord tomorrow \
+            \(project)Flat \(label)house
             """
     }
 

@@ -1,8 +1,8 @@
 import CriaKit
 import SwiftUI
 
-/// Settings > General: language, timezone, date and time style, default project, week start, Quick Add, completed
-/// tasks and discoverability. Server-backed rows save through `SettingsModel`; date and time style are device-local.
+/// Settings > General: language, timezone, date and time style, default project, week start, Quick Add, Ramble
+/// tagging, completed tasks and discoverability. Server-backed rows save through `SettingsModel`; date and time style are device-local.
 struct GeneralSettingsSection: View {
     let model: SettingsModel
     @ObservedObject var prefs: PreferencesModel
@@ -16,6 +16,7 @@ struct GeneralSettingsSection: View {
             taskRows
             discoverabilityRows.disabled(!model.loaded)
         }
+        .task { await AIStatus.shared.refresh() }
     }
 
     private var localeRows: some View {
@@ -91,6 +92,13 @@ struct GeneralSettingsSection: View {
                 SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
             }
             .disabled(!model.loaded)
+            // Read by RambleSheet when it builds the prompt. Tags need the magic's syntax, so it is off with it.
+            if AIStatus.shared.isOfferable {
+                Toggle(isOn: $prefs.value.rambleChoosesTags) {
+                    SettingsLabel("Let Ramble choose projects and labels", symbol: "wand.and.stars", token: .llama500)
+                }
+                .disabled(model.general.quickAddMagicMode == QuickAddMagicMode.disabled.rawValue)
+            }
             Toggle(isOn: $showDone) {
                 SettingsLabel("Show completed", symbol: "checkmark.circle", token: .meadow500)
             }

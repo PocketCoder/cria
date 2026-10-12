@@ -94,4 +94,12 @@ final class LocalPreferencesFieldsTests: XCTestCase {
         XCTAssertEqual(loaded.dateFormat, .automatic)
         XCTAssertEqual(loaded.weeklyRoundupTime, "07:15")
     }
+
+    func testRambleChoosesTagsIsOffByDefaultAndRoundTrips() {
+        XCTAssertFalse(LocalPreferences.default.rambleChoosesTags)
+        let older = #"{"version": 1, "values": {"colorScheme": "dark"}}"#
+        XCTAssertFalse(PreferencesCodec().decode(Data(older.utf8)).rambleChoosesTags)
+        let codec = PreferencesCodec()
+        XCTAssertTrue(codec.decode(codec.encode(LocalPreferences(rambleChoosesTags: true))).rambleChoosesTags)
+    }
 }
