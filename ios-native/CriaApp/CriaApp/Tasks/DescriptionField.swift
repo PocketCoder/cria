@@ -20,9 +20,10 @@ final class DescriptionDraft {
     @ObservationIgnored private var closed = false
     private let onSave: (String) -> Void
 
-    /// About three lines of body text plus the editor's insets.
-    /// One line when empty, like a placeholder; it grows with the text.
-    nonisolated static var minHeight: CGFloat { ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight) + 12 }
+    /// One line while empty, like a placeholder; three as soon as there is text, then it grows with the text.
+    nonisolated static func minHeight(empty: Bool) -> CGFloat {
+        ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight * (empty ? 1 : 3)) + 12
+    }
 
     init(onSave: @escaping (String) -> Void) {
         self.onSave = onSave
@@ -86,13 +87,15 @@ struct DescriptionField: View {
     let html: String
     let draft: DescriptionDraft
     let onExpand: () -> Void
-    @State private var height = DescriptionDraft.minHeight
+    /// What the text needs at the current width, as the editor last reported it.
+    @State private var measured: CGFloat = 0
+    private var height: CGFloat { max(measured, DescriptionDraft.minHeight(empty: draft.isEmpty)) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             EditorHost(
                 services: services, taskLocalId: taskLocalId, initialHTML: html, controller: draft.controller,
-                inlineHeight: height, onHeightChange: { height = max($0, DescriptionDraft.minHeight) }
+                inlineHeight: height, onHeightChange: { measured = $0 }
             )
             .overlay(alignment: .topLeading) {
                 if draft.isEmpty {

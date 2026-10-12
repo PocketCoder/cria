@@ -59,7 +59,10 @@ struct RelationsSection: View {
                 .submitLabel(.next)
                 .onAppear { subtaskFocused = true }
                 .onSubmit(createSubtask)
-            Button("Done") { closeSubtaskField() }
+                // The separator starts under the text, not under the trailing button.
+                .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+            // Saves what was typed, then closes; it used to throw the title away.
+            Button("Done") { finishSubtaskField() }
                 .buttonStyle(.borderless)
         }
         if let subtaskError {
@@ -83,6 +86,19 @@ struct RelationsSection: View {
         }
         // Return ends editing; take the focus back for the next title.
         Task { @MainActor in subtaskFocused = true }
+    }
+
+    private func finishSubtaskField() {
+        let title = subtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty {
+            do {
+                try services.store.createSubtask(parentLocalId: taskLocalId, title: title)
+            } catch {
+                subtaskError = "Could not add the subtask: \(error)"
+                return
+            }
+        }
+        closeSubtaskField()
     }
 
     private func closeSubtaskField() {

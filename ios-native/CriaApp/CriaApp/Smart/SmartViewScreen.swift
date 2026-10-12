@@ -11,6 +11,8 @@ struct SmartViewScreen: View {
     @State private var addPresented = false
     @State private var rescheduling: TaskGroup?
     @State private var failure: String?
+    /// Parents whose subtasks are showing, for this screen only.
+    @State private var expanded: Set<String> = []
 
     init(services: AppServices, view: SmartView, title: String) {
         self.services = services
@@ -20,8 +22,9 @@ struct SmartViewScreen: View {
         _live = State(initialValue: LiveValue(initial: SmartViewData()) {
             observeStore(store, kinds: [.tasks, .labels, .projects, .savedFilters]) { (reading: CriaStore) throws -> SmartViewData in
                 let groups = try reading.smartGroups(view)
-                let parents = try TaskListNesting.parentTitles(reading, for: groups.flatMap(\.items))
-                return SmartViewData(groups: groups, parentTitles: parents)
+                let items = groups.flatMap(\.items)
+                let parents = try TaskListNesting.parentTitles(reading, for: items)
+                return SmartViewData(groups: groups, parentTitles: parents, nesting: try SmartNestingData.read(reading, items: items))
             }
         })
     }
@@ -62,11 +65,8 @@ struct SmartViewScreen: View {
             nothingPlanned
             ForEach(groups, id: \.key) { group in
                 Section {
-                    ForEach(group.items, id: \.task.localId) { item in
-                        TaskRowLink(
-                            services: services, item: item, showProject: true,
-                            tree: TaskRowTree(parentTitle: live.value.parentTitles[item.task.localId])
-                        )
+                    ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
+                        TaskRowLink(services: services, item: row.item, showProject: row.depth == 0, tree: tree(for: row))
                     }
                 } header: {
                     groupHeader(group)
@@ -109,6 +109,22 @@ struct SmartViewScreen: View {
             Text(failure ?? "")
         }
         .task { await live.run() }
+    }
+
+    private func tree(for row: NestedTaskItem) -> TaskRowTree {
+        let id = row.id
+        return TaskRowTree(
+            depth: row.depth,
+            progress: live.value.nesting.progress[id],
+            isCollapsed: row.hasChildren ? !expanded.contains(id) : nil,
+            onToggleCollapsed: {
+                withAnimation(.snappy) {
+                    if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
+                }
+            },
+            // Under its parent the caption would repeat what the indent already says.
+            parentTitle: row.depth == 0 ? live.value.parentTitles[id] : nil
+        )
     }
 
     private var rescheduleTitle: String {
@@ -208,6 +224,7 @@ struct SmartViewScreen: View {
 struct SmartViewData: Sendable {
     var groups: [TaskGroup] = []
     var parentTitles: [String: String] = [:]
+    var nesting = SmartNestingData()
 }
 
 /// Inbox needs the default project id from the server. Offline it falls back to the one remembered from the last

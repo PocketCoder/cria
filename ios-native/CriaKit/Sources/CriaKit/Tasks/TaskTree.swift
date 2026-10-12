@@ -9,6 +9,12 @@ public struct NestedTaskItem: Equatable, Sendable, Identifiable {
     /// True when it has children in the same list.
     public let hasChildren: Bool
     public var id: String { item.task.localId }
+
+    public init(item: TaskListItem, depth: Int, hasChildren: Bool) {
+        self.item = item
+        self.depth = depth
+        self.hasChildren = hasChildren
+    }
 }
 
 public enum TaskTree {
