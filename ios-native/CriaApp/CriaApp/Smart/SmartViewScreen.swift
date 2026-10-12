@@ -50,8 +50,13 @@ struct SmartViewScreen: View {
         }
     }
 
+    /// Today and Upcoming are tab roots with no toolbar buttons, so the bar's empty button row sat above the large
+    /// title. They hide the bar and draw the title as the first row instead, level with Browse's buttons.
+    private var drawsOwnTitle: Bool { view == .today || view == .upcoming }
+
     var body: some View {
         List {
+            if drawsOwnTitle { titleRow }
             header
             // Every group shown is on or after the selected day, so an empty selected day comes first.
             nothingPlanned
@@ -81,6 +86,7 @@ struct SmartViewScreen: View {
             }
         }
         .navigationTitle(title)
+        .toolbar(drawsOwnTitle ? .hidden : .automatic, for: .navigationBar)
         .refreshable { await services.refresh() }
         .quickAdd(services: services)
         .sheet(isPresented: $addPresented) {
@@ -122,15 +128,28 @@ struct SmartViewScreen: View {
         }
     }
 
+    /// The screen title and its subtitle, aligned with the cards' leading edge.
+    private var titleRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(Theme.wordmark)
+                .foregroundStyle(Color(.foreground))
+                .accessibilityAddTraits(.isHeader)
+            subtitleText
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 0, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
     @ViewBuilder private var header: some View {
         if view == .upcoming {
             Section {
                 WeekStrip(selected: $selectedDay, busyDays: Set(live.value.groups.filter { !$0.items.isEmpty }.map(\.key)))
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
-            } header: {
-                subtitleText
             }
-        } else if subtitle != nil {
+        } else if subtitle != nil && !drawsOwnTitle {
             Section {} header: { subtitleText }
         }
     }

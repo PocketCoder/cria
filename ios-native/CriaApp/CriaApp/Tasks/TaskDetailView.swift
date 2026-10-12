@@ -135,8 +135,10 @@ struct TaskDetailView: View {
     private func form(_ task: TaskRecord) -> some View {
         Form {
             Section {
-                HStack(alignment: .top) {
+                // Centred on the check's 44pt tap area, which keeps its size but no longer pads the row below the title.
+                HStack(alignment: .center, spacing: 8) {
                     PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { _ = apply(TaskPatch(done: !task.done)) }
+                        .padding(.vertical, -6)
                     TextField("Title", text: $title, axis: .vertical)
                         .font(Theme.title)
                         .focused($focus, equals: .title)

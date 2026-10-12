@@ -22,6 +22,22 @@ public struct LabelRecord: Equatable, Sendable {
 extension CriaStore {
     static let labelColumns = "local_id, server_id, title, description, hex_color, updated_at"
 
+    /// Open tasks per label (local id), for the Browse list.
+    public func openTaskCountsByLabel() throws -> [String: Int] {
+        try database.writer.read { connection in
+            var counts: [String: Int] = [:]
+            for row in try Row.fetchAll(connection, sql: """
+                SELECT tl.label_local_id AS label, COUNT(*) AS n
+                  FROM task_labels tl JOIN tasks t ON t.local_id = tl.task_local_id
+                 WHERE tl.deleted = 0 AND t.deleted = 0 AND t.done = 0
+                 GROUP BY tl.label_local_id
+                """) {
+                counts[row["label"]] = row["n"]
+            }
+            return counts
+        }
+    }
+
     public func labels() throws -> [LabelRecord] {
         try database.writer.read { connection in
             try Row.fetchAll(connection, sql: """

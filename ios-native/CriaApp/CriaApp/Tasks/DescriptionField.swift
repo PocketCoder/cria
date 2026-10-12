@@ -21,7 +21,8 @@ final class DescriptionDraft {
     private let onSave: (String) -> Void
 
     /// About three lines of body text plus the editor's insets.
-    nonisolated static var minHeight: CGFloat { ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight * 3) + 12 }
+    /// One line when empty, like a placeholder; it grows with the text.
+    nonisolated static var minHeight: CGFloat { ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight) + 12 }
 
     init(onSave: @escaping (String) -> Void) {
         self.onSave = onSave
@@ -88,7 +89,7 @@ struct DescriptionField: View {
     @State private var height = DescriptionDraft.minHeight
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        HStack(alignment: .top, spacing: 8) {
             EditorHost(
                 services: services, taskLocalId: taskLocalId, initialHTML: html, controller: draft.controller,
                 inlineHeight: height, onHeightChange: { height = max($0, DescriptionDraft.minHeight) }
@@ -101,12 +102,15 @@ struct DescriptionField: View {
                         .allowsHitTesting(false)
                 }
             }
-            HStack {
-                Spacer()
-                Button("Expand", systemImage: "arrow.up.left.and.arrow.down.right", action: onExpand)
+            // Beside the text rather than on a row of its own, so an empty description is one line tall.
+            Button(action: onExpand) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .font(Theme.caption)
-                    .buttonStyle(.borderless)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Expand description")
         }
     }
 }

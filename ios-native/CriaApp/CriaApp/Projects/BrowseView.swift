@@ -6,6 +6,8 @@ struct BrowseData: Equatable, Sendable {
     var openCounts: [String: Int] = [:]
     var favouriteCount = 0
     var savedFilters: [SavedFilterRecord] = []
+    var labels: [LabelRecord] = []
+    var labelCounts: [String: Int] = [:]
 }
 
 /// Browse tab: Favourites, then the project tree with colours, task counts, create and edit.
@@ -28,12 +30,14 @@ struct BrowseView: View {
         self.services = services
         let store = services.store
         _live = State(initialValue: LiveValue(initial: BrowseData()) {
-            observeStore(store, kinds: [.projects, .tasks, .savedFilters]) { reading in
+            observeStore(store, kinds: [.projects, .tasks, .savedFilters, .labels]) { reading in
                 BrowseData(
                     projects: ProjectTree.visible(try reading.projects()),
                     openCounts: try reading.openTaskCounts(),
                     favouriteCount: try reading.favouriteTaskCount(),
-                    savedFilters: try reading.savedFilters()
+                    savedFilters: try reading.savedFilters(),
+                    labels: try reading.labels(),
+                    labelCounts: try reading.openTaskCountsByLabel()
                 )
             }
         })
@@ -72,6 +76,7 @@ struct BrowseView: View {
             }
             filtersSection
             projectsSection
+            labelsSection
         }
             .criaSurface()
         .navigationTitle("Browse")
@@ -165,6 +170,32 @@ extension BrowseView {
                         }
                     }
                     .tint(Color(.marigold500))
+                }
+            }
+        }
+    }
+
+    /// Labels, styled like projects: colour dot, title, open count.
+    @ViewBuilder var labelsSection: some View {
+        if !live.value.labels.isEmpty {
+            Section("Labels") {
+                ForEach(live.value.labels, id: \.localId) { label in
+                    NavigationLink(value: Route.label(label.localId)) {
+                        HStack(spacing: 8) {
+                            Label {
+                                Text(label.title).font(Theme.rowTitle)
+                            } icon: {
+                                Image(systemName: "tag.fill")
+                                    .font(.footnote)
+                                    .foregroundStyle(Color(hexString: label.hexColor) ?? Color(.mutedForeground))
+                                    .accessibilityHidden(true)
+                            }
+                            Spacer(minLength: 0)
+                            if let count = live.value.labelCounts[label.localId], count > 0 {
+                                Text("\(count)").font(Theme.rowTitle).foregroundStyle(Color(.mutedForeground))
+                            }
+                        }
+                    }
                 }
             }
         }
