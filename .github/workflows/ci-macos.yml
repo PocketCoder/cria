@@ -1,0 +1,50 @@
+name: CI (native Swift macOS)
+
+# The macOS app. Builds CriaMac when the Mac target or the shared CriaKit
+# package changes. Never publishes anything: the iOS .ipa lives in ci-swift.yml,
+# which ignores Mac-only changes.
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'ios-native/CriaApp/CriaMac/**'
+      - 'ios-native/CriaApp/project.yml'
+      - 'ios-native/CriaKit/**'
+      - '.github/workflows/ci-macos.yml'
+  pull_request:
+    paths:
+      - 'ios-native/CriaApp/CriaMac/**'
+      - 'ios-native/CriaApp/project.yml'
+      - 'ios-native/CriaKit/**'
+      - '.github/workflows/ci-macos.yml'
+
+concurrency:
+  group: ci-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
+
+      - name: Build macOS app
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaMac \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
