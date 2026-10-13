@@ -8,16 +8,16 @@
       "bundleIdentifier": "io.cria.app.swift",
       "developerName": "Cria",
       "subtitle": "Native iOS client for Vikunja",
-      "localizedDescription": "Automated build of the native iOS app from the latest dev or main push. Prerelease.",
+      "localizedDescription": "Automated build of the native iOS app from the latest dev push. Prerelease.",
       "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
       "versions": [
         {
-          "version": "0.15.189",
-          "buildVersion": "189",
-          "date": "2026-10-13T12:02:48Z",
-          "size": 12624559,
-          "downloadURL": "https://github.com/PocketCoder/cria/releases/download/swift-alpha/Cria-Swift-Alpha-unsigned.ipa",
-          "localizedDescription": "dev @ 56fc800"
+          "version": "0.15.194",
+          "buildVersion": "194",
+          "date": "2026-10-13T12:32:37Z",
+          "size": 12648338,
+          "downloadURL": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-iOS-Nightly-unsigned.ipa",
+          "localizedDescription": "dev @ 2c2e3ec"
         }
       ]
     }
