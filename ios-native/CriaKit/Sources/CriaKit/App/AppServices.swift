@@ -59,6 +59,8 @@ public final class AppServices: Sendable {
         try? store.rememberCaptureProject(serverId: projectId.flatMap { $0 > 0 ? $0 : nil })
         let general = GeneralSettings(user: user)
         UserDefaults.standard.set(general.quickAddMagicMode, forKey: GeneralSettings.quickAddDefaultsKey)
+        // Which view a project without a remembered one opens on (Vikunja's Settings > Default view).
+        UserDefaults.standard.set(general.defaultView, forKey: GeneralSettings.defaultViewDefaultsKey)
         // The Upcoming week strip, the weekly round-up and pushed all-day dates read these without opening Settings.
         UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
         // Only a zone the server really holds; an unset one keeps the device's.
@@ -76,7 +78,20 @@ public final class AppServices: Sendable {
                 store.save(next)
                 NotificationCenter.default.post(name: .criaSyncedPreferencesApplied, object: nil)
             }
+            // The view last used in each project on the account's other devices, for a device that takes part.
+            if next.custom.syncProjectViews {
+                try? self.store.applySyncedProjectViews(ProjectViewSync.entries(in: cria))
+            }
         }
+    }
+
+    /// Records the view just chosen in a project for the account's other devices. Only when this device takes part, and
+    /// offline it fails quietly: the next choice sends its own key.
+    public func pushProjectView(projectLocalId: String, viewLocalId: String) async {
+        guard PreferencesStore().load().custom.syncProjectViews, let settings,
+              let change = try? store.syncedProjectViewChange(projectLocalId: projectLocalId, viewLocalId: viewLocalId)
+        else { return }
+        try? await settings.save(change)
     }
 
     /// Sends the synced display prefs that changed to the server (frontend_settings.cria). Offline it fails quietly;

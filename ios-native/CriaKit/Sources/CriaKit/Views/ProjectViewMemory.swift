@@ -13,8 +13,15 @@ public enum ProjectViewMemory {
         defaults.set(viewLocalId, forKey: key(projectLocalId: projectLocalId))
     }
 
-    /// The view to open: the remembered one when the project still has it, else the first.
-    public static func choose(remembered: String?, among views: [ViewRecord]) -> ViewRecord? {
-        views.first { $0.localId == remembered } ?? views.first
+    /// The view to open, as Vikunja-web picks it: the remembered one when the project still has it, else the first view
+    /// of the account's default kind (Settings > Default view), else the first view.
+    public static func choose(
+        remembered: String?, among views: [ViewRecord], defaultView: String = GeneralSettings.defaultDefaultView
+    ) -> ViewRecord? {
+        if let match = views.first(where: { $0.localId == remembered }) { return match }
+        if defaultView != GeneralSettings.defaultDefaultView, let match = views.first(where: { $0.viewKind.rawValue == defaultView }) {
+            return match
+        }
+        return views.first
     }
 }

@@ -13,6 +13,8 @@ public struct GeneralSettings: Equatable, Sendable {
     /// "HH:mm", as the server stores it.
     public var overdueRemindersTime: String
     public var quickAddMagicMode: String
+    /// Vikunja's "Default view": `first`, or a view kind (list, gantt, table, kanban).
+    public var defaultView: String
     /// 0 = Sunday ... 6 = Saturday, as Vikunja stores it.
     public var weekStart: Int
     /// Server id of the default (inbox) project; 0 when unset.
@@ -25,6 +27,9 @@ public struct GeneralSettings: Equatable, Sendable {
     public var timezone: String
 
     public static let defaultQuickAddMode = "vikunja"
+    public static let defaultDefaultView = "first"
+    /// The UserDefaults key the project screen reads the default view from.
+    public static let defaultViewDefaultsKey = "cria.defaultView"
     public static let defaultWeekStart = 1
     /// The UserDefaults key the Upcoming week strip reads the week start from.
     public static let weekStartDefaultsKey = "cria.weekStart"
@@ -50,6 +55,7 @@ public struct GeneralSettings: Equatable, Sendable {
         timezone = settings?["timezone"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultTimezone
         let frontend = FrontendSettings.frontendSettings(of: settings?.objectValue)
         quickAddMagicMode = FrontendSettings.quickAddMagicMode(of: frontend) ?? Self.defaultQuickAddMode
+        defaultView = FrontendSettings.defaultView(of: frontend) ?? Self.defaultDefaultView
     }
 
     public static func changeName(_ name: String) -> SettingsChange {
@@ -77,6 +83,12 @@ public struct GeneralSettings: Equatable, Sendable {
     public static func changeQuickAddMode(_ mode: String) -> SettingsChange? {
         guard FrontendSettings.quickAddMagicModes.contains(mode) else { return nil }
         return SettingsChange(frontend: [FrontendSettings.quickAddMagicKey: .string(mode)])
+    }
+
+    /// Nil when `view` is not one Vikunja knows.
+    public static func changeDefaultView(_ view: String) -> SettingsChange? {
+        guard FrontendSettings.defaultViews.contains(view) else { return nil }
+        return SettingsChange(frontend: [FrontendSettings.defaultViewKey: .string(view)])
     }
 
     /// Nil when `day` is not 0 (Sunday) ... 6 (Saturday).
@@ -123,6 +135,7 @@ public struct GeneralSettings: Equatable, Sendable {
         restore(\.overdueRemindersEnabled)
         restore(\.overdueRemindersTime)
         restore(\.quickAddMagicMode)
+        restore(\.defaultView)
         restore(\.weekStart)
         restore(\.defaultProjectId)
         restore(\.discoverableByEmail)

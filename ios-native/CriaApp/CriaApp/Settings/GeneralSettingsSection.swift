@@ -88,6 +88,20 @@ struct GeneralSettingsSection: View {
                 SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
             }
             .disabled(!canSave)
+            // Vikunja's "Default view": what a project opens on until a view has been chosen in it.
+            Picker(selection: Binding(
+                get: { model.general.defaultView },
+                set: { view in Task { await model.setDefaultView(view) } }
+            )) {
+                Text("First view").tag("first")
+                Text("List").tag("list")
+                Text("Gantt").tag("gantt")
+                Text("Table").tag("table")
+                Text("Kanban").tag("kanban")
+            } label: {
+                SettingsLabel("Default view", symbol: "rectangle.3.group", token: .sky500)
+            }
+            .disabled(!canSave)
             // Read by RambleSheet when it builds the prompt. Tags need the magic's syntax, so it is off with it.
             if AIStatus.shared.isOfferable {
                 Toggle(isOn: $prefs.value.rambleChoosesTags) {

@@ -65,6 +65,11 @@ public struct Customisation: Equatable, Sendable {
     public var resetSubtasksOnRepeat = false
     public var openLinksInApp = false
     public var completionTone: CompletionTone = .tink
+    /// Boards list each column's cards soonest due first (no date last) instead of in the order they were dragged to.
+    public var kanbanSortByDue = false
+    /// Reopen each project on the view last used in it on any of the account's devices. Stays on the device: each one
+    /// chooses whether to take part.
+    public var syncProjectViews = false
 
     public static let `default` = Customisation()
 
@@ -87,7 +92,7 @@ public struct Customisation: Equatable, Sendable {
     /// Keys that follow the account. `syncHomeView` itself stays on the device, and `homeView` only travels while it is on.
     static let syncedKeys = [
         "tabs", "showTaskCount", "swipeRight", "swipeLeft", "quickAddShowsLabels", "quickAddActions", "detectDates",
-        "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone"
+        "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue"
     ]
     static let homeViewKey = "homeView"
 
@@ -119,6 +124,8 @@ public struct Customisation: Equatable, Sendable {
         resetSubtasksOnRepeat = flag("resetSubtasksOnRepeat", base.resetSubtasksOnRepeat)
         openLinksInApp = flag("openLinksInApp", base.openLinksInApp)
         completionTone = text("completionTone").flatMap(CompletionTone.init(rawValue:)) ?? base.completionTone
+        kanbanSortByDue = flag("kanbanSortByDue", base.kanbanSortByDue)
+        syncProjectViews = flag("syncProjectViews", base.syncProjectViews)
     }
 
     var values: JSONBody {
@@ -136,7 +143,9 @@ public struct Customisation: Equatable, Sendable {
             "weekendDay": .number(Double(weekendDay)),
             "resetSubtasksOnRepeat": .bool(resetSubtasksOnRepeat),
             "openLinksInApp": .bool(openLinksInApp),
-            "completionTone": .string(completionTone.rawValue)
+            "completionTone": .string(completionTone.rawValue),
+            "kanbanSortByDue": .bool(kanbanSortByDue),
+            "syncProjectViews": .bool(syncProjectViews)
         ]
     }
 

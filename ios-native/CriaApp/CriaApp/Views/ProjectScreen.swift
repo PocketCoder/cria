@@ -41,13 +41,21 @@ struct ProjectScreen: View {
     private var views: [ViewRecord] { live.value.views }
 
     private var current: ViewRecord? {
-        ProjectViewMemory.choose(remembered: selectedId, among: views)
+        // The account's default view (Vikunja's Settings > Default view) applies until a view has been chosen here.
+        let stored = UserDefaults.standard.string(forKey: GeneralSettings.defaultViewDefaultsKey)
+        return ProjectViewMemory.choose(
+            remembered: selectedId, among: views, defaultView: stored ?? GeneralSettings.defaultDefaultView
+        )
     }
 
     /// Switches view and remembers the choice for next time.
     private func select(_ localId: String?) {
         selectedId = localId
-        if let localId { ProjectViewMemory.remember(localId, projectLocalId: projectLocalId) }
+        guard let localId else { return }
+        ProjectViewMemory.remember(localId, projectLocalId: projectLocalId)
+        // For the account's other devices, when this one takes part (it does nothing otherwise).
+        let services = self.services, projectLocalId = self.projectLocalId
+        Task { await services.pushProjectView(projectLocalId: projectLocalId, viewLocalId: localId) }
     }
 
     private var canManage: Bool {

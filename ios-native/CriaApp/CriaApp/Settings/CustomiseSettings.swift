@@ -37,6 +37,22 @@ struct CustomiseSettingsSection: View {
         } footer: {
             Text("Cria-only settings. They follow your account to Cria on your other devices.")
         }
+        Section {
+            Toggle(isOn: $prefs.value.custom.kanbanSortByDue) {
+                SettingsLabel("Sort board cards by due date", symbol: "calendar.badge.clock", token: .coral500)
+            }
+            Toggle(isOn: $prefs.value.custom.syncProjectViews) {
+                SettingsLabel("Sync project views", symbol: "arrow.triangle.2.circlepath", token: .sky500)
+            }
+        } header: {
+            Text("Projects")
+        } footer: {
+            Text(
+                "Sort puts each column's cards in due-date order, soonest first and undated last; dragging then only moves "
+                + "a card between columns. Sync reopens each project on the view you last used on any device that has this "
+                + "on; turned off, this device keeps its own. Vikunja-web does neither."
+            )
+        }
     }
 }
 

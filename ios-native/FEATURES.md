@@ -1,6 +1,6 @@
-# Cria native iOS: feature reference
+# Cria native apps (iOS and macOS): feature reference
 
-Every user-facing feature of the SwiftUI app, and where its data lives. Derived from the code in `CriaApp/` and `CriaKit/` on `feature/swift-ios`; nothing here is taken on trust from the plan. The app is in daily use on an iPhone (iOS 26), which is where it is tested; problems found there are fixed as they come up.
+Every user-facing feature of the SwiftUI apps, and where its data lives. Derived from the code in `CriaApp/` and `CriaKit/`; nothing here is taken on trust from the plan. The iOS app is in daily use on an iPhone (iOS 26), which is where it is tested. The macOS app (`CriaMac`) compiles the same shared code plus its own shell: it builds in CI but has not been verified on a Mac yet, so treat the [macOS](#macos) section as intended behaviour until it has. Unless a row says otherwise it applies to both apps; where iOS and the Mac differ the row says so, and the [macOS](#macos) section lists what only the Mac has and what it lacks.
 
 ## Where data lives
 
@@ -8,7 +8,7 @@ Every user-facing feature of the SwiftUI app, and where its data lives. Derived 
 |---|---|---|
 | **Vikunja** | On the Vikunja server, so Vikunja-web and every other client sees it. | Local SQLite copy plus an outbox that pushes changes in order. Offline edits queue and send later. |
 | **Cria accounts** | Follows the account to other Cria installs. Vikunja-web ignores it. | `settings.frontend_settings.cria` on the server, saved through the v2 merge-patch with a v1 fallback. The whole app speaks Vikunja API v2 on servers 2.7.0 and newer and v1 otherwise (Settings > Data > Force API v1 overrides); `CriaKit/API/ApiRoutes.swift` holds every v1/v2 difference. Keys listed under [Settings](#settings). |
-| **This device** | Never leaves this phone. | `UserDefaults` (`PreferencesStore`, `@AppStorage`), the Keychain, the App Group database, or in-memory state. |
+| **This device** | Never leaves this phone or Mac. | `UserDefaults` (`PreferencesStore`, `@AppStorage`), the Keychain, the App Group database, or in-memory state. |
 
 Two notes apply throughout:
 
@@ -53,7 +53,8 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Kanban filter | This device | Text, minimum priority, labels, show done; per board (`cria.kanbanFilter.<view>`). Hides cards only. |
 | Gantt date range | This device | From, To, show undated tasks, Reset (`cria.gantt.filters`). |
 | Table cell editing | This device for the switch | Options > Edit cells: labels, assignees and dates edit in place. |
-| Last view per project | This device | A project opens on the view used last (`cria.projectView.<project>`). |
+| Last view per project | This device, or Cria accounts with "Sync project views" | A project opens on the view used last (`cria.projectView.<project>`). With Settings > Customise > Projects > Sync project views on, the choice is also saved as `projectView.<project server id>` (the view's server id) in `frontend_settings.cria`, so each device that has it on reopens the project on the view last used on any of them. Vikunja-web keeps this on the device only. Needs the project and view to have synced. |
+| Default view | Vikunja | Settings > General > Default view (`frontend_settings.default_view`, shared with Vikunja-web): First view, List, Gantt, Table or Kanban. A project that has no remembered view opens on the first view of that kind, else its first view. A remembered view always wins, as in Vikunja-web. |
 | Project info | Vikunja | Identifier, parent, open and done counts, owner, dates. From the project header or Browse long press. |
 | Duplicate a project | Vikunja | Online only, from Browse long press or the info page. |
 | Project views (create, rename, delete, reorder; List, Gantt, Table, Board) | Vikunja | A project keeps at least one view. |
@@ -62,6 +63,8 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Display options (group, sort, filters, show completed) | This device | Per view (each project, label, Favourites, Inbox, Today, Upcoming, saved filter) in `cria.display.configs`. Group by priority, due date, project or label; filter by priority, dates, label, project, assigned to me or unassigned. |
 | Select several tasks | Vikunja for the changes | Select beside the title; the bar completes, schedules, defers, moves, sets priority or deletes them together. |
 | Kanban cards and columns | Vikunja | Move a card by drag or "Move to" (bucket assignment, position); moves made elsewhere arrive at the next pull. Add, rename, delete columns; set a column limit that blocks drops. Subtasks in their parent's column sit inside its card ("2/3 subtasks"); ones in another column are their own card captioned with the parent. |
+| Kanban: sort cards by due date | Cria accounts | Settings > Customise > Projects (`kanbanSortByDue`, off by default). Each column lists its cards soonest due first, undated last; equal dates keep their order. Stored positions are not changed, so turning it off brings the dragged order back. Dragging then only moves a card between columns. Vikunja-web's board has no such sort. |
+| Kanban drag behaviour | This device | A drag starts as a reorder in the card's own column. When the card leaves that column all columns shrink to their headers so each fits on screen without edge-scrolling, and the column under the card opens to choose where in it the card goes. The column a card would land in is outlined. With the due-date sort on, every column stays a header. Drag start uses `onDrag`, not `draggable`, so it needs checking on a device. |
 | Kanban done and default column | Vikunja | Stored on the view. |
 | Kanban for filter views | Vikunja | Read-only by design: each column is a saved search, so a card shows wherever it matches and is not dragged between columns (as in Vikunja-web). |
 | Table view | Vikunja for the tasks | Tap a row to open it; swipe to complete. |
@@ -180,6 +183,7 @@ Settings opens from the gear in Browse.
 | Week starts on | Vikunja | Read by the Upcoming strip and the weekly round-up. |
 | Default project | Vikunja | Also remembered in the App Group so the share extension and Siri can file tasks offline. |
 | Quick Add Magic | Vikunja | See [Quick add](#quick-add-and-ramble). |
+| Default view | Vikunja | `frontend_settings.default_view`: First view, List, Gantt, Table or Kanban. Also cached on the device (`cria.defaultView`) so the project screen can read it. See [Lists and views](#lists-and-views). |
 | Discoverable by email, by name | Vikunja | |
 | Date format, time format | Cria accounts | `dateFormat`, `timeFormat`. Shared with the desktop Cria app. |
 | Show completed | This device | `cria.taskList.showDone`: the starting value for views whose Display options have not been changed. |
@@ -208,6 +212,8 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 | Reset subtasks on repeat | Cria accounts | `resetSubtasksOnRepeat`. |
 | Open web links in Cria or the browser | Cria accounts | `openLinksInApp`. Opens a Safari view inside the app when on. |
 | Task layout | Cria accounts | `taskDetailOrder`; drag to reorder, Reset to default. |
+| Sort board cards by due date | Cria accounts | `kanbanSortByDue` (Projects section). See [Lists and views](#lists-and-views). |
+| Sync project views switch | This device | `syncProjectViews` is never synced: each device chooses whether to take part. The views themselves are saved as `projectView.<project server id>` keys. |
 
 ### Notifications and photo capture
 
@@ -243,6 +249,35 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 | Deep links | This device | `cria://task/{id}`, `cria://project/{id}`, `cria://today`, `cria://upcoming`, `cria://inbox`, `cria://search`, `cria://add?title=...`. A numeric id is a server id; anything else is a local id for this device only. |
 | Spotlight | This device | See [Search](#search). Results open the task. |
 | Navigation | This device | iOS 18 and later use the system `TabView` (a separate Search tab on iOS 26); iOS 17 uses plain tab items. State is kept per tab. |
+
+## macOS
+
+The Mac app (`CriaMac`) is a native SwiftUI app on macOS 15 and later. It uses the same `CriaKit` and the iOS app's screens, so every feature above exists on the Mac unless listed under "Not on the Mac". It is not sandboxed and has no App Group: the database is in `Application Support/<bundle id>/Native/`. Everything here compiles in CI and none of it has been tried on a Mac yet.
+
+| Feature | Where it lives | Notes |
+|---|---|---|
+| Three-column window | This device | Sidebar, the selected list or project, and the open task. Task rows and kanban cards open the task in the detail column (`\.taskOpener`) instead of pushing it. The sidebar collapses (⌘E or the toolbar button). |
+| Menu bar and shortcuts | This device | File, View and Go menus and a Task menu (done, due, priority, labels, move, favourite, copy link, delete). ⌘N new task, ⇧⌘N new project, ⌘1 to ⌘3 Today, Upcoming, Inbox, ⌘F search, ⌘K command palette, ⌘. copy link. |
+| Single-key shortcuts | This device | `g` then a letter to go somewhere, and `t`, `d`, `p`, `l`, `m`, `s` and Delete on the open task. Needs the window focused. |
+| Command palette (⌘K) | This device | Jump to a project, view or task, or run a command. |
+| Rich text editor | Vikunja | The shared editor on an AppKit text view, with a toolbar. Image paste and drop. Link is ⌘L because ⌘K is the palette. The @mention picker is a sheet, not a popover at the caret. |
+| Settings window (⌘,) | This device | The shared Settings plus a Mac tab: menu bar item, close to menu bar, launch at login, hide the Dock icon, global shortcut. |
+| Menu bar extra | This device | Add and open from the menu bar. Closing the window leaves the app running (reminders and summaries keep firing) when "close to menu bar" is on. |
+| Global shortcut | This device | ⌘⇧A by default (changeable); opens quick add in the main window. Not a floating panel. |
+| Launch at login | This device | |
+| Notifications | This device | Reminders, morning summary and weekly round-up as on iOS, scheduled while the app runs. |
+| `cria://` links and file drop | This device | The same links as iOS. Dropping files on a task's detail queues them as attachments. |
+| List from photo | Vikunja for the tasks | A file picker, Photos or paste instead of the camera. |
+| Account takeover from the Tauri app | This device | On the first launch with no native session, the Tauri desktop app's stored sign-in (Keychain service `Cria`, account `vikunja-token`, `.nightly` or `.dev`) is adopted once, then a full sync runs. A refused Keychain prompt ends the attempt; signing out does not bring it back. |
+| Updates | This device | Sparkle is wired but inactive until a public key is set. Until then updates are manual: the DMG on the rolling `nightly` release. |
+
+### Not on the Mac
+
+- Widgets, the share extension, and Siri and Shortcuts "Add task".
+- Camera capture and background Ramble runs (Ramble runs in the foreground).
+- Swipe actions on rows (there is no swipe) and the iOS tab bar settings.
+- A SwiftUI `Table` for the table view: it uses the shared grid.
+- Haptics.
 
 ## Known gaps
 

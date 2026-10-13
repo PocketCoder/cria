@@ -35,6 +35,17 @@ public enum FrontendSettings {
         frontendSettings[criaKey]?.objectValue
     }
 
+    /// Vikunja-web's key for the view a project opens on when none was chosen there yet (Settings > Default view).
+    public static let defaultViewKey = "default_view"
+    /// `first` opens the project's first view; the others open the first view of that kind.
+    public static let defaultViews: [String] = ["first", "list", "gantt", "table", "kanban"]
+
+    /// The user's default view, or nil when unset or not one Vikunja knows.
+    public static func defaultView(of frontendSettings: JSONBody) -> String? {
+        guard case .string(let value)? = frontendSettings[defaultViewKey], defaultViews.contains(value) else { return nil }
+        return value
+    }
+
     public static let quickAddMagicModes: Set<String> = ["disabled", "todoist", "vikunja"]
 
     /// The user's Quick Add Magic mode, or nil when unset or not a known mode.

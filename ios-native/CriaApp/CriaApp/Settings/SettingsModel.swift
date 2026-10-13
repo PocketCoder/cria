@@ -80,6 +80,7 @@ final class SettingsModel {
         general = GeneralSettings(user: user)
         username = user["username"]?.stringValue ?? ""
         UserDefaults.standard.set(general.quickAddMagicMode, forKey: QuickAddStorage.key)
+        UserDefaults.standard.set(general.defaultView, forKey: GeneralSettings.defaultViewDefaultsKey)
         UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
         // Only a zone the server really holds; an unset one keeps the device's.
         if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
@@ -125,6 +126,11 @@ final class SettingsModel {
     func setQuickAddMode(_ mode: String) async {
         let saved = await save(GeneralSettings.changeQuickAddMode(mode)) { $0.quickAddMagicMode = mode }
         if saved { UserDefaults.standard.set(mode, forKey: QuickAddStorage.key) }
+    }
+
+    func setDefaultView(_ view: String) async {
+        let saved = await save(GeneralSettings.changeDefaultView(view)) { $0.defaultView = view }
+        if saved { UserDefaults.standard.set(view, forKey: GeneralSettings.defaultViewDefaultsKey) }
     }
 
     func setWeekStart(_ day: Int) async {

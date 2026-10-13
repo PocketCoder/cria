@@ -38,6 +38,7 @@ struct KanbanBoardView: View {
     /// The board's filter, kept per view on this device (see `BoardFilter`).
     @AppStorage private var filterText: String
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.preferences) private var preferences
 
     init(services: AppServices, view: ViewRecord) {
         self.services = services
@@ -85,11 +86,20 @@ struct KanbanBoardView: View {
         return max(88, (available - 32 - 12 * (count - 1)) / count)
     }
 
+    /// The cards a column draws: its own order, or soonest due first when that setting is on.
+    private func cards(of column: KanbanColumn, in plan: KanbanBoardPlan) -> [KanbanCardPlan] {
+        let cards = plan.column(column.bucket.localId).cards
+        return sortByDue ? KanbanSort.byDueDate(cards) : cards
+    }
+
+    private var sortByDue: Bool { preferences.custom.kanbanSortByDue }
+
     private func beginDrag(from columnId: String) {
         let started = Date.now
         dragStartedAt = started
         dragSource = columnId
-        leftSource = false
+        // With the cards in due-date order there is nothing to reorder, so go straight to choosing a column.
+        leftSource = sortByDue
         sourceWasTargeted = false
         hoverColumn = nil
         dragging = true
@@ -147,11 +157,11 @@ struct KanbanBoardView: View {
                         view: view,
                         column: column,
                         columns: columns,
-                        cards: plan.column(column.bucket.localId).cards,
+                        cards: cards(of: column, in: plan),
                         expanded: $expandedCards,
                         labels: live.value.labels,
                         readOnly: readOnly,
-                        compact: dragging && leftSource && hoverColumn != column.bucket.localId,
+                        compact: dragging && leftSource && (sortByDue || hoverColumn != column.bucket.localId),
                         onDragStart: { beginDrag(from: column.bucket.localId) },
                         onOver: { columnOver(column.bucket.localId, $0) },
                         onDragEnd: { endDrag() },
