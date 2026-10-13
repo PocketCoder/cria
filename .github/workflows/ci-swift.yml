@@ -8,7 +8,7 @@ name: CI (native Swift iOS)
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, main, feature/macos]
     paths:
       - 'ios-native/**'
       - '!ios-native/CriaApp/CriaMac/**'
@@ -97,7 +97,7 @@ jobs:
   # deprecated Tauri iOS entries (io.cria.app, io.cria.app.nightly).
   publish-ipa:
     name: Publish iOS nightly .ipa
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/feature/macos')
     needs: [changes, test-and-build]
     runs-on: macos-latest
     timeout-minutes: 45
@@ -154,9 +154,18 @@ jobs:
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cria-iOS-Nightly-unsigned.ipa" Payload)
 
+      # Other branches get the .ipa as a workflow artifact only; the release and SideStore stay dev's.
+      - name: Upload .ipa artifact
+        if: github.ref != 'refs/heads/dev'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Cria-iOS-${{ github.ref_name }}-unsigned
+          path: Cria-iOS-Nightly-unsigned.ipa
+
       # Adds the .ipa to the rolling nightly release (nightly.yml moves its tag and rewrites its title). Created here
       # only if no nightly exists yet. The separate swift-alpha release this replaces is deleted.
       - name: Attach .ipa to the nightly release
+        if: github.ref == 'refs/heads/dev'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -176,6 +185,7 @@ jobs:
       # dropped (that build is deprecated), so SideStore stops offering them.
       # macOS runner: stat takes -f, not -c.
       - name: Write sidestore.json
+        if: github.ref == 'refs/heads/dev'
         run: |
           set -euo pipefail
           mkdir -p gh-pages-out
@@ -205,6 +215,7 @@ jobs:
           cat gh-pages-out/sidestore.json
 
       - name: Publish sidestore.json to gh-pages
+        if: github.ref == 'refs/heads/dev'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
