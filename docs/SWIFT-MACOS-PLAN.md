@@ -9,7 +9,7 @@ agent: each phase lists exact files, steps and a check that proves it is done.
 | Phase | Title | Status |
 |---|---|---|
 | 0 | Scaffold the macOS target | Done |
-| 1 | Share the platform-neutral code | Not started |
+| 1 | Share the platform-neutral code | Done |
 | 2 | Window shell, menus and shortcuts | Not started |
 | 3 | Rich text editor on macOS | Not started |
 | 4 | Project views and settings | Not started |
