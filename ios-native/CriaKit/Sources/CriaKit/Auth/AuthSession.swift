@@ -17,6 +17,7 @@ public actor AuthSession: SessionProviding {
 
     private let store: CredentialStore
     private let core: HTTPCore
+    private let legacyImport: LegacyCredentialImport?
     private let onSignOut: @Sendable () async -> Void
     private var consecutiveAuthFailures = 0
     private var refreshTask: Task<String?, Never>?
@@ -25,10 +26,13 @@ public actor AuthSession: SessionProviding {
     private var unsavedCredentials = false
 
     /// `onSignOut` clears per-user state (cached user row, background cache) once credentials are gone.
+    /// `legacyImport` adopts a Tauri desktop sign-in on the first launch with no native session (macOS only).
     public init(store: CredentialStore = CredentialStore(), core: HTTPCore = HTTPCore(),
+                legacyImport: LegacyCredentialImport? = nil,
                 onSignOut: @escaping @Sendable () async -> Void = {}) {
         self.store = store
         self.core = core
+        self.legacyImport = legacyImport
         self.onSignOut = onSignOut
     }
 
@@ -47,6 +51,10 @@ public actor AuthSession: SessionProviding {
                 return
             case .none:
                 credentialsUnavailable = false
+                if let imported = legacyImport?.credentials(), (try? store.save(imported)) != nil {
+                    status = .authenticated(imported)
+                    return
+                }
                 status = .unauthenticated
                 return
             case .unavailable:

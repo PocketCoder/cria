@@ -67,3 +67,66 @@ final class CredentialStoreTests: XCTestCase {
         CredentialStore(slot: FailingSlot()).clear()
     }
 }
+
+final class LegacyCredentialImportTests: XCTestCase {
+    private let json = #"{"serverUrl":"https://vk.example","token":"tok","authMethod":"password","refreshToken":"ref"}"#
+
+    private func makeImport(_ slot: any SecretSlot, ran: LockedFlag = LockedFlag()) -> LegacyCredentialImport {
+        LegacyCredentialImport(slot: slot, hasRun: { ran.value }, markRun: { ran.value = true })
+    }
+
+    func testReadsTheTauriJSONOnce() {
+        let ran = LockedFlag()
+        let legacy = makeImport(MemorySlot(json), ran: ran)
+        XCTAssertEqual(legacy.credentials()?.token, "tok")
+        XCTAssertNil(legacy.credentials(), "second call must do nothing")
+    }
+
+    func testMissingItemMarksDone() {
+        let ran = LockedFlag()
+        XCTAssertNil(makeImport(MemorySlot(), ran: ran).credentials())
+        XCTAssertTrue(ran.value)
+    }
+
+    func testUnreadableItemIsRetriedNextLaunch() {
+        let ran = LockedFlag()
+        XCTAssertNil(makeImport(FailingSlot(), ran: ran).credentials())
+        XCTAssertFalse(ran.value)
+    }
+
+    func testHydrateAdoptsAndSavesIntoTheNativeSlot() async throws {
+        let native = MemorySlot()
+        let session = AuthSession(store: CredentialStore(slot: native), legacyImport: makeImport(MemorySlot(json)))
+        await session.hydrate()
+        let status = await session.status
+        let expected = Credentials(serverURL: "https://vk.example", token: "tok", authMethod: .password, refreshToken: "ref")
+        XCTAssertEqual(status, .authenticated(expected))
+        XCTAssertNotNil(try native.read())
+    }
+
+    func testSignOutIsNotUndoneByTheImport() async {
+        let ran = LockedFlag()
+        let native = MemorySlot()
+        let session = AuthSession(store: CredentialStore(slot: native), legacyImport: makeImport(MemorySlot(json), ran: ran))
+        await session.hydrate()
+        await session.signOut()
+        await session.hydrate()
+        let status = await session.status
+        XCTAssertEqual(status, .unauthenticated)
+    }
+
+    func testTauriAccountNames() {
+        XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app"), "vikunja-token")
+        XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app.dev"), "vikunja-token.dev")
+        XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app.nightly"), "vikunja-token.nightly")
+    }
+}
+
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+    var value: Bool {
+        get { lock.withLock { flag } }
+        set { lock.withLock { flag = newValue } }
+    }
+}
