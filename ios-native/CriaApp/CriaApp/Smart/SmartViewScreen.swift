@@ -106,6 +106,9 @@ struct SmartViewScreen: View {
             }
         }
         .criaSurface()
+        // The default top margin and section gaps left a band of empty space under the title.
+        .contentMargins(.top, 0, for: .scrollContent)
+        .listSectionSpacing(.compact)
         .overlay {
             if live.value.loaded && !hasAnyTasks && view != .upcoming && view != .today {
                 ContentUnavailableView("Nothing here", systemImage: "checkmark.circle")
