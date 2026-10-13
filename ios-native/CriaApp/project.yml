@@ -102,7 +102,6 @@ targets:
           # Phase 6.
           - Tasks/CameraPicker.swift
           - AI/BackgroundRun.swift
-          - AI/ShoppingPhotoSheet.swift
           # The Mac target has its own asset catalogue (LoginIcon copied across).
           - Assets.xcassets
           - Fonts
@@ -124,6 +123,7 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Listen while you speak a list of tasks.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Turn what you say into text for your tasks.
         ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: CriaMac/CriaMac.entitlements
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.dev

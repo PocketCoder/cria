@@ -1,7 +1,7 @@
 name: CI (native Swift iOS)
 
 # The iOS app. Lint, CriaKit tests and a simulator build on every change to
-# ios-native/; pushes to dev and main also publish the unsigned .ipa to SideStore.
+# ios-native/; pushes to dev also attach the unsigned .ipa to the nightly release and SideStore.
 # Changes that only touch the macOS app (ios-native/CriaApp/CriaMac/) are ignored
 # here, so a Mac push does not publish a new .ipa. ci-macos.yml builds the Mac app.
 # The Tauri iOS build is deprecated: nothing else builds for iOS.
@@ -102,7 +102,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
-    # Serialises pushes from dev and main so they don't race
+    # Serialises pushes to dev so they do not race
     # on the release or on gh-pages. Queued runs wait, not cancel.
     concurrency:
       group: ios-alpha-publish
@@ -195,7 +195,7 @@ jobs:
                    bundleIdentifier: "io.cria.app.swift",
                    developerName: "Cria",
                    subtitle: "Native iOS client for Vikunja",
-                   localizedDescription: "Automated build of the native iOS app from the latest dev or main push. Prerelease.",
+                   localizedDescription: "Automated build of the native iOS app from the latest dev push. Prerelease.",
                    iconURL: "https://raw.githubusercontent.com/\($repo)/dev/src-tauri/icons/icon.png",
                    versions: [{version: $v, buildVersion: $b, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
                  }] | sort_by(.bundleIdentifier))}

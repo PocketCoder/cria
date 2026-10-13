@@ -1,7 +1,7 @@
 import CriaKit
 import PhotosUI
 import SwiftUI
-import UIKit
+import UniformTypeIdentifiers
 import Vision
 
 /// Photo of a handwritten or printed list to tasks: Vision reads the text, `ShoppingItems` cleans it, the model
@@ -18,7 +18,9 @@ struct ShoppingPhotoSheet: View {
     @State private var label = "shopping"
     @State private var working = false
     @State private var errorMessage: String?
-    @State private var captured: UIImage?
+    @State private var captured: PlatformImage?
+    /// The Mac has no camera: a file picker (and Paste) stand in for it.
+    @State private var choosingFile = false
     @State private var libraryRequested = false
     @State private var tidying = false
     @State private var untidied: [DraftItem]?
@@ -69,6 +71,7 @@ struct ShoppingPhotoSheet: View {
             }
         }
         .presentationDetents([.large])
+        .macSheetFrame()
     }
 
     /// Dark viewport with white corner guides and a shutter. The shutter opens the system camera (or the photo
@@ -78,14 +81,14 @@ struct ShoppingPhotoSheet: View {
         return ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.black)
             if let captured, compact {
-                Image(uiImage: captured).resizable().scaledToFill()
+                Image(platformImage: captured).resizable().scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: 180)
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             } else {
                 CornerGuides().padding(18)
                 VStack {
                     Spacer()
-                    Text("Point at a handwritten or printed list")
+                    Text(Self.viewportHint)
                         .font(Theme.rowSubtitle).foregroundStyle(.white.opacity(0.8))
                     shutter.padding(.top, 8).padding(.bottom, 20)
                 }
@@ -104,19 +107,67 @@ struct ShoppingPhotoSheet: View {
                 .overlay(Circle().strokeBorder(.white, lineWidth: 4))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Take a photo")
+        .accessibilityLabel(Self.shutterLabel)
         .photosPicker(isPresented: $libraryRequested, selection: $picked, matching: .images)
     }
 
+    private static var viewportHint: String {
+        #if os(macOS)
+        "Choose a photo of a handwritten or printed list"
+        #else
+        "Point at a handwritten or printed list"
+        #endif
+    }
+
+    private static var shutterLabel: String {
+        #if os(macOS)
+        "Choose a photo"
+        #else
+        "Take a photo"
+        #endif
+    }
+
     private var libraryRow: some View {
-        PhotosPicker(selection: $picked, matching: .images) {
-            Label("Choose from library", systemImage: "photo")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .foregroundStyle(Color(.primary))
-                .background(Color(.primarySoft), in: Capsule())
+        VStack(spacing: 10) {
+            PhotosPicker(selection: $picked, matching: .images) {
+                Label("Choose from library", systemImage: "photo")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .foregroundStyle(Color(.primary))
+                    .background(Color(.primarySoft), in: Capsule())
+            }
+            #if os(macOS)
+            macSources
+            #endif
         }
     }
+
+    #if os(macOS)
+    /// Files and the clipboard, the Mac's stand-ins for the camera.
+    private var macSources: some View {
+        HStack(spacing: 10) {
+            Button("Choose file…", systemImage: "doc") { choosingFile = true }
+            Button("Paste image", systemImage: "doc.on.clipboard") {
+                guard let data = Pasteboard.image()?.pngRepresentation() else {
+                    errorMessage = "There is no image on the clipboard."
+                    return
+                }
+                Task { await recognise(data) }
+            }
+        }
+        .buttonStyle(.bordered)
+        .fileImporter(isPresented: $choosingFile, allowedContentTypes: [.image]) { result in
+            guard case .success(let url) = result else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else {
+                errorMessage = "Could not open that file."
+                return
+            }
+            Task { await recognise(data) }
+        }
+    }
+    #endif
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -169,7 +220,7 @@ struct ShoppingPhotoSheet: View {
     private func recognise(_ data: Data) async {
         working = true
         defer { working = false }
-        captured = UIImage(data: data)
+        captured = PlatformImage(data: data)
         let lines = await TextRecogniser.lines(in: data)
         items = ShoppingItems.drafts(from: ShoppingItems.parse(lines))
         untidied = nil
