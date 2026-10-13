@@ -41,7 +41,13 @@ struct EditButton: View {
     var body: some View { EmptyView() }
 }
 
+enum ShimSectionSpacing: Sendable {
+    case `default`, compact
+}
+
 extension View {
+    func listSectionSpacing(_ spacing: ShimSectionSpacing) -> some View { self }
+
     func textInputAutocapitalization(_ style: TextInputAutocapitalization?) -> some View { self }
 
     func keyboardType(_ type: ShimKeyboardType) -> some View { self }
