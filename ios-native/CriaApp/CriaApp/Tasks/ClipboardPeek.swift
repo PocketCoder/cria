@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 #if canImport(UIKit)
 import UIKit
