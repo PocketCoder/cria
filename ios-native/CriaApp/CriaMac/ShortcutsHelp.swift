@@ -10,7 +10,7 @@ struct ShortcutsHelp: View {
         ("Go to", [("g o", "Today"), ("g u", "Upcoming"), ("⌘1 ⌘2 ⌘3", "Today, Upcoming, Inbox")]),
         ("Project views", [("g l", "List"), ("g k", "Kanban"), ("g t", "Table"), ("g g", "Gantt")]),
         ("Open task", [("t", "Toggle done"), ("d", "Due date"), ("p", "Priority"), ("l", "Labels"), ("m", "Move to project"),
-                       ("s", "Favourite"), ("⌘.", "Copy link"), ("⌫", "Delete")]),
+                       ("s", "Favourite"), ("⌘.", "Copy link"), ("⌫", "Delete")])
     ]
 
     var body: some View {

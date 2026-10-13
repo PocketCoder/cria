@@ -41,6 +41,7 @@ struct MacRootView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .unauthenticated:
             NavigationStack { LoginView(model: model.makeLoginModel()) }
+                .task { MacBackground.shared.stop() }
         case .authenticated:
             if let services = model.services {
                 MacShellView(
@@ -48,9 +49,8 @@ struct MacRootView: View {
                     onSignOut: { wipe in Task { await model.signOut(wipeLocalData: wipe) } },
                     pendingURL: Binding(get: { model.pendingURL }, set: { model.pendingURL = $0 })
                 )
-                .task { await SyncSideEffects.run(services: services) }
-                .task { await ReminderScheduler.run(store: services.store) }
-                .task { await SummaryScheduler.run(store: services.store) }
+                // Not tied to this window: see `MacBackground`.
+                .task { MacBackground.shared.start(services) }
             } else if let error = model.startupError {
                 Text(error).padding()
             } else {

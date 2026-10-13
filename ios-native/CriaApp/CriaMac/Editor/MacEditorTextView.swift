@@ -253,7 +253,7 @@ final class MacEditorTextView: NSTextView, EditorSurface {
     private func drawText(_ text: String, at point: CGPoint) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.preferredFont(forTextStyle: .body),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: NSColor.secondaryLabelColor
         ]
         (text as NSString).draw(at: point, withAttributes: attributes)
     }

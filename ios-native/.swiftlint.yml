@@ -3,6 +3,7 @@ included:
   - CriaKit/Sources
   - CriaKit/Tests
   - CriaApp/CriaApp
+  - CriaApp/CriaMac
 excluded:
   - CriaApp/CriaApp.xcodeproj
   - CriaKit/.build

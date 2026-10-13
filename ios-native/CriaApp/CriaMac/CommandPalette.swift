@@ -74,7 +74,7 @@ struct CommandPalette: View {
             },
             PaletteItem(id: "cmd.shortcuts", title: "Keyboard shortcuts", detail: "Command", symbol: "keyboard") {
                 actions.showingShortcuts = true
-            },
+            }
         ]
         result += projects.map { project in
             PaletteItem(id: "p.\(project.localId)", title: project.title, detail: "Project", symbol: "folder") {

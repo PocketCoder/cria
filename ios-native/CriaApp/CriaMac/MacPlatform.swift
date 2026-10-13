@@ -26,6 +26,33 @@ extension Notification.Name {
     static let criaQuickAdd = Notification.Name("io.cria.mac.quickAdd")
 }
 
+/// The reminder and summary schedulers and the Spotlight and widget refresh. They belong to the signed-in session, not
+/// to the window: with the window closed to the menu bar, a pull that changes a reminder must still reschedule it.
+@MainActor
+final class MacBackground {
+    static let shared = MacBackground()
+    private var running: ObjectIdentifier?
+    private var tasks: [Task<Void, Never>] = []
+
+    func start(_ services: AppServices) {
+        guard running != ObjectIdentifier(services) else { return }
+        stop()
+        running = ObjectIdentifier(services)
+        let store = services.store
+        tasks = [
+            Task { await SyncSideEffects.run(services: services) },
+            Task { await ReminderScheduler.run(store: store) },
+            Task { await SummaryScheduler.run(store: store) }
+        ]
+    }
+
+    func stop() {
+        tasks.forEach { $0.cancel() }
+        tasks = []
+        running = nil
+    }
+}
+
 /// Finding and raising the main window, and quick add requests that arrive while no window exists.
 @MainActor
 enum MacWindows {
