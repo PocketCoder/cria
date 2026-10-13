@@ -98,11 +98,11 @@ struct KanbanColumnView: View {
         .scrollIndicators(.hidden)
         // The whole height takes drops, not just the cards, so a short column is still easy to drop on.
         .contentShape(Rectangle())
-        .modifier(KanbanDropTarget(enabled: !readOnly, onTargetChange: { overColumn = $0 }) { taskId in
+        .modifier(KanbanDropTarget(enabled: !readOnly, onTargetChange: { overColumn = $0 }, action: { taskId in
             overColumn = false
             onDrop(taskId, nil)
             return true
-        })
+        }))
         .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
@@ -137,12 +137,12 @@ struct KanbanColumnView: View {
             }
             .modifier(KanbanDropTarget(enabled: true, onTargetChange: { over in
                 if over { overCards.insert(task.localId) } else { overCards.remove(task.localId) }
-            }) { taskId in
+            }, action: { taskId in
                 overCards.remove(task.localId)
                 guard taskId != task.localId else { return false }
                 onDrop(taskId, task.localId)
                 return true
-            })
+            }))
         }
     }
 
