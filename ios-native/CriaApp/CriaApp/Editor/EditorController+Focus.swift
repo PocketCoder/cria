@@ -1,16 +1,20 @@
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Keeps an editing session alive across the pickers the editor opens (mention, link, photo). Presenting a sheet or
 /// an alert resigns the text view; without this that ends editing, so the inline editor saves, turns read-only and
 /// needs another tap.
 extension EditorController {
     /// True while editing, a picker's pause included.
-    var isEditing: Bool { isHoldingFocus || textView?.isFirstResponder == true }
+    var isEditing: Bool { isHoldingFocus || textView?.isFocused == true }
 
     /// Call just before presenting a picker. Remembers the caret; the resign that follows does not end editing.
     func holdFocus() {
-        guard let view = textView, view.isFirstResponder else { return }
-        heldSelection = view.selectedRange
+        guard let view = textView, view.isFocused else { return }
+        heldSelection = view.selection
         isHoldingFocus = true
     }
 
@@ -26,7 +30,7 @@ extension EditorController {
 
     private func attemptRestore(_ change: @escaping @MainActor () -> Void, retries: Int) {
         let view = textView
-        if let view, view.window != nil, view.becomeFirstResponder() {
+        if let view, view.isInWindow, view.focus() {
             isHoldingFocus = false
             restoreSelection(view)
             change()
@@ -47,17 +51,17 @@ extension EditorController {
         onEndEditing()
     }
 
-    private func restoreSelection(_ view: EditorTextView) {
+    private func restoreSelection(_ view: any EditorSurface) {
         defer { heldSelection = nil }
-        guard let held = heldSelection, NSMaxRange(held) <= view.textStorage.length else { return }
-        view.selectedRange = held
+        guard let held = heldSelection, NSMaxRange(held) <= view.storage.length else { return }
+        view.selection = held
     }
 
     /// An image arrived for `source` after the text loaded: swap its placeholder for it. Attributes only, so this is
     /// neither an edit nor an undo step.
     func refreshImages(source: String) {
         guard let view = textView else { return }
-        let storage = view.textStorage
+        let storage = view.storage
         storage.beginEditing()
         for paragraph in EditorParagraphs.all(in: storage) {
             guard case .image(let image) = paragraph.kind, EditorStyling.source(of: image) == source else { continue }

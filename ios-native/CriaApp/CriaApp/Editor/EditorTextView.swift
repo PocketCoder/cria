@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import CriaKit
 import UIKit
 
@@ -296,3 +297,28 @@ final class MarkerOverlay: UIView {
         (text as NSString).draw(at: point, withAttributes: attributes)
     }
 }
+
+extension EditorTextView: EditorSurface {
+    var storage: NSTextStorage { textStorage }
+
+    var selection: NSRange {
+        get { selectedRange }
+        set { selectedRange = newValue }
+    }
+
+    var typing: [NSAttributedString.Key: Any] {
+        get { typingAttributes ?? [:] }
+        set { typingAttributes = newValue }
+    }
+
+    var isFocused: Bool { isFirstResponder }
+
+    var isInWindow: Bool { window != nil }
+
+    var editorUndoManager: UndoManager? { undoManager }
+
+    func focus() -> Bool { becomeFirstResponder() }
+
+    func unfocus() { resignFirstResponder() }
+}
+#endif

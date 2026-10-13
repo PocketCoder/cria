@@ -1,18 +1,22 @@
 import CriaKit
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Toolbar commands: inline styles, block kinds, indentation, links, mentions and images.
 extension EditorController {
     func toggleStyle(_ style: InlineStyle) {
         defer { refreshBarState() }
         guard let view = textView else { return }
-        let range = view.selectedRange
+        let range = view.selection
         if range.length == 0 {
             toggleTypingStyle(style, in: view)
             return
         }
         edit {
-            let storage = view.textStorage
+            let storage = view.storage
             var allHave = true
             storage.enumerateAttribute(.criaStyles, in: range) { value, _, _ in
                 if !EditorStyling.styleSet(value).contains(style) { allHave = false }
@@ -34,27 +38,27 @@ extension EditorController {
         }
     }
 
-    private func toggleTypingStyle(_ style: InlineStyle, in view: EditorTextView) {
-        let info = RichDocumentText.blockInfo(from: view.typingAttributes)
-        var styles = EditorStyling.styleSet(view.typingAttributes[.criaStyles])
+    private func toggleTypingStyle(_ style: InlineStyle, in view: any EditorSurface) {
+        let info = RichDocumentText.blockInfo(from: view.typing)
+        var styles = EditorStyling.styleSet(view.typing[.criaStyles])
         if styles.contains(style) { styles.remove(style) } else { styles.insert(style) }
-        view.typingAttributes = EditorStyling.typingAttributes(kind: info.kind, depth: info.depth, styles: styles, context: info.context)
+        view.typing = EditorStyling.typing(kind: info.kind, depth: info.depth, styles: styles, context: info.context)
     }
 
     /// Applies a block kind to the selected paragraphs; choosing the active kind again turns them back into paragraphs.
     func setBlock(_ target: BlockKind) {
         defer { refreshBarState() }
         guard let view = textView else { return }
-        let paragraphs = EditorParagraphs.intersecting(view.selectedRange, in: view.textStorage)
+        let paragraphs = EditorParagraphs.intersecting(view.selection, in: view.storage)
             .filter { paragraph in
                 if case .image = paragraph.kind { return false }
                 return paragraph.kind != .rule
             }
         guard let first = paragraphs.first else {
-            let info = RichDocumentText.blockInfo(from: view.typingAttributes)
+            let info = RichDocumentText.blockInfo(from: view.typing)
             let kind = EditorRules.toggled(info.kind, to: target)
             let depth = EditorRules.depth(afterChangingTo: kind, from: 0)
-            view.typingAttributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [], context: info.context)
+            view.typing = EditorStyling.typing(kind: kind, depth: depth, styles: [], context: info.context)
             return
         }
         let kind = EditorRules.toggled(first.kind, to: target)
@@ -70,7 +74,7 @@ extension EditorController {
 
     func changeIndent(by delta: Int) {
         guard let view = textView else { return }
-        let paragraphs = EditorParagraphs.intersecting(view.selectedRange, in: view.textStorage).filter { $0.kind.isListItem }
+        let paragraphs = EditorParagraphs.intersecting(view.selection, in: view.storage).filter { $0.kind.isListItem }
         guard !paragraphs.isEmpty else { return }
         edit {
             for paragraph in paragraphs {
@@ -85,11 +89,11 @@ extension EditorController {
     /// Links the selection, or inserts the address itself as a link when nothing is selected.
     func insertLink(_ address: String) {
         guard let view = textView, !address.isEmpty else { return }
-        let range = view.selectedRange
+        let range = view.selection
         if range.length > 0 {
             edit {
-                view.textStorage.addAttribute(.criaLink, value: address, range: range)
-                EditorStyling.restyle(view.textStorage, around: range, images: imageProvider)
+                view.storage.addAttribute(.criaLink, value: address, range: range)
+                EditorStyling.restyle(view.storage, around: range, images: imageProvider)
             }
             return
         }
@@ -110,10 +114,10 @@ extension EditorController {
     /// Inserts an inline image as its own paragraph after the paragraph the caret is in.
     func insertImage(_ image: RichImage) {
         guard let view = textView else { return }
-        let storage = view.textStorage
+        let storage = view.storage
         edit {
             var location = storage.length
-            if let paragraph = EditorParagraphs.containing(view.selectedRange.location, in: storage) {
+            if let paragraph = EditorParagraphs.containing(view.selection.location, in: storage) {
                 location = paragraph.range.location + paragraph.range.length
                 if !hasTerminator(paragraph, in: storage) {
                     insert("\n", at: location, kind: paragraph.kind, depth: paragraph.depth)
@@ -125,8 +129,8 @@ extension EditorController {
             let inserted = NSAttributedString(string: text, attributes: attributes)
             storage.replaceCharacters(in: NSRange(location: location, length: 0), with: inserted)
             EditorStyling.restyle(storage, around: NSRange(location: location, length: 2), images: imageProvider)
-            view.selectedRange = NSRange(location: location + 2, length: 0)
-            view.typingAttributes = EditorStyling.typingAttributes(kind: .paragraph, depth: 0, styles: [])
+            view.selection = NSRange(location: location + 2, length: 0)
+            view.typing = EditorStyling.typing(kind: .paragraph, depth: 0, styles: [])
         }
     }
 
@@ -137,16 +141,16 @@ extension EditorController {
 
     private func insertRun(_ text: String, extra: [NSAttributedString.Key: Any]) {
         guard let view = textView else { return }
-        let range = view.selectedRange
+        let range = view.selection
         edit {
-            let info = RichDocumentText.blockInfo(from: view.typingAttributes)
-            var attributes = EditorStyling.typingAttributes(kind: info.kind, depth: info.depth, styles: [])
+            let info = RichDocumentText.blockInfo(from: view.typing)
+            var attributes = EditorStyling.typing(kind: info.kind, depth: info.depth, styles: [])
             attributes.merge(extra) { _, new in new }
-            view.textStorage.replaceCharacters(in: range, with: NSAttributedString(string: text, attributes: attributes))
+            view.storage.replaceCharacters(in: range, with: NSAttributedString(string: text, attributes: attributes))
             let end = range.location + (text as NSString).length
             let inserted = NSRange(location: range.location, length: end - range.location)
-            EditorStyling.restyle(view.textStorage, around: inserted, images: imageProvider)
-            view.selectedRange = NSRange(location: end, length: 0)
+            EditorStyling.restyle(view.storage, around: inserted, images: imageProvider)
+            view.selection = NSRange(location: end, length: 0)
         }
     }
 }

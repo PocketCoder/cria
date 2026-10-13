@@ -183,3 +183,71 @@ extension UNAuthorizationStatus {
         #endif
     }
 }
+
+// MARK: Editor helpers
+
+extension PlatformFont {
+    /// The line height of the body text style, for sizing a text field to a number of lines.
+    nonisolated static var bodyLineHeight: CGFloat {
+        #if canImport(UIKit)
+        UIFont.preferredFont(forTextStyle: .body).lineHeight
+        #else
+        let font = NSFont.preferredFont(forTextStyle: .body)
+        return font.ascender - font.descender + font.leading
+        #endif
+    }
+}
+
+extension PlatformColor {
+    /// A light fill behind code and quotes.
+    static var editorFill: PlatformColor {
+        #if canImport(UIKit)
+        .secondarySystemFill
+        #else
+        .quaternaryLabelColor
+        #endif
+    }
+
+    static var editorTint: PlatformColor {
+        #if canImport(UIKit)
+        .tintColor
+        #else
+        .controlAccentColor
+        #endif
+    }
+
+    static var editorText: PlatformColor {
+        #if canImport(UIKit)
+        .label
+        #else
+        .labelColor
+        #endif
+    }
+
+    static var editorSecondaryText: PlatformColor {
+        #if canImport(UIKit)
+        .secondaryLabel
+        #else
+        .secondaryLabelColor
+        #endif
+    }
+
+    static var editorSeparator: PlatformColor {
+        #if canImport(UIKit)
+        .separator
+        #else
+        .separatorColor
+        #endif
+    }
+}
+
+extension PlatformImage {
+    /// A system symbol, or nil when the name is unknown.
+    static func symbol(_ name: String) -> PlatformImage? {
+        #if canImport(UIKit)
+        UIImage(systemName: name)
+        #else
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        #endif
+    }
+}

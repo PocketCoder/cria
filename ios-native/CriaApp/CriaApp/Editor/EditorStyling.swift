@@ -1,5 +1,9 @@
 import CriaKit
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 enum EditorMetrics {
     static let indent: CGFloat = 24
@@ -12,7 +16,7 @@ enum EditorMetrics {
 /// half of the editor; `CriaKit` only records meaning (block kind, styles, link, mention).
 @MainActor
 enum EditorStyling {
-    typealias ImageProvider = @MainActor (String) -> UIImage?
+    typealias ImageProvider = @MainActor (String) -> PlatformImage?
 
     static func restyleAll(_ storage: NSMutableAttributedString, images: ImageProvider) {
         for paragraph in EditorParagraphs.all(in: storage) { style(paragraph, in: storage, images: images) }
@@ -34,6 +38,7 @@ enum EditorStyling {
         return attributes
     }
 
+    #if canImport(UIKit)
     static func font(kind: BlockKind, styles: Set<InlineStyle>) -> UIFont {
         let base = baseFont(kind)
         var traits = base.fontDescriptor.symbolicTraits
@@ -45,6 +50,19 @@ enum EditorStyling {
         guard let descriptor = base.fontDescriptor.withSymbolicTraits(traits) else { return base }
         return UIFont(descriptor: descriptor, size: base.pointSize)
     }
+    #else
+    static func font(kind: BlockKind, styles: Set<InlineStyle>) -> NSFont {
+        let base = baseFont(kind)
+        let bold = styles.contains(.bold) || NSFontManager.shared.traits(of: base).contains(.boldFontMask)
+        if styles.contains(.code) || kind == .code {
+            return NSFont.monospacedSystemFont(ofSize: base.pointSize * 0.92, weight: bold ? .bold : .regular)
+        }
+        var font = base
+        if styles.contains(.bold) { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
+        if styles.contains(.italic) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
+        return font
+    }
+    #endif
 
     /// Where an image's bytes come from: `src`, or `data-src` when `src` is only the "#" stand-in Vikunja-web writes.
     static func source(of image: RichImage) -> String {
@@ -64,12 +82,12 @@ enum EditorStyling {
         let layout = paragraphStyle(kind: paragraph.kind, depth: paragraph.depth, context: paragraph.context)
         storage.addAttribute(.paragraphStyle, value: layout, range: range)
         storage.addAttribute(.foregroundColor, value: color(for: paragraph.kind), range: range)
-        if paragraph.kind == .code { storage.addAttribute(.backgroundColor, value: UIColor.secondarySystemFill, range: range) }
+        if paragraph.kind == .code { storage.addAttribute(.backgroundColor, value: PlatformColor.editorFill, range: range) }
         var runs: [(NSRange, [NSAttributedString.Key: Any])] = []
         storage.enumerateAttributes(in: range) { attributes, subrange, _ in runs.append((subrange, attributes)) }
         for (subrange, attributes) in runs { styleRun(attributes, subrange, paragraph.kind, storage) }
         if case .image(let image) = paragraph.kind { attach(image, at: range.location, in: storage, images: images) }
-        if paragraph.kind == .rule { storage.addAttribute(.foregroundColor, value: UIColor.clear, range: range) }
+        if paragraph.kind == .rule { storage.addAttribute(.foregroundColor, value: PlatformColor.clear, range: range) }
     }
 
     private static func styleRun(
@@ -80,17 +98,17 @@ enum EditorStyling {
         storage.addAttribute(.font, value: font(kind: kind, styles: styles), range: range)
         storage.addAttribute(.underlineStyle, value: styles.contains(.underline) || isLink ? 1 : 0, range: range)
         storage.addAttribute(.strikethroughStyle, value: styles.contains(.strike) ? 1 : 0, range: range)
-        if isLink { storage.addAttribute(.foregroundColor, value: UIColor.tintColor, range: range) }
+        if isLink { storage.addAttribute(.foregroundColor, value: PlatformColor.editorTint, range: range) }
         if attributes[.criaMention] != nil {
-            storage.addAttribute(.foregroundColor, value: UIColor.tintColor, range: range)
-            storage.addAttribute(.backgroundColor, value: UIColor.tintColor.withAlphaComponent(0.15), range: range)
+            storage.addAttribute(.foregroundColor, value: PlatformColor.editorTint, range: range)
+            storage.addAttribute(.backgroundColor, value: PlatformColor.editorTint.withAlphaComponent(0.15), range: range)
         } else if styles.contains(.code), kind != .code {
-            storage.addAttribute(.backgroundColor, value: UIColor.secondarySystemFill, range: range)
+            storage.addAttribute(.backgroundColor, value: PlatformColor.editorFill, range: range)
         }
     }
 
     private static func attach(_ image: RichImage, at location: Int, in storage: NSMutableAttributedString, images: ImageProvider) {
-        let picture = images(source(of: image)) ?? UIImage(systemName: "photo") ?? UIImage()
+        let picture = images(source(of: image)) ?? PlatformImage.symbol("photo") ?? PlatformImage()
         let attachment = NSTextAttachment()
         attachment.image = picture
         let width = min(picture.size.width, EditorMetrics.imageMaxWidth)
@@ -99,6 +117,7 @@ enum EditorStyling {
         storage.addAttribute(.attachment, value: attachment, range: NSRange(location: location, length: 1))
     }
 
+    #if canImport(UIKit)
     private static func baseFont(_ kind: BlockKind) -> UIFont {
         guard case .heading(let level) = kind else { return UIFont.preferredFont(forTextStyle: .body) }
         let style: UIFont.TextStyle = level == 1 ? .title2 : (level == 2 ? .title3 : .headline)
@@ -106,9 +125,16 @@ enum EditorStyling {
         guard let bold = font.fontDescriptor.withSymbolicTraits(.traitBold) else { return font }
         return UIFont(descriptor: bold, size: font.pointSize)
     }
+    #else
+    private static func baseFont(_ kind: BlockKind) -> NSFont {
+        guard case .heading(let level) = kind else { return NSFont.preferredFont(forTextStyle: .body) }
+        let style: NSFont.TextStyle = level == 1 ? .title2 : (level == 2 ? .title3 : .headline)
+        return NSFontManager.shared.convert(NSFont.preferredFont(forTextStyle: style), toHaveTrait: .boldFontMask)
+    }
+    #endif
 
-    private static func color(for kind: BlockKind) -> UIColor {
-        kind == .quote ? .secondaryLabel : .label
+    private static func color(for kind: BlockKind) -> PlatformColor {
+        kind == .quote ? .editorSecondaryText : .editorText
     }
 
     private static func paragraphStyle(kind: BlockKind, depth: Int, context: BlockContext) -> NSParagraphStyle {

@@ -34,5 +34,8 @@ struct MentionPickerSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 440)
+        #endif
     }
 }

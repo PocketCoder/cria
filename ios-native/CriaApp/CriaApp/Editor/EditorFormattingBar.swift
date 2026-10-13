@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// What the formatting bar asks its host to open. The host sets these once the editor appears; the bar reads them
 /// when a button is tapped, so it never needs rebuilding.
@@ -10,7 +9,12 @@ final class EditorBarActions {
     var onMention: () -> Void = {}
     /// A tap on an inline image while the editor is idle: open it full size.
     var onOpenImage: (String) -> Void = { _ in }
+    /// An image pasted or dropped into the editor (Mac): its bytes, file name and MIME type.
+    var onImageData: (Data, String, String) -> Void = { _, _, _ in }
 }
+
+#if canImport(UIKit)
+import UIKit
 
 /// The formatting buttons shown above the keyboard. Every button runs the same `EditorController` command as before.
 struct EditorFormattingBar: View {
@@ -119,3 +123,4 @@ extension EditorTextView {
         inputAccessoryView = EditorAccessoryView(bar: bar)
     }
 }
+#endif

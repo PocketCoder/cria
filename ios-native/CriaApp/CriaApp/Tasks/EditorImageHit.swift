@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import CriaKit
 import UIKit
 
@@ -20,3 +21,4 @@ extension EditorTextView {
         return EditorStyling.source(of: image)
     }
 }
+#endif

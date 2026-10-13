@@ -1,7 +1,9 @@
 import CriaKit
 import Observation
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The task screen's inline description: the editor's controller and what was last saved. TaskDetailView owns it, so
 /// it outlives the lazily created Form row. Saves when editing ends, when a task checkbox is toggled outside editing,
@@ -22,7 +24,7 @@ final class DescriptionDraft {
 
     /// One line while empty, like a placeholder; three as soon as there is text, then it grows with the text.
     nonisolated static func minHeight(empty: Bool) -> CGFloat {
-        ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight * (empty ? 1 : 3)) + 12
+        ceil(PlatformFont.bodyLineHeight * (empty ? 1 : 3)) + 12
     }
 
     init(onSave: @escaping (String) -> Void) {
@@ -33,7 +35,7 @@ final class DescriptionDraft {
 
     private func edited() {
         dirty = true
-        let empty = (controller.textView?.textStorage.length ?? 0) == 0
+        let empty = (controller.textView?.storage.length ?? 0) == 0
         if empty != isEmpty { isEmpty = empty }
         // A checkbox tapped while not editing ends no editing session, so save now.
         if !controller.isEditing { save() }
@@ -64,7 +66,7 @@ final class DescriptionDraft {
 
     /// Ends editing and saves, before the full-screen editor opens on the same text.
     func finishEditing() {
-        controller.textView?.resignFirstResponder()
+        controller.textView?.unfocus()
         save()
     }
 
