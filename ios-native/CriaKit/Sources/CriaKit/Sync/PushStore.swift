@@ -1,0 +1,97 @@
+import Foundation
+import GRDB
+
+/// Shared local-row bookkeeping for the push executors. Table names are internal constants, never user input.
+extension CriaStore {
+    func pushRow(_ sql: String, _ localId: String) throws -> Row? {
+        try database.writer.read { try Row.fetchOne($0, sql: sql, arguments: [localId]) }
+    }
+
+    func pushInt(_ sql: String, _ localId: String) throws -> Int? {
+        try database.writer.read { try Int.fetchOne($0, sql: sql, arguments: [localId]) }
+    }
+
+    /// Whether a local row still exists. A queued op whose parent is gone can never succeed, so it must finish as a
+    /// no-op rather than block the queue.
+    func pushRowExists(table: String, localId: String) throws -> Bool {
+        try database.writer.read { connection in
+            try Bool.fetchOne(
+                connection, sql: "SELECT EXISTS(SELECT 1 FROM \(table) WHERE local_id = ?)", arguments: [localId]
+            ) ?? false
+        }
+    }
+
+    /// Hard-deletes one row (and any extra statements) and announces.
+    func dropRow(table: String, localId: String, announcing kinds: [ChangeKind], also extra: [(String, [String])] = []) throws {
+        try userWrite(announcing: kinds) { connection in
+            for (sql, arguments) in extra {
+                try connection.execute(sql: sql, arguments: StatementArguments(arguments))
+            }
+            try connection.execute(sql: "DELETE FROM \(table) WHERE local_id = ?", arguments: [localId])
+        }
+    }
+
+    /// Create succeeded (or its id was cached). The server id is always recorded: losing it would make the next pull
+    /// insert a duplicate. `onlyIfUnchangedSince` keeps `dirty` (and the local `updated_at`) when the user edited the
+    /// row while the request was in flight, so that edit still pushes. `lastSynced` (the server's reply), when given,
+    /// becomes the conflict baseline either way: it is what the server now holds.
+    func markCreated(table: String, localId: String, serverId: Int?, updatedAt: String?, onlyIfUnchangedSince: String?,
+                     lastSynced: String? = nil, announcing kind: ChangeKind) throws {
+        let now = isoNow()
+        try userWrite(announcing: [kind]) { connection in
+            try connection.execute(
+                sql: "UPDATE \(table) SET server_id = ?, synced_at = ?, last_synced = COALESCE(?, last_synced) WHERE local_id = ?",
+                arguments: [serverId, now, lastSynced, localId]
+            )
+            var sql = "UPDATE \(table) SET dirty = 0"
+            var arguments: [(any DatabaseValueConvertible)?] = []
+            if let updatedAt {
+                sql += ", updated_at = ?"
+                arguments.append(updatedAt)
+            }
+            sql += " WHERE local_id = ?"
+            arguments.append(localId)
+            if let onlyIfUnchangedSince {
+                sql += " AND updated_at = ?"
+                arguments.append(onlyIfUnchangedSince)
+            }
+            try connection.execute(sql: sql, arguments: StatementArguments(arguments))
+        }
+    }
+
+    /// Update succeeded. `lastSynced` (the server's reply), when given, becomes the conflict baseline even if the row
+    /// was edited again in flight, so this device's own push is never mistaken for a change made elsewhere.
+    func markPushed(table: String, localId: String, updatedAt: String?, onlyIfUnchangedSince: String?,
+                    lastSynced: String? = nil, announcing kind: ChangeKind) throws {
+        let now = isoNow()
+        try userWrite(announcing: [kind]) { connection in
+            if let lastSynced {
+                try connection.execute(sql: "UPDATE \(table) SET last_synced = ? WHERE local_id = ?", arguments: [lastSynced, localId])
+            }
+            var sql = "UPDATE \(table) SET synced_at = ?, dirty = 0"
+            var arguments: [(any DatabaseValueConvertible)?] = [now]
+            if let updatedAt {
+                sql += ", updated_at = ?"
+                arguments.append(updatedAt)
+            }
+            sql += " WHERE local_id = ?"
+            arguments.append(localId)
+            if let onlyIfUnchangedSince {
+                sql += " AND updated_at = ?"
+                arguments.append(onlyIfUnchangedSince)
+            }
+            try connection.execute(sql: sql, arguments: StatementArguments(arguments))
+        }
+    }
+}
+
+func stripHash(_ color: String?) -> String? {
+    guard var color, !color.isEmpty else { return nil }
+    if color.hasPrefix("#") { color.removeFirst() }
+    return color.isEmpty ? nil : color
+}
+
+func jsonValue(parsing text: String?) -> JSONValue? {
+    guard let text, !text.isEmpty else { return nil }
+    return try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+}

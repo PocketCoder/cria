@@ -58,7 +58,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Projects | Project background images | ✅ | Upload + Unsplash + remove (`ProjectBackgroundModal`), shown faintly in the desktop and iPhone headers; cached in the blob store (works offline) |
 | Projects | Customizable project identifier | ✅ | Editable in `ProjectSettingsModal` |
 | Projects | Custom view management (add / rename / delete / drag-reorder) | ✅ | `ViewManagerModal` from the header's view switcher (#86); keeps at least one view. Per-view settings panel edits the filter and, for boards, bucket mode |
-| Projects | Filter-mode kanban buckets | 🟡 | Configured in the view manager; board renders one read-only column per filter from local data (no drag between buckets). Switching back to manual relies on the next pull to restore buckets |
+| Projects | Filter-mode kanban buckets | ✅ | Configured in the view manager; board renders one read-only column per filter from local data. No drag between buckets, by design: columns are saved searches, as in Vikunja-web. Switching back to manual relies on the next pull to restore buckets |
 
 ### Labels
 
@@ -268,6 +268,7 @@ Everything here is client-side and writes ordinary Vikunja tasks.
 | Offline-first outbox + conflict modal | Includes offline attachment uploads |
 | Local FTS5 search | Works offline |
 | iOS app | OS-scheduled reminders, native tab bar |
+| Native SwiftUI iOS app (`ios-native/`, replaces the deprecated Tauri iOS build) | iOS 26 design refresh: Liquid Glass tabs with a Search tab, large Onest titles, priority-ring completion with burst, floating add button, inset-grouped screens, week strip on Upcoming, Kanban cards, redesigned Ramble and List from photo sheets. Settings parity with the desktop app: General (default project, week start, Quick Add Magic, show completed, discoverability, timezone, date and time format), Appearance (colour scheme, completion sound), Notifications (morning summary, weekly round-up, email reminders, overdue digest), Photo capture defaults, Account (display name, avatar), Security (password, email, two-factor), Sessions, API tokens, Teams, Data export and account deletion. There is no language setting: the app is English only and is not translated; deleting an account signs the device out because Vikunja confirms deletion by email. Desktop-only settings (tray, autostart, shortcuts, updater) do not apply. In daily use on an iPhone (iOS 26); feature detail and what syncs where is in [ios-native/FEATURES.md](ios-native/FEATURES.md) |
 | Desktop shell | Tray, global shortcut, autostart, Dock badge |
 | Multi-select `SelectionBar` | Bulk complete, schedule, move, priority, delete |
 

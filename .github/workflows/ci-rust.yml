@@ -2,8 +2,9 @@ name: Rust checks
 
 # fmt, clippy and unit tests for the Tauri shell. macOS runner because parts
 # of the crate (Vision OCR, the Swift AI bridge) only compile on Apple
-# targets. Runs only when the native shell changes. iOS compile-check lives in
-# ci-ios.yml.
+# targets. Runs only when the native shell changes. The Tauri iOS build is
+# deprecated (the iOS app is ios-native/, checked by ci-swift.yml), so the
+# shell is no longer compile-checked for iOS.
 
 on:
   push:

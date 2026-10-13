@@ -24,18 +24,17 @@ pnpm generate:api   # regen src/api/schema.ts (VK_URL= to target an instance)
 pnpm clean          # rm -rf dist src-tauri/target (reclaim ~7GB build artifacts)
 pnpm clean:all      # also rm -rf node_modules (needs pnpm install before next dev)
 cargo check --manifest-path src-tauri/Cargo.toml   # Rust shell sanity
-pnpm tauri ios dev --host           # run on a connected iOS device / simulator
-pnpm tauri ios build --export-method debugging   # standalone signed iOS build
-cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios   # iOS shell compile-check
 ```
+
+The iOS app is the native Swift app in `ios-native/` (commands in its README). The Tauri iOS build is
+deprecated: its code stays in the tree but is not built, tested or released.
 
 If pnpm's build-script pre-flight nags, the same binaries live under
 `node_modules/.bin/` (`node_modules/.bin/tsc --noEmit`, `…/vitest run`,
 `…/vite build`) and skip the check.
 
 **Always** run `pnpm typecheck`, `pnpm lint` and `pnpm test` before declaring a change
-done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
-`cargo check --target aarch64-apple-ios` to catch iOS-only breakage).
+done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
 
 **Touching Rust → also `pnpm fmt:rust` before every commit and after every
 merge.** The macOS "Rust checks" CI job runs `cargo fmt --check`, and unformatted
@@ -68,14 +67,15 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | M7 command palette (Cmd+K) | ✅ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
-| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
-| **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅ |
+| M10 stretch — attachments, comments, Gantt | ✅ attachments, Gantt; ✅ comments (full read/write + reactions). Notes dropped: Vikunja has no notes, and Cria only builds on what it stores |
+| **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅, now deprecated: replaced by the native Swift app (`ios-native/`) |
+| Native Swift iOS app (`ios-native/`) at parity with the Tauri iOS build | ✅ |
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
 | Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased |
 | Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ on `dev`, unreleased; tokens + motion in `src/styles/globals.css` |
-| Native glass: macOS sidebar material, iOS 26 Liquid Glass tab bar | 🟡 on `dev`, CI compile-checked, not yet verified on device |
+| Native glass: macOS sidebar material (iOS 26 tab bar part deprecated with the Tauri iOS build) | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
-**Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
+**Next up:** polish from daily use of the native iOS app (`ios-native/`, see below). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
@@ -396,7 +396,11 @@ the merge commit **on `main`** (v0.13.0 was tagged on `dev`, which left `main`
 behind the shipped build until it was merged back). CI-only fixes made on
 `main` must be merged back into `dev`.
 
-### iOS & platform gating
+### iOS & platform gating (Tauri iOS: deprecated)
+
+**Deprecated.** The Tauri iOS build is replaced by the native Swift app (`ios-native/`, below) and is no longer
+built, tested or released; its code and the gating below stay only because removing them is not worth the churn.
+Keep new desktop code behind the same gates so the desktop build is unaffected, but don't add iOS features here.
 
 Cria builds for iOS from the same codebase. Two distinct "is this mobile?"
 checks — **don't conflate them**:
@@ -434,12 +438,9 @@ Other rules:
 - **iOS dev quirks:** `tauri ios dev --host` serves Vite over the LAN (device
   needs Local Network permission); after install, trust the dev profile in
   Settings → General → VPN & Device Management; the home-screen icon caches
-  hard (delete app + reboot if it shows the default). CI compile-checks the iOS
-  shell on native-code changes
-  ([.github/workflows/ci-ios.yml](.github/workflows/ci-ios.yml)); signed
-  distribution is manual (no paid Apple account yet). Each release also
-  attaches an **unsigned** `.ipa` (release.yml `build-ios` job) for
-  SideStore/iLoader sideloading, which re-sign it with a free Apple ID.
+  hard (delete app + reboot if it shows the default). CI no longer
+  compile-checks the Tauri iOS shell (ci-ios.yml was removed), so it may
+  stop building; that is accepted.
 
 ### Sync vs user mutations
 
@@ -494,6 +495,30 @@ depend on that data, not run once on `[]` mount — otherwise they fire before
 the data loads and never re-run. If wiring is genuinely out of scope, ship the
 control as 🟡 in FEATURE-COMPARISON.md, never ✅.
 
+## Native Swift iOS app (`ios-native/`)
+
+The iOS app. It replaced the Tauri iOS build at parity (plan and status:
+[docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md); features and what syncs where: [ios-native/FEATURES.md](ios-native/FEATURES.md)). `CriaKit/` is a Swift package with all
+logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
+XcodeGen. CI ([ci-swift.yml](.github/workflows/ci-swift.yml)) runs `swiftlint lint --strict`, `swift test` and a
+simulator build; pushes to `dev` and `main` publish an unsigned `.ipa` (`io.cria.app.swift`, rolling
+`swift-alpha` release) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
+also attach the Swift `.ipa` (release.yml `build-ios`).
+
+- Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
+- Same sync rules as above (silent upserts, outbox FIFO, pending-delete guard, settings merge-patch with v1
+  fallback). Where the Swift port deliberately differs from the TS spec because the TS behaviour is a bug, it says
+  so in a comment; the list is in the plan's "Review 2026-10-12" section (label update verb, `percent_done`
+  sent unscaled, comments deleted before their task, project identifier and cover image kept on push).
+- Dates: all date maths use `Calendar.cria` (Gregorian in the device zone), never `Calendar.current`. Server and
+  local timestamps can carry different offsets, so compare instants (`DueDates.parse`, `julianday()` in SQL),
+  never ISO text.
+- The app cannot be compiled on Linux. `CriaKit` can with a Swift toolchain if the Keychain (`Security`) and
+  Darwin notifications are stubbed; macOS CI is the gate.
+- Moving from the Tauri iOS app: the native app is a separate install (own bundle ID and App Group database) that
+  re-syncs everything from the server on sign-in. There is no import. Let the Tauri app finish syncing (empty
+  outbox) before switching, or its unsynced edits stay behind.
+
 ## Release channels and local dev
 
 Three identifiers, three macOS data dirs. No cross-talk.
@@ -506,15 +531,15 @@ Three identifiers, three macOS data dirs. No cross-talk.
 | Workflow | `release.yml` | `nightly.yml` | n/a |
 
 Nightlies are published to a single rolling `nightly` prerelease (recreated on
-each push) with signed macOS bundles plus an unsigned `.ipa`. CI turns the
+each push) with signed macOS bundles. CI turns the
 stable config into the nightly one with
 [`scripts/nightly-config.sh`](scripts/nightly-config.sh), which rewrites
 `tauri.conf.json` in place; there is no committed nightly config. Nightly
 versions are `<package.json version>-nightly.<run_number>`, so they increase
-monotonically. The `.ipa` can't carry the prerelease suffix
-(`CFBundleShortVersionString` rejects it) and SideStore ignores build-number-only
-changes, so the nightly `.ipa` and its `sidestore.json` entry use
-`<major>.<minor>.<run_number>` (e.g. `0.14.60`) as the marketing version.
+monotonically. The iOS app's rolling build (ci-swift.yml) can't carry a
+prerelease suffix (`CFBundleShortVersionString` rejects it) and SideStore ignores
+build-number-only changes, so it uses `<major>.<minor>.<run_number>` as the
+marketing version.
 
 **Why `pnpm dev` uses its own identifier (don't revert this).** Migrations
 are registered Rust-side and the plugin records applied versions in the

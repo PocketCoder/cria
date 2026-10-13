@@ -4,7 +4,7 @@ A native desktop and iOS client for [Vikunja](https://vikunja.io) — an offline
 
 ## Features
 
-- **macOS and iOS** from one codebase (Windows/Linux are not built or tested). A responsive layout collapses the three panes to a single navigable view on iPhone, with touch (pointer) drag-and-drop
+- **macOS** (Tauri) and **iOS** (a native Swift app in [`ios-native/`](ios-native/)), sharing the same local database schema and sync rules. Windows and Linux are not built or tested. The Tauri iOS build is deprecated
 - **Three-pane layout**: projects sidebar | task list | detail pane with editable fields
 - **Offline-first**: local SQLite database, syncs in the background
 - **Rich task editing**: WYSIWYG description (TipTap), inline metadata pickers for priority, dates, labels, assignees, color, repeat, and more
@@ -19,13 +19,13 @@ A native desktop and iOS client for [Vikunja](https://vikunja.io) — an offline
 
 Download the macOS `.dmg` (Apple silicon or Intel) from [GitHub Releases](https://github.com/PocketCoder/cria/releases/latest). The app isn't notarised yet, so macOS blocks the first launch: open **System Settings → Privacy & Security** and choose **Open Anyway**. After that it updates itself.
 
-iOS: each release attaches an unsigned `.ipa` for sideloading with SideStore or iLoader. To install and auto-update from SideStore, add `https://pocketcoder.github.io/cria/sidestore.json` as a source (full steps in [iOS Build instructions](iOS%20Build%20instructions.md)).
+iOS: the native app is sideloaded with SideStore; each release also attaches its unsigned `.ipa`. To install and auto-update from SideStore, add `https://pocketcoder.github.io/cria/sidestore.json` as a source (full steps in [iOS Build instructions](iOS%20Build%20instructions.md)).
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Shell | [Tauri 2](https://v2.tauri.app) (Rust) — desktop + iOS |
+| Shell | [Tauri 2](https://v2.tauri.app) (Rust) — desktop. iOS: native SwiftUI app in `ios-native/` |
 | Frontend | React 18 + TypeScript + Vite |
 | State | TanStack Query (server cache) + Zustand (UI state) |
 | Local DB | SQLite via `@tauri-apps/plugin-sql` |
@@ -38,7 +38,7 @@ iOS: each release attaches an unsigned `.ipa` for sideloading with SideStore or 
 - **Node.js** >= 20 (with `pnpm` installed)
 - **Rust toolchain** via [rustup](https://rustup.rs)
 - **Tauri system dependencies** — see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-- **For iOS** (macOS only): Xcode + Command Line Tools, [CocoaPods](https://cocoapods.org), the iOS Rust target (`rustup target add aarch64-apple-ios`), and an Apple Developer account — a free personal team works for on-device testing (builds expire after 7 days)
+- **For iOS**: see [`ios-native/README.md`](ios-native/README.md) (Xcode and XcodeGen)
 
 ## Development
 
@@ -67,24 +67,7 @@ pnpm vite:build
 
 ### iOS
 
-```sh
-# Run on a connected device / simulator (dev server + hot reload).
-# --host serves Vite on the LAN so a physical device can reach it.
-pnpm tauri ios dev --host
-
-# Standalone release build — bundles the frontend, runs with no Mac attached.
-# `debugging` export = development signing, for your own registered device.
-pnpm tauri ios build --export-method debugging
-```
-
-The Xcode project lives under `src-tauri/gen/apple/` (regenerate with `pnpm tauri ios init`). A debug iOS build needs ~10 GB of free disk.
-
-`tauri ios init` has a bug where it mis-copies some `AppIcon.appiconset` sizes back to Tauri's default logo, even though the source files in `src-tauri/icons/ios/` are correct. After (re-)running `ios init`, fix it with:
-
-```sh
-cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
-```
-CI compile-checks the iOS shell on every native-code change ([`.github/workflows/ci-ios.yml`](.github/workflows/ci-ios.yml)). Tagged releases also build an **unsigned** `.ipa` (`build-ios` job in [`release.yml`](.github/workflows/release.yml)), attached to the GitHub Release alongside the macOS bundles, for sideloading via SideStore/iLoader (they sign it themselves with a free Apple ID; no Apple secrets or device UDIDs are needed in this repo).
+The iOS app is the native Swift app in [`ios-native/`](ios-native/); build and install steps are in [iOS Build instructions](iOS%20Build%20instructions.md). The Tauri iOS build (`pnpm tauri ios …`) is deprecated: its code stays in the tree but is no longer built, checked in CI or released.
 
 ### Regenerating API types
 
