@@ -29,6 +29,11 @@ final class StubServer: @unchecked Sendable {
         box.set(key, replies)
     }
 
+    /// The same, from an array.
+    func route(_ key: String, replies: [Reply]) {
+        box.set(key, replies)
+    }
+
     func json(_ key: String, _ body: String, status: Int = 200, pages: Int = 1) {
         box.set(key, [Reply(status: status, body: body, headers: ["x-pagination-total-pages": "\(pages)"])])
     }

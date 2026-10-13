@@ -245,7 +245,30 @@ public final class Puller: Sendable {
             return (payload, String(bytes: data, encoding: .utf8) ?? "")
         }
         try store.replaceBucketsForViewFromServer(viewLocalId: viewLocalId, items)
+        try await pullBucketAssignments(projectServerId: projectServerId, viewServerId: viewServerId, viewLocalId: viewLocalId)
         return items.count
+    }
+
+    /// Which task sits in which column, as the server has it, so a card moved in Vikunja-web or on another device
+    /// moves here too. One listing per column (`filter=bucket_id = N`, paged), as Vikunja-web loads a column; a
+    /// filter-mode board has no stored columns and is skipped. If any column fails, nothing is replaced.
+    func pullBucketAssignments(projectServerId: Int, viewServerId: Int, viewLocalId: String) async throws {
+        let buckets = try store.bucketServerIds(viewLocalId: viewLocalId)
+        guard !buckets.isEmpty else { return }
+        var assignments: [BucketAssignment] = []
+        for bucketServerId in buckets {
+            let raws = try await api.fetchAllPages(
+                "/projects/\(projectServerId)/views/\(viewServerId)/tasks", query: ["filter": "bucket_id = \(bucketServerId)"]
+            )
+            for data in raws {
+                guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let taskId = object["id"] as? Int else { continue }
+                assignments.append(BucketAssignment(
+                    taskServerId: taskId, bucketServerId: bucketServerId, position: object["position"] as? Double
+                ))
+            }
+        }
+        try store.replaceBucketAssignmentsFromServer(viewLocalId: viewLocalId, assignments)
     }
 }
 

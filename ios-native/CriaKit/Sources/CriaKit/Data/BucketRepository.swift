@@ -187,28 +187,6 @@ extension CriaStore {
         return localId
     }
 
-    /// Silent: records the server's task-to-bucket assignments for a view. Pairs whose task or bucket is not
-    /// known locally are skipped. Like the TypeScript version, this resets the stored position to 0.
-    public func replaceBucketAssignmentsFromServer(
-        viewLocalId: String, _ assignments: [(taskServerId: Int, bucketServerId: Int)]
-    ) throws {
-        try database.writer.write { connection in
-            for item in assignments {
-                let taskLocalId = try String.fetchOne(
-                    connection, sql: "SELECT local_id FROM tasks WHERE server_id = ? LIMIT 1", arguments: [item.taskServerId]
-                )
-                let bucketLocalId = try String.fetchOne(
-                    connection, sql: "SELECT local_id FROM buckets WHERE server_id = ? LIMIT 1", arguments: [item.bucketServerId]
-                )
-                guard let taskLocalId, let bucketLocalId else { continue }
-                try connection.execute(sql: """
-                    INSERT OR REPLACE INTO task_buckets (task_local_id, view_local_id, bucket_local_id)
-                    VALUES (?, ?, ?)
-                    """, arguments: [taskLocalId, viewLocalId, bucketLocalId])
-            }
-        }
-    }
-
     // MARK: User mutations: task placement
 
     /// Moves a task into a bucket for a kanban view, replacing any earlier assignment. Position defaults to 0.

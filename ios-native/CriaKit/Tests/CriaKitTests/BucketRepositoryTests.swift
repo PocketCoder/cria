@@ -72,7 +72,8 @@ final class BucketRepositoryTests: XCTestCase {
         let task = try seedSyncedTask(store, serverId: 1)
 
         try store.replaceBucketAssignmentsFromServer(
-            viewLocalId: kanban.view, [(taskServerId: 1, bucketServerId: 100), (taskServerId: 99, bucketServerId: 100)]
+            viewLocalId: kanban.view,
+            [BucketAssignment(taskServerId: 1, bucketServerId: 100), BucketAssignment(taskServerId: 99, bucketServerId: 100)]
         )
 
         let assignments = try store.bucketAssignments(forView: kanban.view)
