@@ -111,22 +111,6 @@ struct ShoppingPhotoSheet: View {
         .photosPicker(isPresented: $libraryRequested, selection: $picked, matching: .images)
     }
 
-    private static var viewportHint: String {
-        #if os(macOS)
-        "Choose a photo of a handwritten or printed list"
-        #else
-        "Point at a handwritten or printed list"
-        #endif
-    }
-
-    private static var shutterLabel: String {
-        #if os(macOS)
-        "Choose a photo"
-        #else
-        "Take a photo"
-        #endif
-    }
-
     private var libraryRow: some View {
         VStack(spacing: 10) {
             PhotosPicker(selection: $picked, matching: .images) {
@@ -141,33 +125,6 @@ struct ShoppingPhotoSheet: View {
             #endif
         }
     }
-
-    #if os(macOS)
-    /// Files and the clipboard, the Mac's stand-ins for the camera.
-    private var macSources: some View {
-        HStack(spacing: 10) {
-            Button("Choose file…", systemImage: "doc") { choosingFile = true }
-            Button("Paste image", systemImage: "doc.on.clipboard") {
-                guard let data = Pasteboard.image()?.pngRepresentation() else {
-                    errorMessage = "There is no image on the clipboard."
-                    return
-                }
-                Task { await recognise(data) }
-            }
-        }
-        .buttonStyle(.bordered)
-        .fileImporter(isPresented: $choosingFile, allowedContentTypes: [.image]) { result in
-            guard case .success(let url) = result else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else {
-                errorMessage = "Could not open that file."
-                return
-            }
-            Task { await recognise(data) }
-        }
-    }
-    #endif
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -285,6 +242,51 @@ struct ShoppingPhotoSheet: View {
             errorMessage = String(describing: error)
         }
     }
+}
+
+extension ShoppingPhotoSheet {
+    private static var viewportHint: String {
+        #if os(macOS)
+        "Choose a photo of a handwritten or printed list"
+        #else
+        "Point at a handwritten or printed list"
+        #endif
+    }
+
+    private static var shutterLabel: String {
+        #if os(macOS)
+        "Choose a photo"
+        #else
+        "Take a photo"
+        #endif
+    }
+
+    #if os(macOS)
+    /// Files and the clipboard, the Mac's stand-ins for the camera.
+    private var macSources: some View {
+        HStack(spacing: 10) {
+            Button("Choose file…", systemImage: "doc") { choosingFile = true }
+            Button("Paste image", systemImage: "doc.on.clipboard") {
+                guard let data = Pasteboard.image()?.pngRepresentation() else {
+                    errorMessage = "There is no image on the clipboard."
+                    return
+                }
+                Task { await recognise(data) }
+            }
+        }
+        .buttonStyle(.bordered)
+        .fileImporter(isPresented: $choosingFile, allowedContentTypes: [.image]) { result in
+            guard case .success(let url) = result else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else {
+                errorMessage = "Could not open that file."
+                return
+            }
+            Task { await recognise(data) }
+        }
+    }
+    #endif
 }
 
 /// Four white L-shaped corner marks, 26pt long with a 3pt stroke.
