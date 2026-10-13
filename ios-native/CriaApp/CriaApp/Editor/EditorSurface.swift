@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// What `EditorController` needs from a text view, so one controller drives `UITextView` on iOS and `NSTextView` on the
 /// Mac. The names avoid the two classes' own (`selectedRange` is a method on `NSTextView`, `textStorage` optional).
