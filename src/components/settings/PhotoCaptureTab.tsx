@@ -46,6 +46,7 @@ export function PhotoCaptureTab() {
         <div className="flex items-center justify-between">
           <Label>Default label</Label>
           <input
+            aria-label="Default label"
             type="text"
             value={shoppingLabel}
             onChange={(e) => setShoppingLabel(e.target.value)}

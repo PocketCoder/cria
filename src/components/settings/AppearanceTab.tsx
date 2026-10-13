@@ -2,6 +2,7 @@ import { useSettings } from '@/stores/settings';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/cn';
+import { withViewTransition } from '@/lib/viewTransition';
 
 export function AppearanceTab() {
   const colorScheme = useSettings((s) => s.colorScheme);
@@ -18,7 +19,12 @@ export function AppearanceTab() {
           {(['light', 'dark', 'system'] as const).map((scheme) => (
             <button
               key={scheme}
-              onClick={() => setColorScheme(scheme)}
+              onClick={(e) => {
+                const root = document.documentElement.style;
+                root.setProperty('--vt-x', `${e.clientX}px`);
+                root.setProperty('--vt-y', `${e.clientY}px`);
+                void withViewTransition('theme', () => setColorScheme(scheme));
+              }}
               className={cn(
                 'flex-1 rounded-md border px-3 py-2 text-sm capitalize transition-colors',
                 colorScheme === scheme

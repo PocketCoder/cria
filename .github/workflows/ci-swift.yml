@@ -1,0 +1,174 @@
+name: CI (native Swift iOS)
+
+# The iOS app. Lint, CriaKit tests and a simulator build on every change to
+# ios-native/; pushes to dev and main also publish the unsigned .ipa to SideStore.
+# The Tauri iOS build is deprecated: nothing else builds for iOS.
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'ios-native/**'
+      - '.github/workflows/ci-swift.yml'
+  pull_request:
+    paths:
+      - 'ios-native/**'
+      - '.github/workflows/ci-swift.yml'
+
+concurrency:
+  group: ci-swift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Lint
+        working-directory: ios-native
+        run: swiftlint lint --strict
+
+      - name: Unit tests (CriaKit)
+        working-directory: ios-native/CriaKit
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
+
+      - name: Build app for simulator
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+  # Rolling .ipa for SideStore. Runs on push only (not PRs), and only after the
+  # checks above pass. Publishes to a rolling `swift-alpha` prerelease and owns
+  # the shared sidestore.json: it writes the one iOS entry (io.cria.app.swift)
+  # and drops the deprecated Tauri iOS entries (io.cria.app, io.cria.app.nightly).
+  publish-ipa:
+    name: Publish Swift alpha .ipa
+    if: github.event_name == 'push'
+    needs: test-and-build
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    # Serialises pushes from dev and main so they don't race
+    # on the release or on gh-pages. Queued runs wait, not cancel.
+    concurrency:
+      group: ios-alpha-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
+
+      # SideStore only offers an update when the marketing version changes, so
+      # each run gets MAJOR.MINOR.RUN (as nightly.yml does) and the same value
+      # goes into the source entry. Passed on the command line, so Info.plist matches.
+      - name: Set version
+        id: ver
+        run: echo "short=$(jq -r .version package.json | cut -d. -f1,2).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # Unsigned device build. SideStore re-signs the .ipa with the user's Apple ID.
+      - name: Build unsigned device app
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            MARKETING_VERSION=${{ steps.ver.outputs.short }} \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package unsigned .ipa
+        run: |
+          set -euo pipefail
+          APP="$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          [ -n "$APP" ] || { echo "No .app found" >&2; exit 1; }
+          # SideStore refuses the install if these differ from the source entry.
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "${{ steps.ver.outputs.short }}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = "${{ github.run_number }}"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cria-Swift-Alpha-unsigned.ipa" Payload)
+
+      # Recreate the release so the asset and notes track the latest push.
+      - name: Replace swift-alpha release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete swift-alpha --yes --cleanup-tag || true
+          gh release create swift-alpha Cria-Swift-Alpha-unsigned.ipa \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Swift alpha (${GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" \
+            --notes "Unsigned native Swift build of \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Install from the SideStore source as **Cria**. Prerelease."
+
+      # Rewrite the shared source: this app's entry only. The Tauri iOS entries are
+      # dropped (that build is deprecated), so SideStore stops offering them.
+      # macOS runner: stat takes -f, not -c.
+      - name: Write sidestore.json
+        run: |
+          set -euo pipefail
+          mkdir -p gh-pages-out
+          git fetch --depth 1 origin gh-pages 2>/dev/null && git show origin/gh-pages:sidestore.json > existing.json 2>/dev/null || echo '{}' > existing.json
+          jq -n \
+            --arg v "${{ steps.ver.outputs.short }}" \
+            --arg b "${{ github.run_number }}" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg notes "${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}" \
+            --arg repo "${{ github.repository }}" \
+            --arg url "https://github.com/${{ github.repository }}/releases/download/swift-alpha/Cria-Swift-Alpha-unsigned.ipa" \
+            --argjson size "$(stat -f %z Cria-Swift-Alpha-unsigned.ipa)" \
+            --slurpfile old existing.json '
+              ($old[0].apps // []) as $apps
+              | {name: "Cria", identifier: "io.cria.source", news: [],
+                 apps: (($apps | map(select(.bundleIdentifier as $id
+                          | ["io.cria.app.swift", "io.cria.app", "io.cria.app.nightly"] | index($id) | not))) + [{
+                   name: "Cria",
+                   bundleIdentifier: "io.cria.app.swift",
+                   developerName: "Cria",
+                   subtitle: "Native iOS client for Vikunja",
+                   localizedDescription: "Automated build of the native iOS app from the latest dev or main push. Prerelease.",
+                   iconURL: "https://raw.githubusercontent.com/\($repo)/dev/src-tauri/icons/icon.png",
+                   versions: [{version: $v, buildVersion: $b, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
+                 }] | sort_by(.bundleIdentifier))}
+            ' > gh-pages-out/sidestore.json
+          cat gh-pages-out/sidestore.json
+
+      - name: Publish sidestore.json to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: gh-pages-out
+          keep_files: true
+          commit_message: 'swift alpha: ${{ github.sha }}'

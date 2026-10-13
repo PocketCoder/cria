@@ -5,7 +5,9 @@ import { Shell } from '@/features/shell/Shell';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { usePeriodicSync } from '@/sync/usePeriodicSync';
 import { useReminderScheduler } from '@/sync/useReminderScheduler';
+import { useSummaryNotifications } from '@/sync/useSummaryNotifications';
 import { startSettingsSync } from '@/sync/settingsSync';
+import { scheduleBlobSweep } from '@/sync/blobSweep';
 import { useDockBadge } from '@/queries/badge';
 
 export function App() {
@@ -23,8 +25,13 @@ export function App() {
   // across devices. Hydration on load happens in useCurrentUser.
   useEffect(() => startSettingsSync(), []);
 
+  // Once per launch, after a delay: delete queued-upload bytes nothing
+  // refers to any more. Local only, so it doesn't wait for sign-in.
+  useEffect(() => scheduleBlobSweep(), []);
+
   usePeriodicSync();
   useReminderScheduler();
+  useSummaryNotifications();
   useDockBadge();
 
   let body: React.ReactNode;

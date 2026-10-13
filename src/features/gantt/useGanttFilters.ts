@@ -67,13 +67,14 @@ export interface GanttFiltersApi {
 export function useGanttFilters(): GanttFiltersApi {
   const [filters, setFilters] = useState<GanttFilters>(load);
 
-  const update = useCallback((patch: Partial<GanttFilters>) => {
-    setFilters((prev) => {
-      const next = { ...prev, ...patch };
+  const update = useCallback(
+    (patch: Partial<GanttFilters>) => {
+      const next = { ...filters, ...patch };
       persist(next);
-      return next;
-    });
-  }, []);
+      setFilters(next);
+    },
+    [filters],
+  );
 
   const setDateFrom = useCallback(
     (iso: string | null) => {
@@ -87,20 +88,14 @@ export function useGanttFilters(): GanttFiltersApi {
     },
     [update],
   );
-  const toggleDateless = useCallback(() => {
-    setFilters((prev) => {
-      const next = { ...prev, showTasksWithoutDates: !prev.showTasksWithoutDates };
-      persist(next);
-      return next;
-    });
-  }, []);
-  const toggleCompleted = useCallback(() => {
-    setFilters((prev) => {
-      const next = { ...prev, showCompleted: !prev.showCompleted };
-      persist(next);
-      return next;
-    });
-  }, []);
+  const toggleDateless = useCallback(
+    () => update({ showTasksWithoutDates: !filters.showTasksWithoutDates }),
+    [update, filters.showTasksWithoutDates],
+  );
+  const toggleCompleted = useCallback(
+    () => update({ showCompleted: !filters.showCompleted }),
+    [update, filters.showCompleted],
+  );
   const reset = useCallback(() => {
     const d = defaults();
     persist(d);

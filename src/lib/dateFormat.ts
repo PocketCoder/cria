@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
 
 /**
@@ -53,25 +53,48 @@ export function toCalendarDate(iso: string): Date {
 
 /**
  * True when a due/date ISO carries a real time-of-day. All-day values are
- * stored at UTC midnight (the DatePicker convention); anything else is timed.
- * Lets list rows show the time only when one was actually set.
+ * stored at exactly UTC midnight (the DatePicker convention); anything else is
+ * timed. Lets list rows show the time only when one was actually set.
+ *
+ * A timed instant that lands on exactly 00:00:00.000Z is indistinguishable
+ * from all-day, so writers must go through `timedIso` to keep clear of it.
  */
 export function hasTimeOfDay(iso: string | null | undefined): boolean {
   if (!iso) return false;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return false;
-  return !(d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0);
+  return d.getTime() % 86_400_000 !== 0;
+}
+
+/**
+ * The ISO to store for a timed (not all-day) value. If the instant is exactly
+ * UTC midnight (8pm in New York during DST, midnight in London in winter) it
+ * would read back as all-day, so nudge it by one second. Times are only shown
+ * to the minute, so the shift is invisible.
+ */
+export function timedIso(d: Date): string {
+  const ms = d.getTime();
+  return new Date(ms % 86_400_000 === 0 ? ms + 1000 : ms).toISOString();
+}
+
+/**
+ * The local calendar day (as a local-midnight Date) a due/date ISO falls on.
+ * The one rule for due-date display, overdue checks and bucketing: all-day
+ * values (UTC midnight) keep the day that was picked whatever the timezone;
+ * timed values use the *local* day, so "tomorrow 8pm" is tomorrow and the day
+ * always agrees with the time shown beside it.
+ */
+export function dueCalendarDate(iso: string): Date {
+  return hasTimeOfDay(iso) ? startOfDay(new Date(iso)) : toCalendarDate(iso);
 }
 
 /**
  * The calendar-day key (yyyy-MM-dd) a due date belongs to, for day bucketing
- * (Upcoming agenda + calendar dots). All-day values (UTC midnight) use their
- * UTC day so they land on the day picked regardless of timezone; timed values
- * use the *local* day so "Friday 9am" shows on Friday. This keeps the agenda
- * and the calendar's local week-strip cells in lockstep.
+ * (Upcoming agenda + calendar dots). Built on `dueCalendarDate`, so it stays
+ * in lockstep with the list rows and the calendar's local week-strip cells.
  */
 export function dueDayKey(iso: string): string {
-  return format(hasTimeOfDay(iso) ? new Date(iso) : toCalendarDate(iso), 'yyyy-MM-dd');
+  return format(dueCalendarDate(iso), 'yyyy-MM-dd');
 }
 
 export interface DateFormatters {

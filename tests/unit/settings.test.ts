@@ -13,6 +13,7 @@ describe('useSettings', () => {
       closeToTray: true,
       hideDockOnTray: false,
       playSoundWhenDone: false,
+      quickAddMagicMode: 'vikunja',
     });
   });
 
@@ -76,5 +77,21 @@ describe('useSettings', () => {
   it('setPlaySoundWhenDone toggles', () => {
     useSettings.getState().setPlaySoundWhenDone(true);
     expect(useSettings.getState().playSoundWhenDone).toBe(true);
+  });
+
+  // The field was added without bumping `cria:settings/v2`: a store saved
+  // before it existed must rehydrate with the default, not undefined.
+  it('rehydrates an older persisted store with the default quick add mode', async () => {
+    localStorage.setItem('cria:settings/v2', JSON.stringify({ state: { colorScheme: 'dark' }, version: 0 }));
+    await useSettings.persist.rehydrate();
+    expect(useSettings.getState().colorScheme).toBe('dark');
+    expect(useSettings.getState().quickAddMagicMode).toBe('vikunja');
+  });
+
+  it('setQuickAddMagicMode switches modes', () => {
+    for (const mode of ['todoist', 'disabled', 'vikunja'] as const) {
+      useSettings.getState().setQuickAddMagicMode(mode);
+      expect(useSettings.getState().quickAddMagicMode).toBe(mode);
+    }
   });
 });

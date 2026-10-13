@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { X, Download, Loader2 } from 'lucide-react';
 import { downloadAttachment } from '@/sync/attachments';
-import { getAttachmentObjectUrl } from './tiptapImageExtension';
+import { getAttachmentObjectUrl } from './inlineImageUrls';
 
 /**
  * Full-size image viewer for an attachment. Auth-fetches the blob
@@ -44,19 +46,6 @@ export function ImageLightbox({
     };
   }, [taskServerId, attachmentServerId]);
 
-  // Esc to close. Capture so we win over any background editor that
-  // might also be listening for Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
-
   const downloadCurrent = async () => {
     // Fresh blob fetch (rather than reusing the displayed object URL) —
     // Safari refuses cross-document object-URL downloads in some setups,
@@ -69,15 +58,10 @@ export function ImageLightbox({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6"
-      onClick={onClose}
-    >
-      <div
-        className="relative max-h-full max-w-full"
-        // Don't close when clicking the image itself / chrome.
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalDialog label={fileName} onClose={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+      <BackdropDismiss onDismiss={onClose} />
+      <div className="relative max-h-full max-w-full">
         <div className="absolute -top-2 right-0 flex translate-y-[-100%] gap-1">
           <button
             type="button"
@@ -106,7 +90,7 @@ export function ImageLightbox({
           <img
             src={url}
             alt={fileName}
-            className="max-h-[85vh] max-w-[90vw] rounded-md object-contain shadow-2xl"
+            className="max-h-[85dvh] max-w-[90vw] rounded-md object-contain shadow-2xl"
           />
         ) : (
           <div className="flex h-32 w-32 items-center justify-center rounded-md bg-white/5">
@@ -115,5 +99,6 @@ export function ImageLightbox({
         )}
       </div>
     </div>
+    </ModalDialog>
   );
 }

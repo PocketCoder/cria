@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startOfDay, isBefore, isSameDay } from 'date-fns';
-import { toCalendarDate } from '@/lib/dateFormat';
+import { dueCalendarDate } from '@/lib/dateFormat';
 import {
   listTasksWithDueDate,
+  listUndatedTasks,
   listTasksForLabel,
   listFavoriteTasks,
   listTasksForProject,
@@ -25,6 +26,10 @@ export interface TaskGroup {
   key: string;
   label: string;
   tasks: TaskWithProject[];
+  /** Upcoming empty runs only: first and last yyyy-MM-dd day the group covers,
+   * so a day inside the run can find its section. */
+  fromDay?: string;
+  toDay?: string;
 }
 
 /** Bucket a flat task list into one group per project (using its title
@@ -51,7 +56,7 @@ export function groupToday(all: TaskWithProject[], now: Date): TaskGroup[] {
   const due: TaskWithProject[] = [];
   for (const t of all) {
     if (!t.dueDate) continue;
-    const d = toCalendarDate(t.dueDate);
+    const d = dueCalendarDate(t.dueDate);
     if (isBefore(d, today)) overdue.push(t);
     else if (isSameDay(d, today)) due.push(t);
   }
@@ -65,7 +70,7 @@ export function groupToday(all: TaskWithProject[], now: Date): TaskGroup[] {
 export function upcomingFrom(all: TaskWithProject[], now: Date): TaskWithProject[] {
   const today = startOfDay(now);
   return all.filter(
-    (t) => t.dueDate && !isBefore(startOfDay(toCalendarDate(t.dueDate)), today),
+    (t) => t.dueDate && !isBefore(dueCalendarDate(t.dueDate), today),
   );
 }
 
@@ -107,6 +112,25 @@ export function useUpcomingTasks() {
     queryFn: async () => [
       { key: 'upcoming', label: '', tasks: upcomingFrom(await listTasksWithDueDate(), new Date()) },
     ],
+  });
+}
+
+/** Open tasks with no due date, for Today's suggestions when nothing is due. */
+export function useUndatedTasks(enabled = true) {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      subscribe('tasks', () => {
+        void qc.invalidateQueries({ queryKey: ['smart', 'undated'] });
+      }),
+    [qc],
+  );
+
+  return useQuery<TaskWithProject[]>({
+    queryKey: ['smart', 'undated'],
+    enabled,
+    staleTime: 30_000,
+    queryFn: () => listUndatedTasks(20),
   });
 }
 

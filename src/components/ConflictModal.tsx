@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { useConflicts } from '@/queries/conflicts';
 import {
@@ -56,15 +58,11 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
+    <ModalDialog label={conflicts.length > 1 ? 'These tasks changed in two places' : 'This task changed in two places'} onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[var(--color-border)]"
-        onClick={(e) => e.stopPropagation()}
+        className="relative dialog-panel flex max-h-[80dvh] w-full max-w-[440px] flex-col overflow-hidden"
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-4">
           <h2 className="text-[17px] font-semibold tracking-[-0.02em]">
@@ -104,7 +102,8 @@ export function ConflictModal({ onClose }: ConflictModalProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 
@@ -158,13 +157,13 @@ function ConflictItem({
 
       <div className="flex flex-col gap-2">
         <div className="rounded-xl border-[1.5px] border-[var(--color-primary)] px-4 py-3">
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--color-primary)]">
+          <p className="mb-1 group-label text-[var(--color-primary)]">
             Yours · edited {detected}
           </p>
           <p className="text-sm">{mine}</p>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] px-4 py-3">
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--color-muted-foreground)]">
+          <p className="mb-1 group-label text-[var(--color-muted-foreground)]">
             Server
           </p>
           <p className="text-sm">{theirs}</p>

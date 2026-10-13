@@ -1,0 +1,86 @@
+# XcodeGen spec. Run `xcodegen generate` in this folder to create CriaApp.xcodeproj.
+# The .xcodeproj is generated, not committed.
+name: CriaApp
+options:
+  bundleIdPrefix: io.cria
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  CriaKit:
+    path: ../CriaKit
+targets:
+  CriaApp:
+    type: application
+    platform: iOS
+    sources: [CriaApp]
+    dependencies:
+      - package: CriaKit
+      - target: CriaShare
+      - target: CriaWidgets
+    info:
+      path: Config/CriaApp-Info.plist
+      properties:
+        UIAppFonts: [Onest-Bold.ttf]
+        # Ramble's on-device model run continues in the background as a BGContinuedProcessingTask on iOS 26
+        # (BackgroundRun.swift). Its identifiers are "<bundle id>.ai.<uuid>". No background mode is needed.
+        BGTaskSchedulerPermittedIdentifiers: ["$(PRODUCT_BUNDLE_IDENTIFIER).ai.*"]
+        CFBundleURLTypes:
+          - CFBundleURLName: io.cria.app.swift
+            CFBundleURLSchemes: [cria]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.swift
+        PRODUCT_NAME: Cria
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSCameraUsageDescription: Take photos to attach to your tasks.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Listen while you speak a list of tasks.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Turn what you say into text for your tasks.
+        CODE_SIGN_ENTITLEMENTS: CriaApp/CriaApp.entitlements
+  CriaShare:
+    type: app-extension
+    platform: iOS
+    sources: [CriaShare]
+    dependencies:
+      - package: CriaKit
+    info:
+      path: Config/CriaShare-Info.plist
+      properties:
+        CFBundleDisplayName: Cria
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.swift.share
+        PRODUCT_NAME: CriaShare
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: CriaShare/CriaShare.entitlements
+  CriaWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [CriaWidgets]
+    dependencies:
+      - package: CriaKit
+    info:
+      path: Config/CriaWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: Cria
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.swift.widgets
+        PRODUCT_NAME: CriaWidgets
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: CriaWidgets/CriaWidgets.entitlements

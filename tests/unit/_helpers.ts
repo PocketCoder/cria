@@ -39,6 +39,7 @@ export async function initSchema(): Promise<void> {
     '016_project_identifier.sql',
     '017_reset_task_watermark.sql',
     '018_saved_filters.sql',
+    '019_attachment_uploads.sql',
   ]) {
     const sql = await fs.readFile(
       path.join(__dirname, '../../src/db/migrations', file),

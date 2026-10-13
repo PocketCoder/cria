@@ -358,4 +358,44 @@ describe('view filter push', () => {
     expect(call).toBeTruthy();
     expect((call![1] as { body: Record<string, unknown> }).body).not.toHaveProperty('filter');
   });
+
+  it('round-trips bucket_configuration so a rename keeps a filter-mode board intact', async () => {
+    const config = [{ title: 'Urgent', filter: { filter: 'priority >= 4' } }];
+    await withTx(async (tx) => {
+      await tx.execute(
+        `INSERT INTO projects (local_id, server_id, title, updated_at, dirty, deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+        ['proj1', 1, 'Project', now()],
+      );
+      await tx.execute(
+        `INSERT INTO project_views (local_id, server_id, project_local_id, title, view_kind,
+                                    bucket_configuration_mode, bucket_configuration, updated_at, dirty, deleted)
+         VALUES ('view1', 55, 'proj1', 'Board', 'kanban', 'filter', ?, ?, 0, 0)`,
+        [JSON.stringify(config), now()],
+      );
+    });
+    const { updateView } = await import('@/db/views');
+    await updateView('view1', { title: 'Triage' });
+
+    const client = mockClient();
+    await drainOutbox(client);
+
+    expect(client.POST).toHaveBeenCalledWith(
+      '/projects/{project}/views/{id}',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          title: 'Triage',
+          bucket_configuration_mode: 'filter',
+          bucket_configuration: config,
+        }),
+      }),
+    );
+  });
+
+  it('bucketConfigurationForBody only passes through a stored JSON array', async () => {
+    const { bucketConfigurationForBody } = await import('@/sync/push/view');
+    expect(bucketConfigurationForBody(null)).toBeUndefined();
+    expect(bucketConfigurationForBody('not json')).toBeUndefined();
+    expect(bucketConfigurationForBody('{"a":1}')).toBeUndefined();
+    expect(bucketConfigurationForBody('[]')).toEqual([]);
+  });
 });

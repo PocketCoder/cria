@@ -17,6 +17,13 @@ export interface ProjectView {
   defaultBucketServerId: number | null;
   doneBucketServerId: number | null;
   updatedAt: string;
+  /**
+   * True for a local default view (seeded by `createDefaultViews`) that has
+   * no server counterpart yet and no pending create. The outbox can never
+   * push an edit to it, so the UI must not offer rename/reorder/delete until
+   * the server's views replace it.
+   */
+  placeholder: boolean;
 }
 
 /**

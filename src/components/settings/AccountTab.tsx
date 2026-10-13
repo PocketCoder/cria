@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { LabeledInput } from '@/components/ui/labeled-input';
 import { useAuth } from '@/auth/store';
 import { useCurrentUser } from '@/queries/user';
 import { getAvatarSettings, setAvatarProvider, uploadAvatar, fetchAvatarBlob } from '@/api/account';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { notify } from '@/db/bus';
-import type { UserSettingsInput } from '@/api/userSettings';
+import { saveUserSettings } from '@/sync/settingsSync';
 
 const AVATAR_PROVIDERS = [
   { value: 'default', label: 'Default' },
@@ -17,10 +18,9 @@ const AVATAR_PROVIDERS = [
 
 interface Props {
   disabled?: boolean;
-  onPushSettings: (patch: UserSettingsInput) => Promise<void>;
 }
 
-export function AccountTab({ disabled, onPushSettings }: Props) {
+export function AccountTab({ disabled }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: user } = useCurrentUser();
   const signOut = useAuth((s) => s.signOut);
@@ -29,6 +29,7 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
 
   const [displayName, setDisplayName] = useState('');
   const [avatarProvider, setAvatarProviderState] = useState('default');
+  const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,22 +44,23 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
 
   useEffect(() => {
     if (!user?.username) return;
-    let url: string | null = null;
     fetchAvatarBlob(user.username)
-      .then((blob) => {
-        url = URL.createObjectURL(blob);
-        setAvatarPreviewUrl(url);
-      })
+      .then(setAvatarBlob)
       .catch(() => {});
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
   }, [user?.username]);
+
+  // One object URL per blob, revoked when the blob is replaced or on unmount.
+  useEffect(() => {
+    if (!avatarBlob) return;
+    const url = URL.createObjectURL(avatarBlob);
+    setAvatarPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarBlob]);
 
   const handleNameSave = () => {
     const trimmed = displayName.trim();
     if (!trimmed || trimmed === user?.name) return;
-    void onPushSettings({ name: trimmed })
+    void saveUserSettings({ settings: { name: trimmed } })
       .then(() => notify('user'))
       .catch((e) => console.error('Failed to sync name', e));
   };
@@ -74,9 +76,7 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
     void uploadAvatar(file)
       .then(async () => {
         if (user?.username) {
-          const blob = await fetchAvatarBlob(user.username);
-          const url = URL.createObjectURL(blob);
-          setAvatarPreviewUrl(url);
+          setAvatarBlob(await fetchAvatarBlob(user.username));
         }
       })
       .catch((err) => console.error('Failed to upload avatar', err));
@@ -99,15 +99,16 @@ export function AccountTab({ disabled, onPushSettings }: Props) {
           <span className="text-[var(--color-muted-foreground)]">User</span>
           <span className="max-w-[60%] truncate text-[var(--color-foreground)]">{user?.name || user?.username || '—'}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <input
+        <div className="flex items-end gap-2">
+          <LabeledInput
+            label="Display name"
+            className="flex-1"
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             onBlur={handleNameSave}
-            placeholder="Display name"
             disabled={disabled}
-            className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] disabled:opacity-50"
+            inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] disabled:opacity-50"
           />
           <Button variant="outline" size="sm" onClick={handleNameSave} disabled={disabled}>Save</Button>
         </div>

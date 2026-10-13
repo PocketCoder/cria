@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { LRUMap } from '@/features/task-detail/tiptapImageExtension';
+import { LRUMap } from '@/features/task-detail/inlineImageUrls';
 
 describe('LRUMap', () => {
   let revoke: ReturnType<typeof vi.spyOn>;

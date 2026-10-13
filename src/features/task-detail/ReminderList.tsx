@@ -19,6 +19,7 @@ import {
   type PeriodUnit,
 } from '@/lib/period';
 import { InlineWarning } from '@/components/InlineWarning';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 
 /**
  * Reminders for a task: list + add + remove. Edits go through the
@@ -91,7 +92,7 @@ export function ReminderList({
   return (
     <section className="mb-4">
       {!hideHeader ? (
-        <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+        <h3 className="mb-1 flex items-center gap-1 group-label text-[var(--color-muted-foreground)]">
           <Bell className="h-3 w-3" />
           Reminders
           {reminders.length > 0 ? (
@@ -101,11 +102,11 @@ export function ReminderList({
       ) : null}
 
       {reminders.length > 0 ? (
-        <ul className="mb-1 space-y-1">
+        <ul className="mb-1.5 space-y-1.5">
           {reminders.map((r) => (
             <li
               key={reminderKey(r)}
-              className="group flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+              className="group flex items-center gap-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2.5 py-2 text-[13.5px] max-md:min-h-11"
             >
               <Bell className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
               <span className="flex-1">{formatReminder(r, dateFmt)}</span>
@@ -113,7 +114,7 @@ export function ReminderList({
                 type="button"
                 onClick={() => void handleRemove(r)}
                 aria-label="Remove reminder"
-                className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning)] group-hover:opacity-100 cursor-pointer"
+                className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 [@media(hover:none)]:opacity-100 max-md:p-2.5 max-md:-mr-2 cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -148,9 +149,9 @@ export function ReminderList({
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
-          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] cursor-pointer"
+          className="flex items-center gap-2 rounded-md px-1 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] max-md:min-h-11 cursor-pointer"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-[15px] w-[15px]" />
           Add reminder
         </button>
       )}
@@ -192,11 +193,13 @@ function ReminderPicker({
         onClose();
       }
     };
-    window.addEventListener('keydown', onKey);
+    // Capture, so its preventDefault lands before the inspector's own
+    // window-level Escape handler (registered earlier) decides to close.
+    window.addEventListener('keydown', onKey, true);
     // pointerdown so dismissal feels immediate
     window.addEventListener('pointerdown', onClick);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('pointerdown', onClick);
     };
   }, [onClose]);
@@ -213,7 +216,7 @@ function ReminderPicker({
   return (
     <div
       ref={rootRef}
-      className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-2 text-xs shadow-sm"
+      className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 text-[13.5px] shadow-sm"
     >
       {mode === 'presets' ? (
         <div className="flex flex-col gap-1">
@@ -222,7 +225,7 @@ function ReminderPicker({
               key={p.label}
               type="button"
               onClick={() => void addPreset(p.seconds, 'due_date')}
-              className="rounded px-2 py-1 text-left hover:bg-[var(--color-muted)] cursor-pointer"
+              className="rounded-md px-2.5 py-2 text-left hover:bg-[var(--color-muted)] max-md:min-h-11 cursor-pointer"
             >
               {p.seconds === 0 ? 'On due date' : `${p.label} due`}
             </button>
@@ -231,14 +234,14 @@ function ReminderPicker({
           <button
             type="button"
             onClick={() => setMode('custom')}
-            className="rounded px-2 py-1 text-left hover:bg-[var(--color-muted)] cursor-pointer"
+            className="rounded-md px-2.5 py-2 text-left hover:bg-[var(--color-muted)] max-md:min-h-11 cursor-pointer"
           >
             Custom…
           </button>
           <button
             type="button"
             onClick={() => setMode('absolute')}
-            className="rounded px-2 py-1 text-left hover:bg-[var(--color-muted)] cursor-pointer"
+            className="rounded-md px-2.5 py-2 text-left hover:bg-[var(--color-muted)] max-md:min-h-11 cursor-pointer"
           >
             Date and time
           </button>
@@ -277,6 +280,7 @@ function CustomForm({
   onCancel: () => void;
   onAdded: () => void;
 }) {
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const [amount, setAmount] = useState(1);
   const [unit, setUnit] = useState<PeriodUnit>('hours');
   const [direction, setDirection] = useState<'before' | 'after'>('before');
@@ -300,23 +304,24 @@ function CustomForm({
 
   return (
     <form
-      className="space-y-1.5"
+      className="space-y-2 p-1"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
         <input
+          aria-label="Reminder amount"
           type="number"
           min={1}
           value={amount}
-          autoFocus
+          ref={focusOnMount}
           onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 0))}
-          className="w-14 rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+          className="h-8 w-16 rounded-md border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] max-md:h-11 max-md:text-base"
         />
         <Select value={unit} onValueChange={(v) => setUnit(v as PeriodUnit)}>
-          <SelectTrigger className="h-7 text-xs">
+          <SelectTrigger className="h-8 w-auto text-[13.5px] max-md:h-11 max-md:text-base">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -327,7 +332,7 @@ function CustomForm({
           </SelectContent>
         </Select>
         <Select value={direction} onValueChange={(v) => setDirection(v as 'before' | 'after')}>
-          <SelectTrigger className="h-7 text-xs">
+          <SelectTrigger className="h-8 w-auto text-[13.5px] max-md:h-11 max-md:text-base">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -336,7 +341,7 @@ function CustomForm({
           </SelectContent>
         </Select>
         <Select value={relativeTo} onValueChange={(v) => setRelativeTo(v as ReminderRelation)}>
-          <SelectTrigger className="h-7 text-xs">
+          <SelectTrigger className="h-8 w-auto text-[13.5px] max-md:h-11 max-md:text-base">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -350,14 +355,14 @@ function CustomForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-2 py-1 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] cursor-pointer"
+          className="rounded-md px-3 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] max-md:h-11 cursor-pointer"
         >
           Back
         </button>
         <button
           type="submit"
           disabled={busy || amount <= 0}
-          className="rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 cursor-pointer"
+          className="rounded-md bg-[var(--color-primary)] px-3.5 py-1.5 text-[13.5px] font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 max-md:h-11 cursor-pointer"
         >
           Add
         </button>
@@ -378,6 +383,7 @@ function AbsoluteForm({
 }) {
   // Seed 1h from now so the Add button isn't disabled by an empty
   // WebKit datetime-local placeholder.
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const [draft, setDraft] = useState(() =>
     toLocalInput(new Date(Date.now() + 60 * 60 * 1000)),
   );
@@ -400,31 +406,32 @@ function AbsoluteForm({
 
   return (
     <form
-      className="space-y-1.5"
+      className="space-y-2 p-1"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
       <input
+        aria-label="Reminder date and time"
         type="datetime-local"
         value={draft}
-        autoFocus
+        ref={focusOnMount}
         onChange={(e) => setDraft(e.target.value)}
-        className="w-full rounded border border-[var(--color-border)] bg-[var(--color-input)] px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+        className="h-8 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-input)] px-2 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] max-md:h-11 max-md:text-base"
       />
       <div className="flex items-center justify-end gap-1.5">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-2 py-1 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] cursor-pointer"
+          className="rounded-md px-3 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] max-md:h-11 cursor-pointer"
         >
           Back
         </button>
         <button
           type="submit"
           disabled={busy || !draft}
-          className="rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 cursor-pointer"
+          className="rounded-md bg-[var(--color-primary)] px-3.5 py-1.5 text-[13.5px] font-medium text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 max-md:h-11 cursor-pointer"
         >
           Add
         </button>

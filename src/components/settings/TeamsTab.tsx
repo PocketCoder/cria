@@ -47,6 +47,7 @@ function TeamRow({ teamId, name, disabled }: { teamId: number; name: string; dis
         </button>
         {renaming ? (
           <input
+            aria-label="Team name"
             type="text"
             autoFocus
             value={draft}
@@ -56,6 +57,7 @@ function TeamRow({ teamId, name, disabled }: { teamId: number; name: string; dis
                 mutate.mutate(() => renameTeam(teamId, draft.trim()));
                 setRenaming(false);
               } else if (e.key === 'Escape') {
+                e.preventDefault(); // cancel the edit, not the whole Settings modal
                 setDraft(name);
                 setRenaming(false);
               }
@@ -84,6 +86,7 @@ function TeamRow({ teamId, name, disabled }: { teamId: number; name: string; dis
               Yes
             </button>
             <button
+              aria-label="Cancel delete"
               type="button"
               onClick={() => setConfirmDelete(false)}
               className="rounded px-1 py-0.5 hover:bg-[var(--color-muted)]"
@@ -192,7 +195,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">Teams</h3>
       {disabled && (
-        <p className="mb-2 text-xs text-[var(--color-warning)]">
+        <p className="mb-2 text-xs text-[var(--color-warning-text)]">
           You're offline — team management needs a connection.
         </p>
       )}
@@ -209,6 +212,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
       <div className="mt-2">
         {creating ? (
           <input
+            aria-label="New team name"
             type="text"
             autoFocus
             value={newName}
@@ -220,6 +224,7 @@ export function TeamsTab({ disabled }: { disabled: boolean }) {
                 setNewName('');
                 setCreating(false);
               } else if (e.key === 'Escape') {
+                e.preventDefault(); // cancel the edit, not the whole Settings modal
                 setCreating(false);
                 setNewName('');
               }

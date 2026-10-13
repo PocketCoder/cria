@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- macOS: merged into the app's Info.plist. Ramble's live dictation needs both. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cria listens while you ramble so it can turn what you say into tasks.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Cria transcribes your speech to turn it into tasks.</string>
+</dict>
+</plist>

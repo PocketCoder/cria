@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import { useLabels } from '@/queries/labels';
 import {
   createLabel,
@@ -85,15 +87,11 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
+    <ModalDialog label="Manage labels" onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[80vh] w-11/12 max-w-lg flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative dialog-panel flex max-h-[80dvh] w-11/12 max-w-lg flex-col overflow-hidden"
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h2 className="text-sm font-semibold">Manage labels</h2>
@@ -123,12 +121,14 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                   {editingId === label.localId ? (
                     <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5">
                       <input
+                        aria-label="Label colour"
                         type="color"
                         value={editingColor || '#000000'}
                         onChange={(e) => setEditingColor(e.target.value)}
                         className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent p-0"
                       />
                       <input
+                        aria-label="Label name"
                         type="text"
                         autoFocus
                         value={editingTitle}
@@ -138,12 +138,14 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                             e.preventDefault();
                             void handleRenameSave(label.localId);
                           } else if (e.key === 'Escape') {
+                            e.preventDefault(); // cancel the rename, not the dialog
                             setEditingId(null);
                           }
                         }}
                         className="min-w-0 flex-1 rounded bg-transparent px-1 text-sm focus:outline-none"
                       />
                       <button
+                        aria-label="Save label name"
                         type="button"
                         onClick={() => void handleRenameSave(label.localId)}
                         className="rounded p-0.5 text-[var(--color-primary)] hover:bg-[var(--color-muted)]"
@@ -160,7 +162,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                         }}
                       />
                       <span className="flex-1 truncate text-sm">{label.title}</span>
-                      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                         <button
                           type="button"
                           onClick={() => startEdit(label)}
@@ -186,6 +188,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
               {creating ? (
                 <li className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5">
                   <input
+                    aria-label="New label name"
                     type="text"
                     autoFocus
                     value={newTitle}
@@ -196,6 +199,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
                         e.preventDefault();
                         void handleCreate();
                       } else if (e.key === 'Escape') {
+                        e.preventDefault(); // cancel the add, not the dialog
                         setCreating(false);
                         setNewTitle('');
                       }
@@ -224,6 +228,7 @@ export function LabelManagerModal({ onClose }: LabelManagerModalProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }

@@ -1,7 +1,9 @@
 import { useRef, useState, useEffect, type ReactNode } from 'react';
+import { useLatestRef } from '../lib/useLatestRef';
 import { RefreshCw } from 'lucide-react';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { cn } from '@/lib/cn';
+import { selectionTick } from '@/utils/haptics';
 
 const PULL_THRESHOLD = 60;
 const MAX_PULL = 100;
@@ -20,8 +22,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
   const [pullDistance, setPullDistance] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pullDistanceRef = useRef(0);
-  const onRefreshRef = useRef(onRefresh);
-  onRefreshRef.current = onRefresh;
+  const onRefreshRef = useLatestRef(onRefresh);
 
   // The effect is gated on `isMobile` *inside* the body (not via an early
   // return before it): a `return` ahead of a hook changes the hook count when
@@ -38,6 +39,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
     let atTop = false;
     let pulling = false;
     let disqualified = false; // this gesture can't become a pull
+    let wasReady = false; // for the haptic tick when the threshold is crossed
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
@@ -50,6 +52,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       atTop = scrollEl.scrollTop <= 0;
       pulling = false;
       disqualified = false;
+      wasReady = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -84,7 +87,12 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       const distance = Math.min(MAX_PULL, rawDy * DAMPING);
       pullDistanceRef.current = distance;
       setPullDistance(distance);
-      setState(distance >= PULL_THRESHOLD ? 'ready' : 'pulling');
+      const ready = distance >= PULL_THRESHOLD;
+      if (ready !== wasReady) {
+        wasReady = ready;
+        void selectionTick();
+      }
+      setState(ready ? 'ready' : 'pulling');
     };
 
     const onTouchEnd = () => {
@@ -123,7 +131,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       scrollEl.removeEventListener('touchend', onTouchEnd);
       scrollEl.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, [isMobile]);
+  }, [isMobile, onRefreshRef]);
 
   if (!isMobile) return <>{children}</>;
 

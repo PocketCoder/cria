@@ -2,6 +2,7 @@ import { callApi, type ApiClient } from '@/api/client';
 import { withTx, type Database } from '@/db';
 import { notify } from '@/db/bus';
 import { ApiError } from '@/api/errors';
+import { resolveUploadedPendingRefs } from '@/sync/attachments';
 import { type OutboxRow, type ProjectLookup, type TaskRow, callApiIgnore404, type LabelLookup, cachedCreateResponse, cacheCreateResponse, checkDivergence } from './shared';
 
 export const TASK_CONFLICT_FIELDS = [
@@ -226,6 +227,8 @@ export async function executeTaskOp(
     );
   const task = taskRows[0];
   if (!task) return; // permanently gone; nothing to do
+  // Never send an inline-image placeholder whose upload has already landed.
+  task.description = await resolveUploadedPendingRefs(task.description);
 
   if (op.op === 'create') {
     if (task.deleted === 1) {

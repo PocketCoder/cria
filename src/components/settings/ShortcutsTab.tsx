@@ -56,7 +56,7 @@ export function ShortcutsTab() {
         </div>
         {groups.map((group) => (
           <div key={group}>
-            <h4 className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            <h4 className="mb-1 px-1 group-label text-[var(--color-muted-foreground)]">
               {group}
             </h4>
             <div className="space-y-1 rounded-lg border border-[var(--color-border)] p-3">

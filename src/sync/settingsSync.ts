@@ -12,14 +12,34 @@
  * Device-specific settings (tray, autostart, notification permission, the
  * shopping default *project id* which is a per-device local id) stay local and
  * are intentionally NOT synced.
+ *
+ * One setting is shared with Vikunja-web rather than namespaced: the Quick Add
+ * Magic mode lives at web's own key, `frontend_settings.quick_add_magic_mode`,
+ * so a mode picked on the web applies in Cria and vice versa.
+ *
+ * Every settings write goes through `saveUserSettings`, which sends only what
+ * the user changed: a v2 merge-patch where the server has one, else a v1 POST
+ * of the whole object rebuilt from a fresh read (see AGENTS.md).
  */
 
 import { useSettings, type ColorScheme, type DateFormat, type TimeFormat } from '@/stores/settings';
-import { pushUserSettings, SETTINGS_DEFAULTS, type UserSettingsInput } from '@/api/userSettings';
+import { patchUserSettings, pushUserSettings } from '@/api/userSettings';
+import { fetchCurrentUser } from '@/api/user';
+import { getAuthSnapshot } from '@/auth/store';
 import { getCachedUser } from '@/db/user';
 import type { User } from '@/domain/user';
+import type { QuickAddMagicMode } from '@/lib/quickAddPrefixes';
+import {
+  QUICK_ADD_MAGIC_KEY,
+  applySettingsChange,
+  criaPrefsOf,
+  frontendSettingsOf,
+  quickAddMagicModeOf,
+  settingsMergePatch,
+  settingsOf,
+  type SettingsChange,
+} from '@/sync/frontendSettings';
 
-const CRIA_KEY = 'cria';
 const PUSH_DEBOUNCE_MS = 800;
 
 export interface SyncedPrefs {
@@ -28,6 +48,9 @@ export interface SyncedPrefs {
   timeFormat: TimeFormat;
   playSoundWhenDone: boolean;
 }
+
+type SyncedPrefKey = keyof SyncedPrefs;
+const SYNCED_PREF_KEYS: readonly SyncedPrefKey[] = ['colorScheme', 'dateFormat', 'timeFormat', 'playSoundWhenDone'];
 
 function currentPrefs(): SyncedPrefs {
   const s = useSettings.getState();
@@ -46,35 +69,47 @@ let applyingRemote = false;
  *  Pinned on globalThis: an HMR reset would re-hydrate and revert settings. */
 declare global {
   var __cria_settingsHydrated__: boolean | undefined;
-}
-
-function frontendSettingsOf(user: User | null): Record<string, unknown> {
-  const settings = (user?.raw as Record<string, unknown> | undefined)?.settings as
-    | Record<string, unknown>
-    | undefined;
-  const fs = settings?.frontend_settings;
-  return fs && typeof fs === 'object' ? (fs as Record<string, unknown>) : {};
-}
-
-function criaPrefsOf(frontendSettings: Record<string, unknown>): Partial<SyncedPrefs> | null {
-  const cria = frontendSettings[CRIA_KEY];
-  return cria && typeof cria === 'object' ? (cria as Partial<SyncedPrefs>) : null;
+  /** Last Quick Add Magic mode seen on the server this session. */
+  var __cria_serverQuickAddMode__: QuickAddMagicMode | undefined;
+  /** Tail of the settings-save queue: one save at a time. */
+  var __cria_settingsSaveChain__: Promise<void> | undefined;
+  /** Server URLs that answered the v2 settings PATCH with "no such endpoint"
+   *  this session; saves there go straight to the v1 POST. */
+  var __cria_settingsPatchUnsupported__: Set<string> | undefined;
 }
 
 /**
- * Build the `frontend_settings` object to send to the server: the user's
- * existing blob with Cria's prefs merged in. Exported so SettingsModal's other
- * pushes (name, reminders) can include the live prefs and never clobber them.
+ * Follow the server's Quick Add Magic mode. Unlike the Cria prefs this runs on
+ * every user fetch, so a change made on the web reaches a running app, but it
+ * only applies a value the server *changed to*: a server value equal to the
+ * last one seen leaves the local mode alone, so a refetch landing before a
+ * local change has finished pushing can't revert it.
  */
-export function frontendSettingsWithCria(existing: unknown): Record<string, unknown> {
-  const base = existing && typeof existing === 'object' ? (existing as Record<string, unknown>) : {};
-  return { ...base, [CRIA_KEY]: currentPrefs() };
+function followServerQuickAddMode(frontendSettings: Record<string, unknown>): void {
+  const mode = quickAddMagicModeOf(frontendSettings);
+  if (!mode || mode === globalThis.__cria_serverQuickAddMode__) return;
+  globalThis.__cria_serverQuickAddMode__ = mode;
+  const s = useSettings.getState();
+  if (mode === s.quickAddMagicMode) return;
+  applyingRemote = true;
+  try {
+    s.setQuickAddMagicMode(mode);
+  } finally {
+    applyingRemote = false;
+  }
 }
 
-/** Apply server-stored prefs to the local store once. No echo back to server. */
+/**
+ * Apply server-stored prefs to the local store: the Cria prefs once per
+ * session, the Quick Add Magic mode whenever it changed server-side. No echo
+ * back to the server.
+ */
 export function maybeHydrateSyncedPrefs(user: User | null): void {
-  if (globalThis.__cria_settingsHydrated__ || !user) return;
-  const prefs = criaPrefsOf(frontendSettingsOf(user));
+  if (!user) return;
+  const frontendSettings = frontendSettingsOf(settingsOf(user));
+  followServerQuickAddMode(frontendSettings);
+  if (globalThis.__cria_settingsHydrated__) return;
+  const prefs = criaPrefsOf(frontendSettings) as Partial<SyncedPrefs> | null;
   globalThis.__cria_settingsHydrated__ = true; // mark even if absent, so we don't re-check every refetch
   if (!prefs) return;
   applyingRemote = true;
@@ -91,44 +126,97 @@ export function maybeHydrateSyncedPrefs(user: User | null): void {
   }
 }
 
-/** Push the local synced prefs into the server's frontend_settings, preserving
- *  the rest of the settings object and any other frontend_settings keys. */
-export async function pushSyncedPrefs(): Promise<void> {
-  const user = await getCachedUser();
-  if (!user) return; // not signed in / not cached yet — a later change retries
-  const serverSettings = (user.raw as Record<string, unknown>)?.settings as
-    | Record<string, unknown>
-    | undefined;
-  const body: UserSettingsInput = {
-    // Seed with defaults so any field missing from the server response
-    // (e.g. a new field added server-side after the client was built) sends
-    // a safe fallback instead of Go's zero value — which the endpoint's
-    // forceOverride=true would otherwise persist silently.
-    ...SETTINGS_DEFAULTS,
-    ...(serverSettings as Partial<UserSettingsInput> | undefined),
-    frontend_settings: frontendSettingsWithCria(serverSettings?.frontend_settings),
+/**
+ * Save one settings change without overwriting anything another client wrote.
+ *
+ * Vikunja v2.7.0+ takes a merge-patch at `PATCH /api/v2/user/settings/general`:
+ * only the changed fields go over the wire and the server merges them into
+ * what it holds at that moment, so Cria never sends back a copy that may have
+ * gone stale. Older servers answer 404 or 405; there (remembered per server
+ * URL for the session) the save falls back to v1: GET /user for the server's
+ * current settings, apply only `change` on top, POST the whole object. Never
+ * falls back to cached settings: if that GET fails, nothing is sent.
+ *
+ * Saves run one at a time either way: the server applies a PATCH as read,
+ * merge, write, so two in flight at once could still revert each other.
+ */
+export function saveUserSettings(change: SettingsChange): Promise<void> {
+  const run = async () => {
+    if (await savedByPatch(change)) return;
+    await saveByFullPost(change);
   };
+  const queued = (globalThis.__cria_settingsSaveChain__ ?? Promise.resolve()).then(run);
+  globalThis.__cria_settingsSaveChain__ = queued.catch(() => undefined);
+  return queued;
+}
+
+/** The v2 path. False when the server has no settings PATCH (nothing was written). */
+async function savedByPatch(change: SettingsChange): Promise<boolean> {
+  const unsupported = (globalThis.__cria_settingsPatchUnsupported__ ??= new Set());
+  const server = (getAuthSnapshot().serverUrl ?? '').replace(/\/+$/, '');
+  if (unsupported.has(server)) return false;
+  if ((await patchUserSettings(settingsMergePatch(change))) === 'unsupported') {
+    unsupported.add(server);
+    return false;
+  }
+  // The server now holds this mode; a refetch showing it is not a web change.
+  // A mode changed on the web reaches the app on the next user refetch: the
+  // patch doesn't carry the mode, so the server keeps the web's either way.
+  const saved = quickAddMagicModeOf(change.frontend ?? {});
+  if (saved) globalThis.__cria_serverQuickAddMode__ = saved;
+  return true;
+}
+
+/** The v1 path: re-read, apply only `change`, POST the whole object. */
+async function saveByFullPost(change: SettingsChange): Promise<void> {
+  const server = settingsOf(await fetchCurrentUser());
+  // A mode changed on the web since we last looked is picked up here, so
+  // the body below (which keeps it) and the local parser agree. Skipped when
+  // this save *is* a mode change: the user's choice wins.
+  if (!change.frontend || !(QUICK_ADD_MAGIC_KEY in change.frontend)) {
+    followServerQuickAddMode(frontendSettingsOf(server));
+  }
+  const body = applySettingsChange(server, change);
   await pushUserSettings(body);
+  // The server now holds this mode; a refetch showing it is not a web change.
+  const saved = quickAddMagicModeOf(frontendSettingsOf(body as Record<string, unknown>));
+  if (saved) globalThis.__cria_serverQuickAddMode__ = saved;
+}
+
+/** Push the given Cria prefs (all by default) into frontend_settings.cria. */
+export async function pushSyncedPrefs(keys: readonly SyncedPrefKey[] = SYNCED_PREF_KEYS): Promise<void> {
+  if (!(await getCachedUser())) return; // not signed in / not cached yet — a later change retries
+  const prefs = currentPrefs();
+  const cria: Partial<SyncedPrefs> = {};
+  for (const k of keys) (cria as Record<string, unknown>)[k] = prefs[k];
+  await saveUserSettings({ cria });
 }
 
 /**
  * Subscribe once (mount in App): debounce-push synced prefs whenever they
- * change, unless we're the ones applying server values. Returns an unsubscribe.
+ * change, unless we're the ones applying server values. Only the prefs that
+ * changed are sent, so another device's change to a different pref survives.
+ * Returns an unsubscribe.
  */
 export function startSettingsSync(): () => void {
-  let prev = JSON.stringify(currentPrefs());
+  let prev = currentPrefs();
+  let pending = new Set<SyncedPrefKey>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   const unsub = useSettings.subscribe(() => {
+    const next = currentPrefs();
     if (applyingRemote) {
-      prev = JSON.stringify(currentPrefs());
+      prev = next;
       return;
     }
-    const next = JSON.stringify(currentPrefs());
-    if (next === prev) return;
+    const changed = SYNCED_PREF_KEYS.filter((k) => next[k] !== prev[k]);
     prev = next;
+    if (changed.length === 0) return;
+    for (const k of changed) pending.add(k);
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
-      void pushSyncedPrefs().catch((e) => console.warn('[settings-sync] push failed:', e));
+      const keys = [...pending];
+      pending = new Set();
+      void pushSyncedPrefs(keys).catch((e) => console.warn('[settings-sync] push failed:', e));
     }, PUSH_DEBOUNCE_MS);
   });
   return () => {

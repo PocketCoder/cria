@@ -19,7 +19,7 @@ import type { Task } from '@/domain/task';
  * already hit the server and undo would have to re-create it. Deferring
  * the commit makes undo 100% reliable with no server round-trip.
  */
-const UNDO_WINDOW_MS = 15_000;
+const UNDO_WINDOW_MS = 5_000;
 
 // Timers aren't render state, so they live outside the store. Pinned to
 // globalThis so a Vite HMR reload of this module mid-window doesn't

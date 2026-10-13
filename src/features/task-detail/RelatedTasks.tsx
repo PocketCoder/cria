@@ -20,6 +20,7 @@ import {
 import { searchTasks, type TaskWithProject } from '@/db/tasks';
 import { subscribe } from '@/db/bus';
 import { useUi } from '@/stores/ui';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 import {
   TASK_RELATION_PICKABLE_KINDS,
   type TaskRelationKind,
@@ -111,7 +112,7 @@ export function RelatedTasks({
   return (
     <section className="mb-4">
       {hideHeader ? null : (
-        <h3 className="mb-1 flex items-center gap-1 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+        <h3 className="mb-1 flex items-center gap-1 group-label text-[var(--color-muted-foreground)]">
           <Link2 className="h-3 w-3" />
           Related tasks
           {relations.length > 0 ? (
@@ -134,7 +135,7 @@ export function RelatedTasks({
                     className="group flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
                   >
                     {r.otherTaskDone ? (
-                      <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-success,var(--color-primary))]" />
+                      <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--color-success-text,var(--color-primary))]" />
                     ) : (
                       <Square className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
                     )}
@@ -167,7 +168,7 @@ export function RelatedTasks({
                       type="button"
                       onClick={() => void handleRemove(r)}
                       aria-label="Remove relation"
-                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
+                      className="shrink-0 rounded p-0.5 max-md:p-2.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-warning-text)] group-hover:opacity-100 [@media(hover:none)]:opacity-100 disabled:opacity-40 cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -235,6 +236,7 @@ function AddRelationRow({
 }) {
   const qc = useQueryClient();
   const [kind, setKind] = useState<TaskRelationKind>(pickableKinds[0] ?? 'related');
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TaskWithProject[]>([]);
   const [busy, setBusy] = useState(false);
@@ -330,8 +332,9 @@ function AddRelationRow({
           </SelectContent>
         </Select>
         <input
+          aria-label="Search tasks"
           type="text"
-          autoFocus
+          ref={focusOnMount}
           placeholder="Search tasks…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

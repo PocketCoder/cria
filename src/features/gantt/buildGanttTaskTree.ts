@@ -164,14 +164,14 @@ export function reorderRootBlocks(
 ): GanttTaskNode[] {
   const blocks = new Map<string, GanttTaskNode[]>();
   const original: string[] = [];
-  let currentRoot: string | null = null;
+  let currentBlock: GanttTaskNode[] | null = null;
   for (const n of nodes) {
     if (n.indentLevel === 0) {
-      currentRoot = n.task.localId;
-      blocks.set(currentRoot, [n]);
-      original.push(currentRoot);
-    } else if (currentRoot) {
-      blocks.get(currentRoot)!.push(n);
+      currentBlock = [n];
+      blocks.set(n.task.localId, currentBlock);
+      original.push(n.task.localId);
+    } else if (currentBlock) {
+      currentBlock.push(n);
     }
   }
 
@@ -185,7 +185,8 @@ export function reorderRootBlocks(
     }
   }
   for (const id of original) {
-    if (!seen.has(id)) out.push(...blocks.get(id)!);
+    const block = blocks.get(id);
+    if (block && !seen.has(id)) out.push(...block);
   }
   return out;
 }

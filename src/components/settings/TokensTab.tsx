@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LabeledInput } from '@/components/ui/labeled-input';
 import {
   listApiTokens,
   createApiToken,
@@ -136,7 +137,7 @@ export function TokensTab({ disabled }: Props) {
             </Button>
           ) : newTokenValue ? (
             <div className="space-y-2">
-              <p className="text-xs text-[var(--color-success)]">Token created — copy it now, it won't be shown again.</p>
+              <p className="text-xs text-[var(--color-success-text)]">Token created — copy it now, it won't be shown again.</p>
               <div className="flex gap-2">
                 <code className="flex-1 rounded bg-[var(--color-muted)] px-2 py-1 text-xs break-all">{newTokenValue}</code>
                 <Button size="sm" onClick={copyToken}>{copied ? 'Copied!' : 'Copy'}</Button>
@@ -147,18 +148,19 @@ export function TokensTab({ disabled }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              <input
+              <LabeledInput
+                label="Token description"
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Token description"
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+                inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
-              <input
+              <LabeledInput
+                label="Expiry date (optional)"
                 type="date"
                 value={newExpiry}
                 onChange={(e) => setNewExpiry(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
+                inputClassName="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm"
               />
               {routes.length > 0 && (
                 <div>
@@ -216,7 +218,7 @@ export function TokensTab({ disabled }: Props) {
             ))}
           {newCaldavToken && (
             <div className="space-y-2">
-              <p className="text-xs text-[var(--color-success)]">Token created — copy it now, it won't be shown again.</p>
+              <p className="text-xs text-[var(--color-success-text)]">Token created — copy it now, it won't be shown again.</p>
               <div className="flex gap-2">
                 <code className="flex-1 rounded bg-[var(--color-muted)] px-2 py-1 text-xs break-all">{newCaldavToken}</code>
                 <Button

@@ -26,7 +26,7 @@ export function InlineWarning({
         className,
       )}
     >
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warning)]" />
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warning-text)]" />
       <div className="flex-1 leading-snug text-[var(--color-foreground)]">
         {children}
       </div>

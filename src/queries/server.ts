@@ -32,3 +32,19 @@ export function useFrontendUrl() {
     refetchOnWindowFocus: false,
   });
 }
+
+/** Background providers the instance enables (`upload`, `unsplash`). */
+export function useBackgroundProviders() {
+  return useQuery<string[]>({
+    queryKey: ['server-background-providers'],
+    queryFn: async () => {
+      const { serverUrl } = getAuthSnapshot();
+      if (!serverUrl) return [];
+      const { backgroundProviders } = await probeServer(serverUrl);
+      return backgroundProviders;
+    },
+    staleTime: 60 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}

@@ -319,11 +319,14 @@ export function createApiClient(opts?: {
 /**
  * Build an authenticated `fetch`-like function bound to the current auth
  * context.  Use this for endpoints the generated OpenAPI types don't cover
- * (e.g. views/buckets pagination where `query` is typed `never`).
+ * (e.g. views/buckets pagination where `query` is typed `never`), and for
+ * the few `/api/v2` endpoints Cria uses (`apiVersion: 'v2'`).
  */
-export function createApiFetch(): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+export function createApiFetch(
+  apiVersion: 'v1' | 'v2' = 'v1',
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   const snap = getAuthSnapshot();
-  const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/v1`;
+  const baseUrl = `${normalizeBase(snap.serverUrl ?? '')}/api/${apiVersion}`;
   const token = snap.token ?? '';
   guardTokenDestination(baseUrl, token);
   return async (input, init) => {
@@ -378,7 +381,11 @@ export async function callApi<T>(
  */
 export async function probeServer(
   serverUrl: string,
-): Promise<{ version: string | null; frontendUrl: string | null }> {
+): Promise<{
+  version: string | null;
+  frontendUrl: string | null;
+  backgroundProviders: string[];
+}> {
   const client = createClient<paths>({
     baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
     fetch: platformFetch,
@@ -387,6 +394,7 @@ export async function probeServer(
   return {
     version: info.version ?? null,
     frontendUrl: (info as { frontend_url?: string }).frontend_url || null,
+    backgroundProviders: info.enabled_background_providers ?? [],
   };
 }
 

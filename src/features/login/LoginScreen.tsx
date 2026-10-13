@@ -1,36 +1,39 @@
 import { useState } from 'react';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useAuth } from '@/auth/store';
+import { useSettings } from '@/stores/settings';
 import { createApiClient } from '@/api/client';
 import { fetchCurrentUser } from '@/api/user';
 import { loginWithPassword, isTotpRequired } from '@/api/login';
 import { authLinkShare, SHARE_PASSWORD_REQUIRED_CODE } from '@/api/shareAuth';
 import { parseShareInput } from '@/lib/shareInput';
-import type { User } from '@/domain/user';
-import { ApiError, NetworkError } from '@/api/errors';
-
-const serverUrlSchema = z.string().trim().url().refine(
-  (url) => {
-    try {
-      const u = new URL(url);
-      if (u.protocol === 'https:') return true;
-      return ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
-    } catch { return false; }
-  },
-  'Use https:// or a loopback address (localhost/127.0.0.1) for http://',
-);
-
-type AuthMethod = 'token' | 'password' | 'share';
+import { ApiError } from '@/api/errors';
+import {
+  serverUrlSchema,
+  makeShareUser,
+  messageFor,
+  type AuthMethod,
+} from './loginHelpers';
+import {
+  LoginHeader,
+  MethodTabs,
+  ServerUrlField,
+  CredentialFields,
+  RememberOptions,
+} from './LoginFields';
 
 export function LoginScreen() {
   const signIn = useAuth((s) => s.signIn);
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('token');
-  const [serverUrl, setServerUrl] = useState('');
+  const recentServers = useSettings((s) => s.recentServers);
+  const rememberServerUrl = useSettings((s) => s.rememberServer);
+  const forgetServer = useSettings((s) => s.forgetServer);
+  const lastServer = recentServers[0];
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(lastServer?.username ? 'password' : 'token');
+  const [serverUrl, setServerUrl] = useState(lastServer?.url ?? '');
+  const [rememberServer, setRememberServer] = useState(true);
+  const [rememberMe, setRememberMe] = useState(true);
   const [token, setToken] = useState('');
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(lastServer?.username ?? '');
   const [password, setPassword] = useState('');
   const [serverUrlError, setServerUrlError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -49,6 +52,19 @@ export function LoginScreen() {
     setServerUrlError(undefined);
   };
 
+  const pickServer = (r: { url: string; username?: string }) => {
+    setServerUrl(r.url);
+    setServerUrlError(undefined);
+    if (r.username) setUsername(r.username);
+  };
+
+  // Called once the server has accepted the credentials. Username is only kept
+  // for password logins, and only with "Remember me" ticked.
+  const remember = (url: string, user?: string) => {
+    if (!rememberServer) return;
+    rememberServerUrl(url, rememberMe ? user : undefined);
+  };
+
   const doPasswordSignIn = async (
     url: string,
     user: string,
@@ -63,6 +79,7 @@ export function LoginScreen() {
     });
     const client = createApiClient({ baseUrl: url, token: t });
     const me = await fetchCurrentUser(client);
+    remember(url, user);
     await signIn(
       { serverUrl: url, token: t, refreshToken: refreshToken ?? undefined, authMethod: 'password' },
       me,
@@ -92,6 +109,7 @@ export function LoginScreen() {
       try {
         const client = createApiClient({ baseUrl: url, token });
         const user = await fetchCurrentUser(client);
+        remember(url);
         await signIn({ serverUrl: url, token, authMethod: 'token' }, user);
       } catch (err) {
         console.error('[login] token sign-in failed:', err);
@@ -115,21 +133,8 @@ export function LoginScreen() {
           hash,
           sharePassword || undefined,
         );
-        // Link-share sessions have no real account behind them — a
-        // synthetic user keeps the rest of the app (which expects one)
-        // working; account-only chrome is hidden via isLinkShareSession.
-        const shareUser: User = {
-          serverId: 0,
-          username: `link-share-${hash}`,
-          email: null,
-          name: 'Shared project',
-          raw: {},
-          fetchedAt: new Date().toISOString(),
-          defaultProjectId: null,
-          language: '',
-          timezone: '',
-          weekStart: 1,
-        };
+        const shareUser = makeShareUser(hash);
+        remember(url);
         await signIn(
           { serverUrl: url, token: shareToken, authMethod: 'linkShare' },
           shareUser,
@@ -189,163 +194,46 @@ export function LoginScreen() {
 
   return (
     <main className="flex min-h-full items-center justify-center bg-[var(--color-background)] p-6">
-      <div className="w-full max-w-md space-y-6 rounded-xl bg-[var(--color-card)] p-8 text-center dark:border dark:border-[var(--color-border)]">
-        <div className="flex flex-col items-center space-y-2">
-          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-[13px] bg-[var(--color-inverse)] text-[var(--color-inverse-foreground)]">
-            <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-[-0.03em]">Point Cria at your Vikunja</h1>
-          <p className="mx-auto max-w-[42ch] text-[14.5px] leading-relaxed text-[var(--color-muted-foreground)]">
-            Everything is stored on your machine and synced in the background. Works offline from the first launch.
-          </p>
-        </div>
+      <div className="w-full max-w-md space-y-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-8 text-center shadow-sm">
+        <LoginHeader />
 
-        <div className="flex rounded-lg border border-[var(--color-border)] p-0.5">
-          <button
-            type="button"
-            onClick={() => switchMethod('token')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-              authMethod === 'token'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
-          >
-            API Token
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMethod('password')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-              authMethod === 'password'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
-          >
-            Username &amp; Password
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMethod('share')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-              authMethod === 'share'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
-          >
-            Share link
-          </button>
-        </div>
+        <MethodTabs authMethod={authMethod} onSwitch={switchMethod} />
 
         <form onSubmit={onSubmit} className="space-y-4 text-left">
-          <div className="space-y-2">
-            <Label htmlFor="serverUrl">Server URL</Label>
-            <Input
-              id="serverUrl"
-              type="url"
-              inputMode="url"
-              autoComplete="url"
-              autoCapitalize="off"
-              spellCheck={false}
-              placeholder="https://vikunja.example.com"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-            />
-            <FieldError message={serverUrlError} />
-          </div>
+          <ServerUrlField
+            value={serverUrl}
+            onChange={setServerUrl}
+            error={serverUrlError}
+            recents={recentServers}
+            onPick={pickServer}
+            onForget={forgetServer}
+          />
 
-          {authMethod === 'token' ? (
-            <div className="space-y-2">
-              <Label htmlFor="apiToken">API token</Label>
-              <Input
-                id="apiToken"
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="tk_…"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <p className="text-xs text-[var(--color-muted-foreground)]">
-                Create one in Vikunja's web UI under Settings → API Tokens.
-              </p>
-            </div>
-          ) : authMethod === 'share' ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="shareLink">Share link or code</Label>
-                <Input
-                  id="shareLink"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="https://vikunja.example.com/share/…/auth"
-                  value={shareLink}
-                  onChange={(e) => setShareLink(e.target.value)}
-                />
-              </div>
-              {sharePasswordRequired && (
-                <div className="space-y-2">
-                  <Label htmlFor="sharePassword">Share password</Label>
-                  <Input
-                    id="sharePassword"
-                    type="password"
-                    autoComplete="off"
-                    value={sharePassword}
-                    onChange={(e) => setSharePassword(e.target.value)}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="loginUsername">Username or email</Label>
-                <Input
-                  id="loginUsername"
-                  autoComplete="username"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  placeholder="jane@example.com"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </div>
+          <CredentialFields
+            authMethod={authMethod}
+            token={token}
+            setToken={setToken}
+            shareLink={shareLink}
+            setShareLink={setShareLink}
+            sharePasswordRequired={sharePasswordRequired}
+            sharePassword={sharePassword}
+            setSharePassword={setSharePassword}
+            username={username}
+            setUsername={setUsername}
+            password={password}
+            setPassword={setPassword}
+            totpRequired={totpRequired}
+            totpCode={totpCode}
+            setTotpCode={setTotpCode}
+          />
 
-              <div className="space-y-2">
-                <Label htmlFor="loginPassword">Password</Label>
-                <Input
-                  id="loginPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  spellCheck={false}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-
-              {totpRequired && (
-                <div className="space-y-2">
-                  <Label htmlFor="token">Two-factor code</Label>
-                  <Input
-                    id="token"
-                    name="token"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    autoComplete="one-time-code"
-                    autoFocus
-                    placeholder="000000"
-                    value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  />
-                  <p className="text-xs text-[var(--color-muted-foreground)]">
-                    Enter the code from your authenticator app.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
+          <RememberOptions
+            rememberServer={rememberServer}
+            setRememberServer={setRememberServer}
+            rememberMe={rememberMe}
+            setRememberMe={setRememberMe}
+            showRememberMe={authMethod === 'password'}
+          />
 
           {submitError ? (
             <div
@@ -382,25 +270,4 @@ export function LoginScreen() {
       </div>
     </main>
   );
-}
-
-function FieldError({ message }: { message?: string | undefined }) {
-  if (!message) return null;
-  return <p className="text-xs text-[var(--color-destructive)]">{message}</p>;
-}
-
-function messageFor(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 401 || err.status === 403) {
-      return 'That was rejected. Double-check your credentials.';
-    }
-    if (err.status === 404) {
-      return "Couldn't find a Vikunja API at that URL — is /api/v1 reachable?";
-    }
-    return err.message || `Server returned HTTP ${err.status}.`;
-  }
-  if (err instanceof NetworkError) {
-    return "Couldn't reach the server. Check the URL and your connection.";
-  }
-  return err instanceof Error ? err.message : 'Sign-in failed.';
 }

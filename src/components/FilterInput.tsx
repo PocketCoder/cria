@@ -16,8 +16,8 @@ import {
 const KIND_COLOR: Record<SpanKind, string> = {
   field: 'var(--color-primary)',
   operator: 'var(--color-muted-foreground)',
-  value: 'var(--color-success, #15803d)',
-  logical: 'var(--color-warning, #b45309)',
+  value: 'var(--color-success-text, #15803d)',
+  logical: 'var(--color-warning-text, #b45309)',
   paren: 'var(--color-muted-foreground)',
   unknown: 'var(--color-destructive)',
 };
@@ -43,12 +43,18 @@ export function FilterInput({
   rows = 2,
   autoFocus,
   placeholder,
+  id,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   rows?: number;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Lets an external `<label htmlFor>` name the textarea. */
+  id?: string;
+  /** Accessible name when there's no visible `<label>`. */
+  ariaLabel?: string;
 }) {
   const { data: labels = [] } = useLabels();
   const { data: projects = [] } = useProjects();
@@ -138,6 +144,8 @@ export function FilterInput({
       </div>
       <textarea
         ref={taRef}
+        id={id}
+        aria-label={ariaLabel}
         value={value}
         rows={rows}
         autoFocus={autoFocus}
@@ -178,6 +186,7 @@ export function FilterInput({
             accept(suggestions[highlightIdx] ?? suggestions[0]!);
           } else if (e.key === 'Escape') {
             e.stopPropagation();
+            e.preventDefault(); // dismiss suggestions, not a surrounding dialog
             setDismissed(true);
           }
         }}

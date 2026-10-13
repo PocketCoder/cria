@@ -19,6 +19,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
     // Tests mock loosely typed clients; `any` there is fine.
     files: ['tests/**'],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },

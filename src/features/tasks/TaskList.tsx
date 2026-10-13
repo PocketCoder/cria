@@ -25,6 +25,7 @@ import { viewFilterParams } from '@/domain/view';
 import type { ProjectView } from '@/domain/view';
 import type { Task } from '@/domain/task';
 import { cn } from '@/lib/cn';
+import { useOptimisticOrder } from '@/lib/useOptimisticOrder';
 import { updateTask, duplicateTask, reorderTask, reindexTasks } from '@/db/tasks';
 import { planReorder } from '@/lib/position';
 import { listSubtaskRelationsForProject } from '@/db/relations';
@@ -34,7 +35,6 @@ import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useListFocus } from '@/stores/listFocus';
-import { onShortcut } from '@/lib/shortcutBus';
 import { useDisplay } from '@/stores/display';
 import { useDisplayCtx } from '@/queries/displayData';
 import { filterTasks, sortTasks, defaultConfigFor } from '@/lib/displayConfig';
@@ -47,27 +47,17 @@ import {
 } from '@/components/ui/context-menu';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { TaskHoverPreview } from './TaskHoverPreview';
-import { TaskRowCore, countChecklistItems } from './TaskRowCore';
-
-// Collect a task and all its descendants from the task tree
-function collectSubtreeIds(taskId: string, nodes: TaskTreeNode[]): string[] {
-  const find = (list: TaskTreeNode[]): TaskTreeNode | undefined => {
-    for (const n of list) {
-      if (n.task.localId === taskId) return n;
-      const child = find(n.children);
-      if (child) return child;
-    }
-    return undefined;
-  };
-  const root = find(nodes);
-  if (!root) return [];
-  const out: string[] = [];
-  const dfs = (n: TaskTreeNode) => { out.push(n.task.localId); n.children.forEach(dfs); };
-  dfs(root);
-  return out;
-}
-
-
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { forceSync } from '@/sync/forceSync';
+import { TaskRowCore } from './TaskRowCore';
+import { countChecklistItems } from './taskRowHelpers';
+import {
+  buildTaskTree,
+  orderRoots,
+  resolveRootTargetId,
+  type TaskTreeNode,
+} from './taskTree';
+import { useRowKeyboardNav } from './useRowKeyboardNav';
 
 interface TaskListProps {
   project: Project;
@@ -113,6 +103,10 @@ export function TaskList({ project, view }: TaskListProps) {
   );
   const { data: attachmentIds } = useTasksWithAttachments();
   const qc = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    await forceSync();
+    await qc.invalidateQueries();
+  }, [qc]);
   const {
     data: subtaskMap = new Map()
   } = useQuery({
@@ -134,44 +128,7 @@ export function TaskList({ project, view }: TaskListProps) {
     [completedTasks, subtaskMap],
   );
 
-  // j/k/Enter row focus (fixed shortcut set). Moves through the visible
-  // tree in display order; Enter opens the focused task's detail card.
-  useEffect(() => {
-    const flatIds = (): string[] => {
-      const out: string[] = [];
-      const dfs = (nodes: TaskTreeNode[]) => {
-        for (const n of nodes) {
-          out.push(n.task.localId);
-          dfs(n.children);
-        }
-      };
-      dfs(taskTree);
-      return out;
-    };
-    const move = (delta: 1 | -1) => {
-      const ids = flatIds();
-      if (ids.length === 0) return;
-      const { focusedId, setFocusedId } = useListFocus.getState();
-      const idx = focusedId ? ids.indexOf(focusedId) : -1;
-      const next = ids[Math.min(ids.length - 1, Math.max(0, idx + delta))]!;
-      setFocusedId(next);
-      document
-        .querySelector(`[data-task-row="${next}"]`)
-        ?.scrollIntoView({ block: 'nearest' });
-    };
-    const subs = [
-      onShortcut('list.down', () => move(1)),
-      onShortcut('list.up', () => move(-1)),
-      onShortcut('list.open', () => {
-        const { focusedId } = useListFocus.getState();
-        if (focusedId) useUi.getState().setSelectedTask(focusedId);
-      }),
-    ];
-    return () => {
-      subs.forEach((u) => u());
-      useListFocus.getState().setFocusedId(null);
-    };
-  }, [taskTree]);
+  useRowKeyboardNav(taskTree);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState(false);
@@ -181,42 +138,19 @@ export function TaskList({ project, view }: TaskListProps) {
   // a state array that we update directly, separate from the query cache,
   // AND drive the rendered root order from it (see `orderedRoots`) so the
   // DOM and the SortableContext never disagree about where a row sits.
-  const [sortableItems, setSortableItems] = useState<string[]>(() =>
-    taskTree.map((n) => n.task.localId),
-  );
-  // Sync with taskTree when the query refetches, but avoid infinite loops:
-  // return the same reference from the updater when IDs are unchanged.
-  useEffect(() => {
-    setSortableItems((prev) => {
-      const next = taskTree.map((n) => n.task.localId);
-      if (prev.length === next.length && prev.every((id, i) => id === next[i])) {
-        return prev;
-      }
-      return next;
-    });
-  }, [taskTree]);
+  // The override is dropped whenever taskTree changes (query refetch).
+  const rootIds = useMemo(() => taskTree.map((n) => n.task.localId), [taskTree]);
+  const [sortableItems, setSortableItems] = useOptimisticOrder(rootIds);
 
   // Render the active roots in `sortableItems` order so an optimistic reorder
   // shows up in the DOM in the same commit that updates the SortableContext —
   // the row stays where it was dropped instead of snapping back to the old
   // query order. Roots not yet reflected in `sortableItems` (e.g. a just-added
   // task, before the sync effect runs) are appended so nothing flashes out.
-  const orderedRoots = useMemo(() => {
-    const byId = new Map(taskTree.map((n) => [n.task.localId, n]));
-    const seen = new Set<string>();
-    const ordered: TaskTreeNode[] = [];
-    for (const id of sortableItems) {
-      const node = byId.get(id);
-      if (node) {
-        ordered.push(node);
-        seen.add(id);
-      }
-    }
-    for (const node of taskTree) {
-      if (!seen.has(node.task.localId)) ordered.push(node);
-    }
-    return ordered;
-  }, [taskTree, sortableItems]);
+  const orderedRoots = useMemo(
+    () => orderRoots(taskTree, sortableItems),
+    [taskTree, sortableItems],
+  );
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -244,13 +178,7 @@ export function TaskList({ project, view }: TaskListProps) {
 
       // Resolve the drop target to the top‑level root (only roots are sortable).
       // If the pointer lands on a child we treat it as dropping onto its parent root.
-      let targetId = overId;
-      for (const root of taskTree) {
-        if (collectSubtreeIds(root.task.localId, taskTree).includes(overId)) {
-          targetId = root.task.localId;
-          break;
-        }
-      }
+      const targetId = resolveRootTargetId(overId, taskTree);
       if (taskId === targetId) return;
 
       // Reordering happens among the ROOT tasks only — subtasks ride along
@@ -287,24 +215,18 @@ export function TaskList({ project, view }: TaskListProps) {
         setReorderError(true);
       }
     },
-    [view, taskTree],
+    [view, taskTree, setSortableItems],
   );
 
   return (
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {reorderError && <ReorderErrorPill onClose={() => setReorderError(false)} />}
-      <div className="border-b border-[var(--color-border)]">
-        <div className="flex items-center justify-between px-7 py-2 text-xs text-[var(--color-muted-foreground)]">
-          <span>
-            {activeTasks.length === 0 && completedTasks.length === 0
-              ? isLoading
-                ? 'Loading…'
-                : 'No tasks'
-              : `${activeTasks.length} task${activeTasks.length === 1 ? '' : 's'}`}
-          </span>
-          {isFetching ? <span aria-live="polite">syncing…</span> : null}
-        </div>
-      </div>
+      <TaskCountBar
+        activeCount={activeTasks.length}
+        completedCount={completedTasks.length}
+        isLoading={isLoading}
+        isFetching={isFetching}
+      />
 
       <DndContext
         sensors={sensors}
@@ -315,7 +237,8 @@ export function TaskList({ project, view }: TaskListProps) {
           items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
-          <ul className={cn('min-h-0 flex-1 overflow-y-auto', isMobile && 'tab-bar-safe-bottom')}>
+          <PullToRefresh onRefresh={handleRefresh}>
+          <ul className={cn(!isMobile && 'min-h-0 flex-1 overflow-y-auto')}>
             {orderedRoots.map((node) => (
               <TreeBranch
                 key={node.task.localId}
@@ -329,7 +252,7 @@ export function TaskList({ project, view }: TaskListProps) {
                 "Completed Tasks" toggle is on, and are hidden otherwise. */}
             {showCompleted && completedTasks.length > 0 ? (
               <li className="border-t border-[var(--color-border)]">
-                <h2 className="px-7 py-1.5 text-footnote font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                <h2 className="px-7 py-1.5 group-label text-[var(--color-muted-foreground)]">
                   Completed
                   <span className="ml-2 font-normal normal-case">{completedTasks.length}</span>
                 </h2>
@@ -346,6 +269,7 @@ export function TaskList({ project, view }: TaskListProps) {
               </li>
             ) : null}
           </ul>
+          </PullToRefresh>
         </SortableContext>
         <DragOverlay>
           {activeId ? (
@@ -359,7 +283,7 @@ export function TaskList({ project, view }: TaskListProps) {
       </DndContext>
 
       {isError ? (
-        <p className="border-t border-[var(--color-border)] px-7 py-2 text-xs text-[var(--color-warning)]">
+        <p className="border-t border-[var(--color-border)] px-7 py-2 text-xs text-[var(--color-warning-text)]">
           Couldn't refresh
           {error instanceof Error ? `: ${error.message}` : ''}.
         </p>
@@ -368,40 +292,31 @@ export function TaskList({ project, view }: TaskListProps) {
   );
 }
 
-/* ─── Sub-task tree data structures ─── */
-
-interface TaskTreeNode {
-  task: Task;
-  children: TaskTreeNode[];
-}
-
-function buildTaskTree(tasks: Task[], parentMap: Map<string, string[]>): TaskTreeNode[] {
-  const taskMap = new Map(tasks.map((t) => [t.localId, t]));
-  // Only treat a task as "nested" (and exclude it from the top level)
-  // when its parent is actually present in the visible set. Otherwise a
-  // child whose parent is filtered out (e.g. a done parent hidden by the
-  // current view) — or a stale relation row whose parent task no longer
-  // exists locally — would be dropped from roots but never rendered as a
-  // child, making it vanish entirely.
-  const childSet = new Set<string>();
-  for (const [parentId, children] of parentMap) {
-    if (!taskMap.has(parentId)) continue;
-    for (const c of children) childSet.add(c);
-  }
-
-  function childrenOf(parentId: string): TaskTreeNode[] {
-    return (parentMap.get(parentId) ?? [])
-      .map((childId) => {
-        const t = taskMap.get(childId);
-        if (!t) return null;
-        return { task: t, children: childrenOf(childId) };
-      })
-      .filter(Boolean) as TaskTreeNode[];
-  }
-
-  return tasks
-    .filter((t) => !childSet.has(t.localId))
-    .map((t) => ({ task: t, children: childrenOf(t.localId) }));
+function TaskCountBar({
+  activeCount,
+  completedCount,
+  isLoading,
+  isFetching,
+}: {
+  activeCount: number;
+  completedCount: number;
+  isLoading: boolean;
+  isFetching: boolean;
+}) {
+  return (
+    <div className="border-b border-[var(--color-border)]">
+      <div className="flex items-center justify-between px-7 py-2 text-xs text-[var(--color-muted-foreground)]">
+        <span>
+          {activeCount === 0 && completedCount === 0
+            ? isLoading
+              ? 'Loading…'
+              : 'No tasks'
+            : `${activeCount} task${activeCount === 1 ? '' : 's'}`}
+        </span>
+        {isFetching ? <span aria-live="polite">syncing…</span> : null}
+      </div>
+    </div>
+  );
 }
 
 const TreeBranch = memo(function TreeBranch({
@@ -478,7 +393,6 @@ const TaskRow = memo(function TaskRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    paddingLeft: `${28 + depth * 28}px`,
     paddingRight: 0,
     overflow: 'hidden',
     position: 'relative',
@@ -546,7 +460,10 @@ const TaskRow = memo(function TaskRow({
             isOpen={!isSelected && selectedTaskId === task.localId}
             onToggleSelect={() => toggleSelected(task.localId)}
             onOpen={handleOpen}
-            className="py-2.5 pr-6"
+            // Desktop rows: 12px 24px, 28px left + 28px per level. iPhone
+            // (max-md): 14px 20px.
+            className="py-3 pr-6 [--row-pad:var(--row-indent)] max-md:py-3.5 max-md:pr-5 max-md:[--row-pad:20px]"
+            style={{ paddingLeft: `calc(var(--row-pad) + ${depth} * var(--row-indent))` }}
             titleSlot={
               editing ? (
                 <input
@@ -562,11 +479,16 @@ const TaskRow = memo(function TaskRow({
               ) : (
                 <TaskHoverPreview task={task} className="min-w-0 flex-1">
                   <p
-                    className="truncate rounded px-1 py-0.5 text-sm"
+                    className={cn(
+                      'truncate rounded px-1 py-0.5 text-sm max-md:text-md',
+                      task.done && 'text-[var(--color-muted-foreground)]',
+                    )}
                     onDoubleClick={handleTitleEdit}
                     title={task.title}
                   >
-                    {task.title}
+                    <span className="task-strike" data-done={task.done || undefined}>
+                      {task.title}
+                    </span>
                   </p>
                 </TaskHoverPreview>
               )
@@ -583,7 +505,7 @@ const TaskRow = memo(function TaskRow({
                 <button
                   onClick={handleDelete}
                   aria-label="Delete task"
-                  className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+                  className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning-text)] cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

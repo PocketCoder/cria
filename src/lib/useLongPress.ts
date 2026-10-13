@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { selectionTick } from '@/utils/haptics';
 
 /**
  * Long-press (touch) + right-click (desktop) → one callback, for opening a
@@ -30,6 +31,7 @@ export function useLongPress(onLongPress: () => void, delay = 450) {
         clear();
         timer.current = setTimeout(() => {
           fired.current = true;
+          void selectionTick();
           onLongPress();
         }, delay);
       },

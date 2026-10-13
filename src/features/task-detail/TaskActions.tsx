@@ -1,4 +1,5 @@
 import { useEffect, useState, forwardRef, type ButtonHTMLAttributes } from 'react';
+import { COLOR_PRESETS } from '@/lib/colorPresets';
 import { useQuery } from '@tanstack/react-query';
 import {
   Percent,
@@ -8,10 +9,11 @@ import {
   Trash2,
   Bell,
   User,
-  RefreshCw,
   Tags,
+  Check,
 } from 'lucide-react';
-import { updateTask, deleteTask, duplicateTask, moveTask } from '@/db/tasks';
+import { updateTask, duplicateTask, moveTask } from '@/db/tasks';
+import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelManagerModal } from '@/components/LabelManagerModal';
 import { listProjects, getProjectByLocalId } from '@/db/projects';
@@ -23,6 +25,7 @@ import type { TaskAssignee } from '@/domain/task-assignee';
 import type { Label } from '@/domain/label';
 import type { Project } from '@/domain/project';
 import { cn } from '@/lib/cn';
+import { isRepeating } from '@/lib/repeatLabel';
 import { useDateFormatter, toCalendarDate } from '@/lib/dateFormat';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -61,7 +64,7 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     staleTime: 60_000,
   });
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const enqueueDelete = usePendingDeletes((s) => s.enqueue);
 
   const handleDuplicate = async () => {
     const copy = await duplicateTask(task.localId);
@@ -82,8 +85,9 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
     await removeTaskAssignee(task.localId, userServerId);
   };
 
-  const handleDelete = async () => {
-    await deleteTask(task.localId);
+  // Undo over confirm: the delete is deferred and the undo toast offers it back.
+  const handleDelete = () => {
+    enqueueDelete(task);
     onDeleted();
   };
 
@@ -108,33 +112,15 @@ export function TaskActions({ task, onDeleted }: TaskActionsProps) {
       <ActionButton
         icon={<Bell className={`h-4 w-4 ${task.isSubscribed ? 'fill-current' : ''}`} />}
         label={task.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
-        color={task.isSubscribed ? '#3b82f6' : undefined}
+        color={task.isSubscribed ? 'var(--color-primary)' : undefined}
         className="pointer-events-none opacity-50"
       />
-      {confirmDelete ? (
-        <div className="flex items-center gap-2 rounded-md border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 px-3 py-2">
-          <span className="text-xs text-[var(--color-destructive)]">Delete forever?</span>
-          <button
-            onClick={handleDelete}
-            className="ml-auto rounded bg-[var(--color-destructive)] px-2 py-0.5 text-caption text-[var(--color-destructive-foreground)] hover:opacity-90"
-          >
-            Confirm
-          </button>
-          <button
-            onClick={() => setConfirmDelete(false)}
-            className="text-caption text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <ActionButton
-          icon={<Trash2 className="h-4 w-4" />}
-          label="Delete"
-          color="#ef4444"
-          onClick={() => setConfirmDelete(true)}
-        />
-      )}
+      <ActionButton
+        icon={<Trash2 className="h-4 w-4" />}
+        label="Delete"
+        color="var(--color-destructive)"
+        onClick={handleDelete}
+      />
     </div>
   );
 }
@@ -199,8 +185,9 @@ export function InlineProgress({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex items-center gap-2">
+        <div className="reveal-in mx-3 mb-1 flex items-center gap-2">
           <input
+            aria-label="Percent done"
             type="range"
             min={0}
             max={100}
@@ -224,11 +211,6 @@ export function InlineProgress({
 }
 
 /* ─── Color inline ─── */
-
-export const COLOR_PRESETS = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#78716c', '#000000',
-];
 
 export function InlineColor({
   task,
@@ -261,10 +243,11 @@ export function InlineColor({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1">
+        <div className="reveal-in mx-3 mb-1">
           <div className="mb-1.5 flex flex-wrap gap-1">
             {COLOR_PRESETS.map((hex) => (
               <button
+                aria-label={`Colour ${hex}`}
                 key={hex}
                 onClick={() => handleSelect(hex === task.hexColor ? null : hex)}
                 className={cn(
@@ -285,6 +268,7 @@ export function InlineColor({
             </button>
           </div>
           <input
+            aria-label="Custom colour hex"
             type="text"
             value={customHex}
             onChange={(e) => setCustomHex(e.target.value)}
@@ -361,8 +345,9 @@ export function InlineLabels({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+        <div className="reveal-in mx-3 mb-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
           <input
+            aria-label="Search or create label"
             type="text"
             placeholder="Search or create…"
             value={search}
@@ -518,7 +503,7 @@ export function InlineMove({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+        <div className="reveal-in mx-3 mb-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
           {projects.map((p) => (
             <button
               key={p.localId}
@@ -572,7 +557,7 @@ export function InlineAssignees({
         onClick={onToggle}
       />
       {expanded && (
-        <div className="mx-3 mb-1 flex flex-col gap-1">
+        <div className="reveal-in mx-3 mb-1 flex flex-col gap-1">
           {assignees.map((a) => (
             <div
               key={a.userServerId}
@@ -630,15 +615,7 @@ function valueUnitToSeconds(value: number, unit: 'day' | 'month' | 'hour'): numb
 
 const UNIT_OPTIONS = ['hour', 'day', 'month'] as const;
 
-export function InlineRepeat({
-  task,
-  expanded,
-  onToggle,
-}: {
-  task: Task;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
+export function InlineRepeat({ task }: { task: Task }) {
   const init = secondsToValueUnit(task.repeatAfter);
   const [value, setValue] = useState(init.value);
   const [unit, setUnit] = useState<'hour' | 'day' | 'month'>(init.unit);
@@ -651,88 +628,101 @@ export function InlineRepeat({
     setMode(task.repeatMode);
   }, [task.repeatAfter, task.repeatMode]);
 
+  // Monthly mode ignores repeatAfter, so always store it as 0 there.
   const save = async (after: number, m: number) => {
-    await updateTask(task.localId, { repeatAfter: after, repeatMode: m });
+    await updateTask(task.localId, { repeatAfter: m === 1 ? 0 : after, repeatMode: m });
   };
 
-  const label = task.repeatAfter > 0
-    ? `Repeats ${mode === 1 ? 'monthly' : `every ${formatDuration(task.repeatAfter)}`}`
-    : 'Set repeating';
+  const pickMode = (m: number) => {
+    // Leaving monthly with the untouched 1-hour default would save a 1-hour
+    // repeat; seed 1 month instead.
+    if (m !== 1 && mode === 1 && value === 1 && unit === 'hour') {
+      setUnit('month');
+      void save(SECONDS.MONTH, m);
+      return;
+    }
+    void save(valueUnitToSeconds(value, unit), m);
+  };
 
+  // Monthly mode ignores repeatAfter (often 0), so it can't gate on that alone.
+  const repeating = isRepeating(task.repeatAfter, task.repeatMode);
+
+  // The collapsed "Repeat" row above already names the current setting, so
+  // this is only the editor. Fields are 16px on mobile (smaller makes iOS
+  // zoom the page on focus) with 44pt-tall targets.
   return (
-    <div>
-      <ActionButton
-        icon={<RefreshCw className="h-4 w-4" />}
-        label={label}
-        onClick={onToggle}
-      />
-      {expanded && (
-        <div className="mx-3 mb-1 flex flex-col gap-2">
-          {/* Interval input */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-[var(--color-muted-foreground)]">Every</span>
-            <input
-              type="number"
-              min={1}
-              value={value}
-              onChange={(e) => setValue(Math.max(1, Number(e.target.value)))}
-              className="w-14 rounded border border-[var(--color-border)] bg-transparent px-1.5 py-1 text-xs text-center"
-            />
-            <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {UNIT_OPTIONS.map((u) => (
-                  <SelectItem key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <button
-              onClick={() => save(valueUnitToSeconds(value, unit), mode)}
-              className="ml-auto rounded bg-[var(--color-accent)] px-2.5 py-1 text-footnote font-medium text-[var(--color-accent-foreground)]"
-            >
-              Apply
-            </button>
-          </div>
-
-          {/* Repeat mode */}
-          <div className="flex gap-1">
-            {([0, 1, 2] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => save(valueUnitToSeconds(value, unit), m)}
-                className={cn(
-                  'flex-1 rounded px-1.5 py-1 text-footnote transition-colors',
-                  m === mode
-                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                    : 'hover:bg-[var(--color-accent)]/10 text-[var(--color-muted-foreground)]',
-                )}
-              >
-                {REPEAT_MODE_LABELS[m]}
-              </button>
+    <div className="flex flex-col gap-3 px-1.5 pb-1 pt-1">
+      <div className="flex items-center gap-2">
+        <span className="text-[13.5px] text-[var(--color-muted-foreground)]">Every</span>
+        <input
+          aria-label="Repeat interval"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={value}
+          onChange={(e) => setValue(Number.isFinite(e.target.valueAsNumber) ? Math.max(1, e.target.valueAsNumber) : 1)}
+          className="h-8 w-14 rounded-md border border-[var(--color-border)] bg-transparent px-1.5 text-center text-[13.5px] max-md:h-11 max-md:w-16 max-md:text-base"
+        />
+        <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
+          <SelectTrigger className="h-8 w-auto min-w-24 text-[13.5px] max-md:h-11 max-md:text-base">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {UNIT_OPTIONS.map((u) => (
+              <SelectItem key={u} value={u}>{u}{u === 'hour' ? 's' : ''}</SelectItem>
             ))}
-          </div>
+          </SelectContent>
+        </Select>
+        <button
+          type="button"
+          onClick={() => save(valueUnitToSeconds(value, unit), mode)}
+          className="ml-auto rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-[13.5px] font-medium text-[var(--color-primary-foreground)] transition-opacity active:opacity-80 max-md:h-11 max-md:px-4 cursor-pointer"
+        >
+          Apply
+        </button>
+      </div>
 
-          {/* Clear */}
-          {task.repeatAfter > 0 && (
-            <button
-              onClick={() => save(0, 0)}
-              className="self-start rounded px-2 py-0.5 text-footnote text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+      {/* Repeat mode: a short radio list reads at one size, unlike three
+          squeezed columns that wrapped to three lines each. */}
+      <div role="radiogroup" aria-label="Repeat from" className="flex flex-col">
+        {([0, 1, 2] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={m === mode}
+            onClick={() => pickMode(m)}
+            className={cn(
+              'flex items-center gap-2.5 rounded-md px-1.5 py-2 text-left text-[13.5px] transition-colors max-md:min-h-11 cursor-pointer',
+              m === mode
+                ? 'text-[var(--color-foreground)]'
+                : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]',
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors',
+                m === mode
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
+                  : 'border-[var(--color-muted-foreground)]/40',
+              )}
             >
-              Remove repeat
-            </button>
-          )}
-        </div>
+              {m === mode ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+            </span>
+            {REPEAT_MODE_LABELS[m]}
+          </button>
+        ))}
+      </div>
+
+      {repeating && (
+        <button
+          type="button"
+          onClick={() => save(0, 0)}
+          className="self-start rounded-md px-1.5 py-2 text-[13.5px] text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10 max-md:min-h-11 cursor-pointer"
+        >
+          Remove repeat
+        </button>
       )}
     </div>
   );
 }
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-}
-

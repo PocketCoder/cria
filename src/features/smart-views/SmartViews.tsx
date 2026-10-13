@@ -1,11 +1,20 @@
+import { useSheetDismiss } from '@/lib/useSheetDismiss';
 import { useState, useMemo, useCallback, memo } from 'react';
-import { format, startOfDay, isBefore, isSameDay, addDays } from 'date-fns';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
+import { format, startOfDay, addDays } from 'date-fns';
 import { toCalendarDate, dueDayKey } from '@/lib/dateFormat';
+import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
+import { prefersReducedMotion } from '@/lib/viewTransition';
+import { findDayGroupKey, todaySectioner, upcomingDayLabel, upcomingSectioner } from './sectioners';
 import { Check, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { useNow, useUi } from '@/stores/ui';
+import { useUi } from '@/stores/ui';
+import { EmptyState } from '@/components/EmptyState';
+import appIcon from '@/assets/app-icon.png';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { priorityColor } from '@/components/ui/priority-select';
+import { useToday } from '@/hooks/useToday';
+import { suggestTasks } from '@/lib/summaries';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/queries/user';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
@@ -17,6 +26,7 @@ import { impactDeleted } from '@/utils/haptics';
 import {
   useTodayTasks,
   useUpcomingTasks,
+  useUndatedTasks,
   useLabelTasks,
   useInboxTasks,
   useFavoriteTasks,
@@ -34,11 +44,8 @@ import {
 } from '@/lib/displayConfig';
 import { useTaskLabels } from '@/queries/taskLabels';
 import { useTasksWithAttachments } from '@/queries/attachments';
-import {
-  TaskRowCore,
-  countChecklistItems,
-  toggleTaskDone,
-} from '@/features/tasks/TaskRowCore';
+import { TaskRowCore } from '@/features/tasks/TaskRowCore';
+import { countChecklistItems, toggleTaskDone } from '@/features/tasks/taskRowHelpers';
 import { updateTask, type TaskWithProject } from '@/db/tasks';
 
 /* ─────────────────────────── shared chrome ─────────────────────────── */
@@ -156,11 +163,7 @@ function SmartView({
               Loading…
             </p>
           ) : total === 0 && !keepEmptyGroups ? (
-            emptyMessage ? (
-              <p className="p-6 text-sm text-[var(--color-muted-foreground)]">
-                {emptyMessage}
-              </p>
-            ) : null
+            emptyMessage ? <EmptyState message={emptyMessage} /> : null
           ) : (
             filtered.map((g) => {
               const activeCount = g.tasks.filter((t) => !t.done).length;
@@ -168,7 +171,7 @@ function SmartView({
                 (c) => c.groupKey === g.key,
               );
               return (
-                <div key={g.key} data-day={g.key}>
+                <div key={g.key} data-day={g.key} data-day-from={g.fromDay} data-day-to={g.toDay}>
                   {g.tasks.length === 0 && agendaHeadings ? (
                     <p className="px-7 py-1.5 text-[13.5px] text-[var(--color-muted-foreground)]">
                       {g.label}
@@ -284,7 +287,6 @@ export const SmartTaskRow = memo(function SmartTaskRow({
 
   return (
     <li
-      onClick={handleClick}
       className={cn(
         'border-b border-[var(--color-border)]',
         collapse && 'completion-collapse',
@@ -339,13 +341,14 @@ export const SmartTaskRow = memo(function SmartTaskRow({
           isOpen={!isSelected && selectedTaskId === task.localId}
           onToggle={onToggle}
           onToggleSelect={handleToggleSelect}
-          className="px-7 py-3"
+          onOpen={handleClick}
+          className="py-3 pl-7 pr-6 max-md:px-5 max-md:py-3.5"
           actions={
             <div className="flex items-center gap-1">
               <button
                 onClick={handleDelete}
                 aria-label="Delete task"
-                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning)] cursor-pointer"
+                className="hover-reveal p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-warning-text)] cursor-pointer"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -363,139 +366,10 @@ function flatten(groups: TaskGroup[]): TaskWithProject[] {
   return groups.flatMap((g) => g.tasks);
 }
 
-/** Today keeps its Overdue / Today / Completed split regardless of DisplayConfig. */
-function todaySectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[] {
-  const overdue: TaskWithProject[] = [];
-  const today: TaskWithProject[] = [];
-  const completed: TaskWithProject[] = [];
-  for (const t of visible) {
-    if (t.done) completed.push(t);
-    else if (t.dueDate && isBefore(startOfDay(toCalendarDate(t.dueDate)), ctx.today)) overdue.push(t);
-    else today.push(t);
-  }
-  const out: TaskGroup[] = [];
-  if (overdue.length) out.push({ key: 'overdue', label: 'Overdue', tasks: overdue });
-  if (today.length) out.push({ key: 'today', label: 'Today', tasks: today });
-  if (completed.length) out.push({ key: 'completed', label: 'Completed', tasks: completed });
-  return out;
-}
+/* ─────────────────────────────── Pickers ──────────────────────────── */
 
 /**
- * Upcoming agenda: one group per calendar day from today through the later of
- * (today + 13 days) or the last task's day — empty days included, like Todoist.
- * The calendar strip in the header navigates within this range.
- */
-function upcomingDayLabel(d: Date, today: Date): string {
-  const date = format(d, 'EEE d MMM');
-  if (isSameDay(d, today)) return `Today · ${date}`;
-  if (isSameDay(d, addDays(today, 1))) return `Tomorrow · ${date}`;
-  return date;
-}
-
-/** Collapse a run of consecutive empty agenda days into one muted line. */
-function emptyRunLabel(groups: TaskGroup[], start: number, end: number): string {
-  const first = groups[start]!;
-  const last = groups[end]!;
-  const a = first.label;
-  const b = last.label;
-  if (start === end) return `${a} · nothing scheduled`;
-  const dayA = a.replace(/^Today · |^Tomorrow · /, '');
-  const dayB = b.replace(/^Today · |^Tomorrow · /, '');
-  return `${dayA} – ${dayB} · nothing scheduled`;
-}
-
-export function upcomingSectioner(visible: TaskWithProject[], ctx: DisplayCtx): TaskGroup[] {
-  // Bucket by the due date's calendar day (dueDayKey: timezone-correct for both
-  // all-day and timed tasks). Day keys are yyyy-MM-dd, so string comparison is
-  // a valid date comparison — no Date math needed for the range bounds.
-  const todayKey = format(ctx.today, 'yyyy-MM-dd');
-  const byDay = new Map<string, TaskWithProject[]>();
-  let lastKey = todayKey;
-  for (const t of visible) {
-    if (!t.dueDate) continue;
-    const key = dueDayKey(t.dueDate);
-    if (key < todayKey) continue; // Upcoming starts today; overdue lives in Today
-    const arr = byDay.get(key) ?? [];
-    arr.push(t);
-    byDay.set(key, arr);
-    if (key > lastKey) lastKey = key;
-  }
-  // Show today through the later of (today + 13d) or the last task's day.
-  const minEndKey = format(addDays(ctx.today, 13), 'yyyy-MM-dd');
-  const endKey = lastKey > minEndKey ? lastKey : minEndKey;
-  const groups: TaskGroup[] = [];
-  for (let d = ctx.today; format(d, 'yyyy-MM-dd') <= endKey; d = addDays(d, 1)) {
-    const key = format(d, 'yyyy-MM-dd');
-    groups.push({ key, label: upcomingDayLabel(d, ctx.today), tasks: byDay.get(key) ?? [] });
-  }
-  // Collapse runs of consecutive empty days into a single muted line.
-  const out: TaskGroup[] = [];
-  let runStart = -1;
-  const flush = (end: number) => {
-    if (runStart === -1) return;
-    out.push({
-      key: `empty-${groups[runStart]!.key}-${groups[end]!.key}`,
-      label: emptyRunLabel(groups, runStart, end),
-      tasks: [],
-    });
-    runStart = -1;
-  };
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i]!;
-    if (g.tasks.length === 0) {
-      if (runStart === -1) runStart = i;
-      continue;
-    }
-    flush(i - 1);
-    out.push(g);
-  }
-  flush(groups.length - 1);
-  return out;
-}
-
-/* ─────────────────────────────── Now block ──────────────────────────── */
-
-/** A stripped Now-block row: priority bar · checkbox · title(500) · project. */
-function NowRow({ task }: { task: TaskWithProject }) {
-  const setSelectedTask = useUi((s) => s.setSelectedTask);
-  const unpick = useNow((s) => s.unpick);
-  const handleToggle = useCallback(() => {
-    void toggleTaskDone(task).then((ok) => {
-      // Only drop it from the block once the completion actually landed —
-      // otherwise a failed update would silently vanish from Now while
-      // still showing as incomplete everywhere else.
-      if (ok) unpick(task.localId);
-    });
-  }, [task, unpick]);
-  return (
-    <div
-      onClick={() => setSelectedTask(task.localId)}
-      className="flex cursor-pointer items-center gap-3 rounded-md px-1 py-[9px] hover:bg-[var(--color-accent)]/5"
-    >
-      <span
-        aria-hidden="true"
-        className="h-5 w-[3px] shrink-0 rounded-full"
-        style={{ background: task.priority > 2 ? priorityColor(task.priority) : 'transparent' }}
-      />
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={handleToggle}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={task.done ? 'Done' : 'Not done'}
-        className="task-check"
-      />
-      <p className="min-w-0 flex-1 truncate text-[14.5px] font-medium leading-snug">{task.title}</p>
-      {task.projectTitle ? (
-        <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{task.projectTitle}</span>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * A checklist sheet over a task list — used both to pick the Now block (max 3)
- * and to pull a future task forward. Selection is capped at `max`; `onConfirm`
+ * A checklist sheet over a task list — used to pull a future task forward. Selection is capped at `max`; `onConfirm`
  * receives the chosen ids.
  */
 function PickerSheet({
@@ -518,9 +392,11 @@ function PickerSheet({
   onClose: () => void;
 }) {
   const isMobile = useIsMobile();
-  const [chosen, setChosen] = useState<string[]>(() =>
-    initialSelected.filter((id) => tasks.some((t) => t.localId === id)),
-  );
+  const { panelRef, requestClose } = useSheetDismiss(onClose, isMobile);
+  const [chosen, setChosen] = useState<string[]>(() => {
+    const known = new Set(tasks.map((t) => t.localId));
+    return initialSelected.filter((id) => known.has(id));
+  });
 
   const toggle = (id: string) => {
     setChosen((prev) =>
@@ -573,7 +449,7 @@ function PickerSheet({
                     className={cn(
                       'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
                       on
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                         : 'border-[var(--color-muted-foreground)]',
                     )}
                   >
@@ -602,91 +478,28 @@ function PickerSheet({
 
   if (isMobile) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="sheet-backdrop absolute inset-0" onClick={onClose} />
-        <div className="safe-bottom relative z-10 flex max-h-[80vh] flex-col rounded-t-2xl bg-[var(--color-card)] shadow-xl animate-[sheet-up_350ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
+      <ModalDialog label={title} onClose={onClose}>
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <BackdropDismiss onDismiss={requestClose} className="sheet-backdrop" />
+          <div ref={panelRef} className="safe-bottom relative z-10 flex max-h-[80dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_350ms_var(--spring-snappy)]">
+            <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
+            {header}
+            <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+          </div>
+        </div>
+      </ModalDialog>
+    );
+  }
+  return (
+    <ModalDialog label={title} onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-[var(--dialog-backdrop)] p-4 pt-20">
+        <BackdropDismiss onDismiss={onClose} />
+        <div className="relative dialog-panel flex max-h-[80dvh] w-full max-w-md flex-col overflow-hidden">
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
         </div>
       </div>
-    );
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20" onClick={onClose}>
-      <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--color-card)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {header}
-        <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The Now block: up to three user-picked tasks for today. Local device state
- * (`useNow`); a task leaves the block when it's completed or rescheduled off
- * today (both drop it out of `livePicks`). Renders its empty state when nothing
- * live is picked for today.
- */
-function NowBlock({ tasks }: { tasks: TaskWithProject[] }) {
-  const isMobile = useIsMobile();
-  const { nowTaskIds, pickedOn, pick } = useNow();
-  const [picking, setPicking] = useState(false);
-
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
-  const active = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
-  const livePicks = useMemo(() => {
-    if (pickedOn !== todayKey) return [];
-    const byId = new Map(active.map((t) => [t.localId, t]));
-    return nowTaskIds.map((id) => byId.get(id)).filter(Boolean) as TaskWithProject[];
-  }, [pickedOn, todayKey, nowTaskIds, active]);
-
-  return (
-    <div className={cn('mb-[34px] bg-[var(--color-background)] p-5', isMobile ? 'rounded-[18px]' : 'rounded-[14px]')}>
-      <div className="mb-3 flex items-baseline gap-2.5">
-        <h2 className="group-label !tracking-[0.11em] text-[var(--color-primary)]">Now</h2>
-        <span className="text-xs text-[var(--color-muted-foreground)]">three things, then stop</span>
-        {livePicks.length > 0 ? (
-          <button
-            onClick={() => setPicking(true)}
-            className="ml-auto text-xs text-[var(--color-primary)]"
-          >
-            Re-pick
-          </button>
-        ) : null}
-      </div>
-      {livePicks.length > 0 ? (
-        <div className="flex flex-col gap-0.5">
-          {livePicks.map((t) => (
-            <NowRow key={t.localId} task={t} />
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-[var(--color-muted-foreground)]">Pick up to three things for today</span>
-          <button
-            onClick={() => setPicking(true)}
-            className="shrink-0 rounded-lg bg-[var(--color-inverse)] px-3.5 py-2 text-xs font-medium text-[var(--color-inverse-foreground)]"
-          >
-            Pick
-          </button>
-        </div>
-      )}
-      {picking ? (
-        <PickerSheet
-          tasks={active}
-          initialSelected={nowTaskIds}
-          max={3}
-          title="Pick for Now"
-          subtitle="Up to three things, then stop"
-          confirmLabel={(n) => (n ? `Pick ${n}` : 'Clear')}
-          onConfirm={pick}
-          onClose={() => setPicking(false)}
-        />
-      ) : null}
-    </div>
+    </ModalDialog>
   );
 }
 
@@ -697,7 +510,14 @@ function NowBlock({ tasks }: { tasks: TaskWithProject[] }) {
  */
 function NothingDue({ doneCount }: { doneCount: number }) {
   const { data: groups = [] } = useUpcomingTasks();
+  const { data: undated = [] } = useUndatedTasks();
   const [picking, setPicking] = useState(false);
+
+  // "You could work on": undated tasks first, then far-off due dates.
+  const suggestions = useMemo(
+    () => suggestTasks(undated, groups.flatMap((g) => g.tasks), new Date()),
+    [undated, groups],
+  );
 
   const todayKey = format(new Date(), 'yyyy-MM-dd');
   const horizonKey = format(addDays(new Date(), 7), 'yyyy-MM-dd');
@@ -718,12 +538,13 @@ function NothingDue({ doneCount }: { doneCount: number }) {
   }, [upcoming, doneCount]);
 
   const pullForward = useCallback((ids: string[]) => {
-    const iso = new Date().toISOString();
+    const iso = utcMidnightIso(new Date());
     for (const id of ids) void updateTask(id, { dueDate: iso });
   }, []);
 
   return (
-    <div className="mb-6 rounded-[14px] bg-[var(--color-background)] px-5 py-6 text-center">
+    <div className="mb-6 flex flex-col items-center rounded-2xl bg-[var(--color-background)] px-5 py-6 text-center">
+      <img src={appIcon} alt="" className="mb-3.5 h-[72px] w-[72px] rounded-[18px] opacity-90" />
       <p className="text-base font-medium">Nothing left today.</p>
       <p className="mt-1 text-[13.5px] text-[var(--color-muted-foreground)]">{nextLine}</p>
       {upcoming.length > 0 ? (
@@ -745,17 +566,50 @@ function NothingDue({ doneCount }: { doneCount: number }) {
           onClose={() => setPicking(false)}
         />
       ) : null}
+      {suggestions.length > 0 ? (
+        <div className="mt-5 w-full text-left">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
+            You could work on
+          </p>
+          <ul className="space-y-1.5">
+            {suggestions.map((t) => (
+              <li key={t.localId}>
+                <button
+                  type="button"
+                  onClick={() => pullForward([t.localId])}
+                  title="Add to today"
+                  className="flex w-full items-center gap-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-left opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-dashed border-[var(--color-muted-foreground)]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px]">{t.title}</span>
+                    <span className="block truncate text-xs text-[var(--color-muted-foreground)]">
+                      {t.projectTitle}
+                      {t.dueDate
+                        ? ` · due ${format(toCalendarDate(t.dueDate), 'd MMM')}`
+                        : ' · no due date'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">
+                    Add to today
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/** Today's header region: the Now block when there's work, else Nothing-due. */
+/** Today's header region: Nothing-due when nothing is left, else empty. */
 function TodayTop({ tasks }: { tasks: TaskWithProject[] }) {
   const active = tasks.filter((t) => !t.done);
   if (active.length === 0) {
     return <NothingDue doneCount={tasks.filter((t) => t.done).length} />;
   }
-  return <NowBlock tasks={tasks} />;
+  return null;
 }
 
 export function TodayView() {
@@ -779,7 +633,7 @@ export function UpcomingView() {
   const { data: user } = useCurrentUser();
   const tasks = useMemo(() => flatten(groups), [groups]);
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
-  const today = useMemo(() => startOfDay(new Date()), []);
+  const today = useToday();
 
   const taskDays = useMemo(() => {
     const s = new Set<string>();
@@ -792,9 +646,20 @@ export function UpcomingView() {
   const handlePickDay = useCallback((d: Date) => {
     setSelected(d);
     const key = format(d, 'yyyy-MM-dd');
-    // The agenda renders a [data-day] container per day; scroll it into view.
+    // The agenda renders a [data-day] container per section; runs of empty days
+    // share one, so resolve the day to the section that contains it.
     requestAnimationFrame(() => {
-      document.querySelector(`[data-day="${key}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-day]'), (el) => ({
+        key: el.dataset.day!,
+        fromDay: el.dataset.dayFrom,
+        toDay: el.dataset.dayTo,
+      }));
+      const target = findDayGroupKey(sections, key);
+      if (target === undefined) return;
+      document.querySelector(`[data-day="${target}"]`)?.scrollIntoView({
+        block: 'start',
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
     });
   }, []);
 

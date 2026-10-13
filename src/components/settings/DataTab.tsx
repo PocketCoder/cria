@@ -110,7 +110,7 @@ export function DataTab({ disabled }: Props) {
         <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
           {deletionScheduledAt ? (
             <div>
-              <p className="mb-2 text-sm text-[var(--color-warning)]">
+              <p className="mb-2 text-sm text-[var(--color-warning-text)]">
                 Deletion scheduled for {new Date(deletionScheduledAt).toLocaleString()}.
                 Check your email to confirm.
               </p>
@@ -131,6 +131,7 @@ export function DataTab({ disabled }: Props) {
             <div className="space-y-2">
               <p className="text-sm text-[var(--color-destructive)]">Enter your password to confirm:</p>
               <input
+                aria-label="Current password"
                 type="password"
                 value={delPassword}
                 onChange={(e) => setDelPassword(e.target.value)}

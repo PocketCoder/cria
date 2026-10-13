@@ -353,3 +353,21 @@ export async function deleteProject(localId: string): Promise<void> {
   notify('tasks');
   notify('outbox');
 }
+
+export interface ProjectTaskStats {
+  open: number;
+  done: number;
+}
+
+/** Open and completed task counts for one project (local cache). */
+export async function getProjectTaskStats(localId: string): Promise<ProjectTaskStats> {
+  const db = await getDb();
+  const rows = await db.select<{ done: number; cnt: number }[]>(
+    `SELECT done, COUNT(*) AS cnt FROM tasks
+      WHERE project_local_id = ? AND deleted = 0
+      GROUP BY done`,
+    [localId],
+  );
+  const count = (d: number) => rows.find((r) => Number(r.done) === d)?.cnt ?? 0;
+  return { open: count(0), done: count(1) };
+}

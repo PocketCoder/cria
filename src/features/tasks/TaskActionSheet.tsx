@@ -1,9 +1,13 @@
+import { useSheetDismiss } from '@/lib/useSheetDismiss';
 import { useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
 import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
   CalendarDays,
+  CalendarClock,
   FolderInput,
   Target,
   Flag,
@@ -17,14 +21,16 @@ import { useDisplay } from '@/stores/display';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSelectableProjects } from '@/queries/projects';
 import { Calendar } from '@/components/ui/calendar';
-import { PRIORITY_META } from '@/components/ui/priority-select';
+import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, duplicateTask } from '@/db/tasks';
 import { getAuthSnapshot } from '@/auth/store';
-import { toCalendarDate } from '@/lib/dateFormat';
+import { dueCalendarDate } from '@/lib/dateFormat';
+import { pickDayIso } from '@/features/task-detail/taskDetailLogic';
+import { DEFER_PRESETS, deferDueIso } from '@/lib/defer';
 import { impactDeleted } from '@/utils/haptics';
 import type { Task } from '@/domain/task';
 
-type Picker = 'schedule' | 'deadline' | 'move' | 'priority' | null;
+type Picker = 'schedule' | 'defer' | 'deadline' | 'move' | 'priority' | null;
 
 export function TaskActionSheet() {
   const task = useDisplay((s) => s.actionTask);
@@ -35,13 +41,14 @@ export function TaskActionSheet() {
 function Inner({ task }: { task: Task }) {
   const isMobile = useIsMobile();
   const close = useDisplay((s) => s.closeActions);
+  const { panelRef, requestClose } = useSheetDismiss(close, isMobile);
   const startSelecting = useDisplay((s) => s.startSelecting);
   const enqueueDelete = usePendingDeletes((s) => s.enqueue);
   const { data: projects = [] } = useSelectableProjects();
   const [picker, setPicker] = useState<Picker>(null);
 
   const setDate = (field: 'dueDate' | 'endDate', d: Date | undefined) => {
-    void updateTask(task.localId, { [field]: d ? d.toISOString() : null });
+    void updateTask(task.localId, { [field]: pickDayIso(d, task[field]) });
     close();
   };
 
@@ -51,12 +58,26 @@ function Inner({ task }: { task: Task }) {
         <Calendar
           selected={
             (picker === 'schedule' ? task.dueDate : task.endDate)
-              ? toCalendarDate((picker === 'schedule' ? task.dueDate : task.endDate)!)
+              ? dueCalendarDate((picker === 'schedule' ? task.dueDate : task.endDate)!)
               : undefined
           }
           onSelect={(d) => setDate(picker === 'schedule' ? 'dueDate' : 'endDate', d)}
           onClear={() => setDate(picker === 'schedule' ? 'dueDate' : 'endDate', undefined)}
         />
+      )}
+      {picker === 'defer' && (
+        <div className="inset-list">
+          {DEFER_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => { void updateTask(task.localId, { dueDate: deferDueIso(task.dueDate, p.id) }); close(); }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       )}
       {picker === 'move' && (
         <div className="inset-list">
@@ -65,7 +86,7 @@ function Inner({ task }: { task: Task }) {
               key={p.localId}
               type="button"
               onClick={() => { void moveTask(task.localId, p.localId); close(); }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]"
             >
               {p.hexColor && (
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.hexColor }} aria-hidden />
@@ -83,9 +104,9 @@ function Inner({ task }: { task: Task }) {
               key={m.value}
               type="button"
               onClick={() => { void updateTask(task.localId, { priority: m.value }); close(); }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]"
             >
-              <Flag className="h-4 w-4 shrink-0" style={{ color: m.color }} />
+              <Flag className="h-5 w-5 shrink-0" style={{ color: m.color }} />
               <span className="flex-1">{m.label}</span>
               {task.priority === m.value && <span className="text-[var(--color-primary)]">✓</span>}
             </button>
@@ -100,6 +121,7 @@ function Inner({ task }: { task: Task }) {
       </div>
       <div className="inset-list">
         <ActionRow icon={CalendarDays} label="Schedule" chevron onClick={() => setPicker('schedule')} />
+        <ActionRow icon={CalendarClock} label="Defer" chevron onClick={() => setPicker('defer')} />
         <ActionRow icon={FolderInput} label="Move To…" chevron onClick={() => setPicker('move')} />
         <ActionRow icon={Target} label="Deadline" chevron onClick={() => setPicker('deadline')} />
         <ActionRow icon={Flag} label="Priority" chevron onClick={() => setPicker('priority')} />
@@ -132,29 +154,34 @@ function Inner({ task }: { task: Task }) {
 
   if (isMobile) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Task actions">
-        <div className="sheet-backdrop absolute inset-0" onClick={close} />
-        <div className="safe-bottom relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl bg-[var(--color-background)] pt-1 shadow-xl animate-[sheet-up_300ms_var(--spring-snappy)] dark:border dark:border-[oklch(34%_0.008_265)]">
-          <div className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
-          {header}
-          <div className="min-h-0 overflow-y-auto">{body}</div>
+      <ModalDialog label="Task actions" onClose={close}>
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <BackdropDismiss onDismiss={requestClose} className="sheet-backdrop" />
+          <div ref={panelRef} className="safe-bottom relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-[var(--sheet-bg-grouped)] pt-2 shadow-[var(--shadow-sheet)] dark:border-t dark:border-[var(--sheet-border)] animate-[sheet-up_300ms_var(--spring-snappy)]">
+            <div className="mx-auto mb-2 h-1 w-9 shrink-0 rounded-full bg-[var(--color-muted-foreground)]/30" />
+            {header}
+            <div className="min-h-0 overflow-y-auto">{body}</div>
+          </div>
         </div>
-      </div>
+      </ModalDialog>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={close}>
-      <div className="w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[oklch(34%_0.008_265)]" onClick={(e) => e.stopPropagation()}>
-        {header}
-        <div className="max-h-[70vh] overflow-y-auto">{body}</div>
+    <ModalDialog label="Task actions" onClose={close}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
+        <BackdropDismiss onDismiss={close} />
+        <div className="relative w-full max-w-xs overflow-hidden rounded-xl bg-[var(--color-background)] shadow-2xl dark:border dark:border-[var(--sheet-border)]">
+          {header}
+          <div className="max-h-[70dvh] overflow-y-auto">{body}</div>
+        </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 }
 
 function pickerTitle(p: Exclude<Picker, null>): string {
-  return p === 'schedule' ? 'Schedule' : p === 'deadline' ? 'Deadline' : p === 'move' ? 'Move to project' : 'Priority';
+  return p === 'schedule' ? 'Schedule' : p === 'defer' ? 'Defer' : p === 'deadline' ? 'Deadline' : p === 'move' ? 'Move to project' : 'Priority';
 }
 
 function ActionRow({
@@ -175,7 +202,7 @@ function ActionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-3 px-4 py-3 text-left text-base',
+        'flex w-full items-center gap-3 px-4 py-3 text-left text-base active:bg-[var(--color-muted)]',
         destructive ? 'text-[var(--color-destructive)]' : 'text-[var(--color-foreground)]',
       )}
     >

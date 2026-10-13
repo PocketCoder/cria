@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { useTaskLabels } from '@/queries/taskLabels';
-import { priorityColor } from '@/components/ui/priority-select';
+import { priorityColor } from '@/components/ui/priority';
 import { LabelChips } from './LabelChips';
 import type { Task } from '@/domain/task';
 
@@ -80,12 +80,18 @@ export function TaskHoverPreview({ task, children, className }: TaskHoverPreview
     };
   }, []);
 
-  const handleMouseEnter = useCallback(() => {
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(show, HOVER_DELAY);
-  }, [show]);
+  // Real mouse pointers only. iOS synthesises mouseenter after a tap, which
+  // popped this preview up over the task just opened.
+  const handlePointerEnter = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(show, HOVER_DELAY);
+    },
+    [show],
+  );
 
-  const handleMouseLeave = useCallback(() => {
+  const handlePointerLeave = useCallback(() => {
     clearTimeout(timerRef.current);
     setIsOpen(false);
   }, []);
@@ -99,8 +105,9 @@ export function TaskHoverPreview({ task, children, className }: TaskHoverPreview
       <div
         ref={triggerRef}
         className={className}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerLeave}
       >
         {children}
       </div>

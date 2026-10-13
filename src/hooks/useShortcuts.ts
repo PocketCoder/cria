@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useLatestRef } from '../lib/useLatestRef';
 import { useUi } from '@/stores/ui';
 import { createKeyMatcher, eventToKey } from '@/lib/keySequence';
 import { SHORTCUTS, MATCHABLE_SHORTCUTS } from '@/lib/shortcuts';
@@ -21,8 +22,7 @@ interface ShortcutHandlers {
  * (task detail card, task list). Context gates run at dispatch time.
  */
 export function useShortcuts(handlers: ShortcutHandlers) {
-  const handlersRef = useRef(handlers);
-  handlersRef.current = handlers;
+  const handlersRef = useLatestRef(handlers);
 
   // Read fresh UI state at dispatch time without re-mounting the listener.
   const uiRef = useRef(useUi.getState());
@@ -94,8 +94,10 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       // (caught above) or nowhere in particular (a bare button, or the
       // document body) — either way the shortcut set must not act on the
       // view/task behind it, so check for any open dialog regardless of
-      // where focus landed.
-      if (document.querySelector('[role="dialog"]')) return;
+      // where focus landed. Hand-rolled overlays count too: they carry
+      // role="dialog" / aria-modal="true" (the docked desktop inspector is
+      // role="complementary" on purpose, so it does not).
+      if (document.querySelector('dialog[open], [role="dialog"], [aria-modal="true"]')) return;
       const key = eventToKey(e);
       if (!key) return;
 
@@ -123,5 +125,5 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       clearTimeout(timer);
       window.removeEventListener('keydown', handler);
     };
-  }, []);
+  }, [handlersRef]);
 }

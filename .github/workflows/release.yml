@@ -10,12 +10,11 @@ name: Release
 #   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (empty string is fine for an
 #                                           unprotected dev key)
 #
-# Also builds an UNSIGNED iOS .ipa (build-ios job) and attaches it to the
-# same release. It's deliberately unsigned: there's no paid Apple Developer
-# account, so no distribution certificate exists to sign with. The .ipa is
-# meant to be sideloaded via SideStore/iLoader, which sign it themselves
-# locally with a free Apple ID — no Apple secrets or device UDIDs needed in
-# this repo. PRs are still iOS-compile-checked by ci-ios.yml.
+# Also builds the native Swift iOS app (ios-native/) as an UNSIGNED .ipa
+# (build-ios job) and attaches it to the same release. It is unsigned on
+# purpose: there is no paid Apple Developer account. SideStore re-signs it
+# with a free Apple ID. The Tauri iOS build is deprecated and no longer built;
+# rolling iOS builds come from ci-swift.yml, which also owns the SideStore source.
 
 on:
   push:
@@ -53,27 +52,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Check the tagged commit is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Tagged commit $(git rev-parse --short HEAD) is not on main. Merge dev into main and tag the merge commit."
+            exit 1
+          fi
       - name: Check all version sources equal the tag
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           WANT="${TAG#v}"
 
-          pkg=$(jq -r .version package.json)
-          conf=$(jq -r .version src-tauri/tauri.conf.json)
-          cargo=$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
-          lock=$(grep -A1 '^name = "cria"$' src-tauri/Cargo.lock | grep '^version = ' | sed -E 's/.*"(.*)".*/\1/')
-
-          echo "tag=$WANT package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo Cargo.lock=$lock"
-
-          fail=0
-          for pair in "package.json:$pkg" "tauri.conf.json:$conf" "Cargo.toml:$cargo" "Cargo.lock:$lock"; do
-            if [ "${pair#*:}" != "$WANT" ]; then
-              echo "::error::${pair%%:*} is ${pair#*:}, expected $WANT — bump with 'pnpm bump $WANT'"
-              fail=1
-            fi
-          done
-          exit $fail
+          scripts/check-versions.sh "$WANT"
 
   # ------------------------------------------------------------------
   # Build signed bundles per macOS arch.
@@ -121,6 +114,36 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      # Stable self-signed identity so macOS keychain "Always Allow" survives
+      # updates (generate with scripts/make-signing-cert.sh). We import it into
+      # a temporary keychain ourselves and pass only APPLE_SIGNING_IDENTITY:
+      # with APPLE_CERTIFICATE set, Tauri resolves the identity through
+      # `security find-identity -v`, which hides untrusted self-signed certs
+      # ("failed to resolve signing identity"). Without it, Tauri calls
+      # `codesign --sign <hash>` directly, which accepts the cert.
+      - name: Configure macOS code signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "No signing cert configured; using ad-hoc signing."
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/cria-signing.keychain-db"
+          KC_PASS="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cria.p12"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          security import "$RUNNER_TEMP/cria.p12" -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cria.p12"
+          security find-identity -p codesigning "$KC"
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
       - name: Build signed bundle
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -161,11 +184,11 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
-  # Build an unsigned iOS .ipa for sideloading (SideStore/iLoader do their
-  # own signing with a free Apple ID, so no Apple secrets are needed here).
+  # Build the native Swift iOS app as an unsigned .ipa for sideloading
+  # (SideStore re-signs it with a free Apple ID, so no Apple secrets here).
   # ------------------------------------------------------------------
   build-ios:
-    name: Build unsigned iOS .ipa
+    name: Build unsigned iOS .ipa (native Swift)
     runs-on: macos-latest
     timeout-minutes: 45
     needs: verify-version
@@ -175,70 +198,48 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      - uses: pnpm/action-setup@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Install Rust toolchain (iOS target)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-ios-ipa-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-ios-ipa-
-            ${{ runner.os }}-cargo-ios-
-
-      - name: Install JS deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Init iOS project
-        run: pnpm tauri ios init
-
-      # `tauri ios init` silently mis-copies some AppIcon.appiconset sizes
-      # (they end up as Tauri's default logo instead of ours, even though
-      # the source files in src-tauri/icons/ios are correct). Overwrite the
-      # generated catalog with our own source images as a workaround.
-      - name: Fix iOS app icon (tauri ios init copy bug workaround)
-        run: cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
-
-      - name: Build unsigned archive
-        run: pnpm tauri ios build --target aarch64 --no-sign --archive-only --ci
+      # The release version (checked against the tag by verify-version) as the
+      # marketing version; the run number as the build number.
+      - name: Build unsigned device app
+        working-directory: ios-native/CriaApp
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version "$GITHUB_WORKSPACE/package.json")"
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Package unsigned .ipa
         run: |
           set -euo pipefail
-          ARCHIVE=$(find src-tauri/gen/apple -name '*.xcarchive' -print -quit)
-          if [ -z "$ARCHIVE" ]; then
-            echo "No .xcarchive found" >&2
-            find src-tauri/gen/apple -maxdepth 4 >&2
-            exit 1
-          fi
-          APP=$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
-          if [ -z "$APP" ]; then
-            echo "No .app found in archive" >&2
-            exit 1
-          fi
-          mkdir -p ipa_out/Payload
-          cp -R "$APP" ipa_out/Payload/
-          (cd ipa_out && zip -qr ../Cria-unsigned.ipa Payload)
-          ls -la Cria-unsigned.ipa
+          APP="$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          [ -n "$APP" ] || { echo "No .app found" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cria-iOS-unsigned.ipa" Payload)
+          ls -la Cria-iOS-unsigned.ipa
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
           name: cria-ios-unsigned
-          path: Cria-unsigned.ipa
+          path: Cria-iOS-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
 

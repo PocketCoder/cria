@@ -1,5 +1,9 @@
+mod ai;
+mod blobs;
+mod glass;
 mod ocr;
 mod secure;
+mod speech;
 mod tx;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -23,7 +27,8 @@ const MIGRATION_4_SQL: &str = include_str!("../../src/db/migrations/004_project_
 const MIGRATION_5_SQL: &str = include_str!("../../src/db/migrations/005_task_attachments.sql");
 const MIGRATION_6_SQL: &str = include_str!("../../src/db/migrations/006_task_reminders.sql");
 const MIGRATION_7_SQL: &str = include_str!("../../src/db/migrations/007_task_relations.sql");
-const MIGRATION_8_SQL: &str = include_str!("../../src/db/migrations/008_task_reminders_relative.sql");
+const MIGRATION_8_SQL: &str =
+    include_str!("../../src/db/migrations/008_task_reminders_relative.sql");
 const MIGRATION_9_SQL: &str = include_str!("../../src/db/migrations/009_task_identifier.sql");
 const MIGRATION_10_SQL: &str = include_str!("../../src/db/migrations/010_views.sql");
 const MIGRATION_11_SQL: &str = include_str!("../../src/db/migrations/011_kanban.sql");
@@ -34,6 +39,7 @@ const MIGRATION_15_SQL: &str = include_str!("../../src/db/migrations/015_perf_in
 const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project_identifier.sql");
 const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
 const MIGRATION_18_SQL: &str = include_str!("../../src/db/migrations/018_saved_filters.sql");
+const MIGRATION_19_SQL: &str = include_str!("../../src/db/migrations/019_attachment_uploads.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -145,6 +151,12 @@ fn migrations() -> Vec<Migration> {
             sql: MIGRATION_18_SQL,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 19,
+            description: "local-first attachment uploads (pending rows)",
+            sql: MIGRATION_19_SQL,
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -181,8 +193,7 @@ fn set_hide_dock_on_tray(state: tauri::State<'_, AppState>, enabled: bool) -> Re
 fn restore_dock() {
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
-    let mtm = MainThreadMarker::new()
-        .expect("restore_dock must be called on the main thread");
+    let mtm = MainThreadMarker::new().expect("restore_dock must be called on the main thread");
     NSApplication::sharedApplication(mtm)
         .setActivationPolicy(NSApplicationActivationPolicy::Regular);
 }
@@ -208,34 +219,36 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     TrayIconBuilder::with_id(TrayIconId::new("main"))
-        .icon(app.default_window_icon().cloned().expect("default window icon"))
+        .icon(
+            app.default_window_icon()
+                .cloned()
+                .expect("default window icon"),
+        )
         .menu(&menu)
         .tooltip("Cria")
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "show" => {
-                    #[cfg(target_os = "macos")]
-                    restore_dock();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = window.unminimize();
-                    }
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                #[cfg(target_os = "macos")]
+                restore_dock();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.unminimize();
                 }
-                "quick_add" => {
-                    #[cfg(target_os = "macos")]
-                    restore_dock();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = window.emit("tray-quick-add", ());
-                    }
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
             }
+            "quick_add" => {
+                #[cfg(target_os = "macos")]
+                restore_dock();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.emit("tray-quick-add", ());
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let tauri::tray::TrayIconEvent::Click { .. } = event {
@@ -283,8 +296,7 @@ fn hide_input_accessory_bar() {
             return;
         };
         let imp: Imp = core::mem::transmute(
-            input_accessory_view_nil
-                as unsafe extern "C" fn(*mut AnyObject, Sel) -> *mut AnyObject,
+            input_accessory_view_nil as unsafe extern "C" fn(*mut AnyObject, Sel) -> *mut AnyObject,
         );
         method.set_implementation(imp);
     }
@@ -357,18 +369,36 @@ pub fn run() {
             // chevrons + Done) so the quick-add sheet sits flush on the keyboard.
             #[cfg(target_os = "ios")]
             hide_input_accessory_bar();
+            // macOS: native glass behind the (transparent) window; the CSS
+            // lets it through only on the sidebar. See glass.rs.
+            #[cfg(target_os = "macos")]
+            if let Some(window) = tauri::Manager::get_webview_window(_app, "main") {
+                glass::apply_window_glass(&window);
+            }
             Ok(())
         });
 
-    // The tray/dock commands only exist on desktop; mobile gets just the
-    // shared transaction command.
+    // The tray/dock commands only exist on desktop; mobile gets the shared
+    // commands (transactions, OCR, AI, keychain, attachment side-store).
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
         ocr::recognize_text,
+        ai::ai_generate,
+        ai::ai_availability,
+        speech::speech_start,
+        speech::speech_stop,
+        speech::speech_available,
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        glass::native_glass,
+        glass::native_glass_theme,
+        glass::glass_tabbar_update,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
+        blobs::blob_list,
         set_tray_visible,
         set_close_to_tray,
         set_hide_dock_on_tray,
@@ -377,9 +407,21 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         tx::execute_tx,
         ocr::recognize_text,
+        ai::ai_generate,
+        ai::ai_availability,
+        speech::speech_start,
+        speech::speech_stop,
+        speech::speech_available,
         secure::secure_get_token,
         secure::secure_set_token,
         secure::secure_delete_token,
+        glass::native_glass,
+        glass::native_glass_theme,
+        glass::glass_tabbar_update,
+        blobs::blob_write,
+        blobs::blob_read,
+        blobs::blob_delete,
+        blobs::blob_list,
     ]);
 
     builder

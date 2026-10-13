@@ -7,16 +7,22 @@ import {
 } from '@/db/attachments';
 import { subscribe } from '@/db/bus';
 
-/** A single task's attachments, for the detail card list. */
+/** A single task's attachments, for the detail card list. Also listens to
+ * the outbox, since a queued upload that dead-letters flips its row from
+ * "uploading" to "failed" without touching the attachments table. */
 export function useTaskAttachments(taskLocalId: string | null) {
   const qc = useQueryClient();
-  useEffect(
-    () =>
-      subscribe('tasks', () => {
-        void qc.invalidateQueries({ queryKey: ['attachments'] });
-      }),
-    [qc],
-  );
+  useEffect(() => {
+    const invalidate = () => {
+      void qc.invalidateQueries({ queryKey: ['attachments'] });
+    };
+    const unsubTasks = subscribe('tasks', invalidate);
+    const unsubOutbox = subscribe('outbox', invalidate);
+    return () => {
+      unsubTasks();
+      unsubOutbox();
+    };
+  }, [qc]);
   return useQuery<TaskAttachment[]>({
     queryKey: ['attachments', taskLocalId],
     enabled: !!taskLocalId,

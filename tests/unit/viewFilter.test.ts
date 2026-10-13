@@ -15,6 +15,7 @@ const baseView: ProjectView = {
   defaultBucketServerId: null,
   doneBucketServerId: null,
   updatedAt: '2026-07-01T00:00:00Z',
+  placeholder: false,
 };
 
 describe('viewFilterParams', () => {

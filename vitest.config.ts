@@ -9,7 +9,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts', 'src/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/ui/**/*.test.tsx', 'src/**/*.test.ts'],
+    // UI smoke tests render React trees, so they need a DOM. Everything else
+    // keeps the default `node` environment (or its own docblock).
+    environmentMatchGlobs: [['tests/ui/**', 'jsdom']],
     // Polyfills window.localStorage for jsdom-env tests (zustand persist needs
     // it); no-ops under the node environment. See tests/setup.ts.
     setupFiles: ['./tests/setup.ts'],
@@ -21,6 +24,10 @@ export default defineConfig({
     // Forks give each test file its own Node process and clean module
     // graph.
     pool: 'forks',
+    // Coverage instrumentation slows the jsdom UI tests enough that a few
+    // (view-manager, quick-add) pass alone in ~2.5s but crossed the 5s default
+    // in CI's `--coverage` run. A roomier limit keeps them stable.
+    testTimeout: 20000,
     // `pnpm test:coverage` (CI). Scoped to the logic layers; UI components
     // have no unit tests. Thresholds are a floor just under current numbers:
     // raise them as coverage grows, never lower them.

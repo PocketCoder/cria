@@ -22,7 +22,7 @@ export function ReorderErrorPill({
     <div
       className={cn(
         'fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-md',
-        'bg-[rgba(255,165,0,0.9)] px-3 py-1 text-sm text-white shadow-md',
+        'bg-[var(--color-warning)] px-3 py-1 text-sm text-[var(--color-warning-foreground)] shadow-md',
       )}
       role="alert"
     >
@@ -30,7 +30,7 @@ export function ReorderErrorPill({
       <span>{message}</span>
       <button
         onClick={onClose}
-        className="ml-2 flex-shrink-0 rounded-full p-0.5 hover:bg-white/20"
+        className="ml-2 flex-shrink-0 rounded-full p-0.5 hover:bg-black/10"
         aria-label="Dismiss warning"
       >
         <X className="h-3 w-3" />

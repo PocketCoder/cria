@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
+import { selectionTick } from '@/utils/haptics';
+import { useLatestRef } from './useLatestRef';
 
 export const SWIPE_COMPLETE_THRESHOLD = 80;
 export const SWIPE_DELETE_THRESHOLD = 160;
@@ -27,12 +29,9 @@ export function useSwipeGesture<T extends HTMLElement>({
   const ref = useRef<T>(null);
   const [isSwiping, setIsSwiping] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
-  const onCompleteRef = useRef(onComplete);
-  const onDeleteRef = useRef(onDelete);
+  const onCompleteRef = useLatestRef(onComplete);
+  const onDeleteRef = useLatestRef(onDelete);
   const swipeOccurredRef = useRef(false);
-
-  onCompleteRef.current = onComplete;
-  onDeleteRef.current = onDelete;
 
   useEffect(() => {
     const el = ref.current;
@@ -42,8 +41,10 @@ export function useSwipeGesture<T extends HTMLElement>({
     let startY = 0;
     let translateX = 0;
     let swiping = false;
+    let lastLevel = 0;
 
     const onTouchStart = (e: TouchEvent) => {
+      lastLevel = 0;
       if (e.touches.length !== 1) return;
       swipeOccurredRef.current = false;
       startX = e.touches[0]!.clientX;
@@ -67,6 +68,11 @@ export function useSwipeGesture<T extends HTMLElement>({
       if (swiping) {
         e.preventDefault();
         translateX = Math.max(0, Math.min(SWIPE_DELETE_THRESHOLD, dx));
+        const level = translateX >= SWIPE_DELETE_THRESHOLD ? 2 : translateX >= SWIPE_COMPLETE_THRESHOLD ? 1 : 0;
+        if (level !== lastLevel) {
+          lastLevel = level;
+          void selectionTick();
+        }
         el.style.transform = `translateX(${translateX}px)`;
         setSwipeOffset(translateX);
       }
@@ -115,7 +121,7 @@ export function useSwipeGesture<T extends HTMLElement>({
       el.removeEventListener('touchcancel', onTouchEnd);
       el.removeEventListener('click', onClick);
     };
-  }, [disabled]);
+  }, [disabled, onCompleteRef, onDeleteRef]);
 
   return { ref, isSwiping, swipeOffset };
 }

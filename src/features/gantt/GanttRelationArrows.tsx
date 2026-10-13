@@ -24,8 +24,9 @@ interface GanttRelationArrowsProps {
   height: number;
 }
 
-const BLOCKING = '#ef4444'; // red — hard dependency
-const PRECEDES = '#9ca3af'; // grey — ordering
+// Set via style, not the presentation attribute, so the theme tokens resolve.
+const BLOCKING = 'var(--color-destructive)'; // hard dependency
+const PRECEDES = 'var(--color-muted-foreground)'; // ordering
 
 /**
  * SVG overlay drawing dependency arrows between task bars: `blocking` solid
@@ -78,7 +79,7 @@ export function GanttRelationArrows({
             markerHeight="6"
             orient="auto-start-reverse"
           >
-            <path d="M0,0 L10,5 L0,10 z" fill={kind === 'blocking' ? BLOCKING : PRECEDES} />
+            <path d="M0,0 L10,5 L0,10 z" style={{ fill: kind === 'blocking' ? BLOCKING : PRECEDES }} />
           </marker>
         ))}
       </defs>
@@ -95,7 +96,7 @@ export function GanttRelationArrows({
             key={key}
             d={d}
             fill="none"
-            stroke={blocking ? BLOCKING : PRECEDES}
+            style={{ stroke: blocking ? BLOCKING : PRECEDES }}
             strokeWidth={1.5}
             strokeDasharray={blocking ? undefined : '6 4'}
             markerEnd={`url(#gantt-arrow-${kind})`}

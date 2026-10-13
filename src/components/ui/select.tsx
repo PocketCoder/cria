@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { cn } from '@/lib/cn';
+import { useTopModalDialog } from '@/lib/modalStack';
 import { ChevronDown, Check } from 'lucide-react';
 
 export const Select = SelectPrimitive.Root;
@@ -9,13 +10,19 @@ export const SelectValue = SelectPrimitive.Value;
 
 export const SelectTrigger = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
+    /** `ghost`: borderless inline trigger, 8px radius, medium weight. */
+    variant?: 'default' | 'ghost';
+  }
+>(({ className, children, variant = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-8 w-full items-center justify-between gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)]',
-      'focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]',
+      'flex items-center justify-between gap-1.5 px-2 py-1.5 text-sm text-[var(--color-foreground)]',
+      variant === 'ghost'
+        ? 'h-auto w-auto rounded-lg bg-transparent font-medium hover:bg-[var(--color-muted)]'
+        : 'h-8 w-full rounded-md [@media(pointer:coarse)]:min-h-11 border border-[var(--color-border)] bg-[var(--color-background)]',
+      'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 ring-offset-background',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'data-[placeholder]:text-[var(--color-muted-foreground)]',
       className,
@@ -34,12 +41,12 @@ export const SelectContent = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(({ className, children, position = 'popper', ...props }, ref) => (
-  <SelectPrimitive.Portal>
+  <SelectPrimitive.Portal container={useTopModalDialog() ?? undefined}>
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
         'relative z-50 max-h-64 min-w-[8rem] overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-card-foreground)] shadow-md',
-        'animate-in fade-in-80',
+        'pop-in origin-[var(--radix-select-content-transform-origin)]',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         className,
@@ -68,7 +75,7 @@ export const SelectItem = forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none',
+      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none [@media(pointer:coarse)]:py-3',
       'focus:bg-[var(--color-muted)] focus:text-[var(--color-foreground)]',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className,

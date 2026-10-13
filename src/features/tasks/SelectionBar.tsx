@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Check, CalendarDays, FolderInput, Flag, Trash2, X } from 'lucide-react';
+import { Check, CalendarDays, CalendarClock, FolderInput, Flag, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useDisplay } from '@/stores/display';
 import { usePendingDeletes } from '@/stores/pendingDeletes';
 import { useSelectableProjects } from '@/queries/projects';
 import { Calendar } from '@/components/ui/calendar';
-import { PRIORITY_META } from '@/components/ui/priority-select';
+import { PRIORITY_META } from '@/components/ui/priority';
 import { updateTask, moveTask, getTaskByLocalId } from '@/db/tasks';
+import { utcMidnightIso } from '@/features/task-detail/taskDetailLogic';
+import { DEFER_PRESETS, deferDueIso, type DeferPreset } from '@/lib/defer';
+import { showToast } from '@/stores/toasts';
 import { impactComplete, impactDeleted } from '@/utils/haptics';
 
-type Picker = 'schedule' | 'move' | 'priority' | null;
+type Picker = 'schedule' | 'defer' | 'move' | 'priority' | null;
 
 /**
  * Bulk-action bar shown while multi-select is active. Operates on the selected
@@ -32,7 +35,25 @@ export function SelectionBar() {
   };
 
   const complete = () => { void eachUpdate({ done: true }).then(() => { impactComplete(); stop(); }); };
-  const schedule = (d: Date | undefined) => { void eachUpdate({ dueDate: d ? d.toISOString() : null }).then(stop); };
+  const schedule = (d: Date | undefined) => { void eachUpdate({ dueDate: utcMidnightIso(d) }).then(stop); };
+  const defer = (preset: DeferPreset) => {
+    void Promise.all(
+      ids.map(async (id) => {
+        const t = await getTaskByLocalId(id);
+        if (!t) return true;
+        return updateTask(id, { dueDate: deferDueIso(t.dueDate, preset) }).then(
+          () => true,
+          () => false,
+        );
+      }),
+    ).then((results) => {
+      const failed = results.filter((ok) => !ok).length;
+      if (failed > 0) {
+        showToast(`Couldn’t defer ${failed} ${failed === 1 ? 'task' : 'tasks'}`, 'error');
+      }
+      stop();
+    });
+  };
   const setPriority = (p: number) => { void eachUpdate({ priority: p }).then(stop); };
   const move = (projectLocalId: string) => {
     void Promise.all(ids.map((id) => moveTask(id, projectLocalId).catch(() => {}))).then(stop);
@@ -55,6 +76,20 @@ export function SelectionBar() {
         {picker === 'schedule' && (
           <div className="px-1 pb-1">
             <Calendar onSelect={(d) => schedule(d)} onClear={() => schedule(undefined)} />
+          </div>
+        )}
+        {picker === 'defer' && (
+          <div className="max-h-56 overflow-y-auto">
+            {DEFER_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => defer(p.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-[var(--color-muted)]"
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         )}
         {picker === 'move' && (
@@ -100,6 +135,7 @@ export function SelectionBar() {
           <div className="flex items-center gap-0.5">
             <BarBtn icon={Check} label="Complete" disabled={!ids.length} onClick={complete} />
             <BarBtn icon={CalendarDays} label="Schedule" disabled={!ids.length} active={picker === 'schedule'} onClick={() => setPicker(picker === 'schedule' ? null : 'schedule')} />
+            <BarBtn icon={CalendarClock} label="Defer" disabled={!ids.length} active={picker === 'defer'} onClick={() => setPicker(picker === 'defer' ? null : 'defer')} />
             <BarBtn icon={FolderInput} label="Move" disabled={!ids.length} active={picker === 'move'} onClick={() => setPicker(picker === 'move' ? null : 'move')} />
             <BarBtn icon={Flag} label="Priority" disabled={!ids.length} active={picker === 'priority'} onClick={() => setPicker(picker === 'priority' ? null : 'priority')} />
             <BarBtn icon={Trash2} label="Delete" disabled={!ids.length} destructive onClick={remove} />

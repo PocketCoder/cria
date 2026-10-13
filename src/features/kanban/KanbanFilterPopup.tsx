@@ -22,6 +22,7 @@ export function KanbanFilterPopup({ filter, onChange }: KanbanFilterPopupProps) 
   const { data: labels = [] } = useLabels();
   const active = isBoardFilterActive(filter);
 
+  const selectedLabelIds = new Set(filter.labelLocalIds);
   const toggleLabel = (id: string) => {
     const has = filter.labelLocalIds.includes(id);
     onChange({
@@ -82,7 +83,7 @@ export function KanbanFilterPopup({ filter, onChange }: KanbanFilterPopupProps) 
               <span className="text-[var(--color-muted-foreground)]">Labels</span>
               <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto">
                 {labels.map((l) => {
-                  const on = filter.labelLocalIds.includes(l.localId);
+                  const on = selectedLabelIds.has(l.localId);
                   return (
                     <button
                       key={l.localId}

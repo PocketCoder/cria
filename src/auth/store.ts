@@ -1,3 +1,4 @@
+import { clearProjectBackgroundCache } from '@/lib/clearBackgroundCache';
 import { create } from 'zustand';
 import { upsertUser, clearUser } from '@/db/user';
 import type { User } from '@/domain/user';
@@ -52,6 +53,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   async signOut() {
     await clearCredentials();
     await clearUser();
+    await clearProjectBackgroundCache();
     set({ status: { kind: 'unauthenticated' } });
   },
 }));

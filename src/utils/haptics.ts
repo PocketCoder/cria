@@ -39,3 +39,12 @@ export async function impactDeleted(): Promise<void> {
     await h.notificationFeedback('warning');
   } catch (e) { console.warn('[haptics] impactDeleted failed:', e); }
 }
+
+/** Light tick for discrete selection changes: tabs, toggles, pickers, thresholds. */
+export async function selectionTick(): Promise<void> {
+  const h = await ensure();
+  if (!h) return;
+  try {
+    await h.selectionFeedback();
+  } catch (e) { console.warn('[haptics] selectionTick failed:', e); }
+}

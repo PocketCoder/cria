@@ -1,5 +1,6 @@
 /**
- * Server-side attachment ops — upload, delete, auth-fetch blob.
+ * Attachment ops: queued upload (outbox + side-store), delete, auth-fetch
+ * blob.
  *
  * Why not the OpenAPI client (`src/api/client.ts`): the upload endpoint
  * is multipart/form-data and the download is an arbitrary blob; neither
@@ -12,15 +13,30 @@
  * URL shape — `<serverUrl>/api/v1/tasks/{taskId}/attachments/{attId}` —
  * is critical: it's what we insert as the `<img src>` in descriptions
  * so Vikunja-web's CustomImage extension (and our own) recognise it as
- * an auth-required attachment and swap the src for a blob URL.
+ * an auth-required attachment and swap the src for a blob URL. We write
+ * v1 because that's the API Cria talks to and every Vikunja-web release
+ * recognises it (up to v2.6.0 it is the only shape they match). We *read*
+ * the v2 shape too: v2.7.0 writes `<root>/api/v2/tasks/…`.
  */
+import { nanoid } from 'nanoid';
 import { getAuthSnapshot } from '@/auth/store';
 import { platformFetch } from '@/api/client';
+import { ApiError, NetworkError, buildApiError } from '@/api/errors';
 import { saveBlob } from '@/lib/download';
 import {
-  upsertAttachmentLocal,
+  findPendingAttachmentRefs,
+  parsePendingAttachmentRef,
+  replacePendingAttachmentRef,
+  stripPendingAttachmentImages,
+} from '@/lib/pendingAttachmentRef';
+import {
   deleteAttachmentLocal,
+  discardPendingAttachment,
+  insertPendingAttachment,
+  listMissingAttachments,
+  listUploadedAttachments,
 } from '@/db/attachments';
+import { deleteBlob, writeBlob } from '@/tauri/blobStore';
 import {
   taskAttachmentSchema,
   type TaskAttachmentResponse,
@@ -49,13 +65,24 @@ export function buildAttachmentUrl(
   return `${apiBase()}/api/v1/tasks/${taskServerId}/attachments/${attachmentServerId}`;
 }
 
+/**
+ * An inline attachment image's path below the server root. Vikunja-web
+ * writes `/api/v1/…` in every release up to v2.6.0 and `/api/v2/…` from
+ * v2.7.0, whose matcher also accepts the bare `/tasks/…` form. Same set
+ * here, so an image either web version stored loads in Cria. A trailing
+ * slash, query or fragment doesn't change which file it is.
+ */
+const ATTACHMENT_PATH =
+  /^(?:\/api\/v[12])?\/tasks\/\d+\/attachments\/\d+\/?(?:[?#].*)?$/;
+
 /** True if `src` points at an attachment on the currently-signed-in
- * server (i.e. it should be auth-fetched, not loaded directly). */
+ * server (i.e. it should be auth-fetched, not loaded directly). Any API
+ * version is fine: the fetch rebuilds the URL from the ids. */
 export function isAttachmentUrl(src: string | null | undefined): boolean {
   if (!src) return false;
   const base = apiBase();
-  if (!base) return false;
-  return src.startsWith(`${base}/api/v1/tasks/`) && src.includes('/attachments/');
+  if (!base || !src.startsWith(base)) return false;
+  return ATTACHMENT_PATH.test(src.slice(base.length));
 }
 
 /** Parse a `(taskId, attId)` pair from an attachment URL, or null if it
@@ -72,65 +99,150 @@ export function parseAttachmentUrl(
   };
 }
 
+/** Where an inline image's bytes come from when the browser can't load its
+ * URL itself. */
+export type InlineImageSource =
+  | { kind: 'attachment'; taskServerId: number; attachmentServerId: number }
+  | { kind: 'pending'; attachmentLocalId: string };
+
 /**
- * Upload one or more files to a task as attachments. Mirrors each
- * returned attachment into the local task_attachments table so the
- * detail card updates without waiting for the next pull.
+ * What an inline `<img>` in a description or comment shows, or null when the
+ * browser can load it as it stands (an image on another host, say).
  *
- * Returns the list of successfully-created attachments (already parsed
- * through `taskAttachmentSchema`). The server's `errors` array is
- * logged but not thrown — partial-success is the upstream behaviour
- * (one bad file in a batch shouldn't fail the rest).
- *
- * Note the verb: Vikunja's v1 routes attachment upload as **PUT**
- * (not POST). v2 may differ when it lands, but we're on v1.
+ * Vikunja-web stores `<img src="#" data-src="{url}">` (plus an `id` it never
+ * reads back), so the browser doesn't fetch the URL without the token; older
+ * text has the URL in `src` alone. `data-src` wins when both are set, as
+ * upstream. An attachment on this server (v1 or v2 shape) is fetched with
+ * auth; a queued upload (`cria://pending/{id}`) loads from the local bytes.
  */
-export async function uploadAttachment(
-  taskServerId: number,
+export function inlineImageSource(
+  src: string | null | undefined,
+  dataSrc: string | null | undefined,
+): InlineImageSource | null {
+  const real = dataSrc ?? src;
+  const attachmentLocalId = parsePendingAttachmentRef(real);
+  if (attachmentLocalId) return { kind: 'pending', attachmentLocalId };
+  if (!isAttachmentUrl(real)) return null;
+  const ids = parseAttachmentUrl(real!);
+  return ids ? { kind: 'attachment', ...ids } : null;
+}
+
+/**
+ * Attach a file to a task, offline-first. The bytes go to the side-store and
+ * a pending row plus an outbox upload op go to the DB, so the list shows the
+ * file at once and the outbox drain uploads it: straight away when online,
+ * after reconnecting otherwise (the bytes survive an app restart). Works for
+ * a task that hasn't synced yet, as the op waits for the task's create.
+ *
+ * Returns the attachment's local id (the key of `cria://pending/{id}`).
+ */
+export async function queueAttachmentUpload(
   taskLocalId: string,
-  files: File[] | FileList,
-): Promise<TaskAttachmentResponse[]> {
-  if (!taskServerId) throw new Error('uploadAttachment: task has no server id');
-  const list = Array.from(files);
-  if (list.length === 0) return [];
-
-  const form = new FormData();
-  for (const f of list) {
-    // Vikunja's handler reads form.File["files"] — must be 'files' plural.
-    form.append('files', f, f.name);
+  file: File,
+): Promise<string> {
+  const localId = nanoid();
+  await writeBlob(localId, new Uint8Array(await file.arrayBuffer()));
+  try {
+    await insertPendingAttachment({
+      taskLocalId,
+      attachmentLocalId: localId,
+      fileName: file.name || 'attachment',
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      bytesPath: localId,
+    });
+  } catch (err) {
+    await deleteBlob(localId).catch(() => undefined);
+    throw err;
   }
+  return localId;
+}
 
-  const res = await platformFetch(
-    `${apiBase()}/api/v1/tasks/${taskServerId}/attachments`,
-    {
-      method: 'PUT',
-      headers: authHeaders(), // do NOT set Content-Type — the Request boundary header is generated
-      body: form,
-    },
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(
-      `uploadAttachment: HTTP ${res.status} ${text.slice(0, 200)}`,
+/** Remove a queued (or failed) upload: the row, its op and its bytes. */
+export async function cancelAttachmentUpload(attachmentLocalId: string): Promise<void> {
+  const bytesPath = await discardPendingAttachment(attachmentLocalId);
+  if (bytesPath) {
+    await deleteBlob(bytesPath).catch((err) =>
+      console.warn('[attachments] could not delete queued bytes:', err),
     );
+  }
+}
+
+/**
+ * PUT one file to `/tasks/{id}/attachments` and return the created
+ * attachment. Called by the outbox executor (sync/push/attachment.ts).
+ *
+ * Errors are classified the way `callApi` classifies them, so the drain
+ * backs off on a network failure or 5xx and dead-letters a 4xx. Vikunja
+ * reports a rejected file (too large, say) as a 200 with an `errors` entry;
+ * that is a permanent failure too.
+ *
+ * Note the verb: Vikunja's v1 routes attachment upload as **PUT**.
+ */
+export async function putAttachmentFile(
+  taskServerId: number,
+  bytes: Uint8Array<ArrayBuffer>,
+  fileName: string,
+  mime: string,
+): Promise<TaskAttachmentResponse> {
+  const form = new FormData();
+  // Vikunja's handler reads form.File["files"], so 'files' plural.
+  form.append('files', new Blob([bytes], { type: mime }), fileName);
+
+  let res: Response;
+  try {
+    res = await platformFetch(
+      `${apiBase()}/api/v1/tasks/${taskServerId}/attachments`,
+      // No Content-Type: the multipart boundary header is generated.
+      { method: 'PUT', headers: authHeaders(), body: form },
+    );
+  } catch (err) {
+    if (err instanceof NetworkError) throw err;
+    throw new NetworkError(err instanceof Error ? err.message : String(err), err);
+  }
+  if (!res.ok) {
+    throw buildApiError(res.status, await res.text().catch(() => ''));
   }
 
   const payload = (await res.json()) as UploadResult;
-  if (payload.errors?.length) {
-    console.warn('[attachments] upload partial errors:', payload.errors);
+  const parsed = taskAttachmentSchema.safeParse(payload.success?.[0]);
+  if (!parsed.success) {
+    const first = payload.errors?.[0];
+    throw new ApiError(
+      res.status,
+      first?.code ?? null,
+      `upload rejected: ${first?.message ?? 'no attachment in the response'}`,
+      false,
+    );
   }
+  return parsed.data;
+}
 
-  const parsed: TaskAttachmentResponse[] = [];
-  for (const raw of payload.success ?? []) {
-    const r = taskAttachmentSchema.safeParse(raw);
-    if (r.success) parsed.push(r.data);
-    else console.warn('[attachments] skipping malformed upload result:', r.error);
+/**
+ * Swap `cria://pending/{id}` references whose upload has finished for the
+ * real attachment URL. The task and comment push run text through this, so
+ * a placeholder saved after its upload landed (the editor was still open,
+ * say) never reaches the server. An image whose upload was cancelled is
+ * dropped the same way (the editor still held it when the upload was
+ * removed). References still pending are left alone.
+ */
+export async function resolveUploadedPendingRefs(
+  html: string | null,
+): Promise<string | null> {
+  const ids = findPendingAttachmentRefs(html);
+  if (!html || ids.length === 0) return html;
+  let out = html;
+  for (const a of await listUploadedAttachments(ids)) {
+    out = replacePendingAttachmentRef(
+      out,
+      a.localId,
+      buildAttachmentUrl(a.taskServerId, a.serverId),
+    );
   }
-
-  for (const a of parsed) {
-    await upsertAttachmentLocal(taskLocalId, a);
+  for (const id of await listMissingAttachments(ids)) {
+    out = stripPendingAttachmentImages(out, id);
   }
-  return parsed;
+  return out;
 }
 
 /** Delete a server-side attachment + drop it from the local mirror. */

@@ -6,7 +6,8 @@
   "bundle": {
     "createUpdaterArtifacts": false,
     "iOS": {
-      "developmentTeam": "E75F9Z23QE"
+      "developmentTeam": "E75F9Z23QE",
+      "minimumSystemVersion": "15.0"
     }
   }
 }

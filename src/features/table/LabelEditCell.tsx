@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Tags } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useTaskLabels } from '@/queries/taskLabels';
@@ -6,6 +6,7 @@ import { useLabels } from '@/queries/labels';
 import { toggleTaskLabel, createLabel } from '@/db/labels';
 import { LabelChips } from '@/features/tasks/LabelChips';
 import { cn } from '@/lib/cn';
+import { useFocusOnMount } from '@/lib/useFocusOnMount';
 
 /**
  * Editable labels cell for the table's edit mode: a popover to search /
@@ -18,6 +19,7 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
   const { data: current = [] } = useTaskLabels(taskLocalId);
   const { data: all = [] } = useLabels();
   const [search, setSearch] = useState('');
+  const focusOnMount = useFocusOnMount<HTMLInputElement>();
   const currentIds = new Set(current.map((l) => l.localId));
 
   const term = search.trim().toLowerCase();
@@ -30,15 +32,22 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
     );
   };
 
+  // Ref, not state: `search` is only cleared after the async writes, so a
+  // second Enter in that window would create a duplicate label.
+  const creatingRef = useRef(false);
+
   const createAndAdd = async () => {
     const title = search.trim();
-    if (!title) return;
+    if (!title || creatingRef.current) return;
+    creatingRef.current = true;
     try {
       const label = await createLabel({ title });
       await toggleTaskLabel(taskLocalId, label.localId);
       setSearch('');
     } catch (e) {
       console.error('[table] create label failed:', e);
+    } finally {
+      creatingRef.current = false;
     }
   };
 
@@ -60,7 +69,8 @@ export function LabelEditCell({ taskLocalId }: { taskLocalId: string }) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-52 p-1">
         <input
-          autoFocus
+          aria-label="Search or create label"
+          ref={focusOnMount}
           type="text"
           placeholder="Search or create…"
           value={search}

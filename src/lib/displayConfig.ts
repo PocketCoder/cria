@@ -1,5 +1,5 @@
-import { startOfDay, isBefore, isSameDay, addDays, format } from 'date-fns';
-import { toCalendarDate } from '@/lib/dateFormat';
+import { isBefore, isSameDay, addDays, format } from 'date-fns';
+import { dueCalendarDate } from '@/lib/dateFormat';
 import type { TaskWithProject } from '@/db/tasks';
 import type { ActiveView } from '@/stores/ui';
 import type { TaskGroup } from '@/queries/smartViews';
@@ -163,7 +163,7 @@ function matchesDateFilter(iso: string | null, filter: DateFilter | undefined, t
   if (!filter || filter === 'all') return true;
   if (filter === 'none') return !iso;
   if (!iso) return false;
-  const d = startOfDay(toCalendarDate(iso));
+  const d = dueCalendarDate(iso);
   if (filter === 'overdue') return isBefore(d, today);
   if (filter === 'today') return isSameDay(d, today);
   if (filter === 'week') return !isBefore(d, today) && isBefore(d, addDays(today, 7));
@@ -197,7 +197,7 @@ function compareTasks(a: DisplayTaskFields, b: DisplayTaskFields, sort: DisplayS
     if (!x && !y) return 0;
     if (!x) return 1; // nulls last regardless of direction
     if (!y) return -1;
-    return (toCalendarDate(x).getTime() - toCalendarDate(y).getTime()) * dir;
+    return (dueCalendarDate(x).getTime() - dueCalendarDate(y).getTime()) * dir;
   };
   switch (sort.field) {
     case 'manual':
@@ -241,7 +241,7 @@ function groupKey(t: TaskWithProject, ctx: DisplayCtx, groupBy: GroupBy): { key:
       return [{ key: `p${t.priority}`, label: PRIORITY_GROUP_LABEL[t.priority] ?? 'No priority' }];
     case 'dueDate': {
       if (!t.dueDate) return [{ key: 'zzz-none', label: 'No date' }];
-      const d = startOfDay(toCalendarDate(t.dueDate));
+      const d = dueCalendarDate(t.dueDate);
       if (isBefore(d, ctx.today)) return [{ key: '000-overdue', label: 'Overdue' }];
       if (isSameDay(d, ctx.today)) return [{ key: '001-today', label: 'Today' }];
       if (isSameDay(d, addDays(ctx.today, 1))) return [{ key: '002-tomorrow', label: 'Tomorrow' }];

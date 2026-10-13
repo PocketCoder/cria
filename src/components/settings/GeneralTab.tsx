@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCurrentUser } from '@/queries/user';
 import { useSelectableProjects } from '@/queries/projects';
 import { useSettings, type DateFormat, type TimeFormat } from '@/stores/settings';
@@ -7,8 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { notify } from '@/db/bus';
-import { frontendSettingsWithCria } from '@/sync/settingsSync';
-import type { UserSettingsInput } from '@/api/userSettings';
+import { showToast } from '@/stores/toasts';
+import { saveUserSettings } from '@/sync/settingsSync';
+import { QUICK_ADD_PREFIXES, isQuickAddMagicMode, type QuickAddMagicMode } from '@/lib/quickAddPrefixes';
+import { QUICK_ADD_MAGIC_KEY, type SettingsChange } from '@/sync/frontendSettings';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -29,9 +31,21 @@ const LANGUAGES = [
   { code: 'ca', label: 'Català' },
 ];
 
+const QUICK_ADD_MODES: { value: QuickAddMagicMode; label: string }[] = [
+  { value: 'disabled', label: 'Disabled' },
+  { value: 'vikunja', label: 'Vikunja' },
+  { value: 'todoist', label: 'Todoist' },
+];
+
+/** "*label · +project · @assignee · !priority" for the active mode. */
+function quickAddSyntax(mode: QuickAddMagicMode): string {
+  const p = QUICK_ADD_PREFIXES[mode];
+  if (!p) return 'Off: the whole text becomes the task title.';
+  return `${p.label}label · ${p.project}project · ${p.assignee}assignee · ${p.priority}priority`;
+}
+
 interface Props {
   disabled?: boolean;
-  onPushSettings: (patch: UserSettingsInput) => Promise<void>;
 }
 
 function groupTimezones(timezones: string[]): { label: string; items: { value: string; label: string }[] }[] {
@@ -54,18 +68,15 @@ function groupTimezones(timezones: string[]): { label: string; items: { value: s
     }));
 }
 
-interface FeedbackState {
-  type: 'success' | 'error';
-  message: string;
-}
-
-export function GeneralTab({ disabled, onPushSettings }: Props) {
+export function GeneralTab({ disabled }: Props) {
   const { data: user } = useCurrentUser();
   const { data: projects = [] } = useSelectableProjects();
   const dateFormat = useSettings((s) => s.dateFormat);
   const setDateFormat = useSettings((s) => s.setDateFormat);
   const timeFormat = useSettings((s) => s.timeFormat);
   const setTimeFormat = useSettings((s) => s.setTimeFormat);
+  const quickAddMagicMode = useSettings((s) => s.quickAddMagicMode);
+  const setQuickAddMagicMode = useSettings((s) => s.setQuickAddMagicMode);
 
   const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(true);
   const [overdueRemindersEnabled, setOverdueRemindersEnabled] = useState(true);
@@ -76,7 +87,8 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
   const [timezone, setTimezone] = useState('UTC');
   const [discoverableByEmail, setDiscoverableByEmail] = useState(false);
   const [discoverableByName, setDiscoverableByName] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  // Saves in flight: a refetched user must not overwrite a switch the user has just flipped.
+  const inflight = useRef(0);
   const [timezoneGroups, setTimezoneGroups] = useState<{ label: string; items: { value: string; label: string }[] }[]>([]);
 
   useEffect(() => {
@@ -84,34 +96,64 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || inflight.current > 0) return;
     const raw = user.raw as Record<string, unknown> | undefined;
-    const settings = (raw?.settings as Record<string, unknown> | undefined) ?? {};
-    const s = settings as Record<string, unknown>;
-    if (s.email_reminders_enabled === false) setEmailRemindersEnabled(false);
-    if (s.overdue_tasks_reminders_enabled === false) setOverdueRemindersEnabled(false);
-    if (typeof s.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(s.overdue_tasks_reminders_time as string);
-    if (typeof s.week_start === 'number') setWeekStart(s.week_start as number);
-    if (typeof s.default_project_id === 'number') setDefaultProjectId((s.default_project_id as number) || null);
-    if (typeof s.language === 'string') setLanguage(s.language as string);
-    if (typeof s.timezone === 'string') setTimezone(s.timezone as string);
-    if (typeof s.discoverable_by_email === 'boolean') setDiscoverableByEmail(s.discoverable_by_email as boolean);
-    if (typeof s.discoverable_by_name === 'boolean') setDiscoverableByName(s.discoverable_by_name as boolean);
+    const s = (raw?.settings as Record<string, unknown> | undefined) ?? {};
+    // Take every stored value, on and off alike: only copying "off" values left
+    // a switch showing its default after the page was left and reopened.
+    setEmailRemindersEnabled(s.email_reminders_enabled !== false);
+    setOverdueRemindersEnabled(s.overdue_tasks_reminders_enabled !== false);
+    if (typeof s.overdue_tasks_reminders_time === 'string') setOverdueRemindersTime(s.overdue_tasks_reminders_time);
+    if (typeof s.week_start === 'number') setWeekStart(s.week_start);
+    if (typeof s.default_project_id === 'number') setDefaultProjectId(s.default_project_id || null);
+    if (typeof s.language === 'string') setLanguage(s.language);
+    if (typeof s.timezone === 'string') setTimezone(s.timezone);
+    setDiscoverableByEmail(s.discoverable_by_email === true);
+    setDiscoverableByName(s.discoverable_by_name === true);
   }, [user]);
 
-  const clearFeedback = () => setFeedback(null);
-
-  const pushWithSettings = (patch: UserSettingsInput) => {
-    return onPushSettings({
-      ...patch,
-      frontend_settings: frontendSettingsWithCria(undefined),
-    });
+  // Every save: refresh the cached user (so the page shows what the server now
+  // holds when reopened; the user query is otherwise fresh for 60s), then say
+  // so in a toast, which never moves the layout. `revert` undoes an optimistic change.
+  const save = (change: Promise<unknown>, revert?: () => void) => {
+    inflight.current += 1;
+    return change
+      .then(() => {
+        inflight.current -= 1;
+        notify('user');
+        showToast('Saved');
+      })
+      .catch((e: unknown) => {
+        inflight.current -= 1;
+        revert?.();
+        showToast(e instanceof Error ? e.message : 'Could not save', 'error');
+        notify('user');
+      });
   };
 
-  const pushWithFeedback = (patch: UserSettingsInput) => {
-    pushWithSettings(patch)
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e: Error) => { setFeedback({ type: 'error', message: e.message }); setTimeout(clearFeedback, 4000); });
+  // Each save re-reads the server's settings and changes only these fields.
+  const pushWithFeedback = (patch: SettingsChange['settings']) => save(saveUserSettings({ settings: patch }));
+
+  // Shared with Vikunja-web (frontend_settings.quick_add_magic_mode). The
+  // local parser switches at once; a failed save puts the old mode back so
+  // Cria and the server don't drift apart.
+  const handleQuickAddModeChange = (v: string) => {
+    if (!isQuickAddMagicMode(v)) return;
+    const previous = quickAddMagicMode;
+    setQuickAddMagicMode(v);
+    void save(saveUserSettings({ frontend: { [QUICK_ADD_MAGIC_KEY]: v } }), () => setQuickAddMagicMode(previous));
+  };
+
+  const handleWeekStartChange = (v: string) => {
+    const n = Number(v);
+    setWeekStart(n);
+    void pushWithFeedback({ week_start: n });
+  };
+
+  const handleDefaultProjectChange = (v: string) => {
+    const n = v === 'none' ? 0 : Number(v);
+    setDefaultProjectId(n || null);
+    void pushWithFeedback({ default_project_id: n });
   };
 
   const handleDateFormatChange = (fmt: string) => {
@@ -120,24 +162,6 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
 
   const handleTimeFormatChange = (fmt: string) => {
     setTimeFormat(fmt as TimeFormat);
-  };
-
-  const handleWeekStartChange = (v: string) => {
-    const n = Number(v);
-    setWeekStart(n);
-    pushWithSettings({ week_start: n })
-      .then(() => notify('user'))
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e) => { setFeedback({ type: 'error', message: (e as Error).message }); setTimeout(clearFeedback, 4000); });
-  };
-
-  const handleDefaultProjectChange = (v: string) => {
-    const n = v === 'none' ? 0 : Number(v);
-    setDefaultProjectId(n || null);
-    pushWithSettings({ default_project_id: n })
-      .then(() => notify('user'))
-      .then(() => { setFeedback({ type: 'success', message: 'Saved' }); setTimeout(clearFeedback, 2000); })
-      .catch((e) => { setFeedback({ type: 'error', message: (e as Error).message }); setTimeout(clearFeedback, 4000); });
   };
 
   const handleEmailRemindersToggle = (enabled: boolean) => {
@@ -163,11 +187,6 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
   return (
     <section>
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-foreground)]">General</h3>
-      {feedback && (
-        <p className={`mb-2 text-xs ${feedback.type === 'success' ? 'text-[var(--color-success)]' : 'text-[var(--color-destructive)]'}`}>
-          {feedback.message}
-        </p>
-      )}
       <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
         <div className="flex items-center justify-between">
           <Label>Date Format</Label>
@@ -193,6 +212,24 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
               <SelectItem value="12h">12-hour</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <Label>Quick Add Magic</Label>
+            <Select value={quickAddMagicMode} onValueChange={handleQuickAddModeChange} disabled={disabled}>
+              <SelectTrigger className="w-44" aria-label="Quick Add Magic">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {QUICK_ADD_MODES.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+            {quickAddSyntax(quickAddMagicMode)}
+          </p>
         </div>
         <div className="flex items-center justify-between">
           <Label>Start week on</Label>
@@ -299,6 +336,7 @@ export function GeneralTab({ disabled, onPushSettings }: Props) {
           <div className="flex items-center justify-between">
             <Label>Overdue reminder time</Label>
             <input
+              aria-label="Overdue reminder time"
               type="time"
               value={overdueRemindersTime}
               onChange={(e) => handleOverdueRemindersTimeChange(e.target.value)}

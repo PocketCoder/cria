@@ -24,23 +24,28 @@ pnpm generate:api   # regen src/api/schema.ts (VK_URL= to target an instance)
 pnpm clean          # rm -rf dist src-tauri/target (reclaim ~7GB build artifacts)
 pnpm clean:all      # also rm -rf node_modules (needs pnpm install before next dev)
 cargo check --manifest-path src-tauri/Cargo.toml   # Rust shell sanity
-pnpm tauri ios dev --host           # run on a connected iOS device / simulator
-pnpm tauri ios build --export-method debugging   # standalone signed iOS build
-cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios   # iOS shell compile-check
 ```
+
+The iOS app is the native Swift app in `ios-native/` (commands in its README). The Tauri iOS build is
+deprecated: its code stays in the tree but is not built, tested or released.
 
 If pnpm's build-script pre-flight nags, the same binaries live under
 `node_modules/.bin/` (`node_modules/.bin/tsc --noEmit`, `…/vitest run`,
 `…/vite build`) and skip the check.
 
 **Always** run `pnpm typecheck`, `pnpm lint` and `pnpm test` before declaring a change
-done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check` (and
-`cargo check --target aarch64-apple-ios` to catch iOS-only breakage).
+done. Touching Rust or `src-tauri/capabilities/*` → also `cargo check`.
+
+**Touching Rust → also `pnpm fmt:rust` before every commit and after every
+merge.** The macOS "Rust checks" CI job runs `cargo fmt --check`, and unformatted
+Rust (or merge-reordered `mod` lines in `lib.rs`) was the cause of every recent
+CI failure there. `.claude/hooks/rustfmt.sh` formats edited `.rs` files
+automatically, but merges bypass it.
 
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.13.0` (in `package.json`,
+shipped in `v0.4.0`. Current version is `1.0.0` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **Bump only via `pnpm bump` (see "Cutting a
 release") — never hand-edit these files.** This has bitten twice:
@@ -62,16 +67,24 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | M7 command palette (Cmd+K) | ✅ |
 | M8 hierarchy, recurrence, reminders | ✅ Hierarchy, recurrence, reminders, related tasks |
 | M9 reorder, DnD, Kanban, table view | ✅ |
-| M10 stretch — attachments, comments, Gantt, notes | ✅ attachments, Gantt; ✅ comments (full read/write + reactions); 🟡 notes pending |
-| **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅ |
+| M10 stretch — attachments, comments, Gantt | ✅ attachments, Gantt; ✅ comments (full read/write + reactions). Notes dropped: Vikunja has no notes, and Cria only builds on what it stores |
+| **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅, now deprecated: replaced by the native Swift app (`ios-native/`) |
+| Native Swift iOS app (`ios-native/`) at parity with the Tauri iOS build | ✅ |
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
-| Ledger redesign (tokens, shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased; reference in `design_handoff_ledger/` |
+| Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ v1.0.0 |
+| Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ v1.0.0; tokens + motion in `src/styles/globals.css` |
+| Native glass: macOS sidebar material (iOS 26 tab bar part deprecated with the Tauri iOS build) | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
-**Next up:** M10 stretch goals (notes). Feature-level status vs Vikunja lives
+**Next up:** polish from daily use of the native iOS app (`ios-native/`, see below). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
-- **Live sync (WebSockets)** not started; sync is a 60s poll.
+- **Live sync (WebSockets)** not merged; sync is a 60s poll. Vikunja's socket
+  (`/api/v1/ws`, checked against upstream `main` 2026-10-12) pushes only
+  `notification.created` and pro-licence `timer.*`, with no task, project,
+  label or comment events, so true live sync isn't possible upstream.
+  `feature/live-sync` holds a desktop client for the notification event only
+  (unit-tested, never run against a real server).
 - **UI has no unit tests.** Coverage thresholds cover only the logic layers
   (`src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}`).
 
@@ -81,8 +94,8 @@ in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 18 migrations in
-  `src/db/migrations/` (`001_initial.sql` → `018_saved_filters.sql`).
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 19 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `019_attachment_uploads.sql`).
   Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
   Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),
@@ -166,6 +179,12 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
 - `globalThis.__cria_refreshInFlight__`: token-refresh single-flight (a
   duplicate refresh would reuse an already-rotated refresh token).
 - `globalThis.__cria_settingsHydrated__`: synced-prefs hydrate-once flag.
+- `globalThis.__cria_serverQuickAddMode__`: last server Quick Add Magic mode
+  seen, so a refetch only applies a mode the server changed to.
+- `globalThis.__cria_settingsSaveChain__`: settings-save queue tail, so two
+  saves never interleave (v1 GET and POST, or two v2 PATCHes).
+- `globalThis.__cria_settingsPatchUnsupported__`: server URLs with no v2
+  settings PATCH, so only the first save there probes it.
 
 Re-introduce a module-local `let foo = …` for any of these and the HMR-orphan
 bug returns.
@@ -181,6 +200,22 @@ sticks forever and the UI starves.
 **Rule:** sync upserts are silent. User-driven mutations live in *different*
 functions that *do* call `notify()`. See the inline comments in
 [src/db/projects.ts](src/db/projects.ts) and [src/db/tasks.ts](src/db/tasks.ts).
+
+### Attachment uploads ride the outbox; their bytes don't
+
+Picking or pasting a file never hits the network. `queueAttachmentUpload`
+writes the bytes to a Rust side-store ([src-tauri/src/blobs.rs](src-tauri/src/blobs.rs),
+one file per attachment in the app data dir, raw-bytes IPC) and inserts a
+`pending` `task_attachments` row plus a `task_attachment`·`upload` outbox op;
+[src/sync/push/attachment.ts](src/sync/push/attachment.ts) uploads on drain.
+Don't base64 file bytes into an outbox payload. Inline images pasted before
+upload are `cria://pending/{localId}` (allowed by `sanitizeHtml`); the
+executor rewrites them to the server URL, and the task/comment push swaps any
+it finds that have already uploaded, so the server never keeps one.
+Leftover bytes are cleared once per launch by
+[src/sync/blobSweep.ts](src/sync/blobSweep.ts) (via `blob_list`), which only
+deletes a blob over 24h old that no attachment row and no outbox or
+dead-letter op mentions, keeping anything it can't rule out.
 
 ### Vikunja's verb semantics
 
@@ -217,20 +252,51 @@ field of the request body onto the user record and saves with
 value (`""`, `0`, `false`, `nil`) — silently wiping the server's stored `name`,
 `default_project_id`, `week_start`, language/timezone, and reminder flags. The
 generated `schema.ts` only shows the body *shape* (a complete `v1.UserSettings`);
-the Go handler is the ground truth (`pkg/routes/api/v1/user_settings.go`,
-`UpdateGeneralUserSettings`). When upstream runtime behaviour is in doubt, read
-the handler — a local clone of the Vikunja source (`real-vikunja-git/`,
-gitignored) makes this checkable in
-seconds and beats inferring from the schema.
+the Go code is the ground truth (`pkg/routes/api/v1/user_settings.go`,
+`UpdateGeneralUserSettings`, which calls `models.UpdateUserGeneralSettings` in
+`pkg/models/user_settings.go`). `frontend_settings` is stored and returned
+verbatim as any JSON value; Vikunja-web keeps its own snake_case keys there
+(`quick_add_magic_mode`, `color_schema`, …). When upstream runtime behaviour is
+in doubt, read the source rather than inferring from the schema. A local clone
+(`real-vikunja-git/`, gitignored) makes this quick, but it is local-only: a
+fresh container or worktree won't have it. There, shallow-clone
+`https://github.com/go-vikunja/vikunja` (`--depth 1`) into a new, empty scratch
+directory outside the repo and read it; never run its scripts.
 
-**Rule:** never send a partial settings object. Seed the complete current
-settings (`user.raw.settings`), merge your one change on top, then POST the
-whole thing. [`SettingsModal`](src/components/SettingsModal.tsx)'s `settingsRef`
-+ `pushSettings()` wrapper is the reference pattern; `UserSettingsInput` carries
-even the non-UI fields (`default_project_id`, discoverability,
-`frontend_settings`) purely so they round-trip untouched. Assume any other
-"update the whole entity" POST behaves the same — read the handler before
-sending a subset.
+**Rule:** never send a partial *or stale* settings object. Every write goes
+through `saveUserSettings(change)` in
+[src/sync/settingsSync.ts](src/sync/settingsSync.ts), which picks one of two
+paths. Saves are queued one at a time on both.
+
+- **v2 (Vikunja v2.7.0+):** `PATCH /api/v2/user/settings/general` with
+  `Content-Type: application/merge-patch+json`, the same call Vikunja-web
+  makes. The body names only the changed fields (`settingsMergePatch` in
+  [src/sync/frontendSettings.ts](src/sync/frontendSettings.ts)); no GET first.
+  Upstream has no hand-written PATCH: Huma's AutoPatch
+  (`EnableAutoPatch` in `pkg/routes/api/v2/huma.go`) synthesises it for any
+  path with a GET and a PUT. Server-side it GETs the stored settings, applies
+  an RFC 7386 merge-patch (objects merge recursively, so `frontend_settings`
+  and `frontend_settings.cria` merge key by key; arrays and scalars replace; a
+  `null` deletes, and a deleted top-level field is then written as its Go zero
+  value), answers an empty **304** if nothing changed, else PUTs the merged
+  object (200 `{message}`). `settingsMergePatch` therefore drops every null.
+  The server's own read-to-write step has no ETag, so the window is narrowed to
+  that, not zero.
+- **v1 fallback:** v2.4.0 to v2.6.0 have the v2 PUT but no GET on that path, so
+  no PATCH (405); earlier releases have no `/api/v2` (404). On 404, 405, 501
+  or a non-JSON 2xx, nothing was written: the save GETs `/user`, applies only
+  the named change (`applySettingsChange` passes every other field and every
+  unknown `frontend_settings` key through untouched), then POSTs the whole
+  thing; a failed GET sends nothing. Detection is that first PATCH, remembered
+  per server URL for the session. Any other PATCH error is thrown, not
+  retried on v1.
+
+Never build a v1 body from the cached user or a snapshot taken when a screen
+opened: another client (Vikunja-web, another Cria) may have changed it since,
+and the POST would silently revert that. `UserSettingsInput` carries even the
+non-UI fields (`default_project_id`, discoverability, `frontend_settings`)
+purely so they round-trip. Assume any other "update the whole entity" POST
+behaves the same — read the handler before sending a subset.
 
 ### pnpm 11 build-script approvals
 
@@ -241,6 +307,82 @@ The old `package.json#pnpm.onlyBuiltDependencies` block was removed: pnpm 11
 ignores the `pnpm` field and warns on every command. New deps with native
 binaries may need adding to `allowBuilds`; `pnpm ignored-builds` lists any
 that were skipped.
+
+### On-device AI is a Swift bridge, not objc2
+
+Foundation Models is Swift-only, so `objc2` can't reach it (Vision in
+`ocr.rs` is ObjC, so it can). [src-tauri/swift/CriaAI](src-tauri/swift/CriaAI)
+exposes one `@_cdecl` C function; [build.rs](src-tauri/build.rs) compiles it
+via `swift-rs` and [src/ai.rs](src-tauri/src/ai.rs) calls it. Landmines:
+- swift-rs 1.0.7 expects the old SwiftPM output dir; Swift 6.4 writes
+  `out/Products/<Cfg>`, so `build.rs` searches for `libCriaAI.a` itself.
+- Needs `-rpath /usr/lib/swift` (else dyld can't find `libswift_Concurrency`)
+  and `-weak_framework FoundationModels` (else pre-26 OSes crash at launch).
+- The Swift call blocks on a semaphore: keep the command `async` +
+  `spawn_blocking`, never sync (sync commands run on the main thread).
+- iOS runs each call as a `BGContinuedProcessingTask` (system Live Activity);
+  identifiers must match `BGTaskSchedulerPermittedIdentifiers` in
+  `Info.ios.plist`. No paid account or entitlement needed for any of it.
+- Smoke test against the real model:
+  `cargo test --lib ai -- --ignored --nocapture` (in `src-tauri/`).
+- Prompts live in [src/lib/aiPrompts.ts](src/lib/aiPrompts.ts). The model
+  never does date maths: it writes dates in words (or quick-add / filter
+  syntax) and the existing parsers resolve them. Ramble's quick-add syntax
+  follows the user's Quick Add Magic mode, and every ramble parse passes the
+  same mode; with the magic `disabled` it writes plain titles with dates left
+  in words (nothing is parsed, as in Vikunja-web). To iterate on a prompt, write
+  `<name>.instr` + `<name>.prompt` files to a folder and run
+  `CRIA_AI_CASES=<folder> cargo test --lib eval_cases -- --ignored --nocapture`.
+- AI buttons render only when `useAiAvailable()` is true, so unsupported
+  devices never see them.
+
+### Native glass (macOS window material, iOS 26 tab bar)
+
+[src-tauri/src/glass.rs](src-tauri/src/glass.rs) + [src/tauri/glass.ts](src/tauri/glass.ts).
+`native_glass` reports `window`, `tabbar` or `none`, mirrored on
+`<html data-native-glass>` before first render.
+- **macOS:** the window is `transparent` (tauri.macos/dev conf) and
+  `window-vibrancy` puts `NSGlassEffectView` (26+) or the sidebar
+  `NSVisualEffectView` behind the webview. globals.css keeps every screen
+  opaque except `.sidebar-surface` in the desktop shell (`.app-root-desktop`).
+  A new full-window screen with no background of its own shows the desktop
+  through it, so give it one. The material follows the NSWindow appearance,
+  so ThemeProvider calls `native_glass_theme`.
+- **iOS 26+:** `Glass.swift` (in the CriaAI Swift package) lays a
+  `UIGlassEffect` tab bar over the WKWebView. The web TabBar stays mounted at
+  opacity 0 and streams frame/tabs/visibility (`useNativeTabBar`); the native
+  bar hides whenever a hit-test of the capsule centre lands on anything else
+  (sheets, dialogs). Taps return as a `cria:native-tab` DOM event. Older iOS
+  keeps the web capsule.
+
+### Touch and sheet conventions (iOS feel)
+
+- **Inputs are 16px on touch** via a `pointer: coarse` floor in globals.css; the
+  viewport has no zoom lock. Don't add `maximum-scale` back, and don't set a
+  smaller font on a field without checking it on device (iOS zooms on focus).
+- **Never hide a control behind `group-hover` alone.** Tailwind v4 wraps `hover:`
+  in `(hover: hover)`, so it never applies on touch. Use `.hover-reveal` or add
+  `[@media(hover:none)]:opacity-100`.
+- **Mobile sheets use `useSheetDismiss`** ([src/lib/useSheetDismiss.ts](src/lib/useSheetDismiss.ts)):
+  attach `panelRef`, close via `requestClose` (slide-out, then `onClose`).
+  `PopoverContent` renders as a bottom sheet at iPhone width (`.popover-sheet`
+  overrides Radix's positioning wrapper, hence the `!important`s).
+- **Haptics:** `selectionTick()` for discrete changes, `impact*` for outcomes.
+  All no-op on desktop.
+- Hover previews must key off `pointerType === 'mouse'`, not `mouseenter`
+  (iOS synthesises it after a tap).
+
+### Keychain prompts after updates (signing identity)
+
+macOS ties keychain "Always Allow" to the app's code identity. Ad-hoc signed
+builds get a new identity every build, so each update re-prompts. Release and
+nightly workflows sign with a stable self-signed cert when the
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY`
+secrets exist (generate with `scripts/make-signing-cert.sh`; generic subject,
+no personal info); otherwise they fall back to ad-hoc. Separately, `secure.rs`
+uses one keychain account per flavour (`vikunja-token` for stable,
+`vikunja-token.<flavour>` for nightly/dev, derived from the bundle identifier)
+so flavours don't prompt for each other's item.
 
 ### `pnpm dev` indirectly requires `cargo`
 
@@ -259,7 +401,11 @@ the merge commit **on `main`** (v0.13.0 was tagged on `dev`, which left `main`
 behind the shipped build until it was merged back). CI-only fixes made on
 `main` must be merged back into `dev`.
 
-### iOS & platform gating
+### iOS & platform gating (Tauri iOS: deprecated)
+
+**Deprecated.** The Tauri iOS build is replaced by the native Swift app (`ios-native/`, below) and is no longer
+built, tested or released; its code and the gating below stay only because removing them is not worth the churn.
+Keep new desktop code behind the same gates so the desktop build is unaffected, but don't add iOS features here.
 
 Cria builds for iOS from the same codebase. Two distinct "is this mobile?"
 checks — **don't conflate them**:
@@ -297,12 +443,9 @@ Other rules:
 - **iOS dev quirks:** `tauri ios dev --host` serves Vite over the LAN (device
   needs Local Network permission); after install, trust the dev profile in
   Settings → General → VPN & Device Management; the home-screen icon caches
-  hard (delete app + reboot if it shows the default). CI compile-checks the iOS
-  shell on native-code changes
-  ([.github/workflows/ci-ios.yml](.github/workflows/ci-ios.yml)); signed
-  distribution is manual (no paid Apple account yet). Each release also
-  attaches an **unsigned** `.ipa` (release.yml `build-ios` job) for
-  SideStore/iLoader sideloading, which re-sign it with a free Apple ID.
+  hard (delete app + reboot if it shows the default). CI no longer
+  compile-checks the Tauri iOS shell (ci-ios.yml was removed), so it may
+  stop building; that is accepted.
 
 ### Sync vs user mutations
 
@@ -343,8 +486,10 @@ All client preferences live in one Zustand `persist` store
 ([src/stores/settings.ts](src/stores/settings.ts), key `cria:settings/v2`).
 Bump that key only alongside a migration — a bare rename silently resets every
 persisted preference to its default. Server-backed prefs (language, timezone,
-week start, name, reminders) also sync through `pushUserSettings` — which is
-full-object, see the gotcha above.
+week start, name, reminders, the Quick Add Magic mode) are saved through
+`saveUserSettings`, never `pushUserSettings` or `patchUserSettings`
+directly: the v1 POST is full-object and the v2 PATCH needs the fallback and
+the save queue, see the gotcha above.
 
 **A setting isn't done until something reads it.** A persisted/synced toggle
 with no consumer looks like it works but does nothing — that's a bug, not a
@@ -355,43 +500,67 @@ depend on that data, not run once on `[]` mount — otherwise they fire before
 the data loads and never re-run. If wiring is genuinely out of scope, ship the
 control as 🟡 in FEATURE-COMPARISON.md, never ✅.
 
-## Running a dev build side-by-side with the release
+## Native Swift iOS app (`ios-native/`)
 
-Two builds, two bundle IDs, two macOS data dirs. No cross-talk.
+The iOS app. It replaced the Tauri iOS build at parity (plan and status:
+[docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md); features and what syncs where: [ios-native/FEATURES.md](ios-native/FEATURES.md)). `CriaKit/` is a Swift package with all
+logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
+XcodeGen. CI ([ci-swift.yml](.github/workflows/ci-swift.yml)) runs `swiftlint lint --strict`, `swift test` and a
+simulator build; pushes to `dev` and `main` publish an unsigned `.ipa` (`io.cria.app.swift`, rolling
+`swift-alpha` release) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
+also attach the Swift `.ipa` (release.yml `build-ios`).
 
-| | `Cria.app` (release) | `Cria Dev.app` (dev) |
-|---|---|---|
-| Branch | `main` (auto-updates) | `dev` (manual rebuild) |
-| Bundle ID | `io.cria.desktop` | `io.cria.desktop.dev` |
-| Data dir | `~/Library/Application Support/io.cria.desktop` | `…/io.cria.desktop.dev` |
-| SQLite / localStorage | separate | separate |
-| Updater | live `update.json` | disabled (invalid endpoint, error swallowed) |
+- Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
+- Same sync rules as above (silent upserts, outbox FIFO, pending-delete guard, settings merge-patch with v1
+  fallback). Where the Swift port deliberately differs from the TS spec because the TS behaviour is a bug, it says
+  so in a comment; the list is in the plan's "Review 2026-10-12" section (label update verb, `percent_done`
+  sent unscaled, comments deleted before their task, project identifier and cover image kept on push).
+- Dates: all date maths use `Calendar.cria` (Gregorian in the device zone), never `Calendar.current`. Server and
+  local timestamps can carry different offsets, so compare instants (`DueDates.parse`, `julianday()` in SQL),
+  never ISO text.
+- The app cannot be compiled on Linux. `CriaKit` can with a Swift toolchain if the Keychain (`Security`) and
+  Darwin notifications are stubbed; macOS CI is the gate.
+- Moving from the Tauri iOS app: the native app is a separate install (own bundle ID and App Group database) that
+  re-syncs everything from the server on sign-in. There is no import. Let the Tauri app finish syncing (empty
+  outbox) before switching, or its unsynced edits stay behind.
 
-```sh
-pnpm dev            # HMR dev run, ALSO under io.cria.desktop.dev
-pnpm build:dev-app  # → …/bundle/dmg/Cria Dev_<ver>_<arch>.dmg
-```
+## Release channels and local dev
 
-Drag the `.dmg` into `/Applications`; re-run to refresh. The overlay
-([`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json)) only
-overrides productName / identifier / updater endpoints; everything else
-inherits from `tauri.conf.json`.
+Three identifiers, three macOS data dirs. No cross-talk.
 
-**Why `pnpm dev` uses the dev identifier (don't revert this).** Migrations
+| | `Cria.app` (stable) | `Cria (Nightly).app` | `pnpm dev` |
+|---|---|---|---|
+| Source | `v*` tag on `main` | every push to `dev` | local checkout |
+| Bundle ID | `io.cria.app` | `io.cria.app.nightly` | `io.cria.app.dev` |
+| Updater feed | `update.json` | `nightly.json` | disabled (invalid endpoint, error swallowed) |
+| Workflow | `release.yml` | `nightly.yml` | n/a |
+
+Nightlies are published to a single rolling `nightly` prerelease (recreated on
+each push) with signed macOS bundles. CI turns the
+stable config into the nightly one with
+[`scripts/nightly-config.sh`](scripts/nightly-config.sh), which rewrites
+`tauri.conf.json` in place; there is no committed nightly config. Nightly
+versions are `<package.json version>-nightly.<run_number>`, so they increase
+monotonically. The iOS app's rolling build (ci-swift.yml) can't carry a
+prerelease suffix (`CFBundleShortVersionString` rejects it) and SideStore ignores
+build-number-only changes, so it uses `<major>.<minor>.<run_number>` as the
+marketing version.
+
+**Why `pnpm dev` uses its own identifier (don't revert this).** Migrations
 are registered Rust-side and the plugin records applied versions in the
-DB. If `pnpm dev` ran under the release identifier (`io.cria.desktop`,
-the old default), running it from a branch with a *newer* migration would
-upgrade the **installed release app's** database — and the older release
-binary then aborts with `migration N … missing in the resolved
-migrations`, bricking the shipped app's DB. Routing `pnpm dev` through
-`tauri.dev.conf.json` (`io.cria.desktop.dev`) keeps dev's schema fully
-isolated. `pnpm dev:release-id` is the escape hatch if you ever
-deliberately need the release DB.
+DB. If `pnpm dev` ran under an installed app's identifier, running it from a
+branch with a *newer* migration would upgrade that app's database, and the
+older binary then aborts with `migration N … missing in the resolved
+migrations`, bricking its DB. Routing `pnpm dev` through
+[`tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json) (`io.cria.app.dev`)
+keeps dev's schema isolated. `pnpm dev:release-id` is the escape hatch if you
+ever deliberately need the release DB.
 
-**Two-client note:** both apps hit the same server with the same credentials,
-so an edit in one shows up in the other within ~60s of pull lag. Editing the
-same task in both within that window surfaces the M3 conflict modal — a free
-smoke test. Outbox counts are per-app.
+**Multi-client note:** all builds hit the same server with the same
+credentials, so an edit in one shows up in another within ~60s of pull lag.
+Editing the same task in two within that window surfaces the M3 conflict
+modal: a free smoke test. Outbox counts are per-app. The keychain service name
+(`"Cria"` in `secure.rs`) is shared, so sign-in state may be shared too.
 
 ## Cutting a release
 
@@ -413,10 +582,10 @@ GitHub Actions secret. Manifest served at
    branch and tag refs are sent in the same connection, leaving the release
    workflow untriggered.
 
-**Versioning is plain `0.x.y`** — no `-alpha`/`-beta`. The `0.` major is the
-stability signal; minor per milestone, patch for fixes. `1.0.0` is the
-"stable, won't break your data" promise (maps to M7 polish + macOS
-notarisation).
+**Versioning is plain `x.y.z`**, no `-alpha`/`-beta`: major for a new app or a
+break, minor per milestone, patch for fixes. `1.0.0` marked the native iOS app
+replacing the Tauri iOS build; it is the "stable, won't break your data"
+promise. macOS notarisation is still outstanding.
 
 Release-pipeline landmines (don't undo):
 - `--bundles app,dmg,updater` + `createUpdaterArtifacts: true` are both
@@ -427,7 +596,7 @@ Release-pipeline landmines (don't undo):
 
 Not in scope: Windows/Linux builds (matrix is macOS-only), Apple notarisation
 (DMG isn't notarised → first launch trips the "unidentified developer"
-warning; revisit before 1.0).
+warning; still outstanding after 1.0).
 
 ## User preferences observed
 

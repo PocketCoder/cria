@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { BackdropDismiss } from '@/components/ui/backdrop-dismiss';
+import { useLatestRef } from '../../lib/useLatestRef';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
@@ -132,19 +135,12 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
     }
   };
 
-  // Escape key
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  // Escape is handled by the native dialog (ModalDialog → onClose); the editor's
+  // slash menu preventDefaults it when it consumes the key.
 
   // Cmd+Enter to save. Via a ref so the handler always saves the latest
   // field values (depending on [canSave] alone saved stale state).
-  const handleSaveRef = useRef(handleSave);
-  handleSaveRef.current = handleSave;
+  const handleSaveRef = useLatestRef(handleSave);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -154,23 +150,19 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [handleSaveRef]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
+    <ModalDialog label="Edit This Project" onClose={onClose}>
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[var(--dialog-backdrop)] p-4">
+      <BackdropDismiss onDismiss={onClose} />
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] flex max-h-[85vh] w-11/12 max-w-xl flex-col overflow-hidden rounded-lg shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        className="relative dialog-panel flex max-h-[85dvh] w-11/12 max-w-xl flex-col overflow-hidden"
       >
         {/* ── Header ── */}
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">
           <h2 className="text-sm font-semibold">Edit This Project</h2>
-          <button onClick={onClose} className="rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]" aria-label="Close">
+          <button onClick={onClose} className="rounded p-1 max-md:p-3 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </header>
@@ -181,8 +173,9 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Title */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Title</label>
+              <label htmlFor="project-settings-title" className="text-sm font-semibold">Title</label>
               <input
+                id="project-settings-title"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -193,9 +186,10 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Parent Project */}
             <div className="space-y-1.5" ref={parentRef}>
-              <label className="text-sm font-semibold">Parent Project</label>
+              <label htmlFor="project-settings-parent" className="text-sm font-semibold">Parent Project</label>
               <div className="relative">
                 <button
+                  id="project-settings-parent"
                   type="button"
                   onClick={() => setParentOpen(!parentOpen)}
                   className="flex w-full items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-left text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)]"
@@ -208,6 +202,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
                 {parentOpen && (
                   <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-lg">
                     <input
+                      aria-label="Search projects"
                       type="text"
                       value={parentSearch}
                       onChange={(e) => setParentSearch(e.target.value)}
@@ -251,8 +246,10 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Project Identifier */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Project Identifier</label>
+              <label htmlFor="project-settings-identifier" className="text-sm font-semibold">Project Identifier</label>
               <input
+                id="project-settings-identifier"
+                aria-label="Project identifier"
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
@@ -263,7 +260,7 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
 
             {/* Description Editor */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Description</label>
+              <label id="project-settings-description-label" htmlFor="project-settings-description" className="text-sm font-semibold">Description</label>
               <ProjectDescriptionEditor
                 value={descriptionHtml}
                 onChange={setDescriptionHtml}
@@ -324,7 +321,8 @@ export function ProjectSettingsModal({ project, onClose }: ProjectSettingsModalP
           </div>
         </footer>
       </div>
-    </div>
+      </div>
+    </ModalDialog>
   );
 }
 
@@ -389,6 +387,8 @@ function ProjectDescriptionEditor({
     content: value || '<p></p>',
     editorProps: {
       attributes: {
+        id: 'project-settings-description',
+        'aria-labelledby': 'project-settings-description-label',
         class: 'prose prose-sm max-w-none min-h-[8rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-3 text-sm leading-relaxed break-words focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-[var(--color-muted)] [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:rounded [&_pre]:bg-[var(--color-muted)] [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:font-mono [&_pre]:text-xs [&_u]:underline [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-center [&_ul[data-type=taskList]_li]:gap-1.5 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md',
       },
       handleKeyDown(view, event) {
