@@ -12,6 +12,8 @@ struct CriaMacApp: App {
         // Before launch finishes, so a tap on a notification that started the app is delivered.
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         NotificationRouter.registerCategories()
+        // Starts Sparkle at launch (it only runs when the build has a public key).
+        _ = MacUpdater.shared
     }
 
     var body: some Scene {

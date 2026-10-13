@@ -26,7 +26,17 @@ final class AppModel {
     init() {
         let core = HTTPCore()
         self.core = core
+        #if os(macOS)
+        // A Mac that used the Tauri desktop app signs in with its stored credential, once (plan Phase 8).
+        let importDone = "cria.tauriCredentialImportDone"
+        let legacy = LegacyCredentialImport(
+            slot: LegacyCredentialImport.tauriSlot(bundleIdentifier: Bundle.main.bundleIdentifier ?? ""),
+            hasRun: { UserDefaults.standard.bool(forKey: importDone) },
+            markRun: { UserDefaults.standard.set(true, forKey: importDone) })
+        let session = AuthSession(core: core, legacyImport: legacy)
+        #else
         let session = AuthSession(core: core)
+        #endif
         self.session = session
         self.api = ApiClient(session: session, core: core)
         self.loginService = LoginService(core: core)

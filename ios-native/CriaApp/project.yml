@@ -12,6 +12,9 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: 2.0.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
 targets:
   CriaApp:
     type: application
@@ -108,9 +111,16 @@ targets:
     dependencies:
       - package: CriaKit
       - package: KeyboardShortcuts
+      - package: Sparkle
     info:
       path: Config/CriaMac-Info.plist
       properties:
+        # Sparkle. The feed and key come from build settings below so CI can switch the nightly feed on the command
+        # line. SUPublicEDKey stays empty until the user generates the key pair (plan Phase 7 step 1); with no key the
+        # updater is not started (MacUpdater).
+        SUFeedURL: $(CRIA_FEED_URL)
+        SUPublicEDKey: $(CRIA_SPARKLE_PUBLIC_KEY)
+        SUEnableAutomaticChecks: true
         CFBundleURLTypes:
           - CFBundleURLName: io.cria.app
             CFBundleURLSchemes: [cria]
@@ -124,6 +134,8 @@ targets:
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Turn what you say into text for your tasks.
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: CriaMac/CriaMac.entitlements
+        CRIA_FEED_URL: https://pocketcoder.github.io/cria/appcast.xml
+        CRIA_SPARKLE_PUBLIC_KEY: ""
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.dev

@@ -5,6 +5,9 @@ struct MacCommands: Commands {
     @FocusedValue(\.macActions) private var actions
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesCommand(updater: .shared)
+        }
         CommandGroup(replacing: .newItem) {
             Button("New Task") { actions?.newTask() }
                 .keyboardShortcut("n")
