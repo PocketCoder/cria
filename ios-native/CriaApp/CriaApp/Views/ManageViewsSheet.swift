@@ -20,7 +20,9 @@ struct ManageViewsSheet: View {
 
     private var slots: [ViewSlot] { views.map(\.slot) }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
                 Section("Views") {

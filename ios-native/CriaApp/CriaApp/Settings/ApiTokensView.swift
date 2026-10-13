@@ -94,7 +94,9 @@ private struct NewApiTokenSheet: View {
     @State private var routesError: String?
     @State private var routesLoaded = false
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 Section {

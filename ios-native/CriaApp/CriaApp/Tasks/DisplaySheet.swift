@@ -19,7 +19,9 @@ struct DisplaySheet: View {
 
     private var sections: DisplaySections { display.sections }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
                 if sections.completed {

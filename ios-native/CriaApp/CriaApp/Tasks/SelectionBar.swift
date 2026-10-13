@@ -69,7 +69,9 @@ struct BulkMoveSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var projects: [ProjectRecord] = []
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List(projects, id: \.localId) { project in
                 Button {

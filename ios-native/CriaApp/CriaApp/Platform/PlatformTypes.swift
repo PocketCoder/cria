@@ -140,6 +140,16 @@ enum ExternalLink {
 }
 
 enum PlatformApp {
+    /// A ⌘ or ⇧ click on the Mac starts multi-select instead of opening the row. Always false on iOS.
+    @MainActor
+    static var extendsSelection: Bool {
+        #if canImport(UIKit)
+        false
+        #else
+        !NSEvent.modifierFlags.isDisjoint(with: [.command, .shift])
+        #endif
+    }
+
     /// Has VoiceOver speak a short message.
     @MainActor
     static func announce(_ message: String) {

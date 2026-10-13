@@ -105,7 +105,9 @@ struct QuickAddDateTimeSheet: View {
 
     private var isTimed: Bool { hasTime || !timeIsOptional }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 DatePicker(title, selection: $date, displayedComponents: .date)

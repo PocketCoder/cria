@@ -19,6 +19,8 @@ struct TaskRowLink: View {
     @Environment(\.preferences) private var preferences
     /// Set by the Mac shell: a tap selects the task for the detail column instead of pushing it.
     @Environment(\.taskOpener) private var openTask
+    @Environment(\.selectedTaskId) private var selectedTaskId
+    @State private var hovering = false
     @State private var failure: String?
     @State private var scheduling = false
     /// Counts completions made from a swipe or the menu; the ring plays its own haptic for a tap.
@@ -92,14 +94,30 @@ struct TaskRowLink: View {
 
     @ViewBuilder private var rowLink: some View {
         if let openTask {
-            Button { openTask(item.task.localId) } label: {
+            Button { click(openTask) } label: {
                 TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(selectedTaskId == item.task.localId
+                        ? Color.accentColor.opacity(0.16) : (hovering ? Color.primary.opacity(0.06) : Color.clear))
+            )
+            .onHover { hovering = $0 }
         } else {
             NavigationLink(value: Route.task(item.task.localId)) {
                 TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
             }
+        }
+    }
+
+    /// A plain click opens the task; ⌘ or ⇧ with a click starts multi-select with this row ticked.
+    private func click(_ open: @MainActor (String) -> Void) {
+        if PlatformApp.extendsSelection, let selection {
+            selection.start(with: item.task.localId)
+        } else {
+            open(item.task.localId)
         }
     }
 

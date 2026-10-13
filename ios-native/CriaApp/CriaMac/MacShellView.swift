@@ -55,6 +55,7 @@ struct MacShellView: View {
                 .navigationDestination(for: Route.self) { MacRouteDestination(route: $0, services: services) }
         }
         .environment(\.taskOpener) { actions.openTaskId = $0 }
+        .environment(\.selectedTaskId, actions.openTaskId)
         .id(actions.selection)
         .navigationSplitViewColumnWidth(min: 320, ideal: 440)
     }

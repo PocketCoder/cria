@@ -40,6 +40,15 @@ struct TableViewScreen: View {
         })
     }
 
+    /// The wide grid on iPad and the Mac; the compact rows on iPhone.
+    private var usesGrid: Bool {
+        #if os(macOS)
+        true
+        #else
+        sizeClass == .regular
+        #endif
+    }
+
     private var visible: Set<TableViewColumn> { TableConfigCodec.decodeColumns(columnsText) }
     private var sortKeys: [TableSortKey] { TableConfigCodec.decodeSort(sortText) }
     private var extras: TableExtras { TableExtras(currentUserId: currentUserId, commentCounts: commentCounts) }
@@ -70,7 +79,7 @@ struct TableViewScreen: View {
 
     var body: some View {
         Group {
-            if sizeClass == .regular {
+            if usesGrid {
                 PinnedProjectHeader(header: header) {
                     TableGridView(
                         rows: rows, columns: shownColumns, sortKeys: sortKeys, extras: extras,

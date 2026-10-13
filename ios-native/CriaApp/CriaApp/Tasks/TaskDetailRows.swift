@@ -111,7 +111,9 @@ struct LabelPickerSheet: View {
     @State private var newTitle = ""
     @State private var failure: String?
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
                 Section {

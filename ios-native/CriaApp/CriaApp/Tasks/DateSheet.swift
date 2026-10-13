@@ -26,7 +26,9 @@ struct DateSheet: View {
     @State private var repeatChoice: RepeatValue?
     @State private var didLoad = false
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
                 typeSection

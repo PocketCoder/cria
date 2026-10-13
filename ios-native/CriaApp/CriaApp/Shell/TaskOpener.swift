@@ -14,6 +14,18 @@ extension EnvironmentValues {
     }
 }
 
+private struct SelectedTaskKey: EnvironmentKey {
+    static var defaultValue: String? { nil }
+}
+
+extension EnvironmentValues {
+    /// The task open in the Mac's detail column, so its row can show as selected.
+    var selectedTaskId: String? {
+        get { self[SelectedTaskKey.self] }
+        set { self[SelectedTaskKey.self] = newValue }
+    }
+}
+
 /// Menu-bar and keyboard commands for the open task, posted by the Mac shell and carried out by `TaskDetailView`.
 enum TaskCommand: String, Sendable {
     case done, due, priority, labels, move, favourite, copyLink, delete
