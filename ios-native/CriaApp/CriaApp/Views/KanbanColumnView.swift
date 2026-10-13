@@ -44,6 +44,11 @@ struct KanbanColumnView: View {
     /// Labels by task local id.
     let labels: [String: [LabelRecord]]
     let readOnly: Bool
+    /// A card of this board is being dragged: the cards are hidden and the column shrinks to its header, so every column
+    /// is on screen at once to drop on. The cards stay in the view tree (zero height), because the drag started on one.
+    var compact = false
+    /// Told when a card of this column is picked up.
+    var onDragStart: () -> Void = {}
     let onDrop: (String, String?) -> Void
     /// Moves a card to the end of another column (the "Move to" menu).
     let onMoveTo: (String, KanbanColumn) -> Void
@@ -60,23 +65,22 @@ struct KanbanColumnView: View {
     @State private var overColumn = false
     @State private var overCards: Set<String> = []
 
-    /// Outlined on the Mac only: on iOS the lifted card and the haptic already say where it will land.
-    private var isDropTarget: Bool {
-        #if os(macOS)
-        overColumn || !overCards.isEmpty
-        #else
-        false
-        #endif
-    }
+    private var isDropTarget: Bool { overColumn || !overCards.isEmpty }
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 8) {
                 header
-                ForEach(cards) { plan in
-                    card(plan)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(cards) { plan in
+                        card(plan)
+                    }
                 }
-                if !readOnly { addRow }
+                .frame(height: compact ? 0 : nil)
+                .clipped()
+                .opacity(compact ? 0 : 1)
+                .allowsHitTesting(!compact)
+                if !readOnly && !compact { addRow }
             }
             .padding(12)
             .background(Color(.foreground).opacity(isDropTarget ? 0.10 : 0.05),
@@ -126,7 +130,11 @@ struct KanbanColumnView: View {
                 onDelete: { delete(task) },
                 subtasks: plan.subtasks, parentTitle: plan.parentTitle, isExpanded: open
             )
-            .draggable(KanbanPayload.make(task.localId))
+            // onDrag (not draggable) so the board hears the drag begin and can shrink the columns.
+            .onDrag {
+                onDragStart()
+                return NSItemProvider(object: KanbanPayload.make(task.localId) as NSString)
+            }
             .modifier(KanbanDropTarget(enabled: true, onTargetChange: { over in
                 if over { overCards.insert(task.localId) } else { overCards.remove(task.localId) }
             }) { taskId in
@@ -197,7 +205,7 @@ struct KanbanColumnView: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
-            if !readOnly { columnMenu }
+            if !readOnly && !compact { columnMenu }
         }
         .padding(.leading, 4)
         .frame(minHeight: 32)

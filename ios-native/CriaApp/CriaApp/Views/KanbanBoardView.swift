@@ -24,6 +24,9 @@ struct KanbanBoardView: View {
     @State private var limitNotice = false
     @State private var failure: String?
     @State private var filtering = false
+    /// A card is being dragged: the columns shrink to headers so all of them fit on screen.
+    @State private var dragging = false
+    @State private var dragStartedAt: Date?
     /// Cards whose subtasks are open. In memory only: it lasts as long as the board screen.
     @State private var expandedCards: Set<String> = []
     /// The board's filter, kept per view on this device (see `BoardFilter`).
@@ -69,6 +72,20 @@ struct KanbanBoardView: View {
         }
     }
 
+    /// While a card is dragged every column shares the screen, so any of them can be reached without scrolling.
+    private func width(_ available: CGFloat) -> CGFloat {
+        guard dragging else { return Self.columnWidth(available, typeSize: typeSize) }
+        let count = CGFloat(max(columns.count, 1))
+        return max(88, (available - 32 - 12 * (count - 1)) / count)
+    }
+
+    /// A drag that was cancelled (dropped on nothing) sends no event, so the next touch on the board ends it. Not within
+    /// a second of the start: that is the touch that lifted the card.
+    private func endStaleDrag() {
+        guard dragging, let started = dragStartedAt, Date.now.timeIntervalSince(started) > 1 else { return }
+        dragging = false
+    }
+
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
     /// and accessibility sizes take nearly the whole width so titles and chips are not squeezed.
     private static func columnWidth(_ available: CGFloat, typeSize: DynamicTypeSize) -> CGFloat {
@@ -91,20 +108,30 @@ struct KanbanBoardView: View {
                         expanded: $expandedCards,
                         labels: live.value.labels,
                         readOnly: readOnly,
-                        onDrop: { taskId, beforeId in drop(taskId, into: column, before: beforeId) },
+                        compact: dragging,
+                        onDragStart: {
+                            dragStartedAt = .now
+                            dragging = true
+                        },
+                        onDrop: { taskId, beforeId in
+                            dragging = false
+                            drop(taskId, into: column, before: beforeId)
+                        },
                         onMoveTo: { taskId, target in drop(taskId, into: target, before: nil) },
                         onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: columns.count > 1) },
                         onSetRole: { role in setRole(role, of: column.bucket) }
                     )
-                    .containerRelativeFrame(.horizontal) { length, _ in Self.columnWidth(length, typeSize: typeSize) }
+                    .containerRelativeFrame(.horizontal) { length, _ in width(length) }
                 }
-                if !readOnly { addBucketButton }
+                if !readOnly && !dragging { addBucketButton }
             }
             .scrollTargetLayout()
         }
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
         .scrollIndicators(.hidden)
+        .animation(.snappy(duration: 0.25), value: dragging)
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in endStaleDrag() })
         .background(Color(.grouped))
         .safeAreaInset(edge: .bottom, spacing: 0) { notices(hidden: plan.hiddenCount) }
         .toolbar {
