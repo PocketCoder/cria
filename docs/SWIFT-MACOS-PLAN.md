@@ -10,7 +10,7 @@ agent: each phase lists exact files, steps and a check that proves it is done.
 |---|---|---|
 | 0 | Scaffold the macOS target | Done |
 | 1 | Share the platform-neutral code | Done |
-| 2 | Window shell, menus and shortcuts | Not started |
+| 2 | Window shell, menus and shortcuts | Partly done (compiles in CI, untested on a Mac; `j`/`k`/Return, `a`, `c`, `u`, `.` identifier and `g a`/`g m` not built) |
 | 3 | Rich text editor on macOS | Not started |
 | 4 | Project views and settings | Not started |
 | 5 | Mac integrations | Not started |
