@@ -110,3 +110,11 @@ final class PlatformTests: XCTestCase {
         XCTAssertEqual(CriaPaths.blobDirectory(root: root).lastPathComponent, "blobs")
     }
 }
+
+#if os(macOS)
+final class CriaPathsMacTests: XCTestCase {
+    func testDataDirectoryIsTheNativeSubfolder() {
+        XCTAssertEqual(CriaPaths.dataDirectory().lastPathComponent, "Native")
+    }
+}
+#endif
