@@ -34,6 +34,7 @@ struct TaskDetailView: View {
     @State private var openedCopy: String?
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.taskCloser) private var closeTask
     /// Nil when shown inside a sheet, outside the shell's environment: the delete then goes ahead without Undo.
     @Environment(UndoCenter.self) private var undo: UndoCenter?
     @Environment(\.scenePhase) private var scenePhase
@@ -71,7 +72,8 @@ struct TaskDetailView: View {
     var body: some View {
         Group {
             if let task = live.value.task {
-                form(task)
+                // Grouped on the Mac too (its default Form style is a two-column label layout, not the iOS cards).
+                form(task).formStyle(.grouped)
             } else {
                 ContentUnavailableView("Task not found", systemImage: "questionmark.circle")
             }
@@ -236,6 +238,7 @@ struct TaskDetailView: View {
                 try services.store.deleteTask(localId: taskLocalId)
             }
             dismiss()
+            closeTask?()
         } catch {
             didLoad = true
             descriptionDraft.reopen()

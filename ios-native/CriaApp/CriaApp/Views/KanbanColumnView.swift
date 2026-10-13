@@ -5,6 +5,8 @@ import SwiftUI
 /// or card (a new place to land), a light impact when it drops.
 private struct KanbanDropTarget: ViewModifier {
     let enabled: Bool
+    /// Told when a drag enters or leaves, so the column can show it is where the card will land.
+    var onTargetChange: (Bool) -> Void = { _ in }
     let action: (String) -> Bool
     @State private var targeted = false
     @State private var drops = 0
@@ -16,7 +18,7 @@ private struct KanbanDropTarget: ViewModifier {
                 let accepted = action(taskId)
                 if accepted { drops += 1 }
                 return accepted
-            } isTargeted: { targeted = $0 }
+            } isTargeted: { targeted = $0; onTargetChange($0) }
                 .sensoryFeedback(trigger: targeted) { _, now in now ? SensoryFeedback.selection : nil }
                 .sensoryFeedback(.impact(weight: .light), trigger: drops)
         } else {
@@ -53,6 +55,19 @@ struct KanbanColumnView: View {
     @State private var adding = false
     @FocusState private var addFocused: Bool
     @State private var failure: String?
+    /// Which drop target a dragged card is over: the column itself or one of its cards (a card sits inside the column,
+    /// and SwiftUI tells only the innermost target).
+    @State private var overColumn = false
+    @State private var overCards: Set<String> = []
+
+    /// Outlined on the Mac only: on iOS the lifted card and the haptic already say where it will land.
+    private var isDropTarget: Bool {
+        #if os(macOS)
+        overColumn || !overCards.isEmpty
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
         ScrollView(.vertical) {
@@ -64,14 +79,23 @@ struct KanbanColumnView: View {
                 if !readOnly { addRow }
             }
             .padding(12)
-            .background(Color(.foreground).opacity(0.05), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Color(.foreground).opacity(isDropTarget ? 0.10 : 0.05),
+                        in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            // The column a dragged card would land in.
+            .overlay {
+                if isDropTarget {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 2)
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: isDropTarget)
             .padding(.bottom, 12)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
         // The whole height takes drops, not just the cards, so a short column is still easy to drop on.
         .contentShape(Rectangle())
-        .modifier(KanbanDropTarget(enabled: !readOnly) { taskId in
+        .modifier(KanbanDropTarget(enabled: !readOnly, onTargetChange: { overColumn = $0 }) { taskId in
+            overColumn = false
             onDrop(taskId, nil)
             return true
         })
@@ -103,7 +127,10 @@ struct KanbanColumnView: View {
                 subtasks: plan.subtasks, parentTitle: plan.parentTitle, isExpanded: open
             )
             .draggable(KanbanPayload.make(task.localId))
-            .modifier(KanbanDropTarget(enabled: true) { taskId in
+            .modifier(KanbanDropTarget(enabled: true, onTargetChange: { over in
+                if over { overCards.insert(task.localId) } else { overCards.remove(task.localId) }
+            }) { taskId in
+                overCards.remove(task.localId)
                 guard taskId != task.localId else { return false }
                 onDrop(taskId, task.localId)
                 return true

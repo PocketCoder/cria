@@ -26,6 +26,18 @@ extension EnvironmentValues {
     }
 }
 
+private struct TaskCloserKey: EnvironmentKey {
+    static var defaultValue: (@MainActor () -> Void)? { nil }
+}
+
+extension EnvironmentValues {
+    /// Closes the open task in the Mac's detail column (after a delete there is nothing to pop, so `dismiss` does nothing).
+    var taskCloser: (@MainActor () -> Void)? {
+        get { self[TaskCloserKey.self] }
+        set { self[TaskCloserKey.self] = newValue }
+    }
+}
+
 /// Menu-bar and keyboard commands for the open task, posted by the Mac shell and carried out by `TaskDetailView`.
 enum TaskCommand: String, Sendable {
     case done, due, priority, labels, move, favourite, copyLink, delete

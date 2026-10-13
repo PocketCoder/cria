@@ -8,6 +8,8 @@ struct KanbanCardView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// Optional so a card shown outside the shell (a preview) still renders; VoiceOver's open action needs it.
     @Environment(NavigationModel.self) private var navigation: NavigationModel?
+    /// Set by the Mac shell: a card then selects the task in the detail column instead of pushing it (as task rows do).
+    @Environment(\.taskOpener) private var openTask
     let services: AppServices
     let task: TaskRecord
     var labels: [LabelRecord] = []
@@ -48,6 +50,14 @@ struct KanbanCardView: View {
         }
     }
 
+    @ViewBuilder private func openLink<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if let openTask {
+            Button { openTask(task.localId) } label: { content() }
+        } else {
+            NavigationLink(value: Route.task(task.localId)) { content() }
+        }
+    }
+
     /// The ring, title and chips. One VoiceOver element per card: activating opens the task, and the ring, columns
     /// and delete are actions. The subtask disclosure below it stays a separate element.
     private var header: some View {
@@ -55,7 +65,7 @@ struct KanbanCardView: View {
             PriorityCheck(priority: task.priority, isDone: task.done, size: 20) {
                 _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
             }
-            NavigationLink(value: Route.task(task.localId)) {
+            openLink {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(task.title)
                         .font(Theme.rowSubtitle.weight(.medium))

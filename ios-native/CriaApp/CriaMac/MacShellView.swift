@@ -37,6 +37,7 @@ struct MacShellView: View {
             navigation.state.setPath([], for: .browse)
             actions.openTaskId = nil
         }
+        .environment(\.taskCloser) { actions.openTaskId = nil }
         .environment(navigation)
         .environment(undoCenter)
         .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
