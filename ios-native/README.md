@@ -10,7 +10,7 @@ SQLite database in the App Group container `group.io.cria.app`.
 
 ## macOS app
 
-`CriaMac` is a native SwiftUI Mac app in the same XcodeGen project, sharing `CriaKit` (macOS 14 minimum). It does not ship yet: it is the start of the plan in [`docs/SWIFT-MACOS-PLAN.md`](../docs/SWIFT-MACOS-PLAN.md). To build and run it locally:
+`CriaMac` is a native SwiftUI Mac app in the same XcodeGen project, sharing `CriaKit` (macOS 15 minimum). It does not ship yet: it is the start of the plan in [`docs/SWIFT-MACOS-PLAN.md`](../docs/SWIFT-MACOS-PLAN.md). To build and run it locally:
 
 ```sh
 cd CriaApp && xcodegen generate

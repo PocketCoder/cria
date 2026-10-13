@@ -28,8 +28,9 @@ Update this table in the same PR that finishes a phase.
 2. **Bundle ID `io.cria.app`**, taking over from the Tauri app. Nightly is
    `io.cria.app.nightly`, local Debug builds `io.cria.app.dev` (the same IDs
    as the Tauri flavours).
-3. **Minimum macOS 14**, matching CriaKit. Foundation Models (macOS 26) and
-   anything newer go behind `if #available`.
+3. **Minimum macOS 15** (raised from 14 on 2026-10-13: one release back from
+   the current macOS 26; the CriaKit package itself still builds for 14).
+   Foundation Models (macOS 26) and anything newer go behind `if #available`.
 4. **Updates through Sparkle 2**, signed with an EdDSA key, appcast on
    `gh-pages`. No notarisation (no paid Apple account); builds are signed with
    the existing self-signed certificate (`APPLE_SIGNING_IDENTITY` secret).

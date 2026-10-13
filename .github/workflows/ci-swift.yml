@@ -24,7 +24,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A pull request's path filter looks at the whole PR, so a Mac-only push to a PR that also touches iOS files would
+  # still start the iOS build. This looks at the files of the push itself and skips the iOS jobs when they are all
+  # Mac-only (or docs). A skipped job counts as passing.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ios: ${{ steps.diff.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -u
+          ios=true
+          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            files="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+            if [ -n "$files" ] && ! echo "$files" | grep -qvE '^(ios-native/CriaApp/CriaMac/|\.github/workflows/ci-macos\.yml$|docs/|ios-native/README\.md$)'; then
+              ios=false
+            fi
+          fi
+          echo "ios=$ios" >> "$GITHUB_OUTPUT"
+          echo "iOS jobs: $ios"
+
   test-and-build:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -67,7 +96,7 @@ jobs:
   publish-ipa:
     name: Publish Swift alpha .ipa
     if: github.event_name == 'push'
-    needs: test-and-build
+    needs: [changes, test-and-build]
     runs-on: macos-latest
     timeout-minutes: 45
     permissions:

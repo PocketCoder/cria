@@ -1,7 +1,7 @@
 name: CI (native Swift macOS)
 
-# The macOS app. Builds CriaMac when the Mac target or the shared CriaKit
-# package changes. Never publishes anything: the iOS .ipa lives in ci-swift.yml,
+# The macOS app. Builds CriaMac when the Mac target, the shared iOS app sources
+# it compiles (CriaApp/CriaApp) or the CriaKit package change. Never publishes anything: the iOS .ipa lives in ci-swift.yml,
 # which ignores Mac-only changes.
 
 on:
@@ -9,12 +9,14 @@ on:
     branches: [dev, main]
     paths:
       - 'ios-native/CriaApp/CriaMac/**'
+      - 'ios-native/CriaApp/CriaApp/**'
       - 'ios-native/CriaApp/project.yml'
       - 'ios-native/CriaKit/**'
       - '.github/workflows/ci-macos.yml'
   pull_request:
     paths:
       - 'ios-native/CriaApp/CriaMac/**'
+      - 'ios-native/CriaApp/CriaApp/**'
       - 'ios-native/CriaApp/project.yml'
       - 'ios-native/CriaKit/**'
       - '.github/workflows/ci-macos.yml'
