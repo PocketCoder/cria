@@ -42,7 +42,7 @@ extension EditorController {
         let info = RichDocumentText.blockInfo(from: view.typing)
         var styles = EditorStyling.styleSet(view.typing[.criaStyles])
         if styles.contains(style) { styles.remove(style) } else { styles.insert(style) }
-        view.typing = EditorStyling.typing(kind: info.kind, depth: info.depth, styles: styles, context: info.context)
+        view.typing = EditorStyling.typingAttributes(kind: info.kind, depth: info.depth, styles: styles, context: info.context)
     }
 
     /// Applies a block kind to the selected paragraphs; choosing the active kind again turns them back into paragraphs.
@@ -58,7 +58,7 @@ extension EditorController {
             let info = RichDocumentText.blockInfo(from: view.typing)
             let kind = EditorRules.toggled(info.kind, to: target)
             let depth = EditorRules.depth(afterChangingTo: kind, from: 0)
-            view.typing = EditorStyling.typing(kind: kind, depth: depth, styles: [], context: info.context)
+            view.typing = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [], context: info.context)
             return
         }
         let kind = EditorRules.toggled(first.kind, to: target)
@@ -130,7 +130,7 @@ extension EditorController {
             storage.replaceCharacters(in: NSRange(location: location, length: 0), with: inserted)
             EditorStyling.restyle(storage, around: NSRange(location: location, length: 2), images: imageProvider)
             view.selection = NSRange(location: location + 2, length: 0)
-            view.typing = EditorStyling.typing(kind: .paragraph, depth: 0, styles: [])
+            view.typing = EditorStyling.typingAttributes(kind: .paragraph, depth: 0, styles: [])
         }
     }
 
@@ -144,7 +144,7 @@ extension EditorController {
         let range = view.selection
         edit {
             let info = RichDocumentText.blockInfo(from: view.typing)
-            var attributes = EditorStyling.typing(kind: info.kind, depth: info.depth, styles: [])
+            var attributes = EditorStyling.typingAttributes(kind: info.kind, depth: info.depth, styles: [])
             attributes.merge(extra) { _, new in new }
             view.storage.replaceCharacters(in: range, with: NSAttributedString(string: text, attributes: attributes))
             let end = range.location + (text as NSString).length

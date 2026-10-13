@@ -50,7 +50,7 @@ final class EditorController {
         let text = NSMutableAttributedString(attributedString: RichDocumentText.attributedString(from: document))
         EditorStyling.restyleAll(text, images: imageProvider)
         view.storage.setAttributedString(text)
-        view.typing = EditorStyling.typing(kind: .paragraph, depth: 0, styles: [])
+        view.typing = EditorStyling.typingAttributes(kind: .paragraph, depth: 0, styles: [])
         view.refreshMarkers()
     }
 
@@ -97,7 +97,7 @@ final class EditorController {
         guard let view = textView, view.selection.length == 0 else { return }
         guard let paragraph = EditorParagraphs.containing(view.selection.location, in: view.storage) else { return }
         if paragraph.isEmpty {
-            view.typing = EditorStyling.typing(
+            view.typing = EditorStyling.typingAttributes(
                 kind: paragraph.kind, depth: paragraph.depth, styles: [], context: paragraph.context
             )
         }
@@ -188,12 +188,12 @@ final class EditorController {
         EditorStyling.restyle(storage, around: NSRange(location: location, length: 2), images: imageProvider)
         view.selection = NSRange(location: location + 1, length: 0)
         let nextContext = next.isListItem ? BlockContext(quoteLevel: context.quoteLevel) : context
-        view.typing = EditorStyling.typing(kind: next, depth: depth, styles: [], context: nextContext)
+        view.typing = EditorStyling.typingAttributes(kind: next, depth: depth, styles: [], context: nextContext)
     }
 
     func insert(_ text: String, at location: Int, kind: BlockKind, depth: Int, context: BlockContext = .none) {
         guard let view = textView else { return }
-        let attributes = EditorStyling.typing(kind: kind, depth: depth, styles: [], context: context)
+        let attributes = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [], context: context)
         let inserted = NSAttributedString(string: text, attributes: attributes)
         view.storage.replaceCharacters(in: NSRange(location: location, length: 0), with: inserted)
         view.selection = NSRange(location: location + (text as NSString).length, length: 0)
@@ -202,13 +202,13 @@ final class EditorController {
     func convert(_ paragraph: EditorParagraph?, to kind: BlockKind, depth: Int) {
         guard let view = textView else { return }
         guard let paragraph else {
-            view.typing = EditorStyling.typing(kind: kind, depth: depth, styles: [])
+            view.typing = EditorStyling.typingAttributes(kind: kind, depth: depth, styles: [])
             return
         }
         apply(kind: kind, depth: depth, to: paragraph.range)
         EditorStyling.restyle(view.storage, around: paragraph.range, images: imageProvider)
         let after = RichDocumentText.blockInfo(from: view.storage.attributes(at: paragraph.range.location, effectiveRange: nil))
-        view.typing = EditorStyling.typing(kind: kind, depth: after.depth, styles: [], context: after.context)
+        view.typing = EditorStyling.typingAttributes(kind: kind, depth: after.depth, styles: [], context: after.context)
     }
 
     /// Sets a paragraph's kind and depth. Its quotes stay; a block that joined a list item keeps its place (and the
@@ -244,7 +244,7 @@ final class EditorController {
         let context = BlockContext(quoteLevel: paragraph.context.quoteLevel)
         setContext(context, on: paragraph.range)
         EditorStyling.restyle(view.storage, around: paragraph.range, images: imageProvider)
-        view.typing = EditorStyling.typing(kind: paragraph.kind, depth: 0, styles: [], context: context)
+        view.typing = EditorStyling.typingAttributes(kind: paragraph.kind, depth: 0, styles: [], context: context)
     }
 
     private func toggleTask(_ paragraph: EditorParagraph) {

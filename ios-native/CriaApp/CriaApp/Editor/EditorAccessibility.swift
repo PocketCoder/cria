@@ -56,7 +56,7 @@ extension EditorController {
         EditorStyling.restyleAll(view.storage, images: imageProvider)
         let info = RichDocumentText.blockInfo(from: view.typing)
         let styles = EditorStyling.styleSet(view.typing[.criaStyles])
-        view.typing = EditorStyling.typing(
+        view.typing = EditorStyling.typingAttributes(
             kind: info.kind, depth: info.depth, styles: styles, context: info.context
         )
         view.selection = selection
