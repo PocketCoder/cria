@@ -76,29 +76,43 @@ extension CriaStore {
     /// User mutation: removes both directions locally and queues the removal. Carries the peer's server id when known.
     public func removeRelation(taskLocalId: String, relation: RelationRecord) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            let now = isoNow()
-            let kind = TaskRelationKind(rawValue: relation.kind)
-            if let other = relation.otherTaskLocalId {
-                let delete = "DELETE FROM task_relations WHERE task_local_id = ? AND other_task_local_id = ? AND relation_kind = ?"
-                try connection.execute(sql: delete, arguments: [taskLocalId, other, relation.kind])
-                if let inverse = kind?.inverse {
-                    try connection.execute(sql: delete, arguments: [other, taskLocalId, inverse.rawValue])
-                }
-            } else if let serverId = relation.otherTaskServerId {
-                try connection.execute(
-                    sql: "DELETE FROM task_relations WHERE task_local_id = ? AND other_task_server_id = ? AND relation_kind = ?",
-                    arguments: [taskLocalId, serverId, relation.kind]
-                )
+            try CriaStore.deleteRelation(connection, taskLocalId: taskLocalId, relation: relation, now: isoNow())
+        }
+    }
+
+    /// User mutation: changes a relation's kind. Vikunja has no update for relations, so this removes the old one and
+    /// adds the new one in one transaction; the outbox pushes the removal first. Needs the peer stored locally.
+    public func changeRelationKind(taskLocalId: String, relation: RelationRecord, to kind: TaskRelationKind) throws {
+        guard relation.kind != kind.rawValue else { return }
+        guard let other = relation.otherTaskLocalId else { throw CriaStoreError.notFound(String(relation.otherTaskServerId ?? 0)) }
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
+            try CriaStore.deleteRelation(connection, taskLocalId: taskLocalId, relation: relation, now: isoNow())
+            try CriaStore.insertRelation(connection, taskLocalId: taskLocalId, otherTaskLocalId: other, kind: kind)
+        }
+    }
+
+    static func deleteRelation(_ connection: Database, taskLocalId: String, relation: RelationRecord, now: String) throws {
+        let kind = TaskRelationKind(rawValue: relation.kind)
+        if let other = relation.otherTaskLocalId {
+            let delete = "DELETE FROM task_relations WHERE task_local_id = ? AND other_task_local_id = ? AND relation_kind = ?"
+            try connection.execute(sql: delete, arguments: [taskLocalId, other, relation.kind])
+            if let inverse = kind?.inverse {
+                try connection.execute(sql: delete, arguments: [other, taskLocalId, inverse.rawValue])
             }
-            var payload: [String: Any] = ["kind": relation.kind]
-            payload["other_task_local_id"] = relation.otherTaskLocalId
-            payload["other_task_server_id"] = relation.otherTaskServerId
-            try connection.enqueue(.taskRelation, localId: taskLocalId, operation: .remove, payload: payload, at: now)
-            // One subtask fewer: the parent's share of done subtasks changes.
-            let parent = kind == .subtask ? taskLocalId : kind == .parenttask ? relation.otherTaskLocalId : nil
-            if let parent, !ProgressOverride.isManual(parent) {
-                try CriaStore.refreshProgress(connection, parentLocalId: parent, now: now)
-            }
+        } else if let serverId = relation.otherTaskServerId {
+            try connection.execute(
+                sql: "DELETE FROM task_relations WHERE task_local_id = ? AND other_task_server_id = ? AND relation_kind = ?",
+                arguments: [taskLocalId, serverId, relation.kind]
+            )
+        }
+        var payload: [String: Any] = ["kind": relation.kind]
+        payload["other_task_local_id"] = relation.otherTaskLocalId
+        payload["other_task_server_id"] = relation.otherTaskServerId
+        try connection.enqueue(.taskRelation, localId: taskLocalId, operation: .remove, payload: payload, at: now)
+        // One subtask fewer: the parent's share of done subtasks changes.
+        let parent = kind == .subtask ? taskLocalId : kind == .parenttask ? relation.otherTaskLocalId : nil
+        if let parent, !ProgressOverride.isManual(parent) {
+            try CriaStore.refreshProgress(connection, parentLocalId: parent, now: now)
         }
     }
 }

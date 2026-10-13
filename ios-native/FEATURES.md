@@ -37,7 +37,7 @@ Two notes apply throughout:
 | Favourite (star) | Vikunja | |
 | Labels on a task | Vikunja | Pick existing labels or type a new name to create one. |
 | Assignees | Vikunja | Searching for people needs a connection. Names seen are cached on this device (`cria.userNames`). |
-| Subtasks and relations | Vikunja | Add subtask in place, or relate to any task: subtask, parent, related, blocking, blocked by, duplicates, precedes, follows, copied from. Done toggle on each subtask. |
+| Subtasks and relations | Vikunja | Add subtask in place, or relate to any task: subtask, parent, related, blocking, blocked by, duplicates, precedes, follows, copied from. Done toggle on each subtask. Press and hold a relation to change its type or remove it. |
 | Reset subtasks when a repeating task is done | Cria accounts | Customise > Dates & tasks (`resetSubtasksOnRepeat`). The subtask updates themselves go to Vikunja. |
 | Order of sections on the task screen | Cria accounts | Settings > Customise > Task layout (`taskDetailOrder`). Title, description and Delete stay fixed. |
 | Row swipes, context menu | This device for the menu; Cria accounts for what each swipe does | Complete, Schedule, Star, Delete or None per side (Customise). Context menu adds Due tomorrow and Show or Hide subtasks. |
