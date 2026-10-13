@@ -70,3 +70,23 @@ enum BackgroundRun {
         try await work()
     }
 }
+
+/// Comments are written in the rich text editor, which arrives in Phase 3. Until then the sheet only explains that.
+struct CommentComposerSheet: View {
+    let services: AppServices
+    let taskLocalId: String
+    let title: String
+    let initialHTML: String
+    let onSend: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(title).font(.headline)
+            Text("Writing comments is not on the Mac yet.").foregroundStyle(.secondary)
+            Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+        }
+        .padding(32)
+        .frame(minWidth: 320)
+    }
+}
