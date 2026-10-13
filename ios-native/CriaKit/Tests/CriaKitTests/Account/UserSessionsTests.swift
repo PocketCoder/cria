@@ -51,6 +51,6 @@ final class UserSessionsTests: XCTestCase {
         let api = ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
         try await api.revokeSession(id: "a b")
         XCTAssertEqual(transport.requests.first?.httpMethod, "DELETE")
-        XCTAssertEqual(transport.requests.first?.url?.path, "/api/v1/user/sessions/a b")
+        XCTAssertEqual(transport.requests.first?.url?.path, "/api/v2/user/sessions/a b")
     }
 }
