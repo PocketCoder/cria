@@ -597,6 +597,12 @@ repo's history unless the plan says so: CI (`ci-macos.yml`, plus `ci-swift.yml` 
 
 ## Release channels and local dev
 
+> **Since 2026-10-13 the `dev` nightly is the native Swift Mac app** (`nightly.yml` archives `CriaMac` as `Cria (Nightly)`,
+> `io.cria.app.nightly`, and attaches `Cria-Nightly-macOS.dmg` and `.zip` to the rolling `nightly` release beside the iOS
+> `.ipa`). It is not notarised and has no Sparkle feed yet. The table below describes the Tauri app, which still ships
+> stable releases from `release.yml` until the Phase 8 handover; `nightly.json` and `scripts/nightly-config.sh` are
+> no longer used by CI.
+
 Three identifiers, three macOS data dirs. No cross-talk.
 
 | | `Cria.app` (stable) | `Cria (Nightly).app` | `pnpm dev` |
