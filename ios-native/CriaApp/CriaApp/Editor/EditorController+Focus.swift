@@ -9,11 +9,11 @@ import AppKit
 /// needs another tap.
 extension EditorController {
     /// True while editing, a picker's pause included.
-    var isEditing: Bool { isHoldingFocus || textView?.isFocused == true }
+    var isEditing: Bool { isHoldingFocus || textView?.holdsKeyboardFocus == true }
 
     /// Call just before presenting a picker. Remembers the caret; the resign that follows does not end editing.
     func holdFocus() {
-        guard let view = textView, view.isFocused else { return }
+        guard let view = textView, view.holdsKeyboardFocus else { return }
         heldSelection = view.selection
         isHoldingFocus = true
     }

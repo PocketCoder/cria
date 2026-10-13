@@ -58,7 +58,7 @@ final class MacEditorTextView: NSTextView, EditorSurface {
         set { typingAttributes = newValue }
     }
 
-    var isFocused: Bool { window?.firstResponder === self }
+    var holdsKeyboardFocus: Bool { window?.firstResponder === self }
 
     var isInWindow: Bool { window != nil }
 

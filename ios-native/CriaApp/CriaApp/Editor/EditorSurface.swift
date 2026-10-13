@@ -13,7 +13,7 @@ protocol EditorSurface: AnyObject {
     var selection: NSRange { get set }
     var typing: [NSAttributedString.Key: Any] { get set }
     /// True while the view has the keyboard focus.
-    var isFocused: Bool { get }
+    var holdsKeyboardFocus: Bool { get }
     var isInWindow: Bool { get }
     var editorUndoManager: UndoManager? { get }
     var onToggleTask: ((EditorParagraph) -> Void)? { get set }

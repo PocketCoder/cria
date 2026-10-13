@@ -311,7 +311,7 @@ extension EditorTextView: EditorSurface {
         set { typingAttributes = newValue }
     }
 
-    var isFocused: Bool { isFirstResponder }
+    var holdsKeyboardFocus: Bool { isFirstResponder }
 
     var isInWindow: Bool { window != nil }
 
