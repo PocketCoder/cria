@@ -20,8 +20,8 @@ public enum ApiVersionPolicy {
         defaults.bool(forKey: forceV1Key)
     }
 
-    public static func setForceV1(_ on: Bool, defaults: UserDefaults = .standard) {
-        defaults.set(on, forKey: forceV1Key)
+    public static func setForceV1(_ enabled: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: forceV1Key)
     }
 
     /// The leading `vMAJOR.MINOR.PATCH` of `/info`'s `version` (`v2.7.0-16-g58f7cf47`), or nil.
