@@ -4,38 +4,20 @@
   "news": [],
   "apps": [
     {
-      "name": "Cria (Nightly)",
-      "bundleIdentifier": "io.cria.app.nightly",
-      "developerName": "Cria",
-      "subtitle": "Unstable dev builds",
-      "localizedDescription": "Automated build of the dev branch. Unstable.",
-      "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
-      "versions": [
-        {
-          "version": "0.14.69",
-          "buildVersion": "69",
-          "date": "2026-10-11T13:38:37Z",
-          "size": 6161596,
-          "downloadURL": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-unsigned.ipa",
-          "localizedDescription": "dev @ 5fcc8e1"
-        }
-      ]
-    },
-    {
-      "name": "Cria (Swift Alpha)",
+      "name": "Cria",
       "bundleIdentifier": "io.cria.app.swift",
       "developerName": "Cria",
-      "subtitle": "Native Swift alpha",
-      "localizedDescription": "Automated build of the native Swift app. Alpha, unstable.",
+      "subtitle": "Native iOS client for Vikunja",
+      "localizedDescription": "Automated build of the native iOS app from the latest dev or main push. Prerelease.",
       "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
       "versions": [
         {
-          "version": "0.14.146",
-          "buildVersion": "146",
-          "date": "2026-10-13T07:09:54Z",
-          "size": 12563177,
+          "version": "0.14.150",
+          "buildVersion": "150",
+          "date": "2026-10-13T07:36:05Z",
+          "size": 12603318,
           "downloadURL": "https://github.com/PocketCoder/cria/releases/download/swift-alpha/Cria-Swift-Alpha-unsigned.ipa",
-          "localizedDescription": "feature/swift-ios @ 5c3089e"
+          "localizedDescription": "dev @ ba16e99"
         }
       ]
     }
