@@ -16,33 +16,21 @@ struct KanbanCardView: View {
     var onMove: (KanbanColumn) -> Void = { _ in }
     /// Deletes the card with an Undo toast; nil on a read-only board.
     var onDelete: (() -> Void)?
+    /// Subtasks in this card's column, listed inside the card instead of as cards of their own.
+    var subtasks: [KanbanSubtaskRow] = []
+    /// The parent's title when it is on the board in another column: shown as "↳ Parent".
+    var parentTitle: String?
+    var isExpanded: Binding<Bool> = .constant(false)
 
     static let radius: CGFloat = 14
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            PriorityCheck(priority: task.priority, isDone: task.done, size: 20) {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if !subtasks.isEmpty {
+                KanbanSubtaskList(services: services, subtasks: subtasks, isExpanded: isExpanded)
             }
-            NavigationLink(value: Route.task(task.localId)) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(task.title)
-                        .font(Theme.rowSubtitle.weight(.medium))
-                        .strikethrough(task.done)
-                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(4)
-                    if hasChips {
-                        ChipFlowLayout { chips }
-                    }
-                }
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.trailing, 12)
         .background(Color(.cell), in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .contentShape(.dragPreview, RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .contextMenu {
@@ -58,7 +46,40 @@ struct KanbanCardView: View {
                 Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
             }
         }
-        // One VoiceOver element per card: activating opens the task, and the ring, columns and delete are actions.
+    }
+
+    /// The ring, title and chips. One VoiceOver element per card: activating opens the task, and the ring, columns
+    /// and delete are actions. The subtask disclosure below it stays a separate element.
+    private var header: some View {
+        HStack(alignment: .top, spacing: 0) {
+            PriorityCheck(priority: task.priority, isDone: task.done, size: 20) {
+                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+            }
+            NavigationLink(value: Route.task(task.localId)) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(task.title)
+                        .font(Theme.rowSubtitle.weight(.medium))
+                        .strikethrough(task.done)
+                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(4)
+                    if let parentTitle {
+                        Text("↳ \(parentTitle)")
+                            .font(Theme.caption)
+                            .foregroundStyle(Color(.mutedForeground))
+                            .lineLimit(1)
+                    }
+                    if hasChips {
+                        ChipFlowLayout { chips }
+                    }
+                }
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.trailing, 12)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)
         .accessibilityValue(task.done ? "Done" : "")
@@ -81,6 +102,7 @@ struct KanbanCardView: View {
     /// Title, then the chips in reading order.
     private var spokenLabel: String {
         var parts = [task.title]
+        if let parentTitle { parts.append("subtask of \(parentTitle)") }
         if showsDue, let due = task.dueDate {
             let label = DueDates.label(due, now: Date(), display: dateDisplay)
             parts.append(DueDates.isOverdue(due, now: Date()) ? "overdue, \(label)" : "due \(label)")

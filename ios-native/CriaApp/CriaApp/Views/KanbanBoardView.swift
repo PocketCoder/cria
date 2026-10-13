@@ -24,6 +24,8 @@ struct KanbanBoardView: View {
     @State private var limitNotice = false
     @State private var failure: String?
     @State private var filtering = false
+    /// Cards whose subtasks are open. In memory only: it lasts as long as the board screen.
+    @State private var expandedCards: Set<String> = []
     /// The board's filter, kept per view on this device (see `BoardFilter`).
     @AppStorage private var filterText: String
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -34,6 +36,7 @@ struct KanbanBoardView: View {
         _filterText = AppStorage(wrappedValue: "", BoardFilter.storageKey(viewLocalId: view.localId))
         let store = services.store
         let viewId = view.localId
+        let projectId = view.projectLocalId
         _live = State(initialValue: LiveValue(initial: KanbanBoardData()) {
             observeStore(store, kinds: [.tasks, .views, .projects, .labels]) { (reading: CriaStore) throws -> KanbanBoardData in
                 let columns = try reading.kanbanColumns(viewLocalId: viewId)
@@ -41,7 +44,11 @@ struct KanbanBoardView: View {
                 for item in try reading.attachRowData(columns.flatMap(\.tasks)) where !item.labels.isEmpty {
                     labels[item.task.localId] = item.labels
                 }
-                return KanbanBoardData(columns: columns, labels: labels, allLabels: try reading.labels())
+                // The subtask map is read once per load, so cards need no query of their own.
+                return KanbanBoardData(
+                    columns: columns, labels: labels, allLabels: try reading.labels(),
+                    children: try reading.subtaskMap(projectLocalId: projectId)
+                )
             }
         })
     }
@@ -50,15 +57,16 @@ struct KanbanBoardView: View {
     private var readOnly: Bool { Kanban.isFilterMode(view) }
     private var filter: BoardFilter { BoardFilter.from(stored: filterText) }
 
-    /// The cards a column shows. Drops, limits and "Move to" still work on the whole column, so a hidden card keeps
-    /// its place and a filtered column is never mistaken for a full one.
-    private func shown(_ column: KanbanColumn) -> [TaskRecord] {
-        guard filter.isActive else { return column.tasks }
-        return filter.apply(to: column.tasks, labels: live.value.labelIds)
-    }
-
-    private var hiddenCount: Int {
-        columns.reduce(0) { $0 + $1.tasks.count - shown($1).count }
+    /// Which cards each column draws and which subtasks ride inside them. Drops, limits and "Move to" still work on
+    /// the whole column, so a hidden or nested task keeps its place and a filtered column is never mistaken for a
+    /// full one.
+    private var plan: KanbanBoardPlan {
+        let filter = self.filter
+        guard filter.isActive else { return KanbanNesting.plan(columns: columns, children: live.value.children) }
+        let labelIds = live.value.labelIds
+        return KanbanNesting.plan(columns: columns, children: live.value.children) {
+            filter.shows($0, labelIds: labelIds[$0.localId] ?? [])
+        }
     }
 
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
@@ -70,6 +78,7 @@ struct KanbanBoardView: View {
     }
 
     var body: some View {
+        let plan = self.plan
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 12) {
                 ForEach(columns, id: \.bucket.localId) { column in
@@ -78,7 +87,8 @@ struct KanbanBoardView: View {
                         view: view,
                         column: column,
                         columns: columns,
-                        shown: shown(column),
+                        cards: plan.column(column.bucket.localId).cards,
+                        expanded: $expandedCards,
                         labels: live.value.labels,
                         readOnly: readOnly,
                         onDrop: { taskId, beforeId in drop(taskId, into: column, before: beforeId) },
@@ -96,7 +106,7 @@ struct KanbanBoardView: View {
         .scrollTargetBehavior(.viewAligned)
         .scrollIndicators(.hidden)
         .background(Color(.grouped))
-        .safeAreaInset(edge: .bottom, spacing: 0) { notices }
+        .safeAreaInset(edge: .bottom, spacing: 0) { notices(hidden: plan.hiddenCount) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(
@@ -133,7 +143,7 @@ struct KanbanBoardView: View {
         }
     }
 
-    @ViewBuilder private var notices: some View {
+    @ViewBuilder private func notices(hidden hiddenCount: Int) -> some View {
         VStack(spacing: 0) {
             if filter.isActive {
                 HStack {
@@ -221,6 +231,8 @@ struct KanbanBoardData: Equatable, Sendable {
     var labels: [String: [LabelRecord]] = [:]
     /// Every label, for the filter's label choices.
     var allLabels: [LabelRecord] = []
+    /// Parent local id to its subtasks' local ids, for nesting subtasks inside their parent's card.
+    var children: [String: [String]] = [:]
 
     /// Label local ids by task, for `BoardFilter`.
     var labelIds: [String: [String]] { labels.mapValues { $0.map(\.localId) } }

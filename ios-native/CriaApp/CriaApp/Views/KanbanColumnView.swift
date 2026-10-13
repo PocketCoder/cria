@@ -27,8 +27,11 @@ struct KanbanColumnView: View {
     let column: KanbanColumn
     /// Every column of the board, for the cards' "Move to" menu.
     let columns: [KanbanColumn]
-    /// The cards to draw: the column's own, less any the board filter hides.
-    let shown: [TaskRecord]
+    /// The cards to draw: the column's own tasks, less the board filter's and less subtasks listed inside their
+    /// parent's card. The count and limit still use `column.tasks`.
+    let cards: [KanbanCardPlan]
+    /// Cards whose subtasks are open, for the whole board.
+    @Binding var expanded: Set<String>
     /// Labels by task local id.
     let labels: [String: [LabelRecord]]
     let readOnly: Bool
@@ -48,8 +51,8 @@ struct KanbanColumnView: View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 8) {
                 header
-                ForEach(shown, id: \.localId) { task in
-                    card(task)
+                ForEach(cards) { plan in
+                    card(plan)
                 }
                 if !readOnly { addRow }
             }
@@ -72,15 +75,24 @@ struct KanbanColumnView: View {
         }
     }
 
-    @ViewBuilder private func card(_ task: TaskRecord) -> some View {
+    @ViewBuilder private func card(_ plan: KanbanCardPlan) -> some View {
+        let task = plan.task
+        let open = Binding(
+            get: { expanded.contains(task.localId) },
+            set: { setExpanded(task.localId, $0) }
+        )
         if readOnly {
-            KanbanCardView(services: services, task: task, labels: labels[task.localId] ?? [])
+            KanbanCardView(
+                services: services, task: task, labels: labels[task.localId] ?? [],
+                subtasks: plan.subtasks, parentTitle: plan.parentTitle, isExpanded: open
+            )
         } else {
             KanbanCardView(
                 services: services, task: task, labels: labels[task.localId] ?? [],
                 moveTargets: columns.filter { $0.bucket.localId != column.bucket.localId },
                 onMove: { target in onMoveTo(task.localId, target) },
-                onDelete: { delete(task) }
+                onDelete: { delete(task) },
+                subtasks: plan.subtasks, parentTitle: plan.parentTitle, isExpanded: open
             )
             .draggable(KanbanPayload.make(task.localId))
             .modifier(KanbanDropTarget(enabled: true) { taskId in
@@ -88,6 +100,14 @@ struct KanbanColumnView: View {
                 onDrop(taskId, task.localId)
                 return true
             })
+        }
+    }
+
+    private func setExpanded(_ taskId: String, _ open: Bool) {
+        if open {
+            _ = expanded.insert(taskId)
+        } else {
+            _ = expanded.remove(taskId)
         }
     }
 

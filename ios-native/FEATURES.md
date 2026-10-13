@@ -61,7 +61,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | List: manual reorder (edit mode) | Vikunja | Per-view task position (`/tasks/{id}/position`). Only offered with the manual sort. |
 | Display options (group, sort, filters, show completed) | This device | Per view (each project, label, Favourites, Inbox, Today, Upcoming, saved filter) in `cria.display.configs`. Group by priority, due date, project or label; filter by priority, dates, label, project, assigned to me or unassigned. |
 | Select several tasks | Vikunja for the changes | Select beside the title; the bar completes, schedules, defers, moves, sets priority or deletes them together. |
-| Kanban cards and columns | Vikunja | Move a card by drag or "Move to" (bucket assignment, position). Add, rename, delete columns; set a column limit that blocks drops. |
+| Kanban cards and columns | Vikunja | Move a card by drag or "Move to" (bucket assignment, position); moves made elsewhere arrive at the next pull. Add, rename, delete columns; set a column limit that blocks drops. Subtasks in their parent's column sit inside its card ("2/3 subtasks"); ones in another column are their own card captioned with the parent. |
 | Kanban done and default column | Vikunja | Stored on the view. |
 | Kanban for filter views | Vikunja | Read-only by design: each column is a saved search, so a card shows wherever it matches and is not dragged between columns (as in Vikunja-web). |
 | Table view | Vikunja for the tasks | Tap a row to open it; swipe to complete. |
