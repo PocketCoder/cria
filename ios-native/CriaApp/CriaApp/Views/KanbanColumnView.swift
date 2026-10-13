@@ -49,6 +49,8 @@ struct KanbanColumnView: View {
     var compact = false
     /// Told when a card of this column is picked up.
     var onDragStart: () -> Void = {}
+    /// Told when a drop on one of this column's own cards changed nothing, so the board can expand again.
+    var onDragEnd: () -> Void = {}
     let onDrop: (String, String?) -> Void
     /// Moves a card to the end of another column (the "Move to" menu).
     let onMoveTo: (String, KanbanColumn) -> Void
@@ -139,7 +141,10 @@ struct KanbanColumnView: View {
                 if over { overCards.insert(task.localId) } else { overCards.remove(task.localId) }
             }, action: { taskId in
                 overCards.remove(task.localId)
-                guard taskId != task.localId else { return false }
+                guard taskId != task.localId else {
+                    onDragEnd()
+                    return false
+                }
                 onDrop(taskId, task.localId)
                 return true
             }))

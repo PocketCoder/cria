@@ -7,7 +7,7 @@ vi.mock('@/sync/push', () => ({ drainOutbox }));
 
 import { getDb } from '@/db';
 import { initSchema, clearTables } from './_helpers';
-import { countUnsyncedChanges, syncBeforeUpdate } from '@/sync/updateGate';
+import { countUnsyncedChanges, DEAD_LETTER_MESSAGE, syncBeforeUpdate } from '@/sync/updateGate';
 
 async function insertOutbox() {
   const db = await getDb();
@@ -46,19 +46,36 @@ describe('syncBeforeUpdate', () => {
 
   it('holds the update back while an outbox row remains', async () => {
     await insertOutbox();
-    expect(await syncBeforeUpdate()).toEqual({ ok: false, pending: 1 });
+    expect(await syncBeforeUpdate()).toMatchObject({ ok: false, pending: 1, deadLetters: 0 });
   });
 
   it('counts dead letters as unsynced', async () => {
     await insertOutbox();
     await insertDeadLetter();
-    expect(await countUnsyncedChanges()).toBe(2);
-    expect(await syncBeforeUpdate()).toEqual({ ok: false, pending: 2 });
+    expect(await countUnsyncedChanges()).toEqual({ pending: 1, deadLetters: 1 });
+    expect(await syncBeforeUpdate()).toMatchObject({ ok: false, pending: 1, deadLetters: 1 });
   });
 
   it('still counts what is left when the drain itself throws', async () => {
     await insertOutbox();
     drainOutbox.mockRejectedValue(new Error('offline'));
-    expect(await syncBeforeUpdate()).toEqual({ ok: false, pending: 1 });
+    expect(await syncBeforeUpdate()).toMatchObject({ ok: false, pending: 1 });
+  });
+
+  it('points at Settings when only dead letters remain', async () => {
+    await insertDeadLetter();
+    const gate = await syncBeforeUpdate();
+    expect(gate).toMatchObject({ ok: false, pending: 0, deadLetters: 1 });
+    expect(gate.ok === false && gate.message).toBe(DEAD_LETTER_MESSAGE);
+  });
+
+  it('waits for a drain that is already running', async () => {
+    globalThis.__cria_isDraining__ = true;
+    setTimeout(() => {
+      globalThis.__cria_isDraining__ = false;
+    }, 300);
+    await syncBeforeUpdate();
+    expect(globalThis.__cria_isDraining__).toBe(false);
+    expect(drainOutbox).toHaveBeenCalledTimes(1);
   });
 });

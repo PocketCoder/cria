@@ -75,11 +75,34 @@ final class LegacyCredentialImportTests: XCTestCase {
         LegacyCredentialImport(slot: slot, hasRun: { ran.value }, markRun: { ran.value = true })
     }
 
-    func testReadsTheTauriJSONOnce() {
+    func testReadsTheTauriJSONUntilCommitted() {
         let ran = LockedFlag()
         let legacy = makeImport(MemorySlot(json), ran: ran)
         XCTAssertEqual(legacy.credentials()?.token, "tok")
-        XCTAssertNil(legacy.credentials(), "second call must do nothing")
+        XCTAssertFalse(ran.value, "not done until the caller has saved the credentials")
+        XCTAssertEqual(legacy.credentials()?.token, "tok")
+        legacy.commit()
+        XCTAssertNil(legacy.credentials(), "nothing after commit")
+    }
+
+    func testBlobWithoutAuthMethodAdoptsAsToken() {
+        let blob = #"{"serverUrl":"https://vk.example","token":"tok"}"#
+        XCTAssertEqual(makeImport(MemorySlot(blob)).credentials()?.authMethod, .token)
+    }
+
+    func testRefusedKeychainReadEndsTheImport() {
+        let ran = LockedFlag()
+        XCTAssertNil(makeImport(RefusingSlot(), ran: ran).credentials())
+        XCTAssertTrue(ran.value, "a denied prompt is not repeated every launch")
+    }
+
+    func testFailedSaveIsRetried() async {
+        let ran = LockedFlag()
+        let session = AuthSession(store: CredentialStore(slot: UnwritableSlot()), legacyImport: makeImport(MemorySlot(json), ran: ran))
+        await session.hydrate()
+        XCTAssertFalse(ran.value, "the save failed, so the import is tried again next launch")
+        let status = await session.status
+        XCTAssertEqual(status, .unauthenticated)
     }
 
     func testMissingItemMarksDone() {
@@ -119,7 +142,22 @@ final class LegacyCredentialImportTests: XCTestCase {
         XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app"), "vikunja-token")
         XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app.dev"), "vikunja-token.dev")
         XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app.nightly"), "vikunja-token.nightly")
+        XCTAssertEqual(LegacyCredentialImport.tauriAccount(bundleIdentifier: "io.cria.app.foo.bar"), "vikunja-token.foo.bar")
     }
+}
+
+/// Empty and read-only: nothing to load, and a save fails.
+private final class UnwritableSlot: SecretSlot, @unchecked Sendable {
+    func read() throws -> String? { nil }
+    func write(_ value: String) throws { throw KeychainError(status: -25308) }
+    func delete() throws {}
+}
+
+/// A keychain item the user refused access to (errSecAuthFailed).
+private final class RefusingSlot: SecretSlot, @unchecked Sendable {
+    func read() throws -> String? { throw KeychainError(status: -25293) }
+    func write(_ value: String) throws {}
+    func delete() throws {}
 }
 
 private final class LockedFlag: @unchecked Sendable {

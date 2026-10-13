@@ -53,7 +53,8 @@ public actor AuthSession: SessionProviding {
                 return
             case .none:
                 credentialsUnavailable = false
-                if let imported = legacyImport?.credentials(), (try? store.save(imported)) != nil {
+                if let legacyImport, let imported = legacyImport.credentials(), (try? store.save(imported)) != nil {
+                    legacyImport.commit()
                     status = .authenticated(imported)
                     return
                 }

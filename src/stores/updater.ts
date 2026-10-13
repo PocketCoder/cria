@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { checkForUpdate, installUpdate, type AvailableUpdate } from '@/tauri/updater';
-import { syncBeforeUpdate, UNSYNCED_MESSAGE } from '@/sync/updateGate';
+import { syncBeforeUpdate } from '@/sync/updateGate';
 
 export type UpdaterState =
   | { kind: 'idle' }
@@ -61,7 +61,7 @@ export const useUpdaterStore = create<UpdaterStore>()((set, get) => ({
       const gate = await syncBeforeUpdate();
       if (!gate.ok) {
         // Back to 'available' so the same button retries once the edits have synced.
-        set({ state: { kind: 'available', update }, blockedMessage: UNSYNCED_MESSAGE });
+        set({ state: { kind: 'available', update }, blockedMessage: gate.message });
         return;
       }
       set({ blockedMessage: null });

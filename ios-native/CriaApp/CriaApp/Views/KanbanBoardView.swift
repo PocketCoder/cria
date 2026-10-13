@@ -27,6 +27,9 @@ struct KanbanBoardView: View {
     /// A card is being dragged: the columns shrink to headers so all of them fit on screen.
     @State private var dragging = false
     @State private var dragStartedAt: Date?
+    /// The column the dragged card came from. It keeps its cards (narrow) so the card can still be dropped before another
+    /// card in the same column; the other columns shrink to their headers.
+    @State private var dragSource: String?
     /// Cards whose subtasks are open. In memory only: it lasts as long as the board screen.
     @State private var expandedCards: Set<String> = []
     /// The board's filter, kept per view on this device (see `BoardFilter`).
@@ -79,11 +82,29 @@ struct KanbanBoardView: View {
         return max(88, (available - 32 - 12 * (count - 1)) / count)
     }
 
+    private func beginDrag(from columnId: String) {
+        let started = Date.now
+        dragStartedAt = started
+        dragSource = columnId
+        dragging = true
+        // Backstop for a drag that ends with no event at all (dropped outside the board): see `endStaleDrag`.
+        Task {
+            try? await Task.sleep(for: .seconds(30))
+            if dragStartedAt == started { endDrag() }
+        }
+    }
+
+    private func endDrag() {
+        dragging = false
+        dragSource = nil
+        dragStartedAt = nil
+    }
+
     /// A drag that was cancelled (dropped on nothing) sends no event, so the next touch on the board ends it. Not within
     /// a second of the start: that is the touch that lifted the card.
     private func endStaleDrag() {
         guard dragging, let started = dragStartedAt, Date.now.timeIntervalSince(started) > 1 else { return }
-        dragging = false
+        endDrag()
     }
 
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
@@ -108,13 +129,11 @@ struct KanbanBoardView: View {
                         expanded: $expandedCards,
                         labels: live.value.labels,
                         readOnly: readOnly,
-                        compact: dragging,
-                        onDragStart: {
-                            dragStartedAt = .now
-                            dragging = true
-                        },
+                        compact: dragging && dragSource != column.bucket.localId,
+                        onDragStart: { beginDrag(from: column.bucket.localId) },
+                        onDragEnd: { endDrag() },
                         onDrop: { taskId, beforeId in
-                            dragging = false
+                            endDrag()
                             drop(taskId, into: column, before: beforeId)
                         },
                         onMoveTo: { taskId, target in drop(taskId, into: target, before: nil) },
