@@ -91,6 +91,11 @@ struct ProjectScreen: View {
             .onReceive(NotificationCenter.default.publisher(for: .criaProjectBackgroundChanged)) { note in
                 if let serverId = note.object as? Int, serverId == live.value.project?.serverId { backgroundRevision += 1 }
             }
+            // The Mac's View menu and g-key shortcuts.
+            .onReceive(NotificationCenter.default.publisher(for: .criaProjectViewCommand)) { note in
+                guard let kind = note.object as? String, let match = views.first(where: { $0.viewKind.rawValue == kind }) else { return }
+                select(match.localId)
+            }
     }
 
     /// Cached copy first, then the server's; nothing for a project that has not synced yet.

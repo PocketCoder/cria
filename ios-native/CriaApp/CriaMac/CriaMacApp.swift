@@ -14,5 +14,9 @@ struct CriaMacApp: App {
                 .task(id: scenePhase) { await model.setSyncActive(scenePhase == .active) }
         }
         .defaultSize(width: 1100, height: 720)
+        .commands { MacCommands() }
+        Settings {
+            MacSettingsScene(model: model).tint(Color(.primary))
+        }
     }
 }

@@ -17,6 +17,8 @@ struct TaskRowLink: View {
     /// Nil on screens that do not offer multi-select (Search).
     @Environment(TaskSelection.self) private var selection: TaskSelection?
     @Environment(\.preferences) private var preferences
+    /// Set by the Mac shell: a tap selects the task for the detail column instead of pushing it.
+    @Environment(\.taskOpener) private var openTask
     @State private var failure: String?
     @State private var scheduling = false
     /// Counts completions made from a swipe or the menu; the ring plays its own haptic for a tap.
@@ -58,9 +60,7 @@ struct TaskRowLink: View {
 
     private var openableRow: some View {
         let swipes = preferences.custom
-        return NavigationLink(value: Route.task(item.task.localId)) {
-            TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
-        }
+        return rowLink
         .swipeActions(edge: .leading, allowsFullSwipe: swipes.swipeRight != .delete) { swipeButton(swipes.swipeRight) }
         .swipeActions(edge: .trailing, allowsFullSwipe: swipes.swipeLeft != .delete) { swipeButton(swipes.swipeLeft) }
         .sheet(isPresented: $scheduling) {
@@ -86,6 +86,19 @@ struct TaskRowLink: View {
             if let selection { Button("Select") { selection.start(with: item.task.localId) } }
             if let collapsed = tree.isCollapsed {
                 Button(collapsed ? "Show subtasks" : "Hide subtasks") { tree.onToggleCollapsed() }
+            }
+        }
+    }
+
+    @ViewBuilder private var rowLink: some View {
+        if let openTask {
+            Button { openTask(item.task.localId) } label: {
+                TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
+            }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink(value: Route.task(item.task.localId)) {
+                TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
             }
         }
     }

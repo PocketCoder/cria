@@ -28,6 +28,8 @@ struct TaskDetailView: View {
     @State private var editingRepeat = false
     @State private var editingDate: TaskDateField?
     @State private var expandingDescription = false
+    @State private var choosingPriority = false
+    @State private var choosingMove = false
     /// The copy just made by Duplicate, pushed once it exists.
     @State private var openedCopy: String?
     @FocusState private var focus: Field?
@@ -144,6 +146,31 @@ struct TaskDetailView: View {
             services: services, taskLocalId: taskLocalId, state: sheets, assigned: Set(feeds.assignees.value.map(\.userId))
         ))
         .modifier(TaskDetailDialogs(services: services, taskLocalId: taskLocalId, state: sheets))
+        .modifier(TaskCommandHandler(
+            taskLocalId: taskLocalId, choosingPriority: $choosingPriority, choosingMove: $choosingMove,
+            projects: moveChoices, perform: perform,
+            onPriority: { value in apply(TaskPatch(priority: value)) },
+            onMove: { id in
+                var patch = TaskPatch()
+                patch.projectLocalId = id
+                apply(patch)
+            }
+        ))
+    }
+
+    /// A menu-bar or keyboard command from the Mac shell, for the task on screen.
+    private func perform(_ command: TaskCommand) {
+        guard let task = live.value.task else { return }
+        switch command {
+        case .done: apply(TaskPatch(done: !task.done))
+        case .due: editingDate = .due
+        case .labels: showLabels = true
+        case .favourite: apply(TaskPatch(isFavorite: !task.isFavorite))
+        case .copyLink: if let url = services.taskWebURL(task) { sheets.copyLink(url) }
+        case .priority: choosingPriority = true
+        case .move: choosingMove = true
+        case .delete: deleteTask()
+        }
     }
 
     private func form(_ task: TaskRecord) -> some View {
@@ -324,5 +351,35 @@ extension TaskDetailView {
             }
             apply(patch)
         }
+    }
+}
+
+/// Carries out `TaskCommand`s posted for this task, and hosts the two pickers that need no screen of their own.
+private struct TaskCommandHandler: ViewModifier {
+    let taskLocalId: String
+    @Binding var choosingPriority: Bool
+    @Binding var choosingMove: Bool
+    let projects: [ProjectRecord]
+    let perform: (TaskCommand) -> Void
+    let onPriority: (Int) -> Void
+    let onMove: (String) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .criaTaskCommand)) { note in
+                guard note.userInfo?["task"] as? String == taskLocalId,
+                      let raw = note.object as? String, let command = TaskCommand(rawValue: raw) else { return }
+                perform(command)
+            }
+            .confirmationDialog("Priority", isPresented: $choosingPriority) {
+                ForEach(Array(TableCells.priorityNames.enumerated()), id: \.offset) { index, name in
+                    Button(name) { onPriority(index) }
+                }
+            }
+            .confirmationDialog("Move to project", isPresented: $choosingMove) {
+                ForEach(projects, id: \.localId) { project in
+                    Button(project.title) { onMove(project.localId) }
+                }
+            }
     }
 }

@@ -1,12 +1,6 @@
 import CriaKit
 import SwiftUI
 
-/// A quick-add request from a `cria://add` link. Identifiable so a sheet can bind to it.
-struct QuickAddRequest: Identifiable {
-    let id = UUID()
-    let title: String
-}
-
 /// Signed-in shell: four tabs, each with its own navigation stack. On iOS 26 the system draws the glass tab
 /// bar for a plain `TabView`; older versions get the standard bar.
 struct ShellView: View {
@@ -202,17 +196,5 @@ struct RouteDestination: View {
         case .savedFilter(let serverId):
             SavedFilterScreen(services: services, serverId: serverId)
         }
-    }
-}
-
-/// Task counts for the tab badges.
-struct TabCounts: Equatable, Sendable {
-    var today = 0
-    var inbox = 0
-
-    static func read(_ store: CriaStore, inboxLocalId: String?) throws -> TabCounts {
-        let today = try store.smartGroups(.today).reduce(0) { $0 + $1.items.count }
-        let inbox = try inboxLocalId.map { try store.taskItems(.project($0), includeDone: false).count } ?? 0
-        return TabCounts(today: today, inbox: inbox)
     }
 }
