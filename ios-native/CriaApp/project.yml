@@ -5,6 +5,7 @@ options:
   bundleIdPrefix: io.cria
   deploymentTarget:
     iOS: "17.0"
+    macOS: "14.0"
 packages:
   CriaKit:
     path: ../CriaKit
@@ -84,3 +85,29 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: CriaWidgets/CriaWidgets.entitlements
+  CriaMac:
+    type: application
+    platform: macOS
+    sources: [CriaMac]
+    dependencies:
+      - package: CriaKit
+    info:
+      path: Config/CriaMac-Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: io.cria.app
+            CFBundleURLSchemes: [cria]
+    settings:
+      base:
+        PRODUCT_NAME: Cria
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Listen while you speak a list of tasks.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Turn what you say into text for your tasks.
+        ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: io.cria.app
