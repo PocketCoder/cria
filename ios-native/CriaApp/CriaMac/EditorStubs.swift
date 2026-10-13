@@ -90,3 +90,9 @@ struct CommentComposerSheet: View {
         .frame(minWidth: 320)
     }
 }
+
+enum RambleNotice {
+    static func postIfBackgrounded(count: Int) async {}
+
+    static func clear() {}
+}
