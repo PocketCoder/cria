@@ -1,7 +1,8 @@
 name: CI (native Swift iOS)
 
-# The iOS app. Lint, CriaKit tests and a simulator build on every change to
-# ios-native/; pushes to dev and main also publish the unsigned .ipa to SideStore.
+# The iOS and macOS apps. Lint, CriaKit tests, a simulator build and a macOS
+# build on every change to ios-native/; pushes to dev and main also publish
+# the unsigned .ipa to SideStore.
 # The Tauri iOS build is deprecated: nothing else builds for iOS.
 
 on:
@@ -54,6 +55,15 @@ jobs:
             -project CriaApp.xcodeproj \
             -scheme CriaApp \
             -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build macOS app
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaMac \
+            -destination 'generic/platform=macOS' \
             CODE_SIGNING_ALLOWED=NO
 
   # Rolling .ipa for SideStore. Runs on push only (not PRs), and only after the
