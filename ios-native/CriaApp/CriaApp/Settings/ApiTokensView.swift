@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// API tokens: list, create with chosen permissions (the secret is shown once), delete.
 struct ApiTokensView: View {
@@ -19,7 +21,7 @@ struct ApiTokensView: View {
                 Section("New token (shown once)") {
                     Text(secret).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
                     Button(copied ? "Copied" : "Copy token", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.string = secret
+                        Pasteboard.copy(secret)
                         copied = true
                     }
                 }

@@ -1,7 +1,9 @@
 import CriaKit
 import PhotosUI
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Account: display name, avatar source and avatar upload. Ported from `AccountTab.tsx`.
 struct AccountSettingsView: View {
@@ -12,7 +14,7 @@ struct AccountSettingsView: View {
     /// True once the user has edited the field; the server's name no longer overwrites it.
     @State private var nameTouched = false
     @State private var provider = AvatarProvider.standard
-    @State private var avatar: UIImage?
+    @State private var avatar: PlatformImage?
     @State private var picked: PhotosPickerItem?
     @State private var uploading = false
     @State private var errorMessage: String?
@@ -75,7 +77,7 @@ struct AccountSettingsView: View {
     @ViewBuilder
     private var avatarView: some View {
         if let avatar {
-            Image(uiImage: avatar).resizable().scaledToFill()
+            Image(platformImage: avatar).resizable().scaledToFill()
                 .frame(width: 48, height: 48).clipShape(Circle())
                 .accessibilityHidden(true)
         } else {
@@ -138,7 +140,7 @@ struct AccountSettingsView: View {
 
     private func loadAvatar() async {
         guard !model.username.isEmpty, let data = try? await services.api.avatarData(username: model.username) else { return }
-        avatar = UIImage(data: data)
+        avatar = PlatformImage(data: data)
     }
 
     /// The trimmed name to save: non-empty and changed, and only once the server's settings have loaded (before that

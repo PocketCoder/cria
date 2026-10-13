@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 import WebKit
 
 /// Read-only rendering of a Vikunja description or comment. The HTML goes through `HTMLSanitizer` first and the
@@ -33,7 +35,13 @@ struct RichTextView: View {
     }
 }
 
-private struct RichTextWebView: UIViewRepresentable {
+#if canImport(UIKit)
+private typealias PlatformViewRepresentable = UIViewRepresentable
+#else
+private typealias PlatformViewRepresentable = NSViewRepresentable
+#endif
+
+private struct RichTextWebView: PlatformViewRepresentable {
     let html: String
     let services: AppServices?
     let serverBase: String?
@@ -48,7 +56,17 @@ private struct RichTextWebView: UIViewRepresentable {
         Coordinator(height: $height)
     }
 
-    func makeUIView(context: Context) -> WKWebView {
+    #if canImport(UIKit)
+    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+
+    func updateUIView(_ view: WKWebView, context: Context) { update(view, context: context) }
+    #else
+    func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+
+    func updateNSView(_ view: WKWebView, context: Context) { update(view, context: context) }
+    #endif
+
+    private func makeWebView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         if let services {
@@ -58,16 +76,20 @@ private struct RichTextWebView: UIViewRepresentable {
             context.coordinator.images = handler
         }
         let view = WKWebView(frame: .zero, configuration: configuration)
+        #if canImport(UIKit)
         view.isOpaque = false
         view.backgroundColor = .clear
         view.scrollView.isScrollEnabled = false
         // An image is wrapped in a link of our own, which a long press would otherwise preview as an address.
         view.allowsLinkPreview = false
+        #else
+        view.setValue(false, forKey: "drawsBackground")
+        #endif
         view.navigationDelegate = context.coordinator
         return view
     }
 
-    func updateUIView(_ view: WKWebView, context: Context) {
+    private func update(_ view: WKWebView, context: Context) {
         // Every parent re-render (each sync) lands here; only a real change of content reloads the page.
         context.coordinator.onOpenImage = onOpenImage
         guard ready, context.coordinator.loadedHTML != html || context.coordinator.loadedTypeSize != typeSize else { return }

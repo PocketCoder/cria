@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// What a project screen reads for its title, subtitle and view pills.
 struct ProjectScreenData: Equatable, Sendable {
@@ -22,7 +24,7 @@ struct ProjectHeader: View {
     /// Opens the project's info page. Nil hides the Info pill (a project with no page to show).
     var onInfo: (() -> Void)?
     /// The project's background, once loaded. Nil (no background, or not loaded yet) shows no banner.
-    var background: UIImage?
+    var background: PlatformImage?
     /// Shorter when pinned above a board or timeline, which need the height.
     var bannerHeight: CGFloat = 120
 

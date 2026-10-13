@@ -12,9 +12,11 @@ private final class SpeechEngine: @unchecked Sendable {
 
     /// Starts listening. `onUpdate` gets the transcript so far and whether the recogniser has finished.
     func start(recognizer: SFSpeechRecognizer, onUpdate: @escaping @Sendable (String?, Bool) -> Void) throws {
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+        #endif
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
@@ -48,7 +50,9 @@ private final class SpeechEngine: @unchecked Sendable {
         task?.finish()
         request = nil
         task = nil
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 }
 

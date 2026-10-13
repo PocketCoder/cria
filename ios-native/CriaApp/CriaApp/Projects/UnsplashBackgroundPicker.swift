@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Unsplash search for a project background, shown only when the server has the provider enabled. Each photo
 /// credits its photographer with a link to their Unsplash profile, and the section links to Unsplash, as
@@ -89,7 +91,7 @@ private struct UnsplashThumbnailCell: View {
     let image: UnsplashImage
     let disabled: Bool
     let onSelect: () -> Void
-    @State private var thumbnail: UIImage?
+    @State private var thumbnail: PlatformImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -98,7 +100,7 @@ private struct UnsplashThumbnailCell: View {
                     .aspectRatio(4 / 3, contentMode: .fit)
                     .overlay {
                         if let thumbnail {
-                            Image(uiImage: thumbnail).resizable().scaledToFill()
+                            Image(platformImage: thumbnail).resizable().scaledToFill()
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -118,7 +120,7 @@ private struct UnsplashThumbnailCell: View {
         .lineLimit(1)
         .task(id: image.id) {
             guard thumbnail == nil, let data = try? await services.api.unsplashThumbnail(imageId: image.id) else { return }
-            thumbnail = UIImage(data: data)
+            thumbnail = PlatformImage(data: data)
         }
     }
 }

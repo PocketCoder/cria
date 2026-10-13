@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// A label opened in the editor.
 struct LabelEditTarget: Identifiable {
@@ -112,13 +114,9 @@ struct LabelEditorSheet: View {
 
     /// Six lowercase hex digits for a picked colour, clamped to sRGB.
     private static func hex(_ color: Color) -> String? {
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        guard UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+        guard let rgb = color.srgbComponents() else { return nil }
         let byte = { (value: CGFloat) in Int((min(max(value, 0), 1) * 255).rounded()) }
-        return String(format: "%02x%02x%02x", byte(red), byte(green), byte(blue))
+        return String(format: "%02x%02x%02x", byte(rgb.red), byte(rgb.green), byte(rgb.blue))
     }
 
     private func save() {

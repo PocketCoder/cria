@@ -88,7 +88,25 @@ targets:
   CriaMac:
     type: application
     platform: macOS
-    sources: [CriaMac]
+    sources:
+      - CriaMac
+      - path: CriaApp
+        excludes:
+          # Replaced by the Mac shell (Phase 2) and the iOS entry points.
+          - CriaApp.swift
+          - Shell/ShellView.swift
+          - Platform/CriaIntents.swift
+          # The rich text editor arrives in Phase 3; stand-ins live in CriaMac/EditorStubs.swift.
+          - Editor
+          - Tasks/DescriptionField.swift
+          - Tasks/EditorImageHit.swift
+          # Phase 6.
+          - Tasks/CameraPicker.swift
+          - AI/BackgroundRun.swift
+          - AI/ShoppingPhotoSheet.swift
+          # The Mac target has its own asset catalogue (LoginIcon copied across).
+          - Assets.xcassets
+          - Fonts
     dependencies:
       - package: CriaKit
     info:

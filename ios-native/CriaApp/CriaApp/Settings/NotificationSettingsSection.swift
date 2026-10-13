@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 import UserNotifications
 
 /// Settings > Notifications: the master switch (asks the OS for permission), the morning summary and weekly round-up
@@ -136,7 +138,6 @@ struct NotificationSettingsSection: View {
     }
 
     private func openSystemSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
+        ExternalLink.openAppSettings()
     }
 }

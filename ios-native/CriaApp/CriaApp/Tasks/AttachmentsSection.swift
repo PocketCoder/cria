@@ -36,8 +36,8 @@ struct AttachmentsSection: View {
             }
         }
         .onAppear { clipboard.refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in clipboard.refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: Pasteboard.changedNotification)) { _ in clipboard.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: PlatformApp.didBecomeActive)) { _ in
             clipboard.refresh()
         }
     }
@@ -136,7 +136,7 @@ struct AttachmentActions {
                 return
             }
             if type.conforms(to: .image) {
-                guard let png = UIImage(data: data)?.pngData() else {
+                guard let png = PlatformImage(data: data)?.pngRepresentation() else {
                     state.attachmentError = "Could not read the pasted image"
                     return
                 }

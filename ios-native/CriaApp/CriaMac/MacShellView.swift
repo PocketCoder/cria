@@ -2,19 +2,22 @@ import CriaKit
 import SwiftUI
 
 enum MacSelection: Hashable {
-    case inbox, today, upcoming
+    case inbox, today, upcoming, favorites
     case project(String)
 }
 
-/// Sidebar, task list and a detail column that only shows the title for now.
+/// A sidebar of lists and, beside it, the shared screens in a navigation stack (task rows push the shared task
+/// detail). Phase 2 replaces this with the three-column shell, menus and shortcuts.
 struct MacShellView: View {
     let services: AppServices
-    let onSignOut: () -> Void
+    let onSignOut: (_ wipeLocalData: Bool) -> Void
     @State private var selection: MacSelection? = .today
-    @State private var taskId: String?
+    @State private var navigation = NavigationModel()
+    @State private var undoCenter = UndoCenter()
     @State private var projects: LiveValue<[ProjectTreeRow]>
+    @State private var showingSettings = false
 
-    init(services: AppServices, onSignOut: @escaping () -> Void) {
+    init(services: AppServices, onSignOut: @escaping (_ wipeLocalData: Bool) -> Void) {
         self.services = services
         self.onSignOut = onSignOut
         let store = services.store
@@ -28,18 +31,33 @@ struct MacShellView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-        } content: {
-            if let selection {
-                MacTaskListView(services: services, selection: selection, taskId: $taskId)
-                    .id(selection)
-            } else {
-                ContentUnavailableView("Select a list", systemImage: "sidebar.left")
-            }
         } detail: {
-            MacTaskDetailView(services: services, taskId: taskId)
+            NavigationStack(path: navigation.pathBinding(for: .browse)) {
+                root
+                    .navigationDestination(for: Route.self) { MacRouteDestination(route: $0, services: services) }
+            }
+            .id(selection)
         }
+        .environment(navigation)
+        .environment(undoCenter)
         .task { await projects.run() }
-        .onChange(of: selection) { taskId = nil }
+        .task { undoCenter.attach(services) }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(services: services, onSignOut: onSignOut).frame(minWidth: 520, minHeight: 600)
+        }
+    }
+
+    @ViewBuilder
+    private var root: some View {
+        switch selection ?? .today {
+        case .inbox: InboxScreen(services: services)
+        case .today: SmartViewScreen(services: services, view: .today, title: "Today")
+        case .upcoming: SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
+        case .favorites: TaskListView(services: services, source: .favorites, title: "Favourites")
+        case .project(let localId):
+            let title = (try? services.store.project(localId: localId))?.title ?? "Project"
+            ProjectScreen(services: services, projectLocalId: localId, title: title)
+        }
     }
 
     private var sidebar: some View {
@@ -47,6 +65,7 @@ struct MacShellView: View {
             Label("Inbox", systemImage: "tray").tag(MacSelection.inbox)
             Label("Today", systemImage: "sun.max").tag(MacSelection.today)
             Label("Upcoming", systemImage: "calendar").tag(MacSelection.upcoming)
+            Label("Favourites", systemImage: "star").tag(MacSelection.favorites)
             Section("Projects") {
                 ForEach(projects.value, id: \.project.localId) { row in
                     Label(row.project.title, systemImage: "folder")
@@ -57,7 +76,33 @@ struct MacShellView: View {
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         .safeAreaInset(edge: .bottom) {
-            Button("Sign out", action: onSignOut).buttonStyle(.link).padding(8)
+            Button("Settings", systemImage: "gearshape") { showingSettings = true }
+                .buttonStyle(.link).padding(8)
+        }
+    }
+}
+
+/// Screens pushed from a list: a copy of the iOS `RouteDestination`, which lives in the excluded iOS shell.
+struct MacRouteDestination: View {
+    let route: Route
+    let services: AppServices
+
+    var body: some View {
+        switch route {
+        case .project(let localId):
+            let title = (try? services.store.project(localId: localId))?.title ?? "Project"
+            ProjectScreen(services: services, projectLocalId: localId, title: title)
+        case .favorites:
+            TaskListView(services: services, source: .favorites, title: "Favourites")
+        case .label(let localId):
+            let title = (try? services.store.labels())?.first { $0.localId == localId }?.title ?? "Label"
+            TaskListView(services: services, source: .label(localId), title: title)
+        case .task(let localId):
+            TaskDetailView(services: services, taskLocalId: localId)
+        case .inbox:
+            InboxScreen(services: services)
+        case .savedFilter(let serverId):
+            SavedFilterScreen(services: services, serverId: serverId)
         }
     }
 }

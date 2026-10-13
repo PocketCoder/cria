@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// A task row that opens the detail screen. Each swipe does what Settings > Customise > Swipe actions says
 /// (complete and delete by default). Delete goes straight through with an Undo toast (never a full swipe); failed
@@ -202,7 +204,7 @@ extension TaskRowLink {
 
     private func copyLink() {
         guard let url = services.taskWebURL(item.task) else { return }
-        UIPasteboard.general.string = url.absoluteString
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Pasteboard.copy(url.absoluteString)
+        Haptics.success()
     }
 }

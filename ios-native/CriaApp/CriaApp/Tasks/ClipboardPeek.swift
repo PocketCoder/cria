@@ -1,5 +1,9 @@
 import Observation
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 import UniformTypeIdentifiers
 
 /// What the clipboard would paste as an attachment, worked out from its type list alone. Reading the contents (or the
@@ -16,10 +20,17 @@ final class ClipboardPeek {
     private(set) var content: Content?
 
     func refresh() {
+        #if canImport(UIKit)
         let board = UIPasteboard.general
         let next = board.numberOfItems > 0
             ? Self.content(types: board.types, hasImages: board.hasImages, count: board.numberOfItems)
             : nil
+        #else
+        let items = NSPasteboard.general.pasteboardItems ?? []
+        let types = Array(Set(items.flatMap { $0.types.map(\.rawValue) }))
+        let hasImages = types.contains { UTType($0)?.conforms(to: .image) == true }
+        let next = items.isEmpty ? nil : Self.content(types: types, hasImages: hasImages, count: items.count)
+        #endif
         if next != content { content = next }
     }
 

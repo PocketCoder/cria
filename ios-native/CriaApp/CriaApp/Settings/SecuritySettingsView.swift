@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Security: password, email and two-factor authentication. Ported from `SecurityTab.tsx`; sessions live on
 /// their own screen (`SessionsView`).
@@ -117,7 +119,7 @@ private struct TotpSections: View {
     @Binding var needsSignIn: Bool
     @State private var phase = TotpPhase.loading
     @State private var status: TotpStatus?
-    @State private var qrImage: UIImage?
+    @State private var qrImage: PlatformImage?
     @State private var passcode = ""
     @State private var disabling = false
     @State private var disablePassword = ""
@@ -155,7 +157,7 @@ private struct TotpSections: View {
         Group {
             Section {
                 if let qrImage {
-                    Image(uiImage: qrImage).interpolation(.none).resizable().scaledToFit()
+                    Image(platformImage: qrImage).interpolation(.none).resizable().scaledToFit()
                         .frame(width: 180, height: 180).frame(maxWidth: .infinity)
                         .accessibilityLabel("Two-factor QR code")
                 }
@@ -228,7 +230,7 @@ private struct TotpSections: View {
         do {
             status = try await services.api.enrollTotp()
             phase = .enrolling
-            if let data = try? await services.api.totpQRCode() { qrImage = UIImage(data: data) }
+            if let data = try? await services.api.totpQRCode() { qrImage = PlatformImage(data: data) }
         } catch {
             errorMessage = String(describing: error)
         }
@@ -261,7 +263,7 @@ private struct TotpSections: View {
     }
 
     private func copy(_ text: String) {
-        UIPasteboard.general.string = text
+        Pasteboard.copy(text)
         copied = true
     }
 }
