@@ -309,7 +309,6 @@ extension KanbanBoardView {
     }
 }
 
-
 /// The board's columns, plus each card's labels for the chips.
 struct KanbanBoardData: Equatable, Sendable {
     var columns: [KanbanColumn] = []
