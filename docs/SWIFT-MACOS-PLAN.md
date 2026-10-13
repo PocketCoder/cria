@@ -13,7 +13,7 @@ agent: each phase lists exact files, steps and a check that proves it is done.
 | 2 | Window shell, menus and shortcuts | Partly done (compiles in CI, untested on a Mac; `j`/`k`/Return, `a`, `c`, `u`, `.` identifier and `g a`/`g m` not built) |
 | 3 | Rich text editor on macOS | Partly done (compiles in CI, untested on a Mac; mention picker is a sheet, not a caret popover; link is ⌘L because ⌘K is the palette) |
 | 4 | Project views and settings | Partly done (compiles in CI, untested on a Mac; table uses the shared grid, not SwiftUI `Table`; no drag-and-drop or hover work beyond rows) |
-| 5 | Mac integrations | Not started |
+| 5 | Mac integrations | Partly done (compiles in CI, none of it tried on a Mac; global hotkey opens quick add in the main window, not a floating panel; no Dock badge) |
 | 6 | AI, OCR and speech | Not started |
 | 7 | Sparkle updates and release | Not started |
 | 8 | Handover from Tauri, parity audit, deprecation | Not started |
