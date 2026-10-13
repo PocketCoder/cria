@@ -10,6 +10,9 @@ import { isMobilePlatform } from '@/lib/platform';
 import { isEnabled, enable, disable } from '@/tauri/autostart';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { pushTraySettings } from '@/lib/traySettings';
+import { resetApiVersion } from '@/api/apiVersion';
+import { refreshApiVersion } from '@/api/client';
+import { useAuth } from '@/auth/store';
 import pkg from '../../../package.json';
 
 export function AdvancedTab() {
@@ -25,6 +28,20 @@ export function AdvancedTab() {
   const setCloseToTrayInStore = useSettings((s) => s.setCloseToTray);
   const hideDockOnTray = useSettings((s) => s.hideDockOnTray);
   const setHideDockOnTrayInStore = useSettings((s) => s.setHideDockOnTray);
+
+  const forceApiV1 = useSettings((s) => s.forceApiV1);
+  const setForceApiV1 = useSettings((s) => s.setForceApiV1);
+  const serverUrl = useAuth((s) => (s.status.kind === 'authenticated' ? s.status.credentials.serverUrl : null));
+
+  const handleForceApiV1 = (force: boolean) => {
+    setForceApiV1(force);
+    // Re-decide for the signed-in server (the force flag is read on every call,
+    // the probe result is what un-forcing falls back to).
+    if (serverUrl) {
+      resetApiVersion(serverUrl);
+      void refreshApiVersion(serverUrl);
+    }
+  };
 
   useEffect(() => {
     isEnabled().then(setAutostartEnabled).catch(() => setAutostartEnabled(false));
@@ -95,6 +112,15 @@ export function AdvancedTab() {
             )}
           </>
         )}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label>Force API v1</Label>
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              Use Vikunja's older API even when the server supports v2 (2.7.0 and later).
+            </p>
+          </div>
+          <Switch checked={forceApiV1} onCheckedChange={handleForceApiV1} />
+        </div>
         <div className="flex items-center justify-between">
           <Label>CalDAV Documentation</Label>
           <button

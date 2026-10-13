@@ -50,6 +50,10 @@ interface SettingsState {
   setShoppingProjectId: (id: string | null) => void;
   shoppingLabel: string;
   setShoppingLabel: (label: string) => void;
+  // Escape hatch: talk to Vikunja over /api/v1 even when the server supports
+  // /api/v2 (read by src/api/apiVersion.ts). Default off.
+  forceApiV1: boolean;
+  setForceApiV1: (force: boolean) => void;
   // Servers signed in to before, most recent first, for the login screen's
   // quick-pick chips. Non-secret: the token stays in the keychain. `username`
   // is only set when the user ticked "Remember me".
@@ -98,6 +102,8 @@ export const useSettings = create<SettingsState>()(
       setShoppingProjectId: (id) => set({ shoppingProjectId: id }),
       shoppingLabel: 'shopping',
       setShoppingLabel: (label) => set({ shoppingLabel: label }),
+      forceApiV1: false,
+      setForceApiV1: (force) => set({ forceApiV1: force }),
       recentServers: [],
       rememberServer: (url, username) =>
         set((s) => ({

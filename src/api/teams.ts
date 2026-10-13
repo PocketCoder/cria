@@ -1,4 +1,5 @@
 import { type ApiClient, callApi, createApiClient } from './client';
+import { updatePartial } from './partial';
 
 export interface Team {
   serverId: number;
@@ -76,11 +77,14 @@ export async function renameTeam(
   name: string,
   client: ApiClient = createApiClient(),
 ): Promise<void> {
-  await callApi(
-    client.POST('/teams/{id}', {
-      params: { path: { id: teamId } },
-      body: { name },
-    }),
+  // Only the name changes: a v2 PUT would reset the description and visibility.
+  await updatePartial(client, `/teams/${teamId}`, { name }, () =>
+    callApi(
+      client.POST('/teams/{id}', {
+        params: { path: { id: teamId } },
+        body: { name },
+      }),
+    ),
   );
 }
 

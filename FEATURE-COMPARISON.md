@@ -2,6 +2,8 @@
 
 Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e7d7f17)
 
+> **API versions:** the TypeScript client talks Vikunja API v2 (`/api/v2`) to servers 2.7.0 and later and v1 to older ones, via a version-aware adapter (`src/api/adapter.ts`, contract in `docs/V2-MIGRATION.md`). Settings -> Advanced has "Force API v1". TOTP management, avatar upload and the v1 settings fallback stay on v1 (no v2 route). Verified against the published OpenAPI documents and simulated servers only, not yet against a live 2.7 server.
+
 ## Legend
 | Icon | Meaning |
 |---|---|

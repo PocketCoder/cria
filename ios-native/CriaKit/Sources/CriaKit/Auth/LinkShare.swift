@@ -71,10 +71,11 @@ public extension LoginService {
     /// carries a stand-in user, as `makeShareUser` does.
     func signInWithLinkShare(serverURL: String, hash: String, password: String? = nil) async throws -> SignInResult {
         let base = normalizeBase(serverURL)
+        resolver?.reprobe(server: base)
         // The password, and the token that comes back, must not travel over plain HTTP.
-        try guardDestination("\(base)/api/v1")
+        try guardDestination("\(base)\(ApiVersion.apiV1.basePath)")
         let body = ShareAuthBody(password: password ?? "")
-        let response = try await ApiClient(serverURL: base, core: core).send(.post, "/shares/\(hash)/auth", body: body)
+        let response = try await client(base).send(.post, "/shares/\(hash)/auth", body: body)
         try response.requireSuccess()
         guard let token = (try? JSONDecoder().decode(ShareAuthResponse.self, from: response.data))?.token, !token.isEmpty else {
             throw ApiError(status: response.status, code: nil, message: "The server returned no token.", retryable: false)

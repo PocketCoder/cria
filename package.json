@@ -19,6 +19,7 @@
     "lint": "eslint .",
     "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
     "soak": "node scripts/soak/soak.mjs",
+    "generate:api:v2": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v2/openapi-3.0.json -o /tmp/vikunja-openapi-v2.json && openapi-typescript /tmp/vikunja-openapi-v2.json -o src/api/schema.v2.ts'",
     "generate:api": "VK_URL=${VK_URL:-https://try.vikunja.io} sh -c 'curl -sL $VK_URL/api/v1/docs.json -o /tmp/vikunja-swagger.json && npx -y swagger2openapi@7 /tmp/vikunja-swagger.json -o /tmp/vikunja-openapi.json && openapi-typescript /tmp/vikunja-openapi.json -o src/api/schema.ts'",
     "clean": "rm -rf dist src-tauri/target",
     "clean:all": "rm -rf dist src-tauri/target node_modules"

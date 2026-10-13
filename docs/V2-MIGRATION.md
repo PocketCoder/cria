@@ -70,3 +70,17 @@ Keep every quirk in `taskToBody` (hex colour without `#`, `percent_done` 0-100, 
 ## Scratch references (not committed)
 
 The full specs and a normalised route diff were saved by the author session under the session scratchpad (`spec/api_v2_openapi-3.0.json`, `spec/api_v1_docs.json`, `spec/route-diff.txt`). Re-download with `curl https://try.vikunja.io/api/v2/openapi-3.0.json` and `https://try.vikunja.io/api/v1/docs.json` into a fresh directory.
+
+## Open questions: resolved (TS client, checked against Vikunja `main`, `pkg/` sources)
+
+1. **TOTP-required on v2:** same signal as v1. `user.ErrInvalidTOTPPasscode` has `HTTPCode` 412 and code 1017, and v2's `translateDomainError` (`pkg/routes/api/v2/errors.go`) keeps a domain error's status and numeric code on the problem+json body. Only `ValidationHTTPError` moved to 422. Detect with `status == 412 || code == 1017`.
+2. **Refresh cookie:** name `vikunja_refresh_token` on both versions. `SetRefreshTokenCookie` (`pkg/modules/auth/auth.go`) writes one cookie per refresh path, `<base>/api/v1/user/token/refresh` and `<base>/api/v2/user/token/refresh`, so either refresh endpoint receives it; v2 `auth_refresh.go` reads the same cookie and rotates it. Still send refresh to the version login used.
+3. **Bucket move:** `PUT /projects/{p}/views/{v}/buckets/{b}/tasks`, body `TaskBucket` with `task_id` (the bucket and view come from the URL; `bucket_id` and `project_view_id` in the body are ignored). `GET .../buckets/tasks` is a separate paginated list.
+4. **`PUT /notifications/{id}` needs `{ "read": true }`** (the body is the new state; an empty body means unread).
+5. `GET /tasks/{id}?expand=comments` is in the v2 spec; attachment upload returns the same `{ success, errors }` shape as v1 (201), field `files`.
+
+## Known divergence between the clients
+
+- **Partial updates.** The TypeScript client sends task, project and team-rename updates as v2 `PATCH` (merge-patch), so server-side fields Cria does not track (cover image, identifier, bucket) survive. The Swift client sends the same bodies it sent on v1 as a v2 `PUT`, which Vikunja binds as a whole body on both versions, so it is no worse than v1 but does not gain PATCH's protection. Moving Swift to merge-patch is a follow-up. A v2 server with no PATCH for a route is an error in the TypeScript client; it never falls back to a partial `PUT`.
+- **Failed version probe.** The Swift resolver does not cache a failed `/info` probe, so an unreachable server re-probes per request. The TypeScript client keeps its last decision.
+- **Verification status.** The Swift changes have not been compiled; CI (`ci-swift.yml`, `ci-macos.yml`) is the first build. Nothing has run against a live v2 server.

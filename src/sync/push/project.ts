@@ -1,4 +1,6 @@
 import { callApi, type ApiClient } from '@/api/client';
+import { updatePartial } from '@/api/partial';
+import type { components as V2 } from '@/api/schema.v2';
 import { getDb, withTx, type Database } from '@/db';
 import { notify } from '@/db/bus';
 import { ApiError } from '@/api/errors';
@@ -111,13 +113,20 @@ export async function executeProjectOp(
       }
     }
 
-    const res = await callApi(
-      client.POST('/projects/{id}', {
-        params: { path: { id: row.server_id } },
-        body: await projectBodyWithParent(row),
-      }),
+    const body = await projectBodyWithParent(row);
+    const res = await updatePartial(
+      client,
+      `/projects/${row.server_id}`,
+      projectToMergePatch(body),
+      () =>
+        callApi(
+          client.POST('/projects/{id}', {
+            params: { path: { id: row.server_id! } },
+            body,
+          }),
+        ),
     );
-    const newUpdated = (res as { updated?: string }).updated;
+    const newUpdated = (res as { updated?: string } | null)?.updated;
     await withTx(async (tx) => {
       await tx.execute(
         `UPDATE projects SET synced_at = ?, dirty = 0, updated_at = ?
@@ -185,6 +194,22 @@ export function projectBody(row: ProjectRow): Record<string, unknown> {
     position: row.position ?? undefined,
     parent_project_id: undefined as number | undefined,
   };
+}
+
+/**
+ * {@link projectBodyWithParent} as a v2 merge-patch: cleared fields are spelled
+ * out (see taskToMergePatch), and fields Cria does not track (identifier, cover
+ * image, ...) are left unnamed so the server keeps them.
+ */
+export function projectToMergePatch(body: Record<string, unknown>): Partial<V2['schemas']['ProjectReadBody']> {
+  const patch: Record<string, unknown> & Partial<V2['schemas']['ProjectReadBody']> = {
+    ...body,
+    description: (body.description as string | undefined) ?? '',
+    hex_color: (body.hex_color as string | undefined) ?? '',
+    parent_project_id: (body.parent_project_id as number | undefined) ?? 0,
+  };
+  if (patch.position === undefined) delete patch.position;
+  return patch;
 }
 
 export async function projectBodyWithParent(row: ProjectRow): Promise<Record<string, unknown>> {

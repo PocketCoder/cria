@@ -127,7 +127,7 @@ struct CaldavTokensView: View {
         var name = username
         if name.isEmpty { name = await services.signedInUser()?.username ?? "" }
         guard !name.isEmpty else { return }
-        let origin = base.replacingOccurrences(of: #"/api/v1/?$"#, with: "", options: .regularExpression)
+        let origin = ApiPaths.stripPrefix(base)
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove("/")
         let escaped = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name

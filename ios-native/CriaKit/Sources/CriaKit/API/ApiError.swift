@@ -46,7 +46,8 @@ public func classifyRetryable(status: Int) -> Bool {
     status >= 500 || status == 408 || status == 429
 }
 
-/// Builds an `ApiError` from a response body. Parses Vikunja's `{code, message}` envelope defensively,
+/// Builds an `ApiError` from a response body. Parses Vikunja's v1 `{code, message}` and v2 problem+json
+/// `{title, status, detail, code, errors}` bodies defensively (message from `message`, then `detail`, then `title`),
 /// falling back to the first 200 characters of plain text, then `HTTP <status>`.
 public func buildApiError(status: Int, body: Data?) -> ApiError {
     var code: Int?
@@ -54,7 +55,8 @@ public func buildApiError(status: Int, body: Data?) -> ApiError {
     if let body, !body.isEmpty {
         if let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
             if let parsed = object["code"] as? Int { code = parsed }
-            if let text = object["message"] as? String, !text.isEmpty { message = text }
+            let text = ["message", "detail", "title"].lazy.compactMap { object[$0] as? String }.first { !$0.isEmpty }
+            if let text { message = text }
         } else if let text = String(data: body, encoding: .utf8), !text.isEmpty {
             message = String(text.prefix(200))
         }
@@ -62,9 +64,11 @@ public func buildApiError(status: Int, body: Data?) -> ApiError {
     return ApiError(status: status, code: code, message: message, retryable: classifyRetryable(status: status))
 }
 
-/// Vikunja answers 412 when a TOTP passcode is required to finish a password login.
+/// Vikunja answers 412 when a TOTP passcode is required to finish a password login (v1). v2 keeps the numeric
+/// error code 1017, so the code counts on either status. A bare 422 is a validation error, not a TOTP prompt.
 public func isTotpRequired(_ error: Error) -> Bool {
-    (error as? ApiError)?.status == 412
+    guard let api = error as? ApiError else { return false }
+    return api.status == 412 || api.code == 1017
 }
 
 /// Cross-stack "is this an offline failure?" check, so the UI can show a friendlier message.

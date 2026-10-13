@@ -14,6 +14,11 @@ describe('shareUrlFor', () => {
       .toBe('https://vikunja.example.com/share/abc123/auth');
   });
 
+  it('also strips an /api/v2 suffix', () => {
+    expect(shareUrlFor('https://vikunja.example.com/api/v2', null, 'abc123'))
+      .toBe('https://vikunja.example.com/share/abc123/auth');
+  });
+
   it('handles a server url without the /api/v1 suffix', () => {
     expect(shareUrlFor('https://vikunja.example.com', null, 'abc123'))
       .toBe('https://vikunja.example.com/share/abc123/auth');

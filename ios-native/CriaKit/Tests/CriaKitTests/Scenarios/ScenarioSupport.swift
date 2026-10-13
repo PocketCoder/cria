@@ -132,7 +132,7 @@ final class ScenarioServer: @unchecked Sendable {
     // MARK: Handling
 
     private func handle(_ request: URLRequest) throws -> (Int, String, [String: String]) {
-        let path = request.url?.path.replacingOccurrences(of: "/api/v1", with: "") ?? ""
+        let path = (request.url?.path ?? "").replacingOccurrences(of: #"^/api/v[12]"#, with: "", options: .regularExpression)
         let body = (request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
         let bearer = request.value(forHTTPHeaderField: "Authorization")?.replacingOccurrences(of: "Bearer ", with: "")
         let seen = Request(method: request.httpMethod ?? "GET", path: path, token: bearer, body: body)

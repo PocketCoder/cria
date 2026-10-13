@@ -33,23 +33,33 @@ private struct LoginResponse: Decodable {
 /// Unauthenticated login calls. Ported from `src/api/login.ts` and `LoginScreen.tsx`.
 public struct LoginService: Sendable {
     let core: HTTPCore
+    let resolver: VersionResolver?
 
-    public init(core: HTTPCore = HTTPCore()) {
+    public init(core: HTTPCore = HTTPCore(), resolver: VersionResolver? = nil) {
         self.core = core
+        self.resolver = resolver
+    }
+
+    /// A client for `base` that follows the resolved API version.
+    func client(_ base: String, token: String? = nil) -> ApiClient {
+        ApiClient(serverURL: base, token: token, core: core, resolver: resolver)
     }
 
     /// Light healthcheck of `/info` (no auth). Confirms the URL is a reachable Vikunja instance.
     public func probeServer(_ serverURL: String) async throws -> ServerInfo {
-        try await ApiClient(serverURL: serverURL, core: core).info()
+        // A new address is probed afresh: the version decision is made per sign-in and server change.
+        resolver?.reprobe(server: serverURL)
+        return try await ApiClient(serverURL: serverURL, core: core).info()
     }
 
     public func loginWithPassword(serverURL: String, username: String, password: String,
                                   longToken: Bool = true, totpPasscode: String? = nil) async throws -> PasswordLoginResult {
         let base = normalizeBase(serverURL)
+        resolver?.reprobe(server: base)
         // Last line of defence before the password goes out, independent of the form's own validation.
-        try guardDestination("\(base)/api/v1")
+        try guardDestination("\(base)\(ApiVersion.apiV1.basePath)")
         let body = LoginBody(username: username, password: password, longToken: longToken, totpPasscode: totpPasscode)
-        let response = try await ApiClient(serverURL: base, core: core).send(.post, "/login", body: body)
+        let response = try await client(base).send(.post, "/login", body: body)
         try response.requireSuccess()
         guard let token = (try? JSONDecoder().decode(LoginResponse.self, from: response.data))?.token, !token.isEmpty else {
             throw ApiError(status: response.status, code: nil, message: "The server returned no token.", retryable: false)
@@ -60,7 +70,8 @@ public struct LoginService: Sendable {
     /// Validates a pasted API token by fetching the current user with it.
     public func signInWithToken(serverURL: String, token: String) async throws -> SignInResult {
         let base = normalizeBase(serverURL)
-        let user = try await ApiClient(serverURL: base, token: token, core: core).currentUser()
+        resolver?.reprobe(server: base)
+        let user = try await client(base, token: token).currentUser()
         return SignInResult(credentials: Credentials(serverURL: base, token: token, authMethod: .token), user: user)
     }
 
@@ -69,7 +80,7 @@ public struct LoginService: Sendable {
         let base = normalizeBase(serverURL)
         let login = try await loginWithPassword(serverURL: base, username: username, password: password,
                                                 totpPasscode: totpPasscode)
-        let user = try await ApiClient(serverURL: base, token: login.token, core: core).currentUser()
+        let user = try await client(base, token: login.token).currentUser()
         let credentials = Credentials(serverURL: base, token: login.token, authMethod: .password, refreshToken: login.refreshToken)
         return SignInResult(credentials: credentials, user: user)
     }

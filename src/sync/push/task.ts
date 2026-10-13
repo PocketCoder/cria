@@ -1,4 +1,6 @@
 import { callApi, type ApiClient } from '@/api/client';
+import { updatePartial } from '@/api/partial';
+import type { components as V2 } from '@/api/schema.v2';
 import { withTx, type Database } from '@/db';
 import { notify } from '@/db/bus';
 import { ApiError } from '@/api/errors';
@@ -63,6 +65,30 @@ export function taskToBody(
     // reminder change rides the task update. Sent whenever provided —
     // including an empty array, so clearing all reminders propagates.
     ...(reminders ? { reminders } : {}),
+  };
+}
+
+/** Vikunja's "no date": what the server itself writes for an unset timestamp. */
+const NO_DATE = '0001-01-01T00:00:00Z';
+
+/**
+ * The same update as {@link taskToBody}, as a v2 merge-patch. `taskToBody`
+ * clears a field by leaving it out (the v1 POST then writes the zero value);
+ * in a merge-patch a missing key means "keep the server's value", so every
+ * cleared field is spelled out. Fields Cria does not track (cover image,
+ * bucket, identifier, ...) are never named, so they survive: v2's `PUT` would
+ * reset them, which is why task updates use `PATCH` there.
+ */
+export function taskToMergePatch(body: ReturnType<typeof taskToBody>): Partial<V2['schemas']['TaskReadOneBody']> {
+  return {
+    ...body,
+    description: body.description ?? '',
+    due_date: body.due_date ?? NO_DATE,
+    start_date: body.start_date ?? NO_DATE,
+    end_date: body.end_date ?? NO_DATE,
+    hex_color: body.hex_color ?? '',
+    repeat_after: body.repeat_after ?? 0,
+    repeat_mode: body.repeat_mode ?? 0,
   };
 }
 
@@ -277,7 +303,7 @@ export async function executeTaskOp(
       }),
     );
     const newServerId = (res as { id?: number }).id;
-    const newUpdated = (res as { updated?: string }).updated;
+    const newUpdated = (res as { updated?: string } | null)?.updated;
 
     await cacheCreateResponse(op.id, op.payload, newServerId);
 
@@ -385,13 +411,20 @@ export async function executeTaskOp(
         }
       }
 
-      const res = await callApi(
-        client.POST('/tasks/{id}', {
-          params: { path: { id: task.server_id } },
-          body: taskToBody(task, projRow?.server_id ?? undefined, reminders),
-        }),
+      const body = taskToBody(task, projRow?.server_id ?? undefined, reminders);
+      const res = await updatePartial(
+        client,
+        `/tasks/${task.server_id}`,
+        taskToMergePatch(body),
+        () =>
+          callApi(
+            client.POST('/tasks/{id}', {
+              params: { path: { id: task.server_id! } },
+              body,
+            }),
+          ),
       );
-    const newUpdated = (res as { updated?: string }).updated;
+    const newUpdated = (res as { updated?: string } | null)?.updated;
 
     await withTx(async (tx) => {
       await tx.execute(

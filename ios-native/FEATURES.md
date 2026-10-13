@@ -7,7 +7,7 @@ Every user-facing feature of the SwiftUI app, and where its data lives. Derived 
 | Label | Meaning | Storage |
 |---|---|---|
 | **Vikunja** | On the Vikunja server, so Vikunja-web and every other client sees it. | Local SQLite copy plus an outbox that pushes changes in order. Offline edits queue and send later. |
-| **Cria accounts** | Follows the account to other Cria installs. Vikunja-web ignores it. | `settings.frontend_settings.cria` on the server, saved through the v2 merge-patch with a v1 fallback. Keys listed under [Settings](#settings). |
+| **Cria accounts** | Follows the account to other Cria installs. Vikunja-web ignores it. | `settings.frontend_settings.cria` on the server, saved through the v2 merge-patch with a v1 fallback. The whole app speaks Vikunja API v2 on servers 2.7.0 and newer and v1 otherwise (Settings > Data > Force API v1 overrides); `CriaKit/API/ApiRoutes.swift` holds every v1/v2 difference. Keys listed under [Settings](#settings). |
 | **This device** | Never leaves this phone. | `UserDefaults` (`PreferencesStore`, `@AppStorage`), the Keychain, the App Group database, or in-memory state. |
 
 Two notes apply throughout:

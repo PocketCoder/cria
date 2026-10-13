@@ -41,7 +41,7 @@ export function messageFor(err: unknown): string {
       return 'That was rejected. Double-check your credentials.';
     }
     if (err.status === 404) {
-      return "Couldn't find a Vikunja API at that URL — is /api/v1 reachable?";
+      return "Couldn't find a Vikunja API at that URL — is /api reachable?";
     }
     return err.message || `Server returned HTTP ${err.status}.`;
   }

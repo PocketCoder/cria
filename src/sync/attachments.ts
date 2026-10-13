@@ -17,10 +17,16 @@
  * v1 because that's the API Cria talks to and every Vikunja-web release
  * recognises it (up to v2.6.0 it is the only shape they match). We *read*
  * the v2 shape too: v2.7.0 writes `<root>/api/v2/tasks/…`.
+ *
+ * Requests are different from that stored text: they are written against the
+ * logical v1 base and sent through `adaptedFetch`, whose adapter (api/adapter.ts)
+ * moves them to /api/v2 on a v2 server (upload PUT -> POST, 204 delete, problem
+ * errors). The multipart field is `files` on both.
  */
 import { nanoid } from 'nanoid';
 import { getAuthSnapshot } from '@/auth/store';
 import { platformFetch } from '@/api/client';
+import { adaptedFetch } from '@/api/adapter';
 import { ApiError, NetworkError, buildApiError } from '@/api/errors';
 import { saveBlob } from '@/lib/download';
 import {
@@ -46,6 +52,10 @@ interface UploadResult {
   success: TaskAttachmentResponse[];
   errors: { code?: number; message?: string }[];
 }
+
+/** Transport for every request below: the v1/v2 adapter over `platformFetch`. */
+const send = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+  adaptedFetch(input, init, platformFetch);
 
 function authHeaders(): Record<string, string> {
   const { token } = getAuthSnapshot();
@@ -177,7 +187,8 @@ export async function cancelAttachmentUpload(attachmentLocalId: string): Promise
  * reports a rejected file (too large, say) as a 200 with an `errors` entry;
  * that is a permanent failure too.
  *
- * Note the verb: Vikunja's v1 routes attachment upload as **PUT**.
+ * Note the verb: v1 routes attachment upload as **PUT**; the adapter sends it
+ * as POST on v2.
  */
 export async function putAttachmentFile(
   taskServerId: number,
@@ -191,7 +202,7 @@ export async function putAttachmentFile(
 
   let res: Response;
   try {
-    res = await platformFetch(
+    res = await send(
       `${apiBase()}/api/v1/tasks/${taskServerId}/attachments`,
       // No Content-Type: the multipart boundary header is generated.
       { method: 'PUT', headers: authHeaders(), body: form },
@@ -251,7 +262,7 @@ export async function deleteAttachment(
   taskLocalId: string,
   attachmentServerId: number,
 ): Promise<void> {
-  const res = await platformFetch(
+  const res = await send(
     `${apiBase()}/api/v1/tasks/${taskServerId}/attachments/${attachmentServerId}`,
     { method: 'DELETE', headers: authHeaders() },
   );
@@ -276,7 +287,7 @@ export async function fetchAttachmentBlob(
   taskServerId: number,
   attachmentServerId: number,
 ): Promise<Blob> {
-  const res = await platformFetch(
+  const res = await send(
     buildAttachmentUrl(taskServerId, attachmentServerId),
     { headers: authHeaders() },
   );

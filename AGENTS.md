@@ -20,7 +20,8 @@ pnpm test           # vitest run (unit tests in tests/unit/)
 pnpm test:coverage  # tests + coverage thresholds (what CI runs)
 pnpm test:watch     # vitest watch
 pnpm vite:build     # production frontend build
-pnpm generate:api   # regen src/api/schema.ts (VK_URL= to target an instance)
+pnpm generate:api   # regen src/api/schema.ts (v1; VK_URL= to target an instance)
+pnpm generate:api:v2 # regen src/api/schema.v2.ts from /api/v2/openapi-3.0.json
 pnpm clean          # rm -rf dist src-tauri/target (reclaim ~7GB build artifacts)
 pnpm clean:all      # also rm -rf node_modules (needs pnpm install before next dev)
 cargo check --manifest-path src-tauri/Cargo.toml   # Rust shell sanity
@@ -183,6 +184,8 @@ Globals matter here too (pinned so Vite HMR can't reset them mid-flight):
   seen, so a refetch only applies a mode the server changed to.
 - `globalThis.__cria_settingsSaveChain__`: settings-save queue tail, so two
   saves never interleave (v1 GET and POST, or two v2 PATCHes).
+- `globalThis.__cria_apiVersion__` / `__cria_apiVersionProbes__`: per-server
+  v1/v2 decision and in-flight probes (src/api/apiVersion.ts).
 - `globalThis.__cria_settingsPatchUnsupported__`: server URLs with no v2
   settings PATCH, so only the first save there probes it.
 
@@ -217,11 +220,50 @@ Leftover bytes are cleared once per launch by
 deletes a blob over 24h old that no attachment row and no outbox or
 dead-letter op mentions, keeping anything it can't rule out.
 
-### Vikunja's verb semantics
+### Vikunja's verb semantics (v1 and v2, one adapter)
 
-`GET = read`, **`PUT = create`**, **`POST = update`**, `DELETE = delete`.
-Non-standard but baked into Vikunja's API. The generated types reflect this;
-don't try to "fix" them.
+v1: `GET = read`, **`PUT = create`**, **`POST = update`**, `DELETE = delete`.
+v2 (Vikunja 2.7.0+): `POST = create`, `PUT = full replace`, `PATCH` = merge-patch
+(`application/merge-patch+json`), `DELETE` answers 204, lists are
+`{ items, total_pages, ... }`, errors are problem+json, the search parameter is
+`q`. The contract and per-route table are in
+[docs/V2-MIGRATION.md](docs/V2-MIGRATION.md).
+
+**Callers keep writing v1-shaped calls** (`client.PUT('/labels')` creates,
+`client.POST('/tasks/{id}')` updates, `s=`, bare arrays, `x-pagination-*`).
+[src/api/adapter.ts](src/api/adapter.ts) is the only place that knows the
+difference: `createApiClient`/`createApiFetch` send through `adaptedFetch`,
+which on a v2 server rewrites base URL, verb, renamed paths and `s`->`q`, and
+maps the envelope back to an array plus the pagination headers and problem+json
+to `{ code, message }`. Do not add `/api/v1` or `/api/v2` literals, verb
+checks or envelope handling anywhere else. Routes with no v2 equivalent (TOTP,
+avatar upload, MS Todo, the v1 settings POST fallback) are pinned to v1 in the
+one `V1_ONLY_ROUTES` table; routes whose verb did not change are in
+`SAME_VERB_ROUTES`. A new route that is not in either table gets the flip.
+Generated types: `schema.ts` (v1, what the client is typed on), `schema.v2.ts`
+(v2, used to type merge-patch bodies).
+
+- **v2 `PUT` is a full replace: never send it a partial body.** Genuinely
+  partial updates (task, project, team rename) go through `updatePartial`
+  ([src/api/partial.ts](src/api/partial.ts)): v1 keeps its `POST`, v2 sends a
+  `PATCH` merge-patch. In a merge-patch an omitted key means "keep", so the
+  patch spells out cleared fields (`taskToMergePatch`, `projectToMergePatch`).
+  Executors whose body is already complete (label, view, bucket, comment,
+  saved filter, share permission) just use the flipped `PUT`. Outbox payloads
+  stay version-neutral; the verb is chosen when the op is sent.
+- **Version decision:** [src/api/apiVersion.ts](src/api/apiVersion.ts). `/info`
+  version >= `V2_MIN_VERSION` (2.7.0) means v2, else v1; cached per server URL on
+  `globalThis.__cria_apiVersion__` (HMR-safe), re-probed on sign-in
+  (`loginWithPassword`), at launch and on server change (`App.tsx`), and by
+  every `probeServer`. Unprobed servers use v1. Settings -> Advanced has "Force
+  API v1" (`forceApiV1` in the settings store), read on every call. Refresh uses
+  the same decision as login (Vikunja sets the `vikunja_refresh_token` cookie
+  for both refresh paths).
+- **TOTP:** `isTotpRequired` is HTTP 412 or code 1017; v2 keeps both (domain
+  errors keep their status and code, only validation moved to 422).
+- v1 stays supported until Vikunja 4.0; don't delete the v1 paths.
+- Task bucket move is `POST` (v1) / `PUT` (v2) on the same
+  `.../buckets/{b}/tasks` path; v2 takes the bucket from the URL.
 
 ### Vikunja `/tasks` rejects `sort_by=position`
 
@@ -287,8 +329,11 @@ paths. Saves are queued one at a time on both.
   or a non-JSON 2xx, nothing was written: the save GETs `/user`, applies only
   the named change (`applySettingsChange` passes every other field and every
   unknown `frontend_settings` key through untouched), then POSTs the whole
-  thing; a failed GET sends nothing. Detection is that first PATCH, remembered
-  per server URL for the session. Any other PATCH error is thrown, not
+  thing; a failed GET sends nothing. Detection is the shared API version decision
+  (`getApiVersionDecision`: a server decided as v1, or "Force API v1", skips the
+  PATCH and goes straight to this path); a server not probed yet still tries the
+  PATCH first, and the 404/405/501 is remembered per server URL for the session.
+  The v1 POST is pinned to `/api/v1` in the adapter's `V1_ONLY_ROUTES`. Any other PATCH error is thrown, not
   retried on v1.
 
 Never build a v1 body from the cached user or a snapshot taken when a screen

@@ -1,3 +1,4 @@
+import type { components as V2 } from '@/api/schema.v2';
 import { callApi, type ApiClient } from '@/api/client';
 import { withTx, exec, type Database } from '@/db';
 import { notify } from '@/db/bus';
@@ -207,11 +208,13 @@ export async function executeTaskBucketOp(
           bucket: bucketServerId,
         },
       },
+      // v1 reads bucket_id and project_view_id from the body; v2 takes them from
+      // the URL and ignores these (TaskBucket in the v2 schema).
       body: {
         task_id: taskServerId,
         bucket_id: bucketServerId,
         project_view_id: viewServerId,
-      },
+      } satisfies V2['schemas']['TaskBucket'],
     }),
   );
   // Nothing to reconcile locally — the assignment row is already written.

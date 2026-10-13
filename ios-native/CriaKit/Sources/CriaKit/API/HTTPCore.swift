@@ -40,6 +40,11 @@ public struct ApiResponse: Sendable {
 
     public var isSuccess: Bool { (200..<300).contains(status) }
 
+    /// The same response with another body (a v2 list envelope unwrapped to its items).
+    func replacing(data: Data, totalPages: Int) -> ApiResponse {
+        ApiResponse(status: status, data: data, refreshCookie: refreshCookie, totalPages: totalPages, contentType: contentType)
+    }
+
     /// Decodes the body, or throws the `ApiError` for a non-2xx status.
     public func decoded<T: Decodable>(_ type: T.Type = T.self) throws -> T {
         try requireSuccess()

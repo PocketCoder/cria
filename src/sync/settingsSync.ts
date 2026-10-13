@@ -25,6 +25,7 @@
 import { useSettings, type ColorScheme, type DateFormat, type TimeFormat } from '@/stores/settings';
 import { patchUserSettings, pushUserSettings } from '@/api/userSettings';
 import { fetchCurrentUser } from '@/api/user';
+import { getApiVersionDecision } from '@/api/apiVersion';
 import { getAuthSnapshot } from '@/auth/store';
 import { getCachedUser } from '@/db/user';
 import type { User } from '@/domain/user';
@@ -154,6 +155,10 @@ export function saveUserSettings(change: SettingsChange): Promise<void> {
 async function savedByPatch(change: SettingsChange): Promise<boolean> {
   const unsupported = (globalThis.__cria_settingsPatchUnsupported__ ??= new Set());
   const server = (getAuthSnapshot().serverUrl ?? '').replace(/\/+$/, '');
+  // The shared version decision (src/api/apiVersion.ts): a server decided as
+  // v1 (older than 2.7.0, or "Force API v1") never gets a PATCH probe. A server
+  // not probed yet still tries it, and the 404/405/501 memo below keeps v1 safe.
+  if (server && getApiVersionDecision(server) === 'v1') return false;
   if (unsupported.has(server)) return false;
   if ((await patchUserSettings(settingsMergePatch(change))) === 'unsupported') {
     unsupported.add(server);

@@ -33,13 +33,13 @@ final class AppModel {
             slot: LegacyCredentialImport.tauriSlot(bundleIdentifier: Bundle.main.bundleIdentifier ?? ""),
             hasRun: { UserDefaults.standard.bool(forKey: importDone) },
             markRun: { UserDefaults.standard.set(true, forKey: importDone) })
-        let session = AuthSession(core: core, legacyImport: legacy)
+        let session = AuthSession(core: core, legacyImport: legacy, resolver: .shared)
         #else
-        let session = AuthSession(core: core)
+        let session = AuthSession(core: core, resolver: .shared)
         #endif
         self.session = session
-        self.api = ApiClient(session: session, core: core)
-        self.loginService = LoginService(core: core)
+        self.api = ApiClient(session: session, core: core, resolver: .shared)
+        self.loginService = LoginService(core: core, resolver: .shared)
     }
 
     func start() async {
@@ -125,7 +125,7 @@ final class AppModel {
                 api: api,
                 store: CriaStore(database: database),
                 blobDirectory: root.appendingPathComponent("blobs", isDirectory: true),
-                settings: UserSettingsService(session: session, core: core)
+                settings: UserSettingsService(session: session, core: core, resolver: .shared)
             )
             services = built
             startupError = nil

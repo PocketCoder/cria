@@ -17,6 +17,7 @@ public actor AuthSession: SessionProviding {
 
     private let store: CredentialStore
     private let core: HTTPCore
+    private let resolver: VersionResolver?
     private let legacyImport: LegacyCredentialImport?
     private let onSignOut: @Sendable () async -> Void
     private var consecutiveAuthFailures = 0
@@ -28,10 +29,11 @@ public actor AuthSession: SessionProviding {
     /// `onSignOut` clears per-user state (cached user row, background cache) once credentials are gone.
     /// `legacyImport` adopts a Tauri desktop sign-in on the first launch with no native session (macOS only).
     public init(store: CredentialStore = CredentialStore(), core: HTTPCore = HTTPCore(),
-                legacyImport: LegacyCredentialImport? = nil,
+                legacyImport: LegacyCredentialImport? = nil, resolver: VersionResolver? = nil,
                 onSignOut: @escaping @Sendable () async -> Void = {}) {
         self.store = store
         self.core = core
+        self.resolver = resolver
         self.legacyImport = legacyImport
         self.onSignOut = onSignOut
     }
@@ -147,7 +149,9 @@ public actor AuthSession: SessionProviding {
     private func performRefresh() async -> String? {
         guard case .authenticated(let credentials) = status, credentials.authMethod == .password,
               let refreshToken = credentials.refreshToken else { return nil }
-        let base = "\(normalizeBase(credentials.serverURL))/api/v1"
+        // The same version login used (the cookie may be scoped to that version's refresh path).
+        let version = await resolver?.version(forServer: credentials.serverURL, core: core) ?? .apiV1
+        let base = "\(normalizeBase(credentials.serverURL))\(version.basePath)"
         guard let url = URL(string: "\(base)/user/token/refresh") else { return nil }
         do {
             // Don't leak the refresh token over plaintext (same rule as bearer tokens).

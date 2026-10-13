@@ -82,10 +82,10 @@ enum RichTextImages {
         return String(rest[..<end])
     }
 
-    /// `https://server/api/v1/…` becomes `cria-server://server/api/v1/…`; nil for any other address.
+    /// `https://server/api/v1/…` (or `/api/v2/…`) becomes `cria-server://server/api/v1/…`; nil for any other address.
     private static func serverAddress(_ source: String, serverBase: String?) -> String? {
         guard let serverBase, !serverBase.isEmpty,
-              source.lowercased().hasPrefix((serverBase + "/api/v1/").lowercased()),
+              ApiPaths.isServerAPI(source, server: serverBase),
               let schemeEnd = source.range(of: "://") else { return nil }
         return serverScheme + source[schemeEnd.lowerBound...]
     }

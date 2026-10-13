@@ -23,7 +23,7 @@ public enum LoginValidation {
         if let api = error as? ApiError {
             switch api.status {
             case 401, 403: return "That was rejected. Double-check your credentials."
-            case 404: return "Couldn't find a Vikunja API at that URL. Is /api/v1 reachable?"
+            case 404: return "Couldn't find a Vikunja API at that URL. Is the Vikunja API (/api/v1 or /api/v2) reachable?"
             default: return api.message.isEmpty ? "Server returned HTTP \(api.status)." : api.message
             }
         }

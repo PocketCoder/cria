@@ -34,7 +34,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}/**'],
-      exclude: ['src/api/schema.ts', 'src/db/migrations/**'],
+      exclude: ['src/api/schema.ts', 'src/api/schema.v2.ts', 'src/db/migrations/**'],
       reporter: ['text-summary', 'html'],
       thresholds: { lines: 70, statements: 70, functions: 80, branches: 75 },
     },

@@ -20,7 +20,7 @@ describe('messageFor', () => {
   it('maps API statuses to friendly text', () => {
     expect(messageFor(new ApiError(401, null, 'x', false))).toMatch(/rejected/);
     expect(messageFor(new ApiError(403, null, 'x', false))).toMatch(/rejected/);
-    expect(messageFor(new ApiError(404, null, 'x', false))).toMatch(/\/api\/v1/);
+    expect(messageFor(new ApiError(404, null, 'x', false))).toMatch(/\/api/);
     expect(messageFor(new ApiError(500, null, 'Boom', true))).toBe('Boom');
   });
   it('handles network and generic errors', () => {

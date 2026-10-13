@@ -142,13 +142,12 @@ public final class AppServices: Sendable {
         return response.data
     }
 
-    /// The path under `/api/v1` when `url` is on the server at `base`, else nil (images elsewhere load on their own).
+    /// The path under `/api/v1` or `/api/v2` when `url` is on the server at `base`, else nil (images elsewhere load on their own).
     static func apiPath(of url: URL, base: String) -> String? {
         guard let server = URL(string: base), url.host()?.lowercased() == server.host()?.lowercased(),
               url.port == server.port else { return nil }
         let full = url.path(percentEncoded: true)
-        guard let range = full.range(of: "/api/v1/") else { return nil }
-        return "/" + full[range.upperBound...]
+        return ApiPaths.path(after: full)
     }
 
     /// The signed-in user, read once per session (nil until a read succeeds).

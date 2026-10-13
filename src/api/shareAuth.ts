@@ -1,6 +1,7 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
 import { platformFetch } from './client';
+import { adaptedFetch } from './adapter';
 import { NetworkError, buildApiError } from './errors';
 
 /** Vikunja error code: this link share needs a password. */
@@ -22,7 +23,7 @@ export async function authLinkShare(
 ): Promise<ShareAuthResult> {
   const client = createClient<paths>({
     baseUrl: `${serverUrl.replace(/\/+$/, '')}/api/v1`,
-    fetch: platformFetch,
+    fetch: (input: Request) => adaptedFetch(input, undefined, platformFetch),
   });
 
   let result;

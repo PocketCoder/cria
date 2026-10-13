@@ -37,6 +37,6 @@ final class EditorImageLoader {
 
     private static func mayBeOnServer(_ source: String) -> Bool {
         let lower = source.lowercased()
-        return (lower.hasPrefix("https://") || lower.hasPrefix("http://")) && lower.contains("/api/v1/")
+        return (lower.hasPrefix("https://") || lower.hasPrefix("http://")) && ApiPaths.hasPrefix(lower)
     }
 }

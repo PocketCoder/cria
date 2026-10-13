@@ -76,7 +76,8 @@ public extension ApiClient {
         return response.data
     }
 
-    /// `PUT /user/settings/avatar/upload`, multipart with the file in the `avatar` field.
+    /// `PUT /api/v1/user/settings/avatar/upload` (v1-only: v2 replaced it with a different multipart route, so this
+    /// stays on v1 even against a v2 server), multipart with the file in the `avatar` field.
     func uploadAvatar(fileName: String, mime: String, bytes: Data) async throws {
         let boundary = "cria-\(UUID().uuidString)"
         var form = Data()
@@ -85,7 +86,7 @@ public extension ApiClient {
         form.append(Data("Content-Type: \(mime)\r\n\r\n".utf8))
         form.append(bytes)
         form.append(Data("\r\n--\(boundary)--\r\n".utf8))
-        let response = try await sendAuthorized { base, token in
+        let response = try await sendAuthorized(pin: .apiV1) { base, token in
             var request = try self.buildRequest(.put, url: base + "/user/settings/avatar/upload", query: [:], body: nil, token: token)
             request.httpBody = form
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")

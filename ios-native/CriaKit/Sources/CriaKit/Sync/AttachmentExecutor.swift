@@ -65,9 +65,10 @@ public struct AttachmentExecutor: OutboxExecutor {
             throw ApiError(status: 0, code: nil, message: "task_attachment: unreadable upload response", retryable: false)
         }
         let base = await api.serverBase() ?? ""
+        let prefix = await api.currentVersion().basePath
         try store.finaliseAttachmentUpload(
             attachmentLocalId: payload.attachmentLocalId, taskLocalId: payload.taskLocalId, uploaded: uploaded,
-            url: "\(base)/api/v1/tasks/\(taskServerId)/attachments/\(uploaded.id)"
+            url: "\(base)\(prefix)/tasks/\(taskServerId)/attachments/\(uploaded.id)"
         )
         dropBytes(payload.bytesPath)
     }

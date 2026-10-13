@@ -10,6 +10,8 @@ import {
   withTimeout,
 } from './resilience';
 import { getAuthSnapshot, useAuth } from '@/auth/store';
+import { adaptedFetch, resolveApiCall } from './adapter';
+import { decideApiVersion, ensureApiVersion, setDetectedApiVersion } from './apiVersion';
 
 export type ApiClient = Client<paths>;
 
@@ -137,15 +139,18 @@ async function doRefresh(): Promise<string | null> {
   const creds = s.credentials;
   if (creds.authMethod !== 'password' || !creds.refreshToken) return null;
 
-  const base = `${normalizeBase(creds.serverUrl)}/api/v1`;
+  // Same API version login used (the adapter's per-server decision). Vikunja
+  // sets the refresh cookie for both the v1 and v2 refresh paths, under the
+  // same name (pkg/modules/auth: SetRefreshTokenCookie), so either answers.
+  const call = resolveApiCall(creds.serverUrl, 'POST', '/user/token/refresh');
   let res: Response;
   try {
     // Don't leak the refresh token over plaintext (same rule as Bearer tokens).
-    guardTokenDestination(base, creds.refreshToken);
+    guardTokenDestination(call.url, creds.refreshToken);
     // The refresh token rides as a cookie (not a Bearer header); the server
     // rotates it and returns the new JWT in the body + a new cookie.
-    res = await fetchOnce(`${base}/user/token/refresh`, {
-      method: 'POST',
+    res = await fetchOnce(call.url, {
+      method: call.method,
       headers: { Cookie: `${REFRESH_COOKIE}=${creds.refreshToken}` },
     });
   } catch {
@@ -304,6 +309,8 @@ export function createApiClient(opts?: {
   token?: string;
 }): ApiClient {
   const snap = getAuthSnapshot();
+  // The logical base is always /api/v1: callers use the typed v1 client and
+  // `adaptedFetch` moves each call to /api/v2 when the server is decided as v2.
   const baseUrl = `${normalizeBase(opts?.baseUrl ?? snap.serverUrl ?? '')}/api/v1`;
   const token = opts?.token ?? snap.token ?? '';
 
@@ -312,15 +319,20 @@ export function createApiClient(opts?: {
   return createClient<paths>({
     baseUrl,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
-    fetch: platformFetch,
+    fetch: apiFetch,
   });
 }
+
+/** `platformFetch` plus the v1/v2 adapter. What every API client sends through. */
+export const apiFetch: typeof fetch = (input, init) => adaptedFetch(input, init, platformFetch);
 
 /**
  * Build an authenticated `fetch`-like function bound to the current auth
  * context.  Use this for endpoints the generated OpenAPI types don't cover
  * (e.g. views/buckets pagination where `query` is typed `never`), and for
- * the few `/api/v2` endpoints Cria uses (`apiVersion: 'v2'`).
+ * the few `/api/v2` endpoints Cria calls directly (`apiVersion: 'v2'`, sent as
+ * written). The default `'v1'` is the logical v1 base: it goes through the
+ * adapter, so the same call works against a v2 server.
  */
 export function createApiFetch(
   apiVersion: 'v1' | 'v2' = 'v1',
@@ -334,7 +346,7 @@ export function createApiFetch(
     const headers: Record<string, string> = token
       ? { Authorization: `Bearer ${token}`, ...(init?.headers as Record<string, string> | undefined) }
       : { ...(init?.headers as Record<string, string> | undefined) };
-    const res = await platformFetch(url, { ...init, headers });
+    const res = await adaptedFetch(url, { ...init, headers }, platformFetch);
     if (res.status === 401) handleUnauthorized();
     return res;
   };
@@ -386,11 +398,14 @@ export async function probeServer(
   frontendUrl: string | null;
   backgroundProviders: string[];
 }> {
+  // /info is identical on v1 and v2, so it is always asked over v1.
   const client = createClient<paths>({
     baseUrl: `${normalizeBase(serverUrl)}/api/v1`,
     fetch: platformFetch,
   });
   const info = await callApi(client.GET('/info'));
+  // Every successful probe refreshes the API version decision for this server.
+  setDetectedApiVersion(serverUrl, decideApiVersion(info.version));
   return {
     version: info.version ?? null,
     frontendUrl: (info as { frontend_url?: string }).frontend_url || null,
@@ -412,5 +427,19 @@ export function guardDestination(baseUrl: string): void {
         `Refusing to send credentials to ${u.origin} — use https:// or a loopback address`,
       );
     }
+  }
+}
+
+/**
+ * (Re)decide the API version for a server from its `/info` version. Run on
+ * sign-in, at launch for a stored session, and when the server URL changes.
+ * Never throws: an unreachable server keeps its previous decision (v1 if none),
+ * which every supported server still serves.
+ */
+export async function refreshApiVersion(serverUrl: string): Promise<void> {
+  try {
+    await ensureApiVersion(serverUrl, async () => (await probeServer(serverUrl)).version, { force: true });
+  } catch {
+    // keep the previous decision
   }
 }

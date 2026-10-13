@@ -117,10 +117,10 @@ public enum ShareLinks {
         return nil
     }
 
-    /// Public URL for a link share: prefers the server's `frontend_url`, else the API URL without `/api/v1`.
+    /// Public URL for a link share: prefers the server's `frontend_url`, else the API URL without `/api/v1` or `/api/v2`.
     public static func url(serverURL: String, frontendURL: String?, hash: String) -> String {
         let frontend = frontendURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let derived = serverURL.replacingOccurrences(of: #"/api/v1/?$"#, with: "", options: .regularExpression)
+        let derived = ApiPaths.stripPrefix(serverURL)
         var base = frontend.isEmpty ? derived : frontend
         while base.hasSuffix("/") { base.removeLast() }
         return "\(base)/share/\(hash)/auth"

@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'src-tauri/**', 'coverage/**', 'real-vikunja-git/**', 'design_handoff_ledger/**', 'src/api/schema.ts'] },
+  { ignores: ['dist/**', 'src-tauri/**', 'coverage/**', 'real-vikunja-git/**', 'design_handoff_ledger/**', 'src/api/schema.ts', 'src/api/schema.v2.ts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

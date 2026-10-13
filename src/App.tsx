@@ -9,6 +9,7 @@ import { useSummaryNotifications } from '@/sync/useSummaryNotifications';
 import { startSettingsSync } from '@/sync/settingsSync';
 import { scheduleBlobSweep } from '@/sync/blobSweep';
 import { useDockBadge } from '@/queries/badge';
+import { refreshApiVersion } from '@/api/client';
 
 export function App() {
   const status = useAuth((s) => s.status);
@@ -19,6 +20,13 @@ export function App() {
       void hydrate();
     }
   }, [status.kind, hydrate]);
+
+  // Decide v1 or v2 for the stored session's server at launch, and again if the
+  // server URL changes (sign-in probes too; this covers a restored session).
+  const serverUrl = status.kind === 'authenticated' ? status.credentials.serverUrl : null;
+  useEffect(() => {
+    if (serverUrl) void refreshApiVersion(serverUrl);
+  }, [serverUrl]);
 
   // Push display-pref changes (theme/date-format/…) to the server's
   // frontend_settings so they survive an iOS localStorage eviction and sync

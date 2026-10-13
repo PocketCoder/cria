@@ -1,10 +1,5 @@
 import Foundation
 
-public enum ApiVersion: String, Sendable {
-    case apiV1 = "v1"
-    case apiV2 = "v2"
-}
-
 /// Authenticated Vikunja client. Ported from `src/api/client.ts`: bearer auth, a transparent
 /// refresh-and-retry-once on 401 for password sessions, the circuit breaker and the plaintext guard.
 public final class ApiClient: Sendable {
@@ -13,11 +8,14 @@ public final class ApiClient: Sendable {
     private let fixedBase: String?
     private let fixedToken: String?
     private let version: ApiVersion
+    private let resolver: VersionResolver?
 
     /// Session-bound client: server URL and token come from `session` on every request, so token
     /// rotation takes effect immediately.
-    public init(session: any SessionProviding, core: HTTPCore = HTTPCore(), version: ApiVersion = .apiV1) {
+    public init(session: any SessionProviding, core: HTTPCore = HTTPCore(), version: ApiVersion = .apiV1,
+                resolver: VersionResolver? = nil) {
         self.session = session
+        self.resolver = resolver
         self.core = core
         self.fixedBase = nil
         self.fixedToken = nil
@@ -26,8 +24,10 @@ public final class ApiClient: Sendable {
 
     /// Client for a fixed server with an optional fixed token (login, `/info`, verifying a pasted token).
     /// No refresh logic: there is no session behind it.
-    public init(serverURL: String, token: String? = nil, core: HTTPCore = HTTPCore(), version: ApiVersion = .apiV1) {
+    public init(serverURL: String, token: String? = nil, core: HTTPCore = HTTPCore(), version: ApiVersion = .apiV1,
+                resolver: VersionResolver? = nil) {
         self.session = nil
+        self.resolver = resolver
         self.core = core
         self.fixedBase = normalizeBase(serverURL)
         self.fixedToken = token
@@ -43,22 +43,51 @@ public final class ApiClient: Sendable {
 
     /// Sends a request and returns the raw response. Non-2xx is returned, not thrown;
     /// use `ApiResponse.decoded()` or the typed helpers below to throw `ApiError`.
+    /// Callers write the v1 call (`PUT` creates, `POST` updates); `ApiRoutes` rewrites it for a v2 server and a v2 list
+    /// envelope comes back as the bare array, so nothing above this layer knows which version answered.
     public func send(_ method: HTTPMethod, _ path: String, query: [String: String] = [:],
                      body: (any Encodable & Sendable)? = nil) async throws -> ApiResponse {
-        try await sendAuthorized { base, token in
-            try self.buildRequest(method, url: base + path, query: query, body: body, token: token)
+        let response = try await sendVersioned(pin: ApiRoutes.pin(for: path)) { base, token, version in
+            let route = ApiRoutes.translate(method, path, query, for: version)
+            return try self.buildRequest(route.method, url: base + route.path, query: route.query, body: body, token: token)
         }
+        guard method == .get, response.isSuccess, let unwrapped = ApiRoutes.unwrapEnvelope(response.data) else { return response }
+        return response.replacing(data: unwrapped.items, totalPages: unwrapped.totalPages)
+    }
+
+    /// The API version in force for the current server: a pinned client's own, else the resolver's answer.
+    public func currentVersion() async -> ApiVersion {
+        guard let server = await serverBase() else { return version }
+        return await resolvedVersion(server: server)
+    }
+
+    private func resolvedVersion(server: String) async -> ApiVersion {
+        guard let resolver else { return version }
+        return await resolver.version(forServer: server, core: core)
     }
 
     /// Shared send path: auth, plaintext guard, refresh-and-retry-once. `build` gets the API base and token.
-    func sendAuthorized(_ build: (_ base: String, _ token: String) throws -> URLRequest) async throws -> ApiResponse {
+    /// `pin` forces one version for routes that exist on only one.
+    func sendAuthorized(pin: ApiVersion? = nil,
+                        _ build: (_ base: String, _ token: String) throws -> URLRequest) async throws -> ApiResponse {
+        try await sendVersioned(pin: pin) { base, token, _ in try build(base, token) }
+    }
+
+    /// `sendAuthorized` for callers that also need the version the base was built for.
+    func sendVersioned(
+        pin: ApiVersion? = nil,
+        _ build: (_ base: String, _ token: String, _ version: ApiVersion) throws -> URLRequest
+    ) async throws -> ApiResponse {
         let snapshot = await session?.snapshot()
         if session != nil && snapshot == nil { throw AuthRequiredError() }
-        let base = "\(fixedBase ?? normalizeBase(snapshot?.serverURL ?? ""))/api/\(version.rawValue)"
+        let server = fixedBase ?? normalizeBase(snapshot?.serverURL ?? "")
+        let effective: ApiVersion
+        if let pin { effective = pin } else { effective = await resolvedVersion(server: server) }
+        let base = "\(server)\(effective.basePath)"
         let token = snapshot?.token ?? fixedToken ?? ""
         if !token.isEmpty { try guardDestination(base) }
 
-        let first = try await core.fetchOnce(try build(base, token))
+        let first = try await core.fetchOnce(try build(base, token, effective))
         guard let session else { return first }
         if first.isSuccess {
             await session.noteAuthorized()
@@ -67,7 +96,7 @@ public final class ApiClient: Sendable {
         guard first.status == 401 else { return first }
         // Refresh only for authenticated password sessions, never for the refresh call itself.
         if await session.canRefresh(), let fresh = await session.refreshSession(ifTokenIs: token) {
-            let retry = try await core.fetchOnce(try build(base, fresh))
+            let retry = try await core.fetchOnce(try build(base, fresh, effective))
             if retry.isSuccess { await session.noteAuthorized() }
             if retry.status == 401 { await session.noteUnauthorized() }
             return retry
@@ -86,8 +115,9 @@ public final class ApiClient: Sendable {
         form.append(Data("Content-Type: \(mime)\r\n\r\n".utf8))
         form.append(bytes)
         form.append(Data("\r\n--\(boundary)--\r\n".utf8))
-        let response = try await sendAuthorized { base, token in
-            var request = try self.buildRequest(.put, url: base + "/tasks/\(taskId)/attachments", query: [:], body: nil, token: token)
+        let response = try await sendVersioned { base, token, version in
+            let route = ApiRoutes.translate(.put, "/tasks/\(taskId)/attachments", [:], for: version)
+            var request = try self.buildRequest(route.method, url: base + route.path, query: [:], body: nil, token: token)
             request.httpBody = form
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
             return request
@@ -130,8 +160,9 @@ public final class ApiClient: Sendable {
     }
 
     /// JSON merge-patch (RFC 7386), as Vikunja v2 takes for partial updates. Non-2xx is returned, not thrown.
+    /// A v2-only call: it is pinned to `/api/v2` whatever the client's own version.
     public func mergePatch(_ path: String, body: JSONBody) async throws -> ApiResponse {
-        try await sendAuthorized { base, token in
+        try await sendAuthorized(pin: .apiV2) { base, token in
             var request = try self.buildRequest(.patch, url: base + path, query: [:], body: body, token: token)
             request.setValue("application/merge-patch+json", forHTTPHeaderField: "Content-Type")
             return request

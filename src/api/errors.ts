@@ -11,6 +11,8 @@ export class ApiError extends Error {
     message: string,
     public readonly retryable: boolean,
     public readonly dependency: boolean = false,
+    /** v2 validation failures (422): the problem's `errors[]` (field + message). */
+    public readonly fieldErrors: readonly unknown[] = [],
   ) {
     super(message);
     this.name = 'ApiError';
@@ -48,6 +50,13 @@ export interface ErrorClassification {
 interface VikunjaErrorEnvelope {
   code?: number;
   message?: string;
+  // v2 `application/problem+json`: the text is in `detail` (falling back to
+  // `title`); `code` is the same numeric Vikunja code as v1; `errors[]` lists
+  // the invalid fields of a 422. The adapter already copies detail into
+  // `message`, this covers callers that parse a v2 body themselves.
+  detail?: string;
+  title?: string;
+  errors?: unknown;
 }
 
 export function classify(status: number): ErrorClassification {
@@ -84,10 +93,18 @@ export function buildApiError(status: number, error: unknown): ApiError {
 
   if (envelope) {
     if (typeof envelope.code === 'number') code = envelope.code;
-    if (typeof envelope.message === 'string' && envelope.message.length > 0) {
-      message = envelope.message;
-    }
+    const text = [envelope.detail, envelope.message, envelope.title].find(
+      (t) => typeof t === 'string' && t.length > 0,
+    );
+    if (text) message = text;
   }
 
-  return new ApiError(status, code, message, classify(status).retryable);
+  return new ApiError(
+    status,
+    code,
+    message,
+    classify(status).retryable,
+    false,
+    Array.isArray(envelope?.errors) ? envelope.errors : [],
+  );
 }

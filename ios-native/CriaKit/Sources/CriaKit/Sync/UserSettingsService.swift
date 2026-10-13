@@ -14,17 +14,20 @@ import Foundation
 public actor UserSettingsService {
     private let api: ApiClient
     private let apiV2: ApiClient
+    private let resolver: VersionResolver?
     private var unsupportedServers = Set<String>()
     private var tail: Task<Void, Never>?
 
-    public init(api: ApiClient, apiV2: ApiClient) {
+    /// With a `resolver`, a server it resolves to v1 (older than 2.7.0, or "Force API v1") never gets the PATCH probe.
+    public init(api: ApiClient, apiV2: ApiClient, resolver: VersionResolver? = nil) {
         self.api = api
         self.apiV2 = apiV2
+        self.resolver = resolver
     }
 
-    public init(session: any SessionProviding, core: HTTPCore = HTTPCore()) {
+    public init(session: any SessionProviding, core: HTTPCore = HTTPCore(), resolver: VersionResolver? = nil) {
         self.init(api: ApiClient(session: session, core: core, version: .apiV1),
-                  apiV2: ApiClient(session: session, core: core, version: .apiV2))
+                  apiV2: ApiClient(session: session, core: core, version: .apiV2), resolver: resolver)
     }
 
     /// Queues the save behind any in flight and returns when it has been written. A failed save does not block
@@ -50,6 +53,7 @@ public actor UserSettingsService {
     private func savedByPatch(_ change: SettingsChange) async throws -> Bool {
         let server = await api.serverBase() ?? ""
         if unsupportedServers.contains(server) { return false }
+        if let resolver, await resolver.version(forServer: server, core: api.core) == .apiV1 { return false }
         let response = try await apiV2.mergePatch("/user/settings/general", body: FrontendSettings.mergePatch(change))
         let json = (response.contentType ?? "").lowercased().contains("json")
         // A patch that changes nothing gets an empty 304.

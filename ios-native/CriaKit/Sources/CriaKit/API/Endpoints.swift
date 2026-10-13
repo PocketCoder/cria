@@ -1,7 +1,7 @@
 import Foundation
 
-/// Typed wrappers for the endpoints the sync engine and screens use. Vikunja verbs:
-/// GET read, PUT create, POST update, DELETE delete (AGENTS.md). Bodies are `JSONValue` objects
+/// Typed wrappers for the endpoints the sync engine and screens use. Written with Vikunja v1 verbs:
+/// GET read, PUT create, POST update, DELETE delete (AGENTS.md). `ApiRoutes` rewrites them for a v2 server. Bodies are `JSONValue` objects
 /// built by the per-entity push code (the `taskToBody` quirks live there, in Phase 3).
 public typealias JSONBody = [String: JSONValue]
 

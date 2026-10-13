@@ -16,7 +16,7 @@ final class StubServer: @unchecked Sendable {
     init() {
         let box = RouteBox()
         transport = StubTransport { request, _ in
-            let path = request.url?.path.replacingOccurrences(of: "/api/v1", with: "") ?? ""
+            let path = (request.url?.path ?? "").replacingOccurrences(of: #"^/api/v[12]"#, with: "", options: .regularExpression)
             let key = "\(request.httpMethod ?? "GET") \(path)"
             let reply = box.next(key) ?? Reply(status: 404, body: #"{"message":"not found"}"#)
             return (reply.status, reply.body, reply.headers)
@@ -40,8 +40,9 @@ final class StubServer: @unchecked Sendable {
 
     var requests: [URLRequest] { transport.requests }
 
-    func api() -> ApiClient {
-        ApiClient(session: FakeSession(), core: HTTPCore(transport: transport))
+    /// A client for this server. Routes are keyed without the `/api/vN` prefix; a v2 client sends the v2 verbs and paths.
+    func api(version: ApiVersion = .apiV1) -> ApiClient {
+        ApiClient(session: FakeSession(), core: HTTPCore(transport: transport), version: version)
     }
 }
 

@@ -37,6 +37,7 @@ vi.mock('@/auth/store', () => ({
 import { maybeHydrateSyncedPrefs, pushSyncedPrefs, saveUserSettings } from '@/sync/settingsSync';
 import { useSettings } from '@/stores/settings';
 import { _resetResilience } from '@/api/resilience';
+import { resetApiVersion, setDetectedApiVersion } from '@/api/apiVersion';
 
 /** Go zero values of models.UserGeneralSettings' writable fields. */
 const GO_ZERO: Json = {
@@ -179,6 +180,8 @@ function webSave(patch: Json) {
 beforeEach(() => {
   auth.serverUrl = 'https://vk.example';
   _resetResilience();
+  resetApiVersion();
+  useSettings.setState({ forceApiV1: false });
   globalThis.__cria_settingsHydrated__ = undefined;
   globalThis.__cria_serverQuickAddMode__ = undefined;
   globalThis.__cria_settingsSaveChain__ = undefined;
@@ -375,5 +378,27 @@ describe('saveUserSettings on a server without the v2 PATCH', () => {
     await expect(saveUserSettings({ settings: { name: 'X' } })).rejects.toMatchObject({ status: 500 });
     expect(vk.trail).toEqual(['PATCH /api/v2/user/settings/general']);
     expect(vk.settings).toEqual(INITIAL);
+  });
+});
+
+describe('saveUserSettings follows the shared API version decision', () => {
+  it('goes straight to the v1 read-then-POST on a server decided as v1 (no PATCH probe)', async () => {
+    setDetectedApiVersion('https://vk.example', 'v1');
+    await saveUserSettings({ settings: { name: 'Jacob' } });
+    expect(vk.trail).toEqual(['GET /api/v1/user', 'POST /api/v1/user/settings/general']);
+    expect(vk.settings).toEqual({ ...INITIAL, name: 'Jacob' });
+  });
+
+  it('does the same on a v2.7+ server when "Force API v1" is on', async () => {
+    setDetectedApiVersion('https://vk.example', 'v2');
+    useSettings.setState({ forceApiV1: true });
+    await saveUserSettings({ settings: { name: 'Jacob' } });
+    expect(vk.trail).toEqual(['GET /api/v1/user', 'POST /api/v1/user/settings/general']);
+  });
+
+  it('uses the PATCH on a server decided as v2', async () => {
+    setDetectedApiVersion('https://vk.example', 'v2');
+    await saveUserSettings({ settings: { name: 'Jacob' } });
+    expect(vk.trail).toEqual(['PATCH /api/v2/user/settings/general']);
   });
 });

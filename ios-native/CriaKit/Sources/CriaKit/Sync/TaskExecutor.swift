@@ -14,7 +14,8 @@ public struct TaskExecutor: OutboxExecutor {
     public func execute(_ op: OutboxRow, api: ApiClient, store: CriaStore) async throws {
         let localId = op.entityLocalId
         guard var task = try store.pushTask(localId: localId) else { return }  // permanently gone
-        task.record = try store.withResolvedDescription(task.record, base: await api.serverBase() ?? "")
+        let prefix = await api.currentVersion().basePath
+        task.record = try store.withResolvedDescription(task.record, base: await api.serverBase() ?? "", apiPrefix: prefix)
         switch op.op {
         case "create": try await create(op, task, api, store)
         case "update": try await update(op, task, api, store)
@@ -118,8 +119,9 @@ extension CriaStore {
         }
     }
 
-    func withResolvedDescription(_ record: TaskRecord, base: String) throws -> TaskRecord {
-        let resolved = try resolveUploadedPendingRefs(record.description, serverBase: base)
+    func withResolvedDescription(_ record: TaskRecord, base: String,
+                                 apiPrefix: String = ApiVersion.apiV1.basePath) throws -> TaskRecord {
+        let resolved = try resolveUploadedPendingRefs(record.description, serverBase: base, apiPrefix: apiPrefix)
         return resolved == record.description ? record : record.replacingDescription(resolved)
     }
 

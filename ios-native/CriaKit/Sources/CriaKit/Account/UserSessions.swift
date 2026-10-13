@@ -77,13 +77,15 @@ public extension ApiClient {
     /// Nil when the server has no sessions route (older Vikunja), so the screen can say so.
     func sessions() async throws -> SessionListing? {
         var usedToken = ""
-        let response = try await sendAuthorized { base, token in
+        // Sessions exist only on v2: pinned there, so a forced-v1 client still reaches them (older servers answer 404).
+        let response = try await sendAuthorized(pin: .apiV2) { base, token in
             usedToken = token
             return try self.buildRequest(.get, url: base + "/user/sessions", query: ["per_page": "50"], body: nil, token: token)
         }
         if response.status == 404 { return nil }
         try response.requireSuccess()
-        let rows = (try? JSONDecoder().decode([JSONValue]?.self, from: response.data)) ?? nil
+        let list = ApiRoutes.unwrapEnvelope(response.data)?.items ?? response.data
+        let rows = (try? JSONDecoder().decode([JSONValue]?.self, from: list)) ?? nil
         let parsed = (rows ?? []).compactMap(UserSession.init)
         return SessionListing(
             sessions: SessionRules.sorted(parsed), currentId: SessionRules.currentSessionId(token: usedToken)

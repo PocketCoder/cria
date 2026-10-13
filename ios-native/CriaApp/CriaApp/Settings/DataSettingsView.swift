@@ -16,6 +16,8 @@ struct DataSettingsView: View {
     @State private var deletePassword = ""
     @State private var confirmingDelete = false
     @State private var deleteError: String?
+    /// "Force API v1": talk to the server's v1 API even when it offers v2 (read by `VersionResolver`).
+    @AppStorage(ApiVersionPolicy.forceV1Key) private var forceV1 = false
 
     init(services: AppServices) {
         self.services = services
@@ -24,6 +26,7 @@ struct DataSettingsView: View {
     var body: some View {
         Form {
             exportSection
+            apiSection
             deletionSections
         }
         .criaSurface()
@@ -37,6 +40,17 @@ struct DataSettingsView: View {
             Button("Delete account", role: .destructive) { Task { await requestDeletion() } }
         } message: {
             Text("The server emails you a link to confirm. Nothing is deleted until you follow it, and you stay signed in.")
+        }
+    }
+
+    private var apiSection: some View {
+        Section {
+            Toggle("Force API v1", isOn: $forceV1)
+        } header: {
+            Text("Server API")
+        } footer: {
+            Text("Cria uses Vikunja\u{2019}s v2 API on servers 2.7.0 and newer. Turn this on to use v1 instead if something misbehaves.")
+                .font(Theme.caption)
         }
     }
 

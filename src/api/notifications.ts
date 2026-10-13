@@ -1,3 +1,4 @@
+import { usesApiV2 } from './partial';
 import { type ApiClient, callApi, createApiClient } from './client';
 import { normaliseDate } from '@/domain/task';
 
@@ -42,7 +43,12 @@ export async function markNotificationRead(
   client: ApiClient = createApiClient(),
 ): Promise<void> {
   await callApi(
-    client.POST('/notifications/{id}', { params: { path: { id } } }),
+    client.POST('/notifications/{id}', {
+      params: { path: { id } },
+      // v2's PUT takes the new state (`read`, default false = mark unread);
+      // v1 has always marked it read from the bare POST.
+      ...(usesApiV2() ? { body: { read: true } as never } : {}),
+    }),
   );
 }
 
