@@ -45,7 +45,7 @@ automatically, but merges bypass it.
 ## Current state
 
 Daily-driver bar (M0–M5) is **met**; M6 (smart views + FTS5 search)
-shipped in `v0.4.0`. Current version is `0.13.0` (in `package.json`,
+shipped in `v0.4.0`. Current version is `1.0.0` (in `package.json`,
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock` —
 keep all in sync). **Bump only via `pnpm bump` (see "Cutting a
 release") — never hand-edit these files.** This has bitten twice:
@@ -71,15 +71,20 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | **iOS** — desktop-feature gating, responsive iPhone layout, touch DnD, OS-scheduled reminders, perf pass, CI compile-check | ✅, now deprecated: replaced by the native Swift app (`ios-native/`) |
 | Native Swift iOS app (`ios-native/`) at parity with the Tauri iOS build | ✅ |
 | Vikunja parity: saved filters, settings tabs, sharing/teams, notifications, @mentions, keyboard shortcuts (v0.13.0) | ✅ |
-| Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ on `dev`, unreleased |
-| Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ on `dev`, unreleased; tokens + motion in `src/styles/globals.css` |
+| Ledger redesign (shell, inspector, iOS tabs, Now block, dark mode) | ✅ v1.0.0 |
+| Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ v1.0.0; tokens + motion in `src/styles/globals.css` |
 | Native glass: macOS sidebar material (iOS 26 tab bar part deprecated with the Tauri iOS build) | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
 **Next up:** polish from daily use of the native iOS app (`ios-native/`, see below). Feature-level status vs Vikunja lives
 in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 
 **Known gaps / deferred:**
-- **Live sync (WebSockets)** not started; sync is a 60s poll.
+- **Live sync (WebSockets)** not merged; sync is a 60s poll. Vikunja's socket
+  (`/api/v1/ws`, checked against upstream `main` 2026-10-12) pushes only
+  `notification.created` and pro-licence `timer.*`, with no task, project,
+  label or comment events, so true live sync isn't possible upstream.
+  `feature/live-sync` holds a desktop client for the notification event only
+  (unit-tested, never run against a real server).
 - **UI has no unit tests.** Coverage thresholds cover only the logic layers
   (`src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}`).
 
@@ -577,10 +582,10 @@ GitHub Actions secret. Manifest served at
    branch and tag refs are sent in the same connection, leaving the release
    workflow untriggered.
 
-**Versioning is plain `0.x.y`** — no `-alpha`/`-beta`. The `0.` major is the
-stability signal; minor per milestone, patch for fixes. `1.0.0` is the
-"stable, won't break your data" promise (maps to M7 polish + macOS
-notarisation).
+**Versioning is plain `x.y.z`**, no `-alpha`/`-beta`: major for a new app or a
+break, minor per milestone, patch for fixes. `1.0.0` marked the native iOS app
+replacing the Tauri iOS build; it is the "stable, won't break your data"
+promise. macOS notarisation is still outstanding.
 
 Release-pipeline landmines (don't undo):
 - `--bundles app,dmg,updater` + `createUpdaterArtifacts: true` are both
@@ -591,7 +596,7 @@ Release-pipeline landmines (don't undo):
 
 Not in scope: Windows/Linux builds (matrix is macOS-only), Apple notarisation
 (DMG isn't notarised → first launch trips the "unidentified developer"
-warning; revisit before 1.0).
+warning; still outstanding after 1.0).
 
 ## User preferences observed
 
