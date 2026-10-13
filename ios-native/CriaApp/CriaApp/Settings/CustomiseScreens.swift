@@ -10,6 +10,7 @@ struct NavigationSettingsView: View {
 
     var body: some View {
         List {
+            #if os(iOS)
             Section {
                 ForEach(custom.tabs, id: \.self) { tab in
                     Label(tab.title, systemImage: tab.symbol)
@@ -34,6 +35,7 @@ struct NavigationSettingsView: View {
                     }
                 }
             }
+            #endif
             Section {
                 Picker("Home view", selection: Binding(get: { custom.launchTab }, set: { prefs.value.custom.homeView = $0 })) {
                     ForEach(custom.barTabs, id: \.self) { Text($0.title).tag($0) }

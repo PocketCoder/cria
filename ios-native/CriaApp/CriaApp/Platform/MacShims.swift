@@ -73,6 +73,14 @@ struct CameraPicker: View {
     var body: some View { EmptyView() }
 }
 
+enum ShimDrawerDisplayMode: Sendable {
+    case automatic, always
+}
+
+extension SearchFieldPlacement {
+    static func navigationBarDrawer(displayMode: ShimDrawerDisplayMode) -> SearchFieldPlacement { .automatic }
+}
+
 extension ToolbarItemPlacement {
     static var topBarLeading: ToolbarItemPlacement { .navigation }
     static var topBarTrailing: ToolbarItemPlacement { .primaryAction }

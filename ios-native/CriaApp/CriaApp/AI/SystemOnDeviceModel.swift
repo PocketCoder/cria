@@ -10,7 +10,7 @@ import FoundationModels
 struct SystemOnDeviceModel: OnDeviceModel {
     func availability() async -> String {
         #if canImport(FoundationModels)
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             switch SystemLanguageModel.default.availability {
             case .available: return AIFeatures.available
             case .unavailable(let reason): return "unavailable: \(reason)"
@@ -22,7 +22,7 @@ struct SystemOnDeviceModel: OnDeviceModel {
 
     func generate(instructions: String, prompt: String) async throws -> String {
         #if canImport(FoundationModels)
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             do {
                 let session = LanguageModelSession(instructions: instructions)
                 return try await session.respond(to: prompt).content
