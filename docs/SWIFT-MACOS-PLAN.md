@@ -11,7 +11,7 @@ agent: each phase lists exact files, steps and a check that proves it is done.
 | 0 | Scaffold the macOS target | Done |
 | 1 | Share the platform-neutral code | Done |
 | 2 | Window shell, menus and shortcuts | Partly done (compiles in CI, untested on a Mac; `j`/`k`/Return, `a`, `c`, `u`, `.` identifier and `g a`/`g m` not built) |
-| 3 | Rich text editor on macOS | Not started |
+| 3 | Rich text editor on macOS | Partly done (compiles in CI, untested on a Mac; mention picker is a sheet, not a caret popover; link is ⌘L because ⌘K is the palette) |
 | 4 | Project views and settings | Not started |
 | 5 | Mac integrations | Not started |
 | 6 | AI, OCR and speech | Not started |
