@@ -77,7 +77,7 @@ window-vibrancy = "0.8"
 # photo feature, and the keyring Keychain backend for the auth token.
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
-base64 = "0.22"
+base64 = "0.23"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = [
     "NSData",
