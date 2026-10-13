@@ -81,7 +81,6 @@ jobs:
             -archivePath "$RUNNER_TEMP/Cria.xcarchive" \
             ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
             PRODUCT_BUNDLE_IDENTIFIER=io.cria.app.nightly \
-            PRODUCT_NAME="Cria (Nightly)" \
             MARKETING_VERSION="$version" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             CRIA_FEED_URL=https://pocketcoder.github.io/cria/nightly-appcast.xml \
@@ -95,9 +94,12 @@ jobs:
           APP="$(find "$RUNNER_TEMP/Cria.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)"
           [ -n "$APP" ] || { echo "No .app in the archive" >&2; exit 1; }
           codesign --verify --deep --strict "$APP" || true
-          mkdir -p out dmg
-          ditto -c -k --keepParent "$APP" out/Cria-Nightly-macOS.zip
-          ditto "$APP" "dmg/$(basename "$APP")"
+          # PRODUCT_NAME is not overridden at build time (a command-line override reaches every target, including
+          # package resource bundles, and two outputs then share a name). The app is renamed here instead.
+          mkdir -p out dmg stage
+          ditto "$APP" "stage/Cria (Nightly).app"
+          ditto -c -k --keepParent "stage/Cria (Nightly).app" out/Cria-Nightly-macOS.zip
+          ditto "stage/Cria (Nightly).app" "dmg/Cria (Nightly).app"
           ln -s /Applications dmg/Applications
           hdiutil create -volname "Cria Nightly" -srcfolder dmg -ov -format UDZO out/Cria-Nightly-macOS.dmg
           ls -lh out
