@@ -31,13 +31,13 @@ Two notes apply throughout:
 | Move to another project, priority | Vikunja | |
 | Due, start and end dates | Vikunja | Date-only values are pushed at midnight in the timezone set in Settings. Times can be added and removed. |
 | Repeat | Vikunja | Daily, weekly, monthly, yearly, or a custom interval in hours to months; counts from the due date or from completion. |
-| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. |
+| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. Once a reminder has gone off it is deleted, here and on Vikunja, except on repeating tasks (Vikunja moves those on) and done tasks. |
 | Progress (percent done) | Vikunja | Follows the share of subtasks done, unless set by hand. |
 | "Progress set by hand" flag | This device | `ProgressOverride` in `UserDefaults`, keyed by task. Another install may overwrite the value by following subtasks. |
 | Favourite (star) | Vikunja | |
 | Labels on a task | Vikunja | Pick existing labels or type a new name to create one. |
 | Assignees | Vikunja | Searching for people needs a connection. Names seen are cached on this device (`cria.userNames`). |
-| Subtasks and relations | Vikunja | Add subtask in place, or relate to any task: subtask, parent, related, blocking, blocked by, duplicates, precedes, follows, copied from. Done toggle on each subtask. |
+| Subtasks and relations | Vikunja | Add subtask in place, or relate to any task: subtask, parent, related, blocking, blocked by, duplicates, precedes, follows, copied from. Done toggle on each subtask. Press and hold a relation to change its type or remove it. |
 | Reset subtasks when a repeating task is done | Cria accounts | Customise > Dates & tasks (`resetSubtasksOnRepeat`). The subtask updates themselves go to Vikunja. |
 | Order of sections on the task screen | Cria accounts | Settings > Customise > Task layout (`taskDetailOrder`). Title, description and Delete stay fixed. |
 | Row swipes, context menu | This device for the menu; Cria accounts for what each swipe does | Complete, Schedule, Star, Delete or None per side (Customise). Context menu adds Due tomorrow and Show or Hide subtasks. |

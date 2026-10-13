@@ -37,6 +37,24 @@ final class RelationRepositoryTests: XCTestCase {
         XCTAssertEqual(try outboxEntries(store, entity: "task_relation").map(\.operation), ["add", "remove"])
     }
 
+    func testChangeKindSwapsBothDirectionsAndQueuesRemoveThenAdd() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let first = try store.createTask(TaskInput(title: "First", projectLocalId: project))
+        let second = try store.createTask(TaskInput(title: "Second", projectLocalId: project))
+        try store.addRelation(taskLocalId: first.localId, otherTaskLocalId: second.localId, kind: .related)
+
+        let relation = try XCTUnwrap(try store.relations(forTask: first.localId).first)
+        try store.changeRelationKind(taskLocalId: first.localId, relation: relation, to: .blocking)
+
+        XCTAssertEqual(try store.relations(forTask: first.localId).map(\.kind), ["blocking"])
+        XCTAssertEqual(try store.relations(forTask: second.localId).map(\.kind), ["blocked"])
+        let entries = try outboxEntries(store, entity: "task_relation")
+        XCTAssertEqual(entries.map(\.operation), ["add", "remove", "add"])
+        XCTAssertEqual(try payloadObject(entries[1])["kind"] as? String, "related")
+        XCTAssertEqual(try payloadObject(entries[2])["kind"] as? String, "blocking")
+    }
+
     func testRelationToSelfIsIgnored() throws {
         let store = try makeStore()
         let project = try seedProject(store)

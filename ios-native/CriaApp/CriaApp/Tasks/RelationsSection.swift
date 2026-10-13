@@ -23,7 +23,7 @@ struct RelationsSection: View {
     @FocusState private var subtaskFocused: Bool
 
     var body: some View {
-        Section("Relations") {
+        Section {
             ForEach(ordered, id: \.identity) { relation in
                 Group {
                     if let otherId = relation.otherTaskLocalId {
@@ -44,6 +44,7 @@ struct RelationsSection: View {
                         state.attempt { try services.store.removeRelation(taskLocalId: taskLocalId, relation: relation) }
                     }
                 }
+                .contextMenu { relationMenu(relation) }
             }
             if addingSubtask {
                 subtaskField
@@ -52,6 +53,27 @@ struct RelationsSection: View {
             }
             suggestButton
             Button("Add relation", systemImage: "link.badge.plus") { state.addingRelation = true }
+        } header: {
+            Text("Relations")
+        } footer: {
+            if !relations.isEmpty { Text("Press and hold a relation to change its type or remove it.") }
+        }
+    }
+
+    /// Change the type (Vikunja has no edit, so the store swaps the old relation for a new one) or remove it.
+    @ViewBuilder
+    private func relationMenu(_ relation: RelationRecord) -> some View {
+        if relation.otherTaskLocalId != nil {
+            Menu("Change type", systemImage: "arrow.triangle.swap") {
+                ForEach(TaskRelationKind.pickable.filter { $0.rawValue != relation.kind }, id: \.self) { kind in
+                    Button(kindTitles[kind.rawValue] ?? kind.rawValue) {
+                        state.attempt { try services.store.changeRelationKind(taskLocalId: taskLocalId, relation: relation, to: kind) }
+                    }
+                }
+            }
+        }
+        Button("Remove", systemImage: "trash", role: .destructive) {
+            state.attempt { try services.store.removeRelation(taskLocalId: taskLocalId, relation: relation) }
         }
     }
 

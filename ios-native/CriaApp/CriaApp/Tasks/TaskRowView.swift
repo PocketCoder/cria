@@ -9,19 +9,21 @@ struct TaskRowView: View {
     let item: TaskListItem
     var showProject = false
     var tree = TaskRowTree()
+    /// Just ticked: shown done and faded while the row waits a beat before it is saved and leaves the list.
+    var completing = false
     let onToggle: () -> Void
 
     private var task: TaskRecord { item.task }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            PriorityCheck(priority: task.priority, isDone: task.done, action: onToggle)
+            PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
                     Text(task.title)
                         .font(Theme.rowTitle)
-                        .strikethrough(task.done)
-                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                        .strikethrough(task.done || completing)
+                        .foregroundStyle(task.done || completing ? Color(.mutedForeground) : Color(.foreground))
                         .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                     if task.isFavorite {
                         Image(systemName: "star.fill").font(.footnote).foregroundStyle(Color(.warning))
@@ -42,6 +44,9 @@ struct TaskRowView: View {
             Spacer(minLength: 0)
         }
         .padding(.leading, CGFloat(tree.depth) * TaskListNesting.indent)
+        // Fades once the ring's burst has played.
+        .opacity(completing && !task.done ? 0.45 : 1)
+        .animation(.easeOut(duration: 0.3).delay(0.35), value: completing)
         .background(alignment: .leading) { guides }
         .contentShape(Rectangle())
         // One VoiceOver element. The ring and the collapse chevron are not separate stops: TaskRowLink exposes them

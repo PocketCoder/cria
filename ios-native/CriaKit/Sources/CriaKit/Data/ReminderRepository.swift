@@ -115,6 +115,38 @@ extension CriaStore {
         }
     }
 
+    /// User mutation, run by the app after each sync: deletes reminders that went off more than a minute ago from open
+    /// tasks, one task update each, so Vikunja drops them too. Repeating tasks keep theirs: Vikunja moves a repeating
+    /// task's reminders on with it when it is completed. Done tasks are left alone. Returns how many were deleted.
+    @discardableResult
+    public func clearPastReminders(now: Date = Date()) throws -> Int {
+        let cutoff = now.addingTimeInterval(-60)
+        let rows = try database.writer.read { connection in
+            try Row.fetchAll(connection, sql: """
+                SELECT r.task_local_id, r.reminder_at, r.relative_period, r.relative_to
+                  FROM task_reminders r JOIN tasks t ON t.local_id = r.task_local_id
+                 WHERE r.reminder_at IS NOT NULL AND t.done = 0 AND t.deleted = 0
+                   AND t.repeat_after = 0 AND t.repeat_mode <> 1
+                """)
+        }
+        let past = rows.filter { row in
+            guard let fires = DueDates.parse(row["reminder_at"] as String) else { return false }
+            return fires < cutoff
+        }
+        guard !past.isEmpty else { return 0 }
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
+            var changed = Set<String>()
+            for row in past {
+                let taskLocalId: String = row["task_local_id"]
+                if try CriaStore.deleteReminder(connection, taskLocalId: taskLocalId, ReminderRecord(row)) {
+                    changed.insert(taskLocalId)
+                }
+            }
+            for taskLocalId in changed.sorted() { try CriaStore.markTaskChanged(connection, localId: taskLocalId) }
+        }
+        return past.count
+    }
+
     private static func insertReminder(_ connection: Database, taskLocalId: String, _ input: ReminderInput) throws {
         var resolved = input.triggerAt
         let relative = input.period != nil && input.relativeTo != nil

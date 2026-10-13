@@ -3,10 +3,11 @@ import CriaKit
 import Foundation
 import WidgetKit
 
-/// Things that follow data changes: the Today widget reloads and Spotlight re-indexes open tasks. Runs for the life
-/// of the signed-in shell.
+/// Things that follow data changes: past reminders are cleared, the Today widget reloads and Spotlight re-indexes open
+/// tasks. Runs for the life of the signed-in shell.
 enum SyncSideEffects {
     static func run(services: AppServices) async {
+        try? services.store.clearPastReminders()
         await refresh(services.store)
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await afterSyncs(services) }
@@ -18,7 +19,11 @@ enum SyncSideEffects {
     private static func afterSyncs(_ services: AppServices) async {
         var wasSyncing = false
         for await status in services.coordinator.status.subscribe() {
-            if wasSyncing && !status.isSyncing { await refresh(services.store) }
+            if wasSyncing && !status.isSyncing {
+                // A reminder that has gone off is done with; deleting it here also drops it from Vikunja.
+                try? services.store.clearPastReminders()
+                await refresh(services.store)
+            }
             wasSyncing = status.isSyncing
         }
     }

@@ -25,6 +25,8 @@ struct TaskRowLink: View {
     @State private var scheduling = false
     /// Counts completions made from a swipe or the menu; the ring plays its own haptic for a tap.
     @State private var completions = 0
+    /// Ticked and waiting to be saved, so the tick, strikethrough and fade show before the row leaves the list.
+    @State private var completing = false
 
     var body: some View {
         Group {
@@ -95,7 +97,7 @@ struct TaskRowLink: View {
     @ViewBuilder private var rowLink: some View {
         if let openTask {
             Button { click(openTask) } label: {
-                TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
+                TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 6)
@@ -107,7 +109,7 @@ struct TaskRowLink: View {
             .onHover { hovering = $0 }
         } else {
             NavigationLink(value: Route.task(item.task.localId)) {
-                TaskRowView(item: item, showProject: showProject, tree: tree) { toggle() }
+                TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
             }
         }
     }
@@ -212,9 +214,22 @@ extension TaskRowLink {
         attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
     }
 
+    /// Undoing a done task saves at once. Completing shows the done state first and saves after a beat, so the
+    /// burst and the strikethrough are seen before the row leaves a list of open tasks.
     private func toggle() {
-        let patch = TaskPatch(done: !item.task.done)
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+        let localId = item.task.localId
+        guard !item.task.done else {
+            completing = false
+            attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: false)) }
+            return
+        }
+        guard !completing else { return }
+        completing = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: true)) }
+            if failure != nil { withAnimation { completing = false } }
+        }
     }
 
     /// For the swipe and the menu, which have no ring to play the completion haptic. Completing only, as the ring does.

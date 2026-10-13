@@ -156,4 +156,30 @@ final class ReminderPeriodTests: XCTestCase {
         XCTAssertEqual(ReminderPeriod(amount: 999_999_999, unit: .weeks, before: true).seconds, -100_000 * 604_800)
         XCTAssertEqual(ReminderPeriod(amount: -4, unit: .hours, before: false).seconds, 0)
     }
+
+    func testClearPastRemindersSkipsRepeatingAndDoneTasks() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let open = try store.createTask(TaskInput(title: "Open", projectLocalId: project))
+        let repeating = try store.createTask(TaskInput(title: "Weekly", projectLocalId: project))
+        var weekly = TaskPatch()
+        weekly.repeatAfter = 604_800
+        _ = try store.updateTask(localId: repeating.localId, patch: weekly)
+        let done = try store.createTask(TaskInput(title: "Done", projectLocalId: project))
+        for task in [open, repeating, done] {
+            try store.addReminder(taskLocalId: task.localId, ReminderInput(triggerAt: "2026-01-01T09:00:00Z"))
+        }
+        try store.addReminder(taskLocalId: open.localId, ReminderInput(triggerAt: "2099-01-01T09:00:00Z"))
+        _ = try store.updateTask(localId: done.localId, patch: TaskPatch(done: true))
+        let before = try outboxEntries(store, entity: "task").count
+
+        let now = try XCTUnwrap(DueDates.parse("2026-06-01T00:00:00Z"))
+        XCTAssertEqual(try store.clearPastReminders(now: now), 1)
+
+        XCTAssertEqual(try store.reminders(forTask: open.localId).map(\.reminderAt), ["2099-01-01T09:00:00Z"])
+        XCTAssertEqual(try store.reminders(forTask: repeating.localId).count, 1)
+        XCTAssertEqual(try store.reminders(forTask: done.localId).count, 1)
+        XCTAssertEqual(try outboxEntries(store, entity: "task").count, before + 1)
+        XCTAssertEqual(try store.clearPastReminders(now: now), 0, "nothing left to clear")
+    }
 }
