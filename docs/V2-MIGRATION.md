@@ -37,7 +37,7 @@ Same path unless a rename is shown. `{x}` names differ in the spec but are posit
 
 **Updates that moved from POST to PUT** (and now also accept PATCH): `/projects/{id}`, `/labels/{id}` (v1 already PUT; now `PUT`/`PATCH`), `/tasks/{id}`, `/filters/{id}`, `/teams/{id}`, `/projects/{p}/views/{v}`, `/tasks/{t}/comments/{c}`, `/projects/{p}/views/{v}/buckets/{b}`, `/projects/{p}/users/{u}`, `/projects/{p}/teams/{t}`.
 
-**Other verb flips (POST -> PUT):** `/notifications/{id}` (mark read), `/tasks/{id}/position`, `/tasks/{id}/read`, `/tasks/bulk`, `/tasks/{t}/assignees/bulk`, `/tasks/{t}/labels/bulk`, `/user/settings/avatar` (`POST` JSON -> `PUT` multipart field `avatar`), `/user/settings/email` (`POST` -> `PUT`, plus new `DELETE`), `/projects/{p}/backgrounds/unsplash` (POST -> PUT), `/projects/{p}/views/{v}/buckets/{b}/tasks` (POST -> PUT; **the v2 path is `/projects/{p}/views/{v}/buckets/tasks`**, verify body in the spec), `/projects/{p}/duplicate`, `/tasks/{t}/duplicate` (PUT -> POST), `/user/settings/general` (POST -> `PUT`/`PATCH`/`GET`).
+**Other verb flips (POST -> PUT):** `/notifications/{id}` (mark read), `/tasks/{id}/position`, `/tasks/{id}/read`, `/tasks/bulk`, `/tasks/{t}/assignees/bulk`, `/tasks/{t}/labels/bulk`, `/user/settings/avatar` (`POST` JSON -> `PUT` multipart field `avatar`), `/user/settings/email` (`POST` -> `PUT`, plus new `DELETE`), `/projects/{p}/backgrounds/unsplash` (POST -> PUT), `/projects/{p}/views/{v}/buckets/{b}/tasks` (POST -> PUT, same path; body is a `TaskBucket`, the bucket id comes from the URL and `bucket_id` in the body is ignored. `/buckets/tasks` without an id is only the non-paginated GET of buckets with their tasks), `/projects/{p}/duplicate`, `/tasks/{t}/duplicate` (PUT -> POST), `/user/settings/general` (POST -> `PUT`/`PATCH`/`GET`).
 
 **Unchanged verbs:** `POST /login`, `POST /user/token/refresh`, `POST /user/token`, `POST /shares/{share}/auth`, `GET /info`, `GET /user`, `GET /users`, `GET /labels|projects|tasks|teams|notifications` lists (but envelope), all `DELETE`s, `POST /notifications` (mark all read), `DELETE /notifications`, `POST /teams/{t}/members/{u}/admin`, password/TOTP-less user routes (`/user/password`, `/user/export*`, `/user/deletion/*`), `GET /user/timezones`.
 
@@ -62,8 +62,8 @@ Keep every quirk in `taskToBody` (hex colour without `#`, `percent_done` 0-100, 
 ## Open questions (verify against the spec, do not guess)
 
 1. How v2 signals "TOTP passcode required" on `POST /login` (v1: HTTP 412 with code 1017). Inspect problem codes in `/api/v2/openapi-3.0.json` and the Vikunja source if reachable. Support both statuses until proven.
-2. Whether `POST /login` and `/user/token/refresh` on v2 set the `vikunja_refresh_token` cookie the same way (the v2 login body is only `{ token }`).
-3. Exact body of `PUT /projects/{p}/views/{v}/buckets/tasks` (task-to-bucket move).
+2. The refresh cookie may be scoped to the refresh endpoint path, so refresh must use the same API version login used; confirm the cookie name/path. Whether `POST /login` and `/user/token/refresh` on v2 set the `vikunja_refresh_token` cookie the same way (the v2 login body is only `{ token }`).
+3. Required body fields of the task-to-bucket move `PUT .../buckets/{b}/tasks` (likely `task_id`, `project_view_id`; confirm in the schema).
 4. Attachment download path (`GET /tasks/{t}/attachments/{a}`) response is still a binary stream.
 5. `GET /tasks/{id}?expand=comments` still supported on v2.
 
