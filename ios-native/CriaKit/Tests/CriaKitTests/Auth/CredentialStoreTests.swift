@@ -99,7 +99,8 @@ final class LegacyCredentialImportTests: XCTestCase {
         let session = AuthSession(store: CredentialStore(slot: native), legacyImport: makeImport(MemorySlot(json)))
         await session.hydrate()
         let status = await session.status
-        XCTAssertEqual(status, .authenticated(Credentials(serverURL: "https://vk.example", token: "tok", authMethod: .password, refreshToken: "ref")))
+        let expected = Credentials(serverURL: "https://vk.example", token: "tok", authMethod: .password, refreshToken: "ref")
+        XCTAssertEqual(status, .authenticated(expected))
         XCTAssertNotNil(try native.read())
     }
 
