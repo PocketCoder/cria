@@ -14,6 +14,9 @@ struct ManageViewsSheet: View {
     @State private var renameDraft = ""
     @State private var message: String?
     @State private var editing: ViewEditTarget?
+    /// Counts finished drags, for the drop haptic.
+    @State private var reorders = 0
+    @State private var deletions = 0
 
     private var slots: [ViewSlot] { views.map(\.slot) }
 
@@ -28,6 +31,8 @@ struct ManageViewsSheet: View {
             }
                 .criaSurface()
             .environment(\.editMode, .constant(ViewManagement.canReorder(slots) ? .active : .inactive))
+            .sensoryFeedback(.impact(weight: .light), trigger: reorders)
+            .sensoryFeedback(.warning, trigger: deletions)
             .navigationTitle("Manage views")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -124,6 +129,7 @@ struct ManageViewsSheet: View {
         case .placeholder?: message = "This default view has not synced yet. Try again after the next sync."
         case nil:
             try? services.store.deleteView(localId: view.localId)
+            deletions += 1
             onDeleted(view.localId)
         }
     }
@@ -140,5 +146,6 @@ struct ManageViewsSheet: View {
         case .reindex:
             try? services.store.reindexViews(reorder.orderedIds)
         }
+        reorders += 1
     }
 }

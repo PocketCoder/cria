@@ -17,6 +17,8 @@ struct TaskColourRow: View {
     let task: TaskRecord
     let apply: (TaskPatch) -> Bool
     @State private var expanded = false
+    /// Counts swatch taps, for the selection haptic.
+    @State private var swatchPicks = 0
     @State private var custom = Color(.mutedForeground)
     /// A picker drag sends many values; only the one it settles on is saved.
     @State private var pending: Task<Void, Never>?
@@ -59,6 +61,7 @@ struct TaskColourRow: View {
                 }
                 .padding(.vertical, 4)
             }
+            .sensoryFeedback(.selection, trigger: swatchPicks)
             ColorPicker("Custom colour", selection: $custom, supportsOpacity: false)
                 .onChange(of: custom) { _, picked in
                     guard let hex = Self.hex(picked), hex != current else { return }
@@ -80,6 +83,7 @@ struct TaskColourRow: View {
 
     private func swatch(_ hex: String?) -> some View {
         Button {
+            swatchPicks += 1
             save(hex, after: .zero)
         } label: {
             Circle()

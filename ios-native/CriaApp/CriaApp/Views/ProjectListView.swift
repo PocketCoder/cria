@@ -18,6 +18,8 @@ struct ProjectListView: View {
     @State private var editMode: EditMode = .inactive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var failure: String?
+    /// Counts finished drags, for the drop haptic.
+    @State private var reorders = 0
     /// Parents whose subtasks are hidden, for this screen only.
     @State private var collapsed: Set<String> = []
 
@@ -104,6 +106,8 @@ struct ProjectListView: View {
         .quickAdd(services: services, contextProjectId: projectLocalId)
         .displayOptions(display, services: services)
         .taskSelection(selection, services: services)
+        .sensoryFeedback(.impact(weight: .light), trigger: reorders)
+        .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -181,6 +185,7 @@ struct ProjectListView: View {
         do {
             guard let viewId = try services.store.listViewLocalId(projectLocalId: projectLocalId) else { return }
             try services.store.applyListReorder(orderedIds: roots, movedId: moved.localId, viewLocalId: viewId)
+            reorders += 1
         } catch {
             failure = String(describing: error)
         }

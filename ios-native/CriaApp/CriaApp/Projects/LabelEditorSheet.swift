@@ -25,6 +25,8 @@ struct LabelEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var colour: String?
+    /// Counts swatch taps, for the selection haptic.
+    @State private var swatchPicks = 0
     @State private var errorMessage: String?
 
     /// The stored colour as six lowercase digits, so it matches a swatch whatever case or `#` it came with.
@@ -63,6 +65,7 @@ struct LabelEditorSheet: View {
                             ForEach(swatches, id: \.self) { swatch($0) }
                         }
                     }
+                    .sensoryFeedback(.selection, trigger: swatchPicks)
                     ColorPicker("Custom colour", selection: customColour, supportsOpacity: false)
                 }
                 if let errorMessage {
@@ -89,6 +92,7 @@ struct LabelEditorSheet: View {
     private func swatch(_ hex: String?) -> some View {
         Button {
             colour = hex
+            swatchPicks += 1
         } label: {
             Circle()
                 .fill(Color(hexString: hex) ?? Color(.muted))

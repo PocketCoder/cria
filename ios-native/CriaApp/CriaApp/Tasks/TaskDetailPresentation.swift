@@ -32,6 +32,8 @@ final class TaskDetailPresentation {
     /// The user picked in the assign sheet, saved once the sheet has gone.
     var pickedAssignee: UserResponse?
     var failure: String?
+    /// Counts comment and attachment deletes, for the warning haptic.
+    var deletions = 0
 
     /// True while the optional at `keyPath` holds a value; setting false clears it.
     func isSet<Value>(_ keyPath: ReferenceWritableKeyPath<TaskDetailPresentation, Value?>) -> Binding<Bool> {
@@ -162,7 +164,10 @@ struct TaskDetailDialogs: ViewModifier {
         content
             .alert("Delete this comment?", isPresented: state.isSet(\.deletingComment), presenting: state.deletingComment) { comment in
                 Button("Delete", role: .destructive) {
-                    state.attempt { try services.store.deleteComment(localId: comment.localId) }
+                    state.attempt {
+                        try services.store.deleteComment(localId: comment.localId)
+                        state.deletions += 1
+                    }
                 }
                 Button("Cancel", role: .cancel) {}
             }
@@ -176,6 +181,8 @@ struct TaskDetailDialogs: ViewModifier {
             } message: { attachment in
                 Text(attachment.fileName)
             }
+            .sensoryFeedback(.warning, trigger: state.deletions)
+            .errorHaptic(state.failure)
             .alert("Could not save", isPresented: state.isSet(\.failure)) {
                 Button("OK", role: .cancel) {}
             } message: {

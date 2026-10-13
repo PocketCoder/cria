@@ -123,6 +123,7 @@ struct KanbanBoardView: View {
             )
         }
         .task { await live.run() }
+        .errorHaptic(failure)
         .alert("Column full", isPresented: $limitNotice) {
             Button("OK", role: .cancel) {}
         } message: {

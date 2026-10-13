@@ -18,6 +18,8 @@ struct RelationsSection: View {
     @State private var addingSubtask = false
     @State private var subtaskTitle = ""
     @State private var subtaskError: String?
+    /// Completions per subtask row, so only the row that was completed plays the haptic.
+    @State private var completions: [String: Int] = [:]
     @FocusState private var subtaskFocused: Bool
 
     var body: some View {
@@ -30,6 +32,7 @@ struct RelationsSection: View {
                         relationLabel(relation)
                     }
                 }
+                .sensoryFeedback(.success, trigger: completions[relation.identity] ?? 0)
                 .accessibilityActions {
                     // The tick inside a row that opens the task is not its own VoiceOver stop.
                     if relation.kind == "subtask", relation.otherTaskLocalId != nil {
@@ -150,6 +153,7 @@ struct RelationsSection: View {
 
     private func toggleSubtask(_ relation: RelationRecord) {
         guard let otherId = relation.otherTaskLocalId else { return }
+        if !relation.otherDone { completions[relation.identity, default: 0] += 1 }
         state.attempt { _ = try services.store.updateTask(localId: otherId, patch: TaskPatch(done: !relation.otherDone)) }
     }
 

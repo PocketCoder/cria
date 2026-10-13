@@ -48,6 +48,7 @@ struct TodayEmptyView: View {
             .sheet(isPresented: $picking) {
                 PullForwardSheet(items: data.upcoming) { ids in pull(ids) }
             }
+            .errorHaptic(failure)
             .alert("Could not move", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {

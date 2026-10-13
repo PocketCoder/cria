@@ -106,6 +106,7 @@ struct AttachmentActions {
         Task {
             do {
                 try await services.deleteAttachment(attachment, taskLocalId: taskLocalId)
+                state.deletions += 1
             } catch {
                 state.attachmentError = "Could not delete \(attachment.fileName)"
             }

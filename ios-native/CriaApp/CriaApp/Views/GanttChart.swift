@@ -12,6 +12,8 @@ struct GanttChart: View {
     let weekZoom: Bool
     @State private var drag: GanttDrag?
     @State private var dropTargeted = false
+    /// Counts bars dropped in from the no-dates tray, for the drop haptic.
+    @State private var trayDrops = 0
     @Environment(NavigationModel.self) private var navigation
 
     private static let todayId = "gantt-today"
@@ -86,8 +88,10 @@ struct GanttChart: View {
             _ = try? services.store.setGanttDates(
                 taskLocalId: taskId, start: start, end: start + GanttMetrics.defaultSpanDays - 1
             )
+            trayDrops += 1
             return true
         } isTargeted: { dropTargeted = $0 }
+        .sensoryFeedback(.impact(weight: .light), trigger: trayDrops)
     }
 
     /// An invisible one-day marker at today's column. Its layout frame (not an offset) is what `scrollTo` uses.

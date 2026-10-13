@@ -17,6 +17,8 @@ struct TaskRowLink: View {
     @Environment(\.preferences) private var preferences
     @State private var failure: String?
     @State private var scheduling = false
+    /// Counts completions made from a swipe or the menu; the ring plays its own haptic for a tap.
+    @State private var completions = 0
 
     var body: some View {
         Group {
@@ -26,6 +28,8 @@ struct TaskRowLink: View {
                 openableRow
             }
         }
+        .sensoryFeedback(.success, trigger: completions)
+        .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -85,7 +89,7 @@ struct TaskRowLink: View {
     }
 
     @ViewBuilder private var menuItems: some View {
-        Button(item.task.done ? "Mark as not done" : "Complete", systemImage: "checkmark.circle") { toggle() }
+        Button(item.task.done ? "Mark as not done" : "Complete", systemImage: "checkmark.circle") { toggleWithHaptic() }
         Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
         Button("Due tomorrow", systemImage: "sunrise") { dueTomorrow() }
         Button("Schedule…", systemImage: "calendar") { scheduling = true }
@@ -118,7 +122,7 @@ struct TaskRowLink: View {
             EmptyView()
         case .complete:
             // Swipe buttons show only the icon; the title is what VoiceOver offers as the row's action.
-            Button(item.task.done ? "Mark not done" : "Complete", systemImage: "checkmark") { toggle() }
+            Button(item.task.done ? "Mark not done" : "Complete", systemImage: "checkmark") { toggleWithHaptic() }
                 .tint(Color(.meadow500))
         case .schedule:
             Button("Schedule", systemImage: "calendar") { scheduling = true }
@@ -178,6 +182,12 @@ extension TaskRowLink {
     private func toggle() {
         let patch = TaskPatch(done: !item.task.done)
         attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+    }
+
+    /// For the swipe and the menu, which have no ring to play the completion haptic. Completing only, as the ring does.
+    private func toggleWithHaptic() {
+        if !item.task.done { completions += 1 }
+        toggle()
     }
 
     /// Moves the due date on by the preset, counting from the later of the current date and today.

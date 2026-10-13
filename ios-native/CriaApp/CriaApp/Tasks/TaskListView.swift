@@ -95,6 +95,7 @@ struct TaskListView: View {
         .quickAdd(services: services, contextProjectId: contextProjectId)
         .displayOptions(display, services: services)
         .taskSelection(selection, services: services)
+        .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

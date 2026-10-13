@@ -32,6 +32,8 @@ struct ProjectEditorSheet: View {
     @State private var title = ""
     @State private var details = ""
     @State private var colour: String?
+    /// Counts swatch taps, for the selection haptic.
+    @State private var swatchPicks = 0
     @State private var identifier = ""
     @State private var parent: String?
     @State private var isArchived = false
@@ -80,6 +82,7 @@ struct ProjectEditorSheet: View {
                             ForEach(projectColours, id: \.self) { swatch($0) }
                         }
                     }
+                    .sensoryFeedback(.selection, trigger: swatchPicks)
                 }
                 Section("Parent project") {
                     Picker("Parent", selection: $parent) {
@@ -142,6 +145,7 @@ struct ProjectEditorSheet: View {
     private func swatch(_ hex: String?) -> some View {
         Button {
             colour = hex
+            swatchPicks += 1
         } label: {
             Circle()
                 .fill(Color(hexString: hex) ?? Color(.muted))

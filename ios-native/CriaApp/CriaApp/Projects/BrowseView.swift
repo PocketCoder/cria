@@ -22,6 +22,8 @@ struct BrowseView: View {
     @State private var duplicatingTitle: String?
     @State private var failure: String?
     @State private var failureTitle = "Could not delete"
+    /// Counts completed deletes (project, label, filter), for the warning haptic.
+    @State private var deletions = 0
     @State private var pendingFilterDelete: SavedFilterRecord?
     @State private var showRamble = false
     @State private var showPhoto = false
@@ -54,6 +56,7 @@ struct BrowseView: View {
     private func deleteFilter(_ filter: SavedFilterRecord) async {
         do {
             try await services.deleteSavedFilter(serverId: filter.serverId)
+            deletions += 1
         } catch {
             fail("Could not delete", error)
         }
@@ -114,6 +117,8 @@ struct BrowseView: View {
             LabelEditorSheet(services: services, label: target.label)
         }
         .task { await aiStatus.refresh() }
+        .sensoryFeedback(.warning, trigger: deletions)
+        .errorHaptic(failure)
         .alert(failureTitle, isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -146,6 +151,7 @@ struct BrowseView: View {
             Button("Delete", role: .destructive) {
                 do {
                     try services.store.deleteProject(localId: project.localId)
+                    deletions += 1
                 } catch {
                     fail("Could not delete", error)
                 }
@@ -277,6 +283,7 @@ extension BrowseView {
     func deleteLabel(_ label: LabelRecord) {
         do {
             try services.store.deleteLabel(localId: label.localId)
+            deletions += 1
         } catch {
             fail("Could not delete", error)
         }

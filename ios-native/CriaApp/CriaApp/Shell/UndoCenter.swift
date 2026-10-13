@@ -19,6 +19,10 @@ final class UndoCenter {
 
     private(set) var offer: Offer?
     private(set) var failure: String?
+    /// Counts task deletes and successful undos, for the toast's haptics (one change per action, so a bulk delete
+    /// that lands in one update plays one).
+    private(set) var deletions = 0
+    private(set) var restores = 0
     private var services: AppServices?
     private var dismissTask: Task<Void, Never>?
 
@@ -30,6 +34,7 @@ final class UndoCenter {
     func deleteTask(localId: String, title: String) throws {
         guard let services else { return }
         try services.store.deleteTask(localId: localId, undoWindow: Self.window)
+        deletions += 1
         let next = Offer(taskLocalId: localId, title: title)
         offer = next
         failure = nil
@@ -46,7 +51,9 @@ final class UndoCenter {
         self.offer = nil
         dismissTask?.cancel()
         do {
-            if try !services.store.undoDeleteTask(localId: offer.taskLocalId) {
+            if try services.store.undoDeleteTask(localId: offer.taskLocalId) {
+                restores += 1
+            } else {
                 failure = "Too late to undo: the delete was already sent."
             }
         } catch {
@@ -86,6 +93,8 @@ struct UndoToast: View {
                 .modifier(ToastChrome())
             }
         }
+        .sensoryFeedback(.warning, trigger: center.deletions)
+        .sensoryFeedback(.success, trigger: center.restores)
         .animation(.snappy, value: center.offer)
         .animation(.snappy, value: center.failure)
     }

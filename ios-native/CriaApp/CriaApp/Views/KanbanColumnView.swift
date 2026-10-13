@@ -1,17 +1,24 @@
 import CriaKit
 import SwiftUI
 
-/// Accepts a dragged card, unless the board is read-only.
+/// Accepts a dragged card, unless the board is read-only. A selection tick as a dragged card moves over a new column
+/// or card (a new place to land), a light impact when it drops.
 private struct KanbanDropTarget: ViewModifier {
     let enabled: Bool
     let action: (String) -> Bool
+    @State private var targeted = false
+    @State private var drops = 0
 
     @ViewBuilder func body(content: Content) -> some View {
         if enabled {
             content.dropDestination(for: String.self) { items, _ in
                 guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
-                return action(taskId)
-            }
+                let accepted = action(taskId)
+                if accepted { drops += 1 }
+                return accepted
+            } isTargeted: { targeted = $0 }
+                .sensoryFeedback(trigger: targeted) { _, now in now ? SensoryFeedback.selection : nil }
+                .sensoryFeedback(.impact(weight: .light), trigger: drops)
         } else {
             content
         }
@@ -68,6 +75,7 @@ struct KanbanColumnView: View {
             onDrop(taskId, nil)
             return true
         })
+        .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

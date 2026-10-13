@@ -136,6 +136,7 @@ struct SmartViewScreen: View {
         } message: { _ in
             Text("Tasks with a due time keep it.")
         }
+        .errorHaptic(failure)
         .alert("Could not reschedule", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

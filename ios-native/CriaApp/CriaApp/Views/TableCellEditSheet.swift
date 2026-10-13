@@ -91,6 +91,7 @@ private struct TableAssigneesEditor: View {
             .sheet(isPresented: $picking) {
                 AssigneePickerSheet(services: services, assigned: Set(live.value.map(\.userId))) { user in assign(user) }
             }
+            .errorHaptic(failure)
             .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {

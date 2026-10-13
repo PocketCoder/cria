@@ -9,6 +9,7 @@ struct BucketEditSheet: View {
     @State private var title = ""
     @State private var limitText = ""
     @State private var confirmingDelete = false
+    @State private var deletions = 0
     @State private var failure: String?
 
     var body: some View {
@@ -36,6 +37,8 @@ struct BucketEditSheet: View {
             ) {
                 Button("Delete column", role: .destructive) { delete() }
             }
+            .sensoryFeedback(.warning, trigger: deletions)
+            .errorHaptic(failure)
             .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -64,6 +67,7 @@ struct BucketEditSheet: View {
         guard edit.canDelete else { return }
         do {
             try services.store.deleteBucket(localId: edit.bucket.localId)
+            deletions += 1
             dismiss()
         } catch {
             failure = String(describing: error)

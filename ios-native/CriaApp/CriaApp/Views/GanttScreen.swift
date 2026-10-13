@@ -150,6 +150,8 @@ struct GanttBar: View {
     /// When a gesture last moved the bar. A tap within `tapSuppression` of it is the lift of that drag, not a tap.
     /// A time stamp rather than a flag, so a gesture that is cancelled (no `onEnded`) cannot block taps for good.
     @State private var lastDragAt: Date?
+    /// Counts drags that changed the dates, for the drop haptic.
+    @State private var commits = 0
     private static let tapSuppression: TimeInterval = 0.5
 
     var body: some View {
@@ -181,6 +183,9 @@ struct GanttBar: View {
         )
         .overlay(alignment: .leading) { handle(.resizeStart) }
         .overlay(alignment: .trailing) { handle(.resizeEnd) }
+        // A tick as this bar's dates move by a whole day while it is dragged, a light impact when it is let go.
+        .sensoryFeedback(trigger: movingDays) { old, new in old != nil && new != nil ? SensoryFeedback.selection : nil }
+        .sensoryFeedback(.impact(weight: .light), trigger: commits)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)
         .accessibilityAddTraits(.isButton)
@@ -192,6 +197,11 @@ struct GanttBar: View {
                 Button("Move a day later") { shift(1) }
             }
         }
+    }
+
+    /// How many days this bar is dragged by, nil when it is not the one being dragged.
+    private var movingDays: Int? {
+        drag?.taskLocalId == place.taskLocalId ? drag?.deltaDays : nil
     }
 
     /// "Task, 3 to 7 June", noting derived or missing dates and a finished task.
@@ -241,6 +251,7 @@ struct GanttBar: View {
         lastDragAt = Date()
         let days = GanttGeometry.apply(finished)
         if days.start != finished.originalStart || days.end != finished.originalEnd {
+            commits += 1
             onCommit(days.start, days.end)
         }
     }

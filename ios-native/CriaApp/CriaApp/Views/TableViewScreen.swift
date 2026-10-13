@@ -108,6 +108,7 @@ struct TableViewScreen: View {
         .sheet(item: $cellEdit) { edit in
             TableCellEditSheet(services: services, edit: edit) { editFailure = $0 }
         }
+        .errorHaptic(editFailure)
         .alert("Could not save", isPresented: Binding(get: { editFailure != nil }, set: { if !$0 { editFailure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

@@ -24,6 +24,7 @@ struct WeekStrip: View {
             weekButton("Next week", systemImage: "chevron.right", by: 7)
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .sensoryFeedback(.selection, trigger: selected)
     }
 
     private func weekButton(_ title: String, systemImage: String, by days: Int) -> some View {

@@ -14,6 +14,8 @@ struct TableCompactRow: View {
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.colorScheme) private var colorScheme
     @State private var failure: String?
+    /// Counts completions from the swipe; the ring plays its own haptic for a tap.
+    @State private var completions = 0
 
     private var task: TaskRecord { item.task }
 
@@ -51,9 +53,14 @@ struct TableCompactRow: View {
             }
         }
         .swipeActions(edge: .leading) {
-            Button(task.done ? "Reopen" : "Done", systemImage: "checkmark") { toggle() }
-                .tint(Color(.meadow500))
+            Button(task.done ? "Reopen" : "Done", systemImage: "checkmark") {
+                if !task.done { completions += 1 }
+                toggle()
+            }
+            .tint(Color(.meadow500))
         }
+        .sensoryFeedback(.success, trigger: completions)
+        .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

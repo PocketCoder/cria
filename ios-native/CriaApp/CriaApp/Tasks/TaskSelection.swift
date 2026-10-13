@@ -46,6 +46,9 @@ private struct TaskSelectionHost: ViewModifier {
     @State private var scheduling = false
     @State private var moving = false
     @State private var confirmingDelete = false
+    /// One tick per bulk action that saved every task, for the haptics: one per action, not one per task.
+    @State private var completions = 0
+    @State private var deletions = 0
 
     private var ids: [String] { selection.ids.sorted() }
     private var store: CriaStore { services.store }
@@ -57,7 +60,7 @@ private struct TaskSelectionHost: ViewModifier {
                 if selection.isActive {
                     SelectionBar(
                         count: selection.count,
-                        onComplete: { finish(store.bulkComplete(ids)) },
+                        onComplete: { if finish(store.bulkComplete(ids)) { completions += 1 } },
                         onSchedule: { scheduling = true },
                         onDefer: { preset in finish(store.bulkDefer(ids, preset: preset)) },
                         onMove: { moving = true },
@@ -77,8 +80,13 @@ private struct TaskSelectionHost: ViewModifier {
             .confirmationDialog(
                 "Delete \(selection.count) tasks?", isPresented: $confirmingDelete, titleVisibility: .visible
             ) {
-                Button("Delete \(selection.count) tasks", role: .destructive) { finish(store.bulkDelete(ids)) }
+                Button("Delete \(selection.count) tasks", role: .destructive) {
+                    if finish(store.bulkDelete(ids)) { deletions += 1 }
+                }
             }
+            .sensoryFeedback(.success, trigger: completions)
+            .sensoryFeedback(.warning, trigger: deletions)
+            .errorHaptic(selection.failure)
             .alert("Could not update every task", isPresented: Binding(
                 get: { selection.failure != nil }, set: { if !$0 { selection.failure = nil } }
             )) {
@@ -88,10 +96,12 @@ private struct TaskSelectionHost: ViewModifier {
             }
     }
 
-    /// Ends the selection and reports any task that did not save.
-    private func finish(_ result: BulkResult) {
+    /// Ends the selection and reports any task that did not save. True when every task saved.
+    @discardableResult
+    private func finish(_ result: BulkResult) -> Bool {
         if !result.failures.isEmpty { selection.failure = result.failures.joined(separator: "\n") }
         selection.stop()
+        return result.failures.isEmpty
     }
 
     /// One task goes through Undo like a swipe delete. Several have no single Undo, so they ask first.
