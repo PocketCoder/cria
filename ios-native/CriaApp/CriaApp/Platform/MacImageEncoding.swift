@@ -16,7 +16,7 @@ enum JPEGReencoder {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: min(maxSide, max(width, height)),
+            kCGImageSourceThumbnailMaxPixelSize: min(maxSide, max(width, height))
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
               let context = CGContext(
