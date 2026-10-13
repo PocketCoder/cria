@@ -79,66 +79,6 @@ struct KanbanBoardView: View {
         }
     }
 
-    /// While a card is dragged every column shares the screen, so any of them can be reached without scrolling.
-    private func width(_ available: CGFloat) -> CGFloat {
-        guard dragging && leftSource else { return Self.columnWidth(available, typeSize: typeSize) }
-        let count = CGFloat(max(columns.count, 1))
-        return max(88, (available - 32 - 12 * (count - 1)) / count)
-    }
-
-    /// The cards a column draws: its own order, or soonest due first when that setting is on.
-    private func cards(of column: KanbanColumn, in plan: KanbanBoardPlan) -> [KanbanCardPlan] {
-        let cards = plan.column(column.bucket.localId).cards
-        return sortByDue ? KanbanSort.byDueDate(cards) : cards
-    }
-
-    private var sortByDue: Bool { preferences.custom.kanbanSortByDue }
-
-    private func beginDrag(from columnId: String) {
-        let started = Date.now
-        dragStartedAt = started
-        dragSource = columnId
-        // With the cards in due-date order there is nothing to reorder, so go straight to choosing a column.
-        leftSource = sortByDue
-        sourceWasTargeted = false
-        hoverColumn = nil
-        dragging = true
-        // Backstop for a drag that ends with no event at all (dropped outside the board): see `endStaleDrag`.
-        Task {
-            try? await Task.sleep(for: .seconds(30))
-            if dragStartedAt == started { endDrag() }
-        }
-    }
-
-    private func endDrag() {
-        dragging = false
-        dragSource = nil
-        leftSource = false
-        sourceWasTargeted = false
-        hoverColumn = nil
-        dragStartedAt = nil
-    }
-
-    /// A column reports the dragged card entering or leaving it. Leaving the column it came from, or entering another,
-    /// switches from reordering to choosing a column.
-    private func columnOver(_ id: String, _ isOver: Bool) {
-        guard dragging else { return }
-        if isOver {
-            hoverColumn = id
-            if id == dragSource { sourceWasTargeted = true } else { leftSource = true }
-        } else {
-            if hoverColumn == id { hoverColumn = nil }
-            if id == dragSource && sourceWasTargeted { leftSource = true }
-        }
-    }
-
-    /// A drag that was cancelled (dropped on nothing) sends no event, so the next touch on the board ends it. Not within
-    /// a second of the start: that is the touch that lifted the card.
-    private func endStaleDrag() {
-        guard dragging, let started = dragStartedAt, Date.now.timeIntervalSince(started) > 1 else { return }
-        endDrag()
-    }
-
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
     /// and accessibility sizes take nearly the whole width so titles and chips are not squeezed.
     private static func columnWidth(_ available: CGFloat, typeSize: DynamicTypeSize) -> CGFloat {
@@ -304,6 +244,71 @@ struct KanbanBoardView: View {
         }
     }
 }
+
+// MARK: Drag state
+
+extension KanbanBoardView {
+    /// While a card is dragged every column shares the screen, so any of them can be reached without scrolling.
+    private func width(_ available: CGFloat) -> CGFloat {
+        guard dragging && leftSource else { return Self.columnWidth(available, typeSize: typeSize) }
+        let count = CGFloat(max(columns.count, 1))
+        return max(88, (available - 32 - 12 * (count - 1)) / count)
+    }
+
+    /// The cards a column draws: its own order, or soonest due first when that setting is on.
+    private func cards(of column: KanbanColumn, in plan: KanbanBoardPlan) -> [KanbanCardPlan] {
+        let cards = plan.column(column.bucket.localId).cards
+        return sortByDue ? KanbanSort.byDueDate(cards) : cards
+    }
+
+    private var sortByDue: Bool { preferences.custom.kanbanSortByDue }
+
+    private func beginDrag(from columnId: String) {
+        let started = Date.now
+        dragStartedAt = started
+        dragSource = columnId
+        // With the cards in due-date order there is nothing to reorder, so go straight to choosing a column.
+        leftSource = sortByDue
+        sourceWasTargeted = false
+        hoverColumn = nil
+        dragging = true
+        // Backstop for a drag that ends with no event at all (dropped outside the board): see `endStaleDrag`.
+        Task {
+            try? await Task.sleep(for: .seconds(30))
+            if dragStartedAt == started { endDrag() }
+        }
+    }
+
+    private func endDrag() {
+        dragging = false
+        dragSource = nil
+        leftSource = false
+        sourceWasTargeted = false
+        hoverColumn = nil
+        dragStartedAt = nil
+    }
+
+    /// A column reports the dragged card entering or leaving it. Leaving the column it came from, or entering another,
+    /// switches from reordering to choosing a column.
+    private func columnOver(_ id: String, _ isOver: Bool) {
+        guard dragging else { return }
+        if isOver {
+            hoverColumn = id
+            if id == dragSource { sourceWasTargeted = true } else { leftSource = true }
+        } else {
+            if hoverColumn == id { hoverColumn = nil }
+            if id == dragSource && sourceWasTargeted { leftSource = true }
+        }
+    }
+
+    /// A drag that was cancelled (dropped on nothing) sends no event, so the next touch on the board ends it. Not within
+    /// a second of the start: that is the touch that lifted the card.
+    private func endStaleDrag() {
+        guard dragging, let started = dragStartedAt, Date.now.timeIntervalSince(started) > 1 else { return }
+        endDrag()
+    }
+}
+
 
 /// The board's columns, plus each card's labels for the chips.
 struct KanbanBoardData: Equatable, Sendable {
