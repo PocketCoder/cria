@@ -65,8 +65,7 @@ export const SAME_VERB_ROUTES: readonly RouteRule[] = [
   { method: 'POST', path: /^\/oauth\// },
   { method: 'POST', path: /^\/admin\/users$/ },
   { method: 'POST', path: /^\/migration\/(todoist|trello|vikunja-file)\/(migrate|auth)$/ },
-  // v1 already updated labels with PUT, and uploads backgrounds with PUT.
-  { method: 'PUT', path: /^\/labels\/[^/]+$/ },
+  // v1 already uploads backgrounds with PUT.
   { method: 'PUT', path: /^\/projects\/[^/]+\/backgrounds\/upload$/ },
 ];
 

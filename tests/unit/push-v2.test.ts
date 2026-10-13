@@ -190,7 +190,7 @@ class FakeVikunja {
       }
       return this.out({ items: slice, page, per_page: 2, total: all.length, total_pages: Math.ceil(all.length / 2) });
     }
-    const hit = crud(this.projects, '/projects', replace) ?? crud(this.labels, '/labels', this.version === 'v1' ? 'PUT' : 'PUT');
+    const hit = crud(this.projects, '/projects', replace) ?? crud(this.labels, '/labels', replace);
     if (hit) return hit;
     if ((g = m(/^\/tasks\/(\d+)$/))) {
       const id = Number(g[1]);
@@ -284,7 +284,7 @@ describe.each<ApiVersion>(['v1', 'v2'])('outbox executors against a %s server', 
     expect(await outboxCount()).toBe(0);
   });
 
-  it('labels: create, update (PUT on both) and delete', async () => {
+  it('labels: create, update (POST on v1, PUT on v2) and delete', async () => {
     const l = await createLabel({ title: 'urgent', hexColor: '#ff0000' });
     await drain();
     expect(server.writes()).toEqual([v2 ? 'POST /labels' : 'PUT /labels']);
@@ -293,7 +293,7 @@ describe.each<ApiVersion>(['v1', 'v2'])('outbox executors against a %s server', 
     server.calls = [];
     await updateLabel(l.localId, { title: 'urgent!' });
     await drain();
-    expect(server.writes()).toEqual(['PUT /labels/100']);
+    expect(server.writes()).toEqual([v2 ? 'PUT /labels/100' : 'POST /labels/100']);
     expect(server.labels.get(100)).toMatchObject({ title: 'urgent!', hex_color: 'ff0000' });
 
     server.calls = [];

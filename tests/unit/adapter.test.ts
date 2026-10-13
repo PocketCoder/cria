@@ -66,7 +66,7 @@ describe('planRoute: verbs and paths (v1 -> v2, from the contract table)', () =>
     ['POST', '/user/password', 'POST', '/user/password'],
     ['POST', '/user/export/download', 'POST', '/user/export/download'],
     ['POST', '/user/deletion/request', 'POST', '/user/deletion/request'],
-    ['PUT', '/labels/4', 'PUT', '/labels/4'],
+    ['POST', '/labels/4', 'PUT', '/labels/4'],
     ['PUT', '/projects/3/backgrounds/upload', 'PUT', '/projects/3/backgrounds/upload'],
     ['GET', '/tasks', 'GET', '/tasks'],
     ['DELETE', '/tasks/9', 'DELETE', '/tasks/9'],

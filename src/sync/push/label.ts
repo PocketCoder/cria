@@ -107,8 +107,12 @@ export async function executeLabelOp(
       }
     }
 
+    // v1 updates labels with POST (pkg/routes/routes.go: `a.POST("/labels/:label", ...)`); the swagger
+    // annotation in pkg/models/label.go says PUT, so the generated schema is wrong. The adapter flips it to
+    // PUT on v2.
+    const updateLabelCall = client.POST as unknown as ApiClient['PUT'];
     const res = await callApi(
-      client.PUT('/labels/{id}', {
+      updateLabelCall('/labels/{id}', {
         params: { path: { id: row.server_id } },
         body: labelBody(row),
       }),

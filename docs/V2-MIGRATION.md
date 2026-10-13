@@ -35,7 +35,7 @@ Same path unless a rename is shown. `{x}` names differ in the spec but are posit
 
 **Create is POST, update is PUT** (v1 was PUT/POST): `/projects`, `/labels`, `/filters`, `/teams`, `/tokens`, `/user/settings/token/caldav`, `/user/settings/webhooks`, `/projects/{p}/tasks`, `/projects/{p}/views`, `/projects/{p}/views/{v}/buckets`, `/projects/{p}/shares`, `/projects/{p}/users`, `/projects/{p}/teams`, `/projects/{p}/webhooks`, `/tasks/{t}/assignees`, `/tasks/{t}/labels`, `/tasks/{t}/comments`, `/tasks/{t}/relations`, `/tasks/{t}/attachments` (multipart, field name `files`), `/teams/{t}/members`, `/{entitykind}/{entityid}/reactions`, `/subscriptions/{entity}/{entityID}` (PUT -> POST).
 
-**Updates that moved from POST to PUT** (and now also accept PATCH): `/projects/{id}`, `/labels/{id}` (v1 already PUT; now `PUT`/`PATCH`), `/tasks/{id}`, `/filters/{id}`, `/teams/{id}`, `/projects/{p}/views/{v}`, `/tasks/{t}/comments/{c}`, `/projects/{p}/views/{v}/buckets/{b}`, `/projects/{p}/users/{u}`, `/projects/{p}/teams/{t}`.
+**Updates that moved from POST to PUT** (and now also accept PATCH): `/projects/{id}`, `/labels/{id}` (v1 is `POST` per `pkg/routes/routes.go`; the v1 swagger annotation in `pkg/models/label.go` wrongly says `PUT`, so `schema.ts` does too), `/tasks/{id}`, `/filters/{id}`, `/teams/{id}`, `/projects/{p}/views/{v}`, `/tasks/{t}/comments/{c}`, `/projects/{p}/views/{v}/buckets/{b}`, `/projects/{p}/users/{u}`, `/projects/{p}/teams/{t}`.
 
 **Other verb flips (POST -> PUT):** `/notifications/{id}` (mark read), `/tasks/{id}/position`, `/tasks/{id}/read`, `/tasks/bulk`, `/tasks/{t}/assignees/bulk`, `/tasks/{t}/labels/bulk`, `/user/settings/avatar` (`POST` JSON -> `PUT` multipart field `avatar`), `/user/settings/email` (`POST` -> `PUT`, plus new `DELETE`), `/projects/{p}/backgrounds/unsplash` (POST -> PUT), `/projects/{p}/views/{v}/buckets/{b}/tasks` (POST -> PUT, same path; body is a `TaskBucket`, the bucket id comes from the URL and `bucket_id` in the body is ignored. `/buckets/tasks` without an id is only the non-paginated GET of buckets with their tasks), `/projects/{p}/duplicate`, `/tasks/{t}/duplicate` (PUT -> POST), `/user/settings/general` (POST -> `PUT`/`PATCH`/`GET`).
 
@@ -49,7 +49,7 @@ Same path unless a rename is shown. `{x}` names differ in the spec but are posit
 
 ### v1-only routes (no v2 equivalent; keep calling `/api/v1`)
 
-TOTP: `GET /user/settings/totp`, `POST /user/settings/totp/enroll`, `/enable`, `/disable`, `GET /user/settings/totp/qrcode`. Avatar upload `PUT /user/settings/avatar/upload` (v2 replaced it with `PUT /user/settings/avatar`, multipart). The Microsoft Todo migration routes. If a client only reaches these through the adapter's route table, put the exception list in one place.
+TOTP: `GET /user/settings/totp`, `POST /user/settings/totp/enroll`, `/enable`, `/disable`, `GET /user/settings/totp/qrcode`. (Vikunja `main` now has these on v2 too, same verbs, `pkg/routes/api/v2/user_totp.go`; they stay pinned to v1, which works until 4.0, because the 2.7.0 spec lacked them.) Avatar upload `PUT /user/settings/avatar/upload` (v2 replaced it with `PUT /user/settings/avatar`, multipart). The Microsoft Todo migration routes. If a client only reaches these through the adapter's route table, put the exception list in one place.
 
 ### New in v2 (not used by this change)
 
