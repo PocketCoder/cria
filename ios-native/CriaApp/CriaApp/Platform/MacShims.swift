@@ -81,6 +81,15 @@ extension SearchFieldPlacement {
     static func navigationBarDrawer(displayMode: ShimDrawerDisplayMode) -> SearchFieldPlacement { .automatic }
 }
 
+extension DatePickerStyle where Self == FieldDatePickerStyle {
+    /// The wheel is iOS-only; a text field with steppers is the Mac's time entry.
+    static var wheel: FieldDatePickerStyle { .field }
+}
+
+extension PickerStyle where Self == MenuPickerStyle {
+    static var navigationLink: MenuPickerStyle { .menu }
+}
+
 extension ToolbarItemPlacement {
     static var topBarLeading: ToolbarItemPlacement { .navigation }
     static var topBarTrailing: ToolbarItemPlacement { .primaryAction }
