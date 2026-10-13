@@ -37,22 +37,7 @@ struct ReminderSection: View {
             }
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
             ForEach(Array(reminders.enumerated()), id: \.offset) { _, reminder in
-                Label {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(reminder.summary(display: dateDisplay))
-                        // A relative reminder also names the moment it fires, so "1 hour before" is never vague.
-                        if let when = reminder.firesAtText(display: dateDisplay) {
-                            Text(when).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-                        }
-                    }
-                } icon: {
-                    Image(systemName: "bell").foregroundStyle(Color(.coral500))
-                }
-                    .swipeActions {
-                        Button("Delete", role: .destructive) {
-                            state.attempt { try services.store.removeReminder(taskLocalId: task.localId, reminder) }
-                        }
-                    }
+                ReminderRow(services: services, taskLocalId: task.localId, reminder: reminder, state: state)
             }
             if !reminders.isEmpty && (systemDenied || !preferences.notificationsEnabled) { notificationWarning }
             if let custom {

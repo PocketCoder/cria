@@ -31,7 +31,7 @@ Two notes apply throughout:
 | Move to another project, priority | Vikunja | |
 | Due, start and end dates | Vikunja | Date-only values are pushed at midnight in the timezone set in Settings. Times can be added and removed. |
 | Repeat | Vikunja | Daily, weekly, monthly, yearly, or a custom interval in hours to months; counts from the due date or from completion. |
-| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). |
+| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. |
 | Progress (percent done) | Vikunja | Follows the share of subtasks done, unless set by hand. |
 | "Progress set by hand" flag | This device | `ProgressOverride` in `UserDefaults`, keyed by task. Another install may overwrite the value by following subtasks. |
 | Favourite (star) | Vikunja | |
@@ -113,8 +113,8 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 
 | Feature | Where it lives | Notes |
 |---|---|---|
-| Projects: create, edit, delete | Vikunja | Title, description, colour, parent, archived. |
-| Project hierarchy | Vikunja | Parent and child projects, with open task counts. |
+| Projects: create, edit, delete | Vikunja | Title, identifier (task prefix, up to 10 characters), description, colour, parent, archived. A parent cannot be the project itself, one of its own sub-projects or an archived project. Clearing a description does not reach the server (Vikunja only saves a non-empty one). |
+| Project hierarchy | Vikunja | Parent and child projects, with open task counts. "New sub-project" from a project's long press or its Info page. |
 | Favourite a project | Vikunja | Swipe right in Browse. |
 | Expand and collapse in Browse | This device | `@AppStorage` (`cria.projectTree.collapsed`). |
 | Labels: create | Vikunja | From the task label picker, quick add, or Ramble. |

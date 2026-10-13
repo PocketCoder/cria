@@ -3,11 +3,14 @@ import SwiftUI
 
 enum ProjectEditorTarget: Identifiable {
     case create
+    /// A new project with its parent already chosen (the parent's local id).
+    case createChild(parent: String)
     case edit(ProjectRecord)
 
     var id: String {
         switch self {
         case .create: return "create"
+        case .createChild(let parent): return "create-in-\(parent)"
         case .edit(let project): return project.localId
         }
     }
@@ -29,6 +32,7 @@ struct ProjectEditorSheet: View {
     @State private var title = ""
     @State private var details = ""
     @State private var colour: String?
+    @State private var identifier = ""
     @State private var parent: String?
     @State private var isArchived = false
     @State private var errorMessage: String?
@@ -38,11 +42,27 @@ struct ProjectEditorSheet: View {
         return nil
     }
 
-    /// Parents offered: not the project itself or anything beneath it.
+    /// Parents offered: not the project itself or anything beneath it (a cycle), and not an archived project, which
+    /// Vikunja refuses. A current parent stays listed so the picker can show it.
     private var parentChoices: [ProjectRecord] {
-        guard let editing else { return projects }
-        let banned = ProjectTree.descendantIds(of: editing.localId, in: projects).union([editing.localId])
-        return projects.filter { !banned.contains($0.localId) }
+        ProjectTree.validParents(for: editing?.localId, in: projects, keeping: parent)
+    }
+
+    /// What is wrong with the identifier, if anything. One the project already has is not checked again, so an old
+    /// value never blocks an unrelated edit.
+    private var identifierProblem: ProjectValidationError? {
+        identifierChanged ? ProjectIdentifier.problem(identifier, among: projects, excluding: editing?.localId) : nil
+    }
+
+    private var identifierChanged: Bool {
+        guard let editing else { return true }
+        return ProjectIdentifier.normalised(identifier) != ProjectIdentifier.normalised(editing.identifier)
+    }
+
+    private var navigationTitle: String {
+        if editing != nil { return "Edit project" }
+        if case .createChild = target { return "New sub-project" }
+        return "New project"
     }
 
     var body: some View {
@@ -52,6 +72,7 @@ struct ProjectEditorSheet: View {
                     TextField("Title", text: $title)
                     TextField("Description", text: $details, axis: .vertical)
                 }
+                identifierSection
                 Section("Colour") {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
@@ -84,16 +105,37 @@ struct ProjectEditorSheet: View {
                 }
             }
                 .criaSurface()
-            .navigationTitle(editing == nil ? "New project" : "Edit project")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || identifierProblem != nil)
                 }
             }
             .onAppear(perform: load)
+        }
+    }
+
+    /// The task-number prefix (`PROJ-12`). Vikunja keeps it uppercase, at most 10 characters, unique across projects.
+    private var identifierSection: some View {
+        Section {
+            TextField("Identifier", text: $identifier)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .onChange(of: identifier) { _, new in
+                    // Past the limit is cut off as it is typed; the server would refuse more.
+                    if new.unicodeScalars.count > ProjectIdentifier.maxLength {
+                        identifier = String(String.UnicodeScalarView(new.unicodeScalars.prefix(ProjectIdentifier.maxLength)))
+                    }
+                }
+        } footer: {
+            if let identifierProblem {
+                Text(identifierProblem.description).foregroundStyle(Color(.destructive))
+            } else {
+                Text("Optional. Up to \(ProjectIdentifier.maxLength) characters, unique to this project. Tasks are numbered like PROJ-12.")
+            }
         }
     }
 
@@ -113,10 +155,12 @@ struct ProjectEditorSheet: View {
     }
 
     private func load() {
+        if case .createChild(let preset) = target { parent = preset }
         guard let editing else { return }
         title = editing.title
         details = editing.description ?? ""
         colour = editing.hexColor
+        identifier = editing.identifier ?? ""
         parent = editing.parentLocalId
         isArchived = editing.isArchived
     }
@@ -130,10 +174,12 @@ struct ProjectEditorSheet: View {
                 patch.description = .set(note.isEmpty ? nil : note)
                 patch.hexColor = .set(colour)
                 patch.parentLocalId = .set(parent)
+                if identifierChanged { patch.identifier = .set(identifier) }
                 try services.store.updateProject(localId: editing.localId, patch: patch)
             } else {
                 try services.store.createProject(ProjectInput(
-                    title: name, description: note.isEmpty ? nil : note, parentLocalId: parent, hexColor: colour
+                    title: name, description: note.isEmpty ? nil : note, parentLocalId: parent, hexColor: colour,
+                    identifier: identifier
                 ))
             }
             dismiss()

@@ -88,22 +88,7 @@ extension CriaStore {
     /// A relative reminder resolves its local trigger time from the task's matching date; the next pull corrects it.
     public func addReminder(taskLocalId: String, _ input: ReminderInput) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            var resolved = input.triggerAt
-            let relative = input.period != nil && input.relativeTo != nil
-            if let period = input.period, let anchor = input.relativeTo {
-                let column = anchor.rawValue
-                let base = try String.fetchOne(
-                    connection, sql: "SELECT \(column) FROM tasks WHERE local_id = ?", arguments: [taskLocalId]
-                )
-                // An all-day date counts from the start of that day here, as the date sheet and the push read it.
-                if let base, let date = DueDates.pickerDate(base) {
-                    resolved = ISO8601DateFormatter().string(from: date.addingTimeInterval(TimeInterval(period)))
-                }
-            }
-            try connection.execute(sql: """
-                INSERT OR IGNORE INTO task_reminders (task_local_id, reminder_at, relative_period, relative_to, notified)
-                VALUES (?, ?, ?, ?, 0)
-                """, arguments: [taskLocalId, resolved, relative ? input.period : nil, relative ? input.relativeTo?.rawValue : nil])
+            try CriaStore.insertReminder(connection, taskLocalId: taskLocalId, input)
             try CriaStore.markTaskChanged(connection, localId: taskLocalId)
         }
     }
@@ -111,15 +96,55 @@ extension CriaStore {
     /// User mutation: removes the reminder with this exact shape and queues a task update.
     public func removeReminder(taskLocalId: String, _ reminder: ReminderRecord) throws {
         try userWrite(announcing: [.tasks, .outbox]) { connection in
-            try connection.execute(sql: """
-                DELETE FROM task_reminders
-                 WHERE task_local_id = ?
-                   AND COALESCE(reminder_at, '') = COALESCE(?, '')
-                   AND COALESCE(relative_to, '') = COALESCE(?, '')
-                   AND (COALESCE(relative_to, '') = '' OR relative_period IS ?)
-                """, arguments: [taskLocalId, reminder.reminderAt, reminder.relativeTo, reminder.relativePeriod])
+            try CriaStore.deleteReminder(connection, taskLocalId: taskLocalId, reminder)
             try CriaStore.markTaskChanged(connection, localId: taskLocalId)
         }
+    }
+
+    /// User mutation: swaps `old` for a new reminder in one transaction, so one task update is queued and the push
+    /// never sees the task without it. Either kind can become the other (a fixed time can turn relative and back).
+    /// The new row starts unfired, so an edited reminder whose old one already went off can fire again. Throws
+    /// `notFound` when `old` is no longer on the task (it was removed or replaced by a pull), changing nothing.
+    public func replaceReminder(taskLocalId: String, old: ReminderRecord, with input: ReminderInput) throws {
+        try userWrite(announcing: [.tasks, .outbox]) { connection in
+            guard try CriaStore.deleteReminder(connection, taskLocalId: taskLocalId, old) else {
+                throw CriaStoreError.notFound("reminder")
+            }
+            try CriaStore.insertReminder(connection, taskLocalId: taskLocalId, input)
+            try CriaStore.markTaskChanged(connection, localId: taskLocalId)
+        }
+    }
+
+    private static func insertReminder(_ connection: Database, taskLocalId: String, _ input: ReminderInput) throws {
+        var resolved = input.triggerAt
+        let relative = input.period != nil && input.relativeTo != nil
+        if let period = input.period, let anchor = input.relativeTo {
+            let column = anchor.rawValue
+            let base = try String.fetchOne(
+                connection, sql: "SELECT \(column) FROM tasks WHERE local_id = ?", arguments: [taskLocalId]
+            )
+            // An all-day date counts from the start of that day here, as the date sheet and the push read it.
+            if let base, let date = DueDates.pickerDate(base) {
+                resolved = ISO8601DateFormatter().string(from: date.addingTimeInterval(TimeInterval(period)))
+            }
+        }
+        try connection.execute(sql: """
+            INSERT OR IGNORE INTO task_reminders (task_local_id, reminder_at, relative_period, relative_to, notified)
+            VALUES (?, ?, ?, ?, 0)
+            """, arguments: [taskLocalId, resolved, relative ? input.period : nil, relative ? input.relativeTo?.rawValue : nil])
+    }
+
+    /// Whether a row matched and was deleted.
+    @discardableResult
+    private static func deleteReminder(_ connection: Database, taskLocalId: String, _ reminder: ReminderRecord) throws -> Bool {
+        try connection.execute(sql: """
+            DELETE FROM task_reminders
+             WHERE task_local_id = ?
+               AND COALESCE(reminder_at, '') = COALESCE(?, '')
+               AND COALESCE(relative_to, '') = COALESCE(?, '')
+               AND (COALESCE(relative_to, '') = '' OR relative_period IS ?)
+            """, arguments: [taskLocalId, reminder.reminderAt, reminder.relativeTo, reminder.relativePeriod])
+        return connection.changesCount > 0
     }
 
     private static func markTaskChanged(_ connection: Database, localId: String) throws {

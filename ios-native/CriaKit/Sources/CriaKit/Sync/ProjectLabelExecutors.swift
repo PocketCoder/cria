@@ -10,22 +10,42 @@ public struct ProjectExecutor: OutboxExecutor {
         SELECT \(CriaStore.projectColumns), deleted, last_synced FROM projects WHERE local_id = ?
         """
 
+    /// The whole project, because the server's update writes every column it is given and blanks the ones left out.
+    /// `identifier` is therefore always sent (empty when there is none). `description` is the exception upstream:
+    /// the server skips an empty one, so a cleared description cannot be pushed and comes back on the next pull.
     func body(_ project: ProjectRecord, store: CriaStore) throws -> JSONBody {
         var body: JSONBody = [
             "title": .string(project.title),
             "is_archived": .bool(project.isArchived),
-            "is_favorite": .bool(project.isFavorite)
+            "is_favorite": .bool(project.isFavorite),
+            "identifier": .string(project.identifier ?? "")
         ]
         if let description = project.description { body["description"] = .string(description) }
         if let color = stripHash(project.hexColor) { body["hex_color"] = .string(color) }
         if let position = project.position { body["position"] = .number(position) }
-        if let identifier = project.identifier { body["identifier"] = .string(identifier) }
-        if let parent = project.parentLocalId, let parentServerId = try store.pushInt(
-            "SELECT server_id FROM projects WHERE local_id = ?", parent
-        ) {
-            body["parent_project_id"] = .number(Double(parentServerId))
-        }
+        if let parent = try parentProjectId(project, store: store) { body["parent_project_id"] = .number(Double(parent)) }
         return body
+    }
+
+    /// The parent's server id. A synced project the user moved to the top level sends an explicit 0: newer servers
+    /// leave the parent alone when the field is missing. Only sent when the old parent is a project this device
+    /// knows, so a shared sub-project whose parent is not visible here is never detached by an unrelated edit.
+    private func parentProjectId(_ project: ProjectRecord, store: CriaStore) throws -> Int? {
+        if let parent = project.parentLocalId {
+            return try store.pushInt("SELECT server_id FROM projects WHERE local_id = ?", parent)
+        }
+        guard project.serverId != nil,
+              let row = try store.pushRow("SELECT last_synced FROM projects WHERE local_id = ?", project.localId) else { return nil }
+        let lastSynced: String? = row["last_synced"]
+        guard let lastSynced,
+              let object = try? JSONSerialization.jsonObject(with: Data(lastSynced.utf8)) as? [String: Any],
+              let oldParent = object["parent_project_id"] as? Int, oldParent > 0 else { return nil }
+        let known = try store.database.writer.read { connection in
+            try Bool.fetchOne(
+                connection, sql: "SELECT EXISTS(SELECT 1 FROM projects WHERE server_id = ? AND deleted = 0)", arguments: [oldParent]
+            ) ?? false
+        }
+        return known ? 0 : nil
     }
 
     public func execute(_ op: OutboxRow, api: ApiClient, store: CriaStore) async throws {

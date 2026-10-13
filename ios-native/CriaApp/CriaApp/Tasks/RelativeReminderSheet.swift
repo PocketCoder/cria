@@ -3,49 +3,45 @@ import SwiftUI
 
 /// A reminder at any distance from the task's due, start or end date: an amount, a unit, before or after, and which
 /// date it follows. Vikunja keeps it relative, so it moves with the date. Spec: `ReminderList.tsx`.
+/// Given `editing`, the sheet opens on that reminder and Save replaces it instead of adding another.
 struct RelativeReminderSheet: View {
     let services: AppServices
     let taskLocalId: String
+    /// The reminder being edited, as it was when the sheet opened; nil to add a new one.
+    let editing: ReminderRecord?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dateDisplay) private var dateDisplay
     private let task: TaskRecord?
-    @State private var amount = 1
-    @State private var unit = Unit.hours
-    @State private var before = true
+    @State private var amount: Int
+    @State private var unit: ReminderUnit
+    @State private var before: Bool
     @State private var anchor: ReminderAnchor?
     @State private var failure: String?
 
-    init(services: AppServices, taskLocalId: String) {
+    init(services: AppServices, taskLocalId: String, editing: ReminderRecord? = nil) {
         self.services = services
         self.taskLocalId = taskLocalId
+        self.editing = editing
         task = try? services.store.task(localId: taskLocalId)
+        let fallback = ReminderPeriod(amount: 1, unit: .hours, before: true)
+        let period = editing?.relativePeriod.map(ReminderPeriod.init(seconds:)) ?? fallback
+        _amount = State(initialValue: period.amount)
+        _unit = State(initialValue: period.unit)
+        _before = State(initialValue: period.before)
+        _anchor = State(initialValue: editing?.relativeTo.flatMap(ReminderAnchor.init(rawValue:)))
     }
 
-    enum Unit: Int, CaseIterable, Identifiable {
-        case minutes = 60, hours = 3_600, days = 86_400, weeks = 604_800
-        var id: Int { rawValue }
-
-        var title: String {
-            switch self {
-            case .minutes: return "Minutes"
-            case .hours: return "Hours"
-            case .days: return "Days"
-            case .weeks: return "Weeks"
-            }
-        }
-    }
-
-    /// The dates the task has; a reminder cannot follow one it lacks.
+    /// The dates the task has; a reminder cannot follow one it lacks. An edited reminder keeps its own date listed,
+    /// so the picker never opens on a blank choice.
     private var anchors: [ReminderAnchor] {
         guard let task else { return [] }
-        return ReminderAnchor.allCases.filter { Self.date(of: $0, in: task) != nil }
+        let own = editing?.relativeTo.flatMap(ReminderAnchor.init(rawValue:))
+        return ReminderAnchor.allCases.filter { $0 == own || Self.date(of: $0, in: task) != nil }
     }
 
     /// The amount kept to a sane size, so a long run of digits cannot overflow the seconds.
-    private var count: Int { min(max(amount, 0), 100_000) }
-
     /// Seconds from the date, negative before it.
-    private var period: Int { (before ? -1 : 1) * count * unit.rawValue }
+    private var period: Int { ReminderPeriod(amount: amount, unit: unit, before: before).seconds }
 
     var body: some View {
         NavigationStack {
@@ -63,7 +59,7 @@ struct RelativeReminderSheet: View {
                                 .multilineTextAlignment(.trailing)
                         }
                         Picker("Unit", selection: $unit) {
-                            ForEach(Unit.allCases) { Text($0.title).tag($0) }
+                            ForEach(ReminderUnit.allCases, id: \.self) { Text($0.title).tag($0) }
                         }
                         Picker("Direction", selection: $before) {
                             Text("Before").tag(true)
@@ -82,12 +78,12 @@ struct RelativeReminderSheet: View {
                 }
             }
             .criaSurface()
-            .navigationTitle("Relative reminder")
+            .navigationTitle(editing == nil ? "Relative reminder" : "Edit reminder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", action: add).disabled(anchors.isEmpty)
+                    Button(editing == nil ? "Add" : "Save", action: save).disabled(anchors.isEmpty)
                 }
             }
         }
@@ -103,10 +99,15 @@ struct RelativeReminderSheet: View {
         return "\(words.prefix(1).uppercased())\(words.dropFirst()): \(fires)"
     }
 
-    private func add() {
+    private func save() {
         guard let chosen = anchor ?? anchors.first else { return }
+        let input = ReminderInput(period: period, relativeTo: chosen)
         do {
-            try services.store.addReminder(taskLocalId: taskLocalId, ReminderInput(period: period, relativeTo: chosen))
+            if let editing {
+                try services.store.replaceReminder(taskLocalId: taskLocalId, old: editing, with: input)
+            } else {
+                try services.store.addReminder(taskLocalId: taskLocalId, input)
+            }
             dismiss()
         } catch {
             failure = String(describing: error)
@@ -127,6 +128,17 @@ struct RelativeReminderSheet: View {
         case .dueDate: return "Due date"
         case .startDate: return "Start date"
         case .endDate: return "End date"
+        }
+    }
+}
+
+private extension ReminderUnit {
+    var title: String {
+        switch self {
+        case .minutes: return "Minutes"
+        case .hours: return "Hours"
+        case .days: return "Days"
+        case .weeks: return "Weeks"
         }
     }
 }

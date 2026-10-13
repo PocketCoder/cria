@@ -52,6 +52,8 @@ struct ProjectInfoSheet: View {
                 if let project {
                     descriptionSection(project)
                     detailsSection(project)
+                    // Works offline: the sub-project syncs with the rest.
+                    Section { NewSubProjectButton(services: services, parentLocalId: projectLocalId) }
                     if let serverId = project.serverId, serverId > 0 { actionsSection }
                 }
             }

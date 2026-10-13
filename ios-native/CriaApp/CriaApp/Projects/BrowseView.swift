@@ -214,6 +214,7 @@ extension BrowseView {
     @ViewBuilder func projectMenu(_ project: ProjectRecord) -> some View {
         Button("Info", systemImage: "info.circle") { infoTarget = ProjectShareTarget(project: project) }
         Button("Edit", systemImage: "pencil") { editor = .edit(project) }
+        Button("New sub-project", systemImage: "folder.badge.plus") { editor = .createChild(parent: project.localId) }
         if !isLinkShare {
             Button("Share", systemImage: "person.badge.plus") { sharing = ProjectShareTarget(project: project) }
             Button("Duplicate", systemImage: "plus.square.on.square") { Task { await duplicate(project) } }
