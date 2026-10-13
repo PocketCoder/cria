@@ -9,6 +9,9 @@ options:
 packages:
   CriaKit:
     path: ../CriaKit
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
 targets:
   CriaApp:
     type: application
@@ -105,6 +108,7 @@ targets:
           - Fonts
     dependencies:
       - package: CriaKit
+      - package: KeyboardShortcuts
     info:
       path: Config/CriaMac-Info.plist
       properties:

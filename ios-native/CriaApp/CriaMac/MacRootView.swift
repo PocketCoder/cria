@@ -23,7 +23,15 @@ struct MacRootView: View {
     let model: AppModel
 
     var body: some View {
-        content.modifier(MacPreferenceEnvironment())
+        content
+            .modifier(MacPreferenceEnvironment())
+            .onOpenURL { model.pendingURL = $0 }
+            // A tapped notification becomes a link the shell opens.
+            .onChange(of: NotificationRouter.shared.pendingURL, initial: true) { _, url in
+                guard let url else { return }
+                NotificationRouter.shared.pendingURL = nil
+                model.pendingURL = url
+            }
     }
 
     @ViewBuilder
@@ -35,8 +43,14 @@ struct MacRootView: View {
             NavigationStack { LoginView(model: model.makeLoginModel()) }
         case .authenticated:
             if let services = model.services {
-                MacShellView(services: services) { wipe in Task { await model.signOut(wipeLocalData: wipe) } }
-                    .task { await SyncSideEffects.run(services: services) }
+                MacShellView(
+                    services: services,
+                    onSignOut: { wipe in Task { await model.signOut(wipeLocalData: wipe) } },
+                    pendingURL: Binding(get: { model.pendingURL }, set: { model.pendingURL = $0 })
+                )
+                .task { await SyncSideEffects.run(services: services) }
+                .task { await ReminderScheduler.run(store: services.store) }
+                .task { await SummaryScheduler.run(store: services.store) }
             } else if let error = model.startupError {
                 Text(error).padding()
             } else {
@@ -51,12 +65,17 @@ struct MacSettingsScene: View {
     let model: AppModel
 
     var body: some View {
-        Group {
-            if let services = model.services {
-                SettingsView(services: services) { wipe in Task { await model.signOut(wipeLocalData: wipe) } }
-            } else {
-                Text("Sign in to change settings.").foregroundStyle(.secondary).padding(40)
+        TabView {
+            Group {
+                if let services = model.services {
+                    SettingsView(services: services) { wipe in Task { await model.signOut(wipeLocalData: wipe) } }
+                } else {
+                    Text("Sign in to change settings.").foregroundStyle(.secondary).padding(40)
+                }
             }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
+            MacSettingsView()
+                .tabItem { Label("Mac", systemImage: "desktopcomputer") }
         }
         .frame(width: 560, height: 640)
         .modifier(MacPreferenceEnvironment())

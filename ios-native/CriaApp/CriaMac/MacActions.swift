@@ -26,6 +26,27 @@ final class MacActions {
         openTaskId = nil
     }
 
+    /// Opens what a `cria://` link or a tapped notification points at.
+    func open(_ url: URL, services: AppServices) {
+        guard let link = DeepLink(url: url), let destination = try? link.destination(in: services.store) else { return }
+        switch destination {
+        case .quickAdd(let title):
+            addRequest = QuickAddRequest(title: title ?? "")
+        case .open(let tab, let route):
+            switch (tab, route) {
+            case (_, .task(let id)?):
+                openTaskId = id
+            case (_, .project(let id)?): go(.project(id))
+            case (_, .inbox?): go(.inbox)
+            case (_, .favorites?): go(.favorites)
+            case (_, .savedFilter(let id)?): go(.savedFilter(id))
+            case (.upcoming, _): go(.upcoming)
+            case (.search, _): go(.search)
+            default: go(.today)
+            }
+        }
+    }
+
     func newTask() {
         addRequest = QuickAddRequest(title: "")
     }

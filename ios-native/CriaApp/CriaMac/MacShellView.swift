@@ -1,11 +1,13 @@
 import CriaKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Three columns: sidebar, the shared screens for the selection, and the open task. Task rows select into the detail
 /// column (through `taskOpener`) instead of pushing.
 struct MacShellView: View {
     let services: AppServices
     let onSignOut: (_ wipeLocalData: Bool) -> Void
+    @Binding var pendingURL: URL?
     @State private var actions = MacActions()
     @State private var navigation = NavigationModel()
     @State private var undoCenter = UndoCenter()
@@ -20,6 +22,7 @@ struct MacShellView: View {
             NavigationStack {
                 if let id = actions.openTaskId {
                     TaskDetailView(services: services, taskLocalId: id).id(id)
+                        .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
                 } else {
                     ContentUnavailableView("No task selected", systemImage: "checklist")
                 }
@@ -33,6 +36,16 @@ struct MacShellView: View {
         .environment(undoCenter)
         .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
         .task { undoCenter.attach(services) }
+        .task {
+            // Quick add asked for while no window was open (the global hotkey, the menu bar).
+            if MacWindows.quickAddPending {
+                MacWindows.quickAddPending = false
+                actions.newTask()
+            }
+            openPendingURL()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .criaQuickAdd)) { _ in actions.newTask() }
+        .onChange(of: pendingURL) { openPendingURL() }
         .sheet(item: $actions.addRequest) { request in
             QuickAddSheet(services: services, contextProjectId: contextProject, initialLine: request.title)
         }
@@ -41,6 +54,25 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $actions.showingPalette) { CommandPalette(services: services, actions: actions) }
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
+    }
+
+    private func openPendingURL() {
+        guard let url = pendingURL else { return }
+        pendingURL = nil
+        actions.open(url, services: services)
+    }
+
+    /// Files dropped on a task's detail are queued as attachments, as the iOS Add file does.
+    private func attach(_ urls: [URL], to taskLocalId: String) -> Bool {
+        var queued = false
+        for url in urls where url.isFileURL {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+            if (try? services.attachFile(taskLocalId: taskLocalId, fileName: url.lastPathComponent, mime: mime, data: data)) != nil {
+                queued = true
+            }
+        }
+        return queued
     }
 
     /// New tasks go to the project on screen.
