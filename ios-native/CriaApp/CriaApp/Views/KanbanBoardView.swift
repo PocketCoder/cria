@@ -27,10 +27,13 @@ struct KanbanBoardView: View {
     /// A card is being dragged: the columns shrink to headers so all of them fit on screen.
     @State private var dragging = false
     @State private var dragStartedAt: Date?
-    /// The column the dragged card came from. It keeps its cards (narrow) so the card can still be dropped before another
-    /// card in the same column; the other columns shrink to their headers.
+    /// The column the dragged card came from. A drag starts as a reorder in that column; once the card leaves it, every
+    /// column shrinks to a header (`leftSource`) so any of them can be picked without scrolling, and the column the card
+    /// is over (`hoverColumn`) opens to show its cards, to choose where in it the card goes.
     @State private var dragSource: String?
-    /// Cards whose subtasks are open. In memory only: it lasts as long as the board screen.
+    @State private var leftSource = false
+    @State private var sourceWasTargeted = false
+    @State private var hoverColumn: String?
     @State private var expandedCards: Set<String> = []
     /// The board's filter, kept per view on this device (see `BoardFilter`).
     @AppStorage private var filterText: String
@@ -77,7 +80,7 @@ struct KanbanBoardView: View {
 
     /// While a card is dragged every column shares the screen, so any of them can be reached without scrolling.
     private func width(_ available: CGFloat) -> CGFloat {
-        guard dragging else { return Self.columnWidth(available, typeSize: typeSize) }
+        guard dragging && leftSource else { return Self.columnWidth(available, typeSize: typeSize) }
         let count = CGFloat(max(columns.count, 1))
         return max(88, (available - 32 - 12 * (count - 1)) / count)
     }
@@ -86,6 +89,9 @@ struct KanbanBoardView: View {
         let started = Date.now
         dragStartedAt = started
         dragSource = columnId
+        leftSource = false
+        sourceWasTargeted = false
+        hoverColumn = nil
         dragging = true
         // Backstop for a drag that ends with no event at all (dropped outside the board): see `endStaleDrag`.
         Task {
@@ -97,7 +103,23 @@ struct KanbanBoardView: View {
     private func endDrag() {
         dragging = false
         dragSource = nil
+        leftSource = false
+        sourceWasTargeted = false
+        hoverColumn = nil
         dragStartedAt = nil
+    }
+
+    /// A column reports the dragged card entering or leaving it. Leaving the column it came from, or entering another,
+    /// switches from reordering to choosing a column.
+    private func columnOver(_ id: String, _ isOver: Bool) {
+        guard dragging else { return }
+        if isOver {
+            hoverColumn = id
+            if id == dragSource { sourceWasTargeted = true } else { leftSource = true }
+        } else {
+            if hoverColumn == id { hoverColumn = nil }
+            if id == dragSource && sourceWasTargeted { leftSource = true }
+        }
     }
 
     /// A drag that was cancelled (dropped on nothing) sends no event, so the next touch on the board ends it. Not within
@@ -129,8 +151,9 @@ struct KanbanBoardView: View {
                         expanded: $expandedCards,
                         labels: live.value.labels,
                         readOnly: readOnly,
-                        compact: dragging && dragSource != column.bucket.localId,
+                        compact: dragging && leftSource && hoverColumn != column.bucket.localId,
                         onDragStart: { beginDrag(from: column.bucket.localId) },
+                        onOver: { columnOver(column.bucket.localId, $0) },
                         onDragEnd: { endDrag() },
                         onDrop: { taskId, beforeId in
                             endDrag()
@@ -142,7 +165,7 @@ struct KanbanBoardView: View {
                     )
                     .containerRelativeFrame(.horizontal) { length, _ in width(length) }
                 }
-                if !readOnly && !dragging { addBucketButton }
+                if !readOnly && !(dragging && leftSource) { addBucketButton }
             }
             .scrollTargetLayout()
         }

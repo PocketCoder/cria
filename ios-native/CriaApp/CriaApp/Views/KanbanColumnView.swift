@@ -44,11 +44,14 @@ struct KanbanColumnView: View {
     /// Labels by task local id.
     let labels: [String: [LabelRecord]]
     let readOnly: Bool
-    /// A card of this board is being dragged: the cards are hidden and the column shrinks to its header, so every column
-    /// is on screen at once to drop on. The cards stay in the view tree (zero height), because the drag started on one.
+    /// A card is being dragged and has left its own column: this column shrinks to its header so every column is on
+    /// screen at once to drop on. It opens again (not compact) while the card is over it. The cards stay in the view tree
+    /// (zero height), because the drag started on one.
     var compact = false
     /// Told when a card of this column is picked up.
     var onDragStart: () -> Void = {}
+    /// Told when the dragged card enters or leaves this column (or one of its cards).
+    var onOver: (Bool) -> Void = { _ in }
     /// Told when a drop on one of this column's own cards changed nothing, so the board can expand again.
     var onDragEnd: () -> Void = {}
     let onDrop: (String, String?) -> Void
@@ -96,6 +99,7 @@ struct KanbanColumnView: View {
             .animation(.easeOut(duration: 0.12), value: isDropTarget)
             .padding(.bottom, 12)
         }
+        .onChange(of: isDropTarget) { _, over in onOver(over) }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
         // The whole height takes drops, not just the cards, so a short column is still easy to drop on.
