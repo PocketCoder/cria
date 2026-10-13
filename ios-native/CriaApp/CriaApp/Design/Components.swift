@@ -150,13 +150,13 @@ private struct BurstView: View {
                     KeyframeTrack(\.scale) { MoveKeyframe(0.7); CubicKeyframe(2.1, duration: 0.56) }
                     KeyframeTrack(\.opacity) { MoveKeyframe(trigger == 0 ? 0 : 0.55); CubicKeyframe(0, duration: 0.56) }
                 }
-            ForEach(0..<6, id: \.self) { index in
+            ForEach(0..<8, id: \.self) { index in
                 Circle().fill(index.isMultiple(of: 2) ? color : Color(.primary))
-                    .frame(width: 4, height: 4)
+                    .frame(width: 5, height: 5)
                     .keyframeAnimator(initialValue: BurstState(scale: 0.4), trigger: trigger) { view, state in
                         view.scaleEffect(state.scale).offset(y: -state.distance).opacity(state.opacity)
                     } keyframes: { _ in
-                        KeyframeTrack(\.distance) { MoveKeyframe(0); CubicKeyframe(size * 0.62, duration: 0.56) }
+                        KeyframeTrack(\.distance) { MoveKeyframe(0); CubicKeyframe(size * 0.78, duration: 0.56) }
                         KeyframeTrack(\.scale) { MoveKeyframe(0.4); CubicKeyframe(1, duration: 0.56) }
                         KeyframeTrack(\.opacity) {
                             MoveKeyframe(0)
@@ -164,7 +164,7 @@ private struct BurstView: View {
                             LinearKeyframe(0, duration: 0.39)
                         }
                     }
-                    .rotationEffect(.degrees(Double(index) * 60))
+                    .rotationEffect(.degrees(Double(index) * 45))
             }
         }
         .frame(width: size, height: size)

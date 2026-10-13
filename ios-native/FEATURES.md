@@ -31,7 +31,7 @@ Two notes apply throughout:
 | Move to another project, priority | Vikunja | |
 | Due, start and end dates | Vikunja | Date-only values are pushed at midnight in the timezone set in Settings. Times can be added and removed. |
 | Repeat | Vikunja | Daily, weekly, monthly, yearly, or a custom interval in hours to months; counts from the due date or from completion. |
-| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. |
+| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. Once a reminder has gone off it is deleted, here and on Vikunja, except on repeating tasks (Vikunja moves those on) and done tasks. |
 | Progress (percent done) | Vikunja | Follows the share of subtasks done, unless set by hand. |
 | "Progress set by hand" flag | This device | `ProgressOverride` in `UserDefaults`, keyed by task. Another install may overwrite the value by following subtasks. |
 | Favourite (star) | Vikunja | |
