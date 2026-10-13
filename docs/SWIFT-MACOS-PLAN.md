@@ -20,23 +20,22 @@ Outline for a SwiftUI macOS app that replaces the Tauri desktop app, the way
   links, glass sidebar, three-pane shell with inspector, command palette and
   keyboard shortcuts, wide Kanban/table/Gantt.
 
-## Decisions to make first
+## Decisions (agreed 2026-10-13)
 
-1. **Target shape.** Recommended: a native macOS target in the existing
-   XcodeGen project, sharing CriaKit and the platform-neutral views. Not Mac
-   Catalyst: it reads as an iPad app and makes the menu bar extra, glass
-   sidebar and window handling harder.
-2. **Bundle ID and data.** Either take over `io.cria.app` (one install,
-   existing updater users move across) or ship as a new ID beside the Tauri
-   app. Either way, re-sync from the server on sign-in as iOS does. A
-   sandboxed app can't read the Tauri database, so no import: drain the
-   Tauri outbox before switching.
-3. **Minimum macOS.** 14, to match CriaKit, with availability checks for
+1. **Target shape: native macOS target** in the existing XcodeGen project,
+   sharing CriaKit and the platform-neutral views. Not Mac Catalyst.
+2. **Bundle ID: take over `io.cria.app`.** The native app ships as the next
+   update to the Tauri app, so installed copies move across. It re-syncs from
+   the server on first launch (the Tauri database isn't imported, and a
+   sandboxed app can't read it), so the last Tauri release must drain its
+   outbox and warn about unsynced changes before handing over. The keychain
+   item and URL scheme stay the same.
+3. **Minimum macOS 14**, matching CriaKit, with availability checks for
    Foundation Models and the macOS 26 glass.
-4. **Distribution.** There's no paid Apple account, so there's no
-   notarisation and no Mac App Store. Keep the self-signed certificate and
-   use Sparkle 2 for updates (EdDSA-signed appcast on `gh-pages`). The first
-   launch still shows the "unidentified developer" warning, as today.
+4. **Distribution: still open.** No paid Apple account means no notarisation
+   and no Mac App Store. In-app updates need Sparkle (the standard framework
+   for this, and what Tauri's updater copies); a Homebrew tap can sit beside it
+   for installs but doesn't update the app by itself.
 
 ## Phases
 
