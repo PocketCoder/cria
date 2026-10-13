@@ -281,15 +281,9 @@ extension View {
 
     /// FAB pinned bottom-trailing, above the tab bar. For list screens only (not Search or task detail). The extra
     /// bottom margin lets the last row scroll clear of the button.
-    /// `hidden` while the button's own sheet is up: iOS 26 sheets are glass, and the button's glow showed through.
-    func criaFab(menu: [FabMenuItem] = [], hidden: Bool = false, _ action: @escaping () -> Void) -> some View {
+    func criaFab(menu: [FabMenuItem] = [], _ action: @escaping () -> Void) -> some View {
         contentMargins(.bottom, CriaFab.clearance, for: .scrollContent)
-            .overlay(alignment: .bottomTrailing) {
-                CriaFab(action: action, menuItems: menu)
-                    .opacity(hidden ? 0 : 1)
-                    .allowsHitTesting(!hidden)
-                    .animation(.easeOut(duration: 0.15), value: hidden)
-            }
+            .overlay(alignment: .bottomTrailing) { CriaFab(action: action, menuItems: menu) }
     }
 
     /// Prominent button: Liquid Glass on iOS 26, filled primary capsule before.
