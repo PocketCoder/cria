@@ -67,6 +67,7 @@ export function Shell() {
   const updaterState = useUpdaterStore((s) => s.state);
   const runUpdaterCheck = useUpdaterStore((s) => s.runCheck);
   const installUpdate = useUpdaterStore((s) => s.install);
+  const updateBlocked = useUpdaterStore((s) => s.blockedMessage);
   // Auto-check for updates on mount (silent failure is fine).
   useEffect(() => { void runUpdaterCheck(true); }, [runUpdaterCheck]);
   const isOnline = useOnline();
@@ -227,6 +228,7 @@ export function Shell() {
           <UpdateBanner
             state={updaterState}
             onInstall={() => void installUpdate()}
+            blockedMessage={updateBlocked}
           />
         </div>
       )}
