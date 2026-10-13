@@ -1,7 +1,9 @@
 import CriaKit
 import PhotosUI
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// A project's background: upload a photo, pick one from Unsplash (when the server offers it) or remove it. Online
 /// only, with no outbox: each change is sent at once, with a spinner while it runs and the error if it fails. Ported
@@ -12,7 +14,7 @@ struct ProjectBackgroundView: View {
     /// The server's background providers from `/info`; nil until loaded.
     @State private var providers: [String]?
     @State private var offline = false
-    @State private var current: UIImage?
+    @State private var current: PlatformImage?
     @State private var picked: PhotosPickerItem?
     @State private var busy = false
     @State private var errorMessage: String?
@@ -187,7 +189,10 @@ private enum BackgroundImage {
 
     @MainActor
     static func jpeg(from data: Data) -> Data? {
-        guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
+        #if os(macOS)
+        return JPEGReencoder.jpeg(from: data, maxSide: maxSide, quality: quality)
+        #else
+        guard let image = PlatformImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
         let factor = min(1, maxSide / max(image.size.width, image.size.height))
         let size = CGSize(width: max(1, (image.size.width * factor).rounded()), height: max(1, (image.size.height * factor).rounded()))
         let format = UIGraphicsImageRendererFormat()
@@ -200,5 +205,6 @@ private enum BackgroundImage {
             image.draw(in: CGRect(origin: .zero, size: size))
         }
         return rendered.jpegData(compressionQuality: quality)
+        #endif
     }
 }

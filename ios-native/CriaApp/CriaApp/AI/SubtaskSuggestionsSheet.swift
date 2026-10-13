@@ -25,7 +25,9 @@ struct SubtaskSuggestionsSheet: View {
         suggestions.filter { $0.include && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
                 if suggestions.isEmpty {

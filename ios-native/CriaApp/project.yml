@@ -5,9 +5,13 @@ options:
   bundleIdPrefix: io.cria
   deploymentTarget:
     iOS: "17.0"
+    macOS: "15.0"
 packages:
   CriaKit:
     path: ../CriaKit
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
 targets:
   CriaApp:
     type: application
@@ -84,3 +88,44 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: CriaWidgets/CriaWidgets.entitlements
+  CriaMac:
+    type: application
+    platform: macOS
+    sources:
+      - CriaMac
+      - path: CriaApp
+        excludes:
+          # Replaced by the Mac shell (Phase 2) and the iOS entry points.
+          - CriaApp.swift
+          - Shell/ShellView.swift
+          - Platform/CriaIntents.swift
+          # Phase 6.
+          - Tasks/CameraPicker.swift
+          - AI/BackgroundRun.swift
+          # The Mac target has its own asset catalogue (LoginIcon copied across).
+          - Assets.xcassets
+          - Fonts
+    dependencies:
+      - package: CriaKit
+      - package: KeyboardShortcuts
+    info:
+      path: Config/CriaMac-Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: io.cria.app
+            CFBundleURLSchemes: [cria]
+    settings:
+      base:
+        PRODUCT_NAME: Cria
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Listen while you speak a list of tasks.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Turn what you say into text for your tasks.
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: CriaMac/CriaMac.entitlements
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: io.cria.app

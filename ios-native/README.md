@@ -8,6 +8,18 @@
 Fixed decisions (S-00): iOS 17 minimum, bundle ID `io.cria.app.swift`,
 SQLite database in the App Group container `group.io.cria.app`.
 
+## macOS app
+
+`CriaMac` is a native SwiftUI Mac app in the same XcodeGen project, sharing `CriaKit` (macOS 15 minimum). It does not ship yet: it is the start of the plan in [`docs/SWIFT-MACOS-PLAN.md`](../docs/SWIFT-MACOS-PLAN.md). To build and run it locally:
+
+```sh
+cd CriaApp && xcodegen generate
+open CriaApp.xcodeproj   # pick the CriaMac scheme and Run
+# or: xcodebuild build -project CriaApp.xcodeproj -scheme CriaMac -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO
+```
+
+Debug builds use bundle ID `io.cria.app.dev` and keep their database in `~/Library/Application Support/io.cria.app.dev/Native/`, away from the Tauri app's files.
+
 ## Tooling decisions (S-02)
 
 - **Database:** GRDB 7 (`groue/GRDB.swift`, `from: 7.0.0`), linked into `CriaKit`.

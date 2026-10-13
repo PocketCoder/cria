@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// CalDAV: the address to add to a calendar app, plus the tokens (app passwords) to sign in with. A new token's text
 /// is shown once, as the server never returns it again. The token list mirrors the CalDAV half of
@@ -28,7 +30,7 @@ struct CaldavTokensView: View {
                 Section {
                     Text(secret).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
                     Button(copiedSecret ? "Copied" : "Copy token", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.string = secret
+                        Pasteboard.copy(secret)
                         copiedSecret = true
                     }
                 } header: {
@@ -73,7 +75,7 @@ struct CaldavTokensView: View {
             Section {
                 Text(address).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
                 Button(copiedAddress ? "Copied" : "Copy address", systemImage: "doc.on.doc") {
-                    UIPasteboard.general.string = address
+                    Pasteboard.copy(address)
                     copiedAddress = true
                 }
             } header: {

@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import SwiftUI
 
 /// SwiftUI wrapper around `EditorTextView`. The controller owns the content and the commands.
@@ -75,3 +76,4 @@ final class EditorCoordinator: NSObject, UITextViewDelegate {
         controller.onEndEditing()
     }
 }
+#endif

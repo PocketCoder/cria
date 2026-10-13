@@ -20,6 +20,7 @@ struct CustomiseSettingsSection: View {
             NavigationLink { DatesAndTasksSettingsView(prefs: prefs) } label: {
                 SettingsLabel("Dates & tasks", symbol: "calendar.badge.checkmark", token: .meadow500)
             }
+            #if os(iOS)
             Picker(selection: $prefs.value.custom.swipeRight) {
                 ForEach(SwipeAction.allCases, id: \.self) { Text($0.title).tag($0) }
             } label: {
@@ -30,6 +31,7 @@ struct CustomiseSettingsSection: View {
             } label: {
                 SettingsLabel("Swipe left", symbol: "hand.point.left", token: .plum500)
             }
+            #endif
         } header: {
             Text("Customise")
         } footer: {

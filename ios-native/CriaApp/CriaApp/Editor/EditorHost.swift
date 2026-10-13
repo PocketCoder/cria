@@ -25,10 +25,7 @@ struct EditorHost: View {
     @State private var viewingImage: ImageViewerItem?
 
     var body: some View {
-        RichTextEditor(
-            controller: controller, initialHTML: initialHTML, imageProvider: imageProvider, barActions: barActions,
-            inlineHeight: inlineHeight, onHeightChange: onHeightChange
-        )
+        editor
             // Presented from here, not from the formatting bar: that bar is torn down when the keyboard hides,
             // which would dismiss the picker with it. Each picker holds the editing session open (see
             // `EditorController.holdFocus`) and hands the keyboard back when it closes.
@@ -56,6 +53,22 @@ struct EditorHost: View {
             }
             .fullScreenCover(item: $viewingImage) { ImageViewer(item: $0, services: services) }
             .onAppear { configureController() }
+    }
+
+    @ViewBuilder private var editor: some View {
+        let text = RichTextEditor(
+            controller: controller, initialHTML: initialHTML, imageProvider: imageProvider, barActions: barActions,
+            inlineHeight: inlineHeight, onHeightChange: onHeightChange
+        )
+        #if os(macOS)
+        // No keyboard accessory on the Mac: the formatting bar sits above the text.
+        VStack(spacing: 0) {
+            MacEditorToolbar(controller: controller, actions: barActions)
+            text
+        }
+        #else
+        text
+        #endif
     }
 
     /// Passed into the editor so it is in place before the first HTML load.
@@ -91,6 +104,9 @@ struct EditorHost: View {
             controller.holdFocus()
             showMention = true
         }
+        barActions.onImageData = { data, name, mime in
+            Task { await insertImageData(data, name: name, mime: mime) }
+        }
     }
 
     private func finishMention() {
@@ -122,7 +138,11 @@ struct EditorHost: View {
         guard let data = try? await item.loadTransferable(type: Data.self) else { return }
         let type = item.supportedContentTypes.first
         let name = "photo-\(Int(Date().timeIntervalSince1970)).\(type?.preferredFilenameExtension ?? "jpg")"
-        let mime = type?.preferredMIMEType ?? "image/jpeg"
+        await insertImageData(data, name: name, mime: type?.preferredMIMEType ?? "image/jpeg")
+    }
+
+    /// Queues the bytes as an attachment and puts the image in the text as `cria://pending/{id}` until it uploads.
+    private func insertImageData(_ data: Data, name: String, mime: String) async {
         guard let localId = try? services.attachFile(taskLocalId: taskLocalId, fileName: name, mime: mime, data: data) else { return }
         controller.insertImage(RichImage(src: "cria://pending/\(localId)", alt: name))
     }

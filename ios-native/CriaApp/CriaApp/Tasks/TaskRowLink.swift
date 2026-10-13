@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// A task row that opens the detail screen. Each swipe does what Settings > Customise > Swipe actions says
 /// (complete and delete by default). Delete goes straight through with an Undo toast (never a full swipe); failed
@@ -15,6 +17,10 @@ struct TaskRowLink: View {
     /// Nil on screens that do not offer multi-select (Search).
     @Environment(TaskSelection.self) private var selection: TaskSelection?
     @Environment(\.preferences) private var preferences
+    /// Set by the Mac shell: a tap selects the task for the detail column instead of pushing it.
+    @Environment(\.taskOpener) private var openTask
+    @Environment(\.selectedTaskId) private var selectedTaskId
+    @State private var hovering = false
     @State private var failure: String?
     @State private var scheduling = false
     /// Counts completions made from a swipe or the menu; the ring plays its own haptic for a tap.
@@ -58,9 +64,7 @@ struct TaskRowLink: View {
 
     private var openableRow: some View {
         let swipes = preferences.custom
-        return NavigationLink(value: Route.task(item.task.localId)) {
-            TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
-        }
+        return rowLink
         .swipeActions(edge: .leading, allowsFullSwipe: swipes.swipeRight != .delete) { swipeButton(swipes.swipeRight) }
         .swipeActions(edge: .trailing, allowsFullSwipe: swipes.swipeLeft != .delete) { swipeButton(swipes.swipeLeft) }
         .sheet(isPresented: $scheduling) {
@@ -87,6 +91,35 @@ struct TaskRowLink: View {
             if let collapsed = tree.isCollapsed {
                 Button(collapsed ? "Show subtasks" : "Hide subtasks") { tree.onToggleCollapsed() }
             }
+        }
+    }
+
+    @ViewBuilder private var rowLink: some View {
+        if let openTask {
+            Button { click(openTask) } label: {
+                TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(selectedTaskId == item.task.localId
+                        ? Color.accentColor.opacity(0.16) : (hovering ? Color.primary.opacity(0.06) : Color.clear))
+            )
+            .onHover { hovering = $0 }
+        } else {
+            NavigationLink(value: Route.task(item.task.localId)) {
+                TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
+            }
+        }
+    }
+
+    /// A plain click opens the task; ⌘ or ⇧ with a click starts multi-select with this row ticked.
+    private func click(_ open: @MainActor (String) -> Void) {
+        if PlatformApp.extendsSelection, let selection {
+            selection.start(with: item.task.localId)
+        } else {
+            open(item.task.localId)
         }
     }
 
@@ -217,7 +250,7 @@ extension TaskRowLink {
 
     private func copyLink() {
         guard let url = services.taskWebURL(item.task) else { return }
-        UIPasteboard.general.string = url.absoluteString
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Pasteboard.copy(url.absoluteString)
+        Haptics.success()
     }
 }

@@ -24,7 +24,9 @@ struct FixedReminderSheet: View {
 
     private var isPast: Bool { date <= Date() }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 Section {

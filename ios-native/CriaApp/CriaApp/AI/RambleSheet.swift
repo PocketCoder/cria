@@ -33,7 +33,9 @@ struct RambleSheet: View {
     /// Rows that would be lost by closing. Switching to another app never loses them; closing the sheet does.
     private var hasUnsavedRows: Bool { !chosen.isEmpty }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             content
                 .background(Color(.grouped))

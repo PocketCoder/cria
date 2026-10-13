@@ -289,7 +289,7 @@ extension View {
     /// Prominent button: Liquid Glass on iOS 26, filled primary capsule before.
     @ViewBuilder
     func criaProminent() -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             buttonStyle(.glassProminent).controlSize(.large)
         } else {
             buttonStyle(CriaPrimaryButtonStyle())
@@ -300,7 +300,7 @@ extension View {
 /// Confirm button in a sheet toolbar: glass prominent on iOS 26, bordered prominent before.
 struct CriaProminentToolbarButton: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             content.buttonStyle(.glassProminent)
         } else {
             content.buttonStyle(.borderedProminent)

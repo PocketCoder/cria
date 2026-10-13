@@ -12,7 +12,9 @@ struct BucketEditSheet: View {
     @State private var deletions = 0
     @State private var failure: String?
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 TextField("Title", text: $title)

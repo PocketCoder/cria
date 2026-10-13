@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 import UserNotifications
 
 private let presets: [(title: String, period: Int)] = [
@@ -58,8 +60,7 @@ struct ReminderSection: View {
                      : "Notifications are switched off in Cria, so reminders will not alert you.")
                     .font(Theme.caption)
                 Button("Open notification settings") {
-                    guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
+                    ExternalLink.openNotificationSettings()
                 }
                 .font(Theme.chip)
             }

@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 extension Notification.Name {
     /// Posted after a project's background is set or removed (object: the project's server id), so an open project
@@ -11,7 +13,7 @@ extension Notification.Name {
 /// A project's background as a rounded banner above the header line. Nothing is drawn over it, so text stays
 /// readable on any photo; in dark mode it is dimmed a little so a bright photo does not glare.
 struct ProjectBackgroundBanner: View {
-    let image: UIImage
+    let image: PlatformImage
     let height: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
@@ -20,7 +22,7 @@ struct ProjectBackgroundBanner: View {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .overlay {
-                Image(uiImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .scaledToFill()
             }
@@ -51,7 +53,7 @@ enum ProjectBackgroundLoader {
     }
 
     /// Calls `show` with the cached image (nil when none), then again if the server's differs.
-    static func load(services: AppServices, serverId: Int, show: (UIImage?) -> Void) async {
+    static func load(services: AppServices, serverId: Int, show: (PlatformImage?) -> Void) async {
         let cache = services.backgrounds
         let cached = cache.cached(serverId: serverId)
         if let cached {
@@ -77,12 +79,12 @@ enum ProjectBackgroundLoader {
     }
 
     /// Decodes and downsizes off the main thread, so a large photo cannot stall scrolling.
-    nonisolated static func decode(_ data: Data) async -> sending UIImage? {
-        guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
-        let width = image.size.width * image.scale
-        let height = image.size.height * image.scale
+    nonisolated static func decode(_ data: Data) async -> sending PlatformImage? {
+        guard let image = PlatformImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
+        let width = image.size.width * image.pixelScale
+        let height = image.size.height * image.pixelScale
         let factor = min(1, maxPixels / max(width, height))
         let size = CGSize(width: max(1, (width * factor).rounded()), height: max(1, (height * factor).rounded()))
-        return image.preparingThumbnail(of: size) ?? image
+        return image.thumbnail(of: size) ?? image
     }
 }

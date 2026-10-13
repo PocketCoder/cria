@@ -93,7 +93,9 @@ struct AssigneePickerSheet: View {
     /// Why the last search failed, shown in place of the results.
     @State private var failure: String?
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List(results, id: \.id) { user in
                 Button {

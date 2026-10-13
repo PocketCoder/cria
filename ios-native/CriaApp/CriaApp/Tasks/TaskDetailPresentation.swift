@@ -3,7 +3,9 @@ import Observation
 import PhotosUI
 import QuickLook
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 import UniformTypeIdentifiers
 
 /// What the task detail sections present, and the failures they report. TaskDetailView owns it and attaches every
@@ -42,10 +44,10 @@ final class TaskDetailPresentation {
 
     /// Puts the address on the clipboard and confirms it with a haptic, a spoken announcement and a brief notice.
     func copyLink(_ url: URL, notice message: String = "Link copied") {
-        UIPasteboard.general.string = url.absoluteString
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Pasteboard.copy(url.absoluteString)
+        Haptics.success()
         notice = message
-        UIAccessibility.post(notification: .announcement, argument: message)
+        PlatformApp.announce(message)
     }
 
     func attempt(_ work: () throws -> Void) {

@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// An inline image to show full screen. `source` is the address as the HTML holds it.
 struct ImageViewerItem: Identifiable, Equatable {
@@ -14,14 +16,14 @@ struct ImageViewerItem: Identifiable, Equatable {
 enum ImageViewerLoader {
     private static let pendingPrefix = "cria://pending/"
 
-    static func image(source: String, services: AppServices?) async -> UIImage? {
+    static func image(source: String, services: AppServices?) async -> PlatformImage? {
         if source.hasPrefix(pendingPrefix) {
-            return services?.pendingBlobData(String(source.dropFirst(pendingPrefix.count))).flatMap { UIImage(data: $0) }
+            return services?.pendingBlobData(String(source.dropFirst(pendingPrefix.count))).flatMap { PlatformImage(data: $0) }
         }
         guard let url = URL(string: source), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
-        if let services, let data = await services.serverImageData(url), let image = UIImage(data: data) { return image }
+        if let services, let data = await services.serverImageData(url), let image = PlatformImage(data: data) { return image }
         guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
-        return UIImage(data: data)
+        return PlatformImage(data: data)
     }
 }
 
@@ -31,7 +33,7 @@ struct ImageViewer: View {
     let item: ImageViewerItem
     let services: AppServices?
     @Environment(\.dismiss) private var dismiss
-    @State private var image: UIImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
     @State private var scale: CGFloat = 1
     @State private var settledScale: CGFloat = 1
@@ -46,7 +48,7 @@ struct ImageViewer: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 if let image {
-                    Image(uiImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .scaledToFit()
                         .frame(width: proxy.size.width, height: proxy.size.height)
@@ -75,7 +77,7 @@ struct ImageViewer: View {
 
     @ViewBuilder private var shareButton: some View {
         if let image {
-            ShareLink(item: Image(uiImage: image), preview: SharePreview("Image", image: Image(uiImage: image))) {
+            ShareLink(item: Image(platformImage: image), preview: SharePreview("Image", image: Image(platformImage: image))) {
                 chrome(Image(systemName: "square.and.arrow.up"))
             }
             .accessibilityLabel("Share or save image")

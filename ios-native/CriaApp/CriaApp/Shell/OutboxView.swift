@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct OutboxData: Equatable, Sendable {
     var waiting: [OutboxRow] = []
@@ -83,7 +85,7 @@ struct OutboxView: View {
                         Button("Discard", systemImage: "trash") { pendingDiscard = row }.tint(.red)
                     }
                     .contextMenu {
-                        Button("Copy details", systemImage: "doc.on.doc") { UIPasteboard.general.string = OutboxRowSummary(row).text }
+                        Button("Copy details", systemImage: "doc.on.doc") { Pasteboard.copy(OutboxRowSummary(row).text) }
                         Button("Discard", systemImage: "trash", role: .destructive) { pendingDiscard = row }
                     }
             }
@@ -107,7 +109,7 @@ struct OutboxView: View {
                     }
                     .contextMenu {
                         Button("Retry", systemImage: "arrow.clockwise") { retry(row.id) }
-                        Button("Copy details", systemImage: "doc.on.doc") { UIPasteboard.general.string = OutboxRowSummary(row).text }
+                        Button("Copy details", systemImage: "doc.on.doc") { Pasteboard.copy(OutboxRowSummary(row).text) }
                         Button("Discard", systemImage: "trash", role: .destructive) { discard(row.id) }
                     }
             }

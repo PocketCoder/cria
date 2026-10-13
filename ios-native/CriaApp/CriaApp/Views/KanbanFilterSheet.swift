@@ -8,7 +8,9 @@ struct KanbanFilterSheet: View {
     let labels: [LabelRecord]
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 Section("Search") {

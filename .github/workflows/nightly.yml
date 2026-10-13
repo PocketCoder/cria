@@ -2,7 +2,7 @@ name: Nightly
 
 # Every push to dev builds "Cria (Nightly)" (io.cria.app.nightly, see
 # scripts/nightly-config.sh): signed macOS bundles attached to a single
-# rolling `nightly` prerelease. The Tauri iOS build is deprecated and no
+# rolling `nightly` prerelease (which also holds the iOS .ipa from ci-swift.yml). The Tauri iOS build is deprecated and no
 # longer built here; iOS builds come from ci-swift.yml (native Swift app). Its updater reads
 # nightly.json on gh-pages, so nightlies auto-update while stable Cria keeps
 # reading update.json. Separate identifiers mean both install side by side.
@@ -143,18 +143,24 @@ jobs:
               }
             }' > gh-pages-out/nightly.json
           cat gh-pages-out/nightly.json
-      # Recreate the release so the tag, assets, and notes track the latest push.
-      - name: Replace nightly release
+      # One rolling release for the nightly Mac build and the iOS .ipa (ci-swift.yml adds that). It is updated in place,
+      # not deleted and recreated, so the .ipa survives a Mac-only push. The tag moves to the latest push.
+      - name: Update nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release delete nightly --yes --cleanup-tag || true
-          gh release create nightly release/* \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "Nightly (dev @ ${GITHUB_SHA::7})" \
-            --notes "Automated build of \`dev\` at ${GITHUB_SHA}. Installs as **Cria (Nightly)** alongside stable Cria and auto-updates on each dev push. Unstable."
+          git tag -f nightly "$GITHUB_SHA"
+          git push -f origin refs/tags/nightly
+          title="Nightly (dev @ ${GITHUB_SHA::7})"
+          notes="Automated build of \`dev\` at ${GITHUB_SHA}: the Mac app (installs as **Cria (Nightly)** alongside stable Cria and auto-updates on each dev push) and the unsigned iOS .ipa for SideStore. Unstable."
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --prerelease --title "$title" --notes "$notes"
+          else
+            gh release create nightly --verify-tag --prerelease --title "$title" --notes "$notes" \
+              || gh release edit nightly --prerelease --title "$title" --notes "$notes"
+          fi
+          gh release upload nightly release/* --clobber
       - name: Publish nightly.json to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:

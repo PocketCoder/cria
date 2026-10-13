@@ -32,7 +32,9 @@ struct ProjectSharingSheet: View {
 
     private var projectId: Int { project.serverId ?? 0 }
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
                 usersSection

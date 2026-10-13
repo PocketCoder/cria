@@ -61,8 +61,12 @@ enum ReminderScheduler {
     /// Asks the first time there is something to schedule; afterwards the answer stands.
     private static func isAuthorised(_ center: UNUserNotificationCenter) async -> Bool {
         switch await center.notificationSettings().authorizationStatus {
-        case .authorized, .provisional, .ephemeral:
+        case .authorized, .provisional:
             return true
+        #if os(iOS)
+        case .ephemeral:
+            return true
+        #endif
         case .notDetermined:
             let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
             // The summary notifications wait for permission too; let them recount now it is known.

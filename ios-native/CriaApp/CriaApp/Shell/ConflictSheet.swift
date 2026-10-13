@@ -1,7 +1,9 @@
 import CriaKit
 import Observation
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Unresolved conflicts and whether the sheet is up. An unresolved conflict holds that task's pushes, so the sheet
 /// opens by itself when one appears; once the user closes it with conflicts left, it stays closed for the session
@@ -50,7 +52,7 @@ final class ConflictPrompt {
     /// A local notification when new conflicts appear and the user would not otherwise see the sheet: the app is in
     /// the background, or the sheet was closed earlier this session (so it will not open by itself).
     private func notifyNewConflicts() {
-        guard !isShowing, UIApplication.shared.applicationState != .active || dismissedThisSession else { return }
+        guard !isShowing, !PlatformApp.isActive || dismissedThisSession else { return }
         let count = conflicts.count
         Task { await ConflictNotice.post(count: count) }
     }

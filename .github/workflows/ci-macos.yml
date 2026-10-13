@@ -1,0 +1,72 @@
+name: CI (native Swift macOS)
+
+# The macOS app. Builds CriaMac when the Mac target, the shared iOS app sources
+# it compiles (CriaApp/CriaApp) or the CriaKit package change. Never publishes anything: the iOS .ipa lives in ci-swift.yml,
+# which ignores Mac-only changes.
+
+on:
+  push:
+    branches: [dev, main, feature/macos]
+    paths:
+      - 'ios-native/CriaApp/CriaMac/**'
+      - 'ios-native/CriaApp/CriaApp/**'
+      - 'ios-native/CriaApp/project.yml'
+      - 'ios-native/CriaKit/**'
+      - '.github/workflows/ci-macos.yml'
+  pull_request:
+    paths:
+      - 'ios-native/CriaApp/CriaMac/**'
+      - 'ios-native/CriaApp/CriaApp/**'
+      - 'ios-native/CriaApp/project.yml'
+      - 'ios-native/CriaKit/**'
+      - '.github/workflows/ci-macos.yml'
+
+concurrency:
+  group: ci-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      # The iOS workflow lints too, but it skips pushes that only touch Mac files.
+      - name: Lint
+        working-directory: ios-native
+        run: |
+          brew install swiftlint
+          swiftlint lint --strict
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
+
+      - name: Build macOS app
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaMac \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Pushes (not PRs) keep the unsigned app as a workflow artifact so it can be tried without building.
+      - name: Zip app
+        if: github.event_name == 'push'
+        run: ditto -c -k --keepParent "$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name 'Cria*.app' -print -quit)" Cria-Mac-unsigned.zip
+
+      - name: Upload app artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Cria-Mac-${{ github.sha }}-unsigned
+          path: Cria-Mac-unsigned.zip

@@ -116,7 +116,9 @@ struct PullForwardSheet: View {
     @Environment(\.dateDisplay) private var dateDisplay
     @State private var chosen: Set<String> = []
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List(items, id: \.task.localId) { item in
                 let picked = chosen.contains(item.task.localId)

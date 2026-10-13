@@ -20,7 +20,7 @@ Free Apple IDs allow 3 active sideloaded apps and certificates last 7 days; Side
 
 ### Manual install
 
-Download the `.ipa` from the [GitHub Releases](https://github.com/PocketCoder/cria/releases) page (`Cria-Swift-Alpha-unsigned.ipa` on the rolling `swift-alpha` prerelease, or `Cria-iOS-unsigned.ipa` attached to a tagged release) in Safari, then share it to SideStore.
+Download the `.ipa` from the [GitHub Releases](https://github.com/PocketCoder/cria/releases) page (`Cria-iOS-Nightly-unsigned.ipa` on the rolling `nightly` prerelease, or `Cria-iOS-unsigned.ipa` attached to a tagged release) in Safari, then share it to SideStore.
 
 ### Troubleshooting
 
@@ -30,7 +30,7 @@ Download the `.ipa` from the [GitHub Releases](https://github.com/PocketCoder/cr
 
 ## How the source is built
 
-[`ci-swift.yml`](.github/workflows/ci-swift.yml) (`publish-ipa` job) owns `sidestore.json` on the `gh-pages` branch. On pushes to `dev` and `main` that pass its checks it uploads the `.ipa` to the rolling `swift-alpha` prerelease and rewrites the source with the one app entry, dropping the deprecated Tauri entries. The marketing version is `<major>.<minor>.<run number>`, because SideStore ignores build-number-only changes.
+[`ci-swift.yml`](.github/workflows/ci-swift.yml) (`publish-ipa` job) owns `sidestore.json` on the `gh-pages` branch. On pushes to `dev` that pass its checks it uploads the `.ipa` to the rolling `nightly` prerelease (shared with the Mac build) and rewrites the source with the one app entry, dropping the deprecated Tauri entries. The marketing version is `<major>.<minor>.<run number>`, because SideStore ignores build-number-only changes.
 
 SideStore refuses an install if `version` or `buildVersion` differs from the `.ipa`'s `Info.plist`; the workflow checks the two match before publishing.
 

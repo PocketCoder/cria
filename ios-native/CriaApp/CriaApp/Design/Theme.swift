@@ -1,15 +1,27 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 extension Color {
     /// A colour that follows the system light or dark appearance, from a ported `globals.css` token.
     init(_ token: ThemeToken) {
         let pair = token.pair
+        #if canImport(UIKit)
         self.init(uiColor: UIColor { traits in
             let rgb = (traits.userInterfaceStyle == .dark ? pair.dark : pair.light).rgb
             return UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
         })
+        #else
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let rgb = (isDark ? pair.dark : pair.light).rgb
+            return NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+        })
+        #endif
     }
 
     /// Parses a Vikunja hex colour (with or without `#`). Nil when it is not six hex digits.
@@ -48,8 +60,10 @@ enum Theme {
     /// bundled and listed under `UIAppFonts`, so the system font stands in.
     @MainActor
     static func applyNavigationAppearance() {
+        #if canImport(UIKit)
         guard let onest = UIFont(name: brandFont, size: 34) else { return }
         let scaled = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: onest)
         UINavigationBar.appearance().largeTitleTextAttributes = [.font: scaled, .kern: -0.6]
+        #endif
     }
 }

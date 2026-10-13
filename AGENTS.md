@@ -506,8 +506,8 @@ The iOS app. It replaced the Tauri iOS build at parity (plan and status:
 [docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md); features and what syncs where: [ios-native/FEATURES.md](ios-native/FEATURES.md)). `CriaKit/` is a Swift package with all
 logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
 XcodeGen. CI ([ci-swift.yml](.github/workflows/ci-swift.yml)) runs `swiftlint lint --strict`, `swift test` and a
-simulator build; pushes to `dev` and `main` publish an unsigned `.ipa` (`io.cria.app.swift`, rolling
-`swift-alpha` release) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
+simulator build; pushes to `dev` attach an unsigned `.ipa` (`io.cria.app.swift`) to the rolling `nightly`
+release, which also holds the Mac build (nightly.yml) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
 also attach the Swift `.ipa` (release.yml `build-ios`).
 
 - Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
@@ -523,6 +523,32 @@ also attach the Swift `.ipa` (release.yml `build-ios`).
 - Moving from the Tauri iOS app: the native app is a separate install (own bundle ID and App Group database) that
   re-syncs everything from the server on sign-in. There is no import. Let the Tauri app finish syncing (empty
   outbox) before switching, or its unsynced edits stay behind.
+
+## Native macOS app (`ios-native/CriaApp/CriaMac/`)
+
+Replaces the Tauri desktop app (plan and status: [docs/SWIFT-MACOS-PLAN.md](docs/SWIFT-MACOS-PLAN.md)). Same XcodeGen
+project and `CriaKit` as iOS; the `CriaMac` target compiles `CriaMac/` plus the iOS app's `CriaApp/` sources (see the
+`excludes` in `project.yml`). Minimum macOS 15. Not sandboxed; no app group, so the database is in
+`Application Support/<bundle id>/Native/`. Nothing here compiles on Linux and nobody has run it on a Mac in this
+repo's history unless the plan says so: CI (`ci-macos.yml`, plus `ci-swift.yml` for shared code) is the only compiler.
+
+- **Shared code, one rule:** a change to `CriaApp/CriaApp/` must keep iOS identical. Prefer `Platform/PlatformTypes.swift`
+  (`PlatformImage`, `Pasteboard`, `ExternalLink`, `Haptics`) and `Platform/MacShims.swift` (macOS-only stand-ins for
+  iOS-only SwiftUI API under the same names, so call sites stay untouched) over scattering `#if`. UIKit imports are
+  `#if canImport(UIKit)`. A name an iOS framework already uses can't be a new protocol requirement (`UIView` has
+  `isFocused`, hence `EditorSurface.holdsKeyboardFocus`).
+- **Editor:** `EditorController`, `EditorStyling` and the paragraph rules are shared; they talk to the text view through
+  `EditorSurface`. `Editor/EditorTextView.swift` is the UIKit host, `CriaMac/Editor/MacEditorTextView.swift` the AppKit
+  one. Never rename `EditorStyling.typingAttributes` when renaming the surface's `typing` property.
+- **Mac shell:** `MacShellView` (three columns), `MacActions` (selection, menus, palette), `MacCommands`, `MacKeyboard`
+  (`g`-sequences, task keys). Shared task rows select into the detail column through the `\.taskOpener` environment
+  value; `TaskDetailView` carries out menu and key commands posted as `TaskCommand` notifications. Reminder and
+  summary schedulers run from `MacBackground`, not the window, so they survive closing to the menu bar.
+- **Reading CI failures:** `get_job_logs` output is huge; save it to a file and grep for ` error: `. A Swift compiler
+  crash (`IRGenRequest`, `report_fatal_error`) names the file in "While evaluating request"; rewrite the construct
+  (a `Binding(get:set:)` in `MacSettingsView` did it once).
+- **CI split:** `ci-swift.yml` is iOS (and skips pushes that only touch `CriaMac/`, so Mac pushes don't publish an
+  `.ipa`); `ci-macos.yml` builds and lints the Mac app.
 
 ## Release channels and local dev
 

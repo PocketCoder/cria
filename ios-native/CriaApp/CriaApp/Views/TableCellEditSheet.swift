@@ -13,7 +13,9 @@ struct TableCellEditSheet: View {
     let edit: TableCellEdit
     let onFailure: (String) -> Void
 
-    var body: some View {
+    var body: some View { sheetContent.macSheetFrame() }
+
+    @ViewBuilder private var sheetContent: some View {
         switch edit {
         case .labels(let taskId): TableLabelsEditor(services: services, taskLocalId: taskId)
         case .assignees(let taskId): TableAssigneesEditor(services: services, taskLocalId: taskId)

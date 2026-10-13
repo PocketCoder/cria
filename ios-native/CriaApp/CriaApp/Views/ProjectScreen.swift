@@ -1,6 +1,8 @@
 import CriaKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// A project with its views: the project's name as a large title, an open count and a row of view pills under
 /// it, then the selected view. List-shaped views carry the header in their scroll content (like Today); the board
@@ -13,7 +15,7 @@ struct ProjectScreen: View {
     @State private var selectedId: String?
     @State private var managing = false
     @State private var showingInfo = false
-    @State private var background: UIImage?
+    @State private var background: PlatformImage?
     /// Bumped when the background changes elsewhere, to reload it.
     @State private var backgroundRevision = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -88,6 +90,11 @@ struct ProjectScreen: View {
             .task(id: "\(live.value.project?.serverId ?? 0)-\(backgroundRevision)") { await loadBackground() }
             .onReceive(NotificationCenter.default.publisher(for: .criaProjectBackgroundChanged)) { note in
                 if let serverId = note.object as? Int, serverId == live.value.project?.serverId { backgroundRevision += 1 }
+            }
+            // The Mac's View menu and g-key shortcuts.
+            .onReceive(NotificationCenter.default.publisher(for: .criaProjectViewCommand)) { note in
+                guard let kind = note.object as? String, let match = views.first(where: { $0.viewKind.rawValue == kind }) else { return }
+                select(match.localId)
             }
     }
 
