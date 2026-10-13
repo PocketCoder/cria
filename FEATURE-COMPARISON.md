@@ -177,7 +177,7 @@ Last updated: 9 October 2026 (v0.14.1 + `dev`, compared against Vikunja `main` e
 | Native | Notifications (plugin-notification) | ✅ | tauri/notification.ts |
 | Native | Tray icon | ✅ | Show window / Quick Add / Quit menu; toggle in settings |
 | Native | Global shortcuts configuration UI | ❌ | Hardcoded only |
-| Native | macOS notarisation | ❌ | Not done; v1.0.0 shipped without it |
+| Native | macOS notarisation | ❌ | V1.0.0 gate |
 | Native | Windows/Linux builds | ❌ | macOS-only matrix in CI |
 
 ### UI
