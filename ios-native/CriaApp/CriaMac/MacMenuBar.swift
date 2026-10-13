@@ -4,7 +4,6 @@ import SwiftUI
 /// The menu bar extra: today's open tasks with checkboxes, New Task, Open Cria and Quit.
 struct MacMenuBarContent: View {
     let model: AppModel
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -16,9 +15,7 @@ struct MacMenuBarContent: View {
             Divider()
             Button("New Task…") { MacWindows.requestQuickAdd() }
                 .disabled(model.services == nil)
-            Button("Open Cria") {
-                if !MacWindows.showMain() { openWindow(id: "main") }
-            }
+            Button("Open Cria") { MacWindows.showMain() }
             Button("Quit Cria") { NSApplication.shared.terminate(nil) }
         }
         .padding(12)

@@ -75,7 +75,9 @@ final class MacEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
-        // A deletion arrives with no replacement string.
+        // AppKit sends nil for an attribute-only change and "" for a deletion. The controller acts only on a Return,
+        // an "@", or the exact one-character backspace pattern (collapsed caret just after the range), so a nil that
+        // is not that passes through unchanged.
         controller.shouldChange(range: range, text: text ?? "")
     }
 

@@ -157,7 +157,8 @@ jobs:
           if gh release view nightly >/dev/null 2>&1; then
             gh release edit nightly --prerelease --title "$title" --notes "$notes"
           else
-            gh release create nightly --verify-tag --prerelease --title "$title" --notes "$notes"
+            gh release create nightly --verify-tag --prerelease --title "$title" --notes "$notes" \
+              || gh release edit nightly --prerelease --title "$title" --notes "$notes"
           fi
           gh release upload nightly release/* --clobber
       - name: Publish nightly.json to gh-pages

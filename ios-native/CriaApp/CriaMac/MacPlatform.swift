@@ -53,31 +53,37 @@ final class MacBackground {
     }
 }
 
-/// Finding and raising the main window, and quick add requests that arrive while no window exists.
+/// Finding and raising the main window. With no window (closed to the menu bar) it opens a `cria://` link, which makes
+/// the WindowGroup create one and hands the link to its shell: no private AppKit selector, and exactly one window.
 @MainActor
 enum MacWindows {
-    /// Set when quick add was asked for with no window open; the next shell to appear shows it.
-    static var quickAddPending = false
-
-    /// True when a window already existed and was brought forward.
-    @discardableResult
-    static func showMain() -> Bool {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.canBecomeMain && !$0.isMiniaturized && $0.isVisible })
-            ?? NSApp.windows.first(where: { $0.canBecomeMain }) {
-            window.makeKeyAndOrderFront(nil)
-            return true
+    /// The main window, not the Settings window or a panel such as the menu bar popover.
+    private static var mainWindow: NSWindow? {
+        let candidates = NSApp.windows.filter { window in
+            guard window.canBecomeMain, !(window is NSPanel) else { return false }
+            return !(window.identifier?.rawValue.localizedCaseInsensitiveContains("settings") ?? false)
         }
-        // The WindowGroup has no window (closed to the menu bar): ask for a new one.
-        NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
-        return false
+        return candidates.first { $0.isVisible && !$0.isMiniaturized } ?? candidates.first { $0.isMiniaturized }
+    }
+
+    /// Brings the main window forward, or opens `link` (which creates a window) when there is none.
+    static func showMain(opening link: String = "cria://today") {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = mainWindow {
+            window.makeKeyAndOrderFront(nil)
+        } else if let url = URL(string: link) {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     static func requestQuickAdd() {
-        if showMain() {
+        if let window = mainWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
             NotificationCenter.default.post(name: .criaQuickAdd, object: nil)
         } else {
-            quickAddPending = true
+            // A new window shows quick add for this link, as for any cria://add link.
+            showMain(opening: "cria://add")
         }
     }
 }
@@ -106,6 +112,14 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateActivationPolicy() {
+        MacActivation.update()
+    }
+}
+
+/// Dock icon visibility: hidden while no window is open when "Hide the Dock icon" is on.
+@MainActor
+enum MacActivation {
+    static func update() {
         let hide = UserDefaults.standard.bool(forKey: MacPrefs.hideDock)
         let hasWindow = NSApp.windows.contains { $0.isVisible && $0.canBecomeMain }
         let wanted: NSApplication.ActivationPolicy = hide && !hasWindow ? .accessory : .regular
@@ -127,6 +141,7 @@ struct MacSettingsView: View {
                 Toggle("Show in menu bar", isOn: $menuBar)
                 Toggle("Keep running in the menu bar when the window is closed", isOn: $closeToMenuBar)
                 Toggle("Hide the Dock icon while no window is open", isOn: $hideDock)
+                    .onChange(of: hideDock) { MacActivation.update() }
             }
             Section("Quick add") {
                 KeyboardShortcuts.Recorder("Global shortcut", name: .quickAdd)

@@ -14,10 +14,16 @@ final class MacEditorTextView: NSTextView, EditorSurface {
     /// Set for the inline editor, which reports the height its text needs.
     var onHeightChange: (@MainActor (CGFloat) -> Void)?
     private var reportedHeight: CGFloat = 0
+    /// A layout manager and a text container do not retain what they point back to, and the view retains only its
+    /// container: without these two the storage is freed as soon as `init` returns.
+    private let ownedStorage: NSTextStorage
+    private let ownedLayout: NSLayoutManager
 
     init() {
         let storage = NSTextStorage()
         let layout = NSLayoutManager()
+        ownedStorage = storage
+        ownedLayout = layout
         let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
         layout.addTextContainer(container)
@@ -46,7 +52,7 @@ final class MacEditorTextView: NSTextView, EditorSurface {
 
     // MARK: EditorSurface
 
-    var storage: NSTextStorage { textStorage ?? NSTextStorage() }
+    var storage: NSTextStorage { ownedStorage }
 
     var selection: NSRange {
         get { selectedRange() }

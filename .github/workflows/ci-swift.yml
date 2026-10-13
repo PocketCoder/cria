@@ -166,7 +166,8 @@ jobs:
             git push -f origin refs/tags/nightly
             gh release create nightly --verify-tag --prerelease \
               --title "Nightly (dev @ ${GITHUB_SHA::7})" \
-              --notes "Automated build of \`dev\` at ${GITHUB_SHA}: the Mac app and the unsigned iOS .ipa. Unstable."
+              --notes "Automated build of \`dev\` at ${GITHUB_SHA}: the Mac app and the unsigned iOS .ipa. Unstable." \
+              || gh release view nightly >/dev/null
           fi
           gh release upload nightly Cria-iOS-Nightly-unsigned.ipa --clobber
           gh release delete swift-alpha --yes --cleanup-tag || true

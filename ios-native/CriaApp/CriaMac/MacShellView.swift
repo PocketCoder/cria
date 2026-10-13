@@ -32,16 +32,16 @@ struct MacShellView: View {
         .focusEffectDisabled()
         .onKeyPress { keys.handle($0, actions: actions) }
         .focusedSceneValue(\.macActions, actions)
+        // A new list starts clean: no pushed route from the old one, no task left open.
+        .onChange(of: actions.selection) {
+            navigation.state.setPath([], for: .browse)
+            actions.openTaskId = nil
+        }
         .environment(navigation)
         .environment(undoCenter)
         .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
         .task { undoCenter.attach(services) }
         .task {
-            // Quick add asked for while no window was open (the global hotkey, the menu bar).
-            if MacWindows.quickAddPending {
-                MacWindows.quickAddPending = false
-                actions.newTask()
-            }
             openPendingURL()
         }
         .onReceive(NotificationCenter.default.publisher(for: .criaQuickAdd)) { _ in actions.newTask() }
