@@ -104,6 +104,8 @@ struct QuickAddSheet: View {
         // One fitted height only: with a taller detent available, iOS moves the sheet up to it as soon as the
         // keyboard opens, which left a screen of empty space above the keyboard.
         .presentationDetents([fittedDetent])
+        // Solid, so nothing behind the sheet (the + button's glow, list rows) shows through the glass.
+        .presentationBackground(Color(.background))
         .task { await aiStatus.refresh() }
         .task { await adoptServerDefault() }
     }

@@ -19,8 +19,31 @@ public struct QuickAddFields: Equatable, Sendable {
 }
 
 /// Case-insensitive project lookup for a `+project` token.
+/// The project a typed `+name` means: the exact title (any case), else the one project whose title matches once
+/// emoji, punctuation and spacing are ignored ("+flat" finds "Flat 🏠"), else the one whose title starts with it, else
+/// the one that contains it as a word. Nil when nothing or more than one project fits.
 public func findProject(titled title: String, in projects: [ProjectRecord]) -> ProjectRecord? {
-    projects.first { $0.title.lowercased() == title.lowercased() }
+    if let exact = projects.first(where: { $0.title.lowercased() == title.lowercased() }) { return exact }
+    let wanted = projectKey(title)
+    guard !wanted.isEmpty else { return nil }
+    let keyed = projects.map { (project: $0, key: projectKey($0.title)) }
+    let tests: [(String) -> Bool] = [
+        { $0 == wanted },
+        { $0.hasPrefix(wanted) },
+        { (" " + $0 + " ").contains(" " + wanted + " ") }
+    ]
+    for test in tests {
+        let matches = keyed.filter { test($0.key) }
+        if matches.count == 1 { return matches[0].project }
+        if matches.count > 1 { return nil }
+    }
+    return nil
+}
+
+/// Lowercased letters and digits, words separated by single spaces.
+private func projectKey(_ text: String) -> String {
+    let words = text.lowercased().unicodeScalars.split { !CharacterSet.alphanumerics.contains($0) }
+    return words.map { String(String.UnicodeScalarView($0)) }.joined(separator: " ")
 }
 
 /// Which project the chip row shows: a typed token wins (no colour, it may not match a real project), else the
@@ -29,7 +52,11 @@ public func resolveProjectChip(
     parsedProjectTitle: String?, projects: [ProjectRecord], projectLocalId: String?
 ) -> (title: String?, color: String?) {
     let chosen = projects.first { $0.localId == projectLocalId }
-    if let parsedProjectTitle { return (parsedProjectTitle, nil) }
+    if let parsedProjectTitle {
+        // The project it will really go to, so a near miss is visible before adding.
+        if let match = findProject(titled: parsedProjectTitle, in: projects) { return (match.title, match.hexColor) }
+        return ("No project “\(parsedProjectTitle)”", nil)
+    }
     return (chosen?.title, chosen?.hexColor)
 }
 

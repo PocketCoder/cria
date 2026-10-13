@@ -57,7 +57,7 @@ struct QuickAddButton: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .criaFab(menu: fabMenu) { sheet = .quickAdd }
+            .criaFab(menu: fabMenu, hidden: sheet != nil) { sheet = .quickAdd }
             .task { await aiStatus.refresh() }
             .sheet(item: $sheet) { which in
                 switch which {

@@ -40,6 +40,8 @@ struct KanbanColumnView: View {
     /// Optional so a row shown inside a sheet (no shell environment) still deletes, without the Undo toast.
     @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var draft = ""
+    @State private var adding = false
+    @FocusState private var addFocused: Bool
     @State private var failure: String?
 
     var body: some View {
@@ -89,16 +91,37 @@ struct KanbanColumnView: View {
         }
     }
 
-    private var addRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "plus").foregroundStyle(Color(.primary)).accessibilityHidden(true)
-            TextField("Add task", text: $draft)
-                .font(Theme.rowSubtitle)
-                .submitLabel(.done)
-                .onSubmit { addTask() }
+    /// A button until tapped: a text field there took a dragged card as text ("cria-task:…") instead of letting the
+    /// column take the drop.
+    @ViewBuilder private var addRow: some View {
+        if adding {
+            HStack(spacing: 8) {
+                Image(systemName: "plus").foregroundStyle(Color(.primary)).accessibilityHidden(true)
+                TextField("Add task", text: $draft)
+                    .font(Theme.rowSubtitle)
+                    .submitLabel(.done)
+                    .focused($addFocused)
+                    .onSubmit { addTask() }
+                    .onChange(of: addFocused) { _, focused in
+                        if !focused && draft.trimmingCharacters(in: .whitespaces).isEmpty { adding = false }
+                    }
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 40)
+        } else {
+            Button {
+                adding = true
+                addFocused = true
+            } label: {
+                Label("Add task", systemImage: "plus")
+                    .font(Theme.rowSubtitle)
+                    .foregroundStyle(Color(.primary))
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 40)
     }
 
     private var header: some View {

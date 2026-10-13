@@ -3,12 +3,12 @@ import XCTest
 
 final class QuickAddSubmitTests: XCTestCase {
     /// Home (server id 10, red) and Work (20), read back from one store so they carry real local ids.
-    private func fixtures() throws -> [ProjectRecord] {
+    private func fixtures(_ extra: [String] = []) throws -> [ProjectRecord] {
         let store = try makeStore()
         let fixtures = [
             #"{"id": 10, "title": "Home", "hex_color": "ff0000"}"#,
             #"{"id": 20, "title": "Work"}"#
-        ]
+        ] + extra
         for json in fixtures {
             try store.upsertProjectFromServer(try decodeFixture(ProjectResponse.self, json), rawJSON: json)
         }
@@ -134,12 +134,25 @@ final class QuickAddSubmitTests: XCTestCase {
         XCTAssertEqual(findProject(titled: "WORK", in: projects)?.title, "Work")
         XCTAssertNil(findProject(titled: "nope", in: projects))
         let typed = resolveProjectChip(parsedProjectTitle: "Typed", projects: projects, projectLocalId: projects[0].localId)
-        XCTAssertEqual(typed.title, "Typed")
+        XCTAssertEqual(typed.title, "No project “Typed”", "an unknown name says so instead of looking matched")
         XCTAssertNil(typed.color)
+        XCTAssertEqual(resolveProjectChip(parsedProjectTitle: "home", projects: projects, projectLocalId: nil).title, "Home")
         let chosen = resolveProjectChip(parsedProjectTitle: nil, projects: projects, projectLocalId: projects[0].localId)
         XCTAssertEqual(chosen.title, "Home")
         XCTAssertEqual(chosen.color, "ff0000")
         XCTAssertNil(resolveProjectChip(parsedProjectTitle: nil, projects: projects, projectLocalId: nil).title)
+    }
+
+    func testTypedProjectMatchesIgnoringEmojiPunctuationAndExtraWords() throws {
+        let projects = try fixtures([
+            #"{"id": 30, "title": "Flat 🏠"}"#, #"{"id": 31, "title": "Shopping list"}"#,
+            #"{"id": 32, "title": "The Garden"}"#, #"{"id": 33, "title": "Car: MOT"}"#, #"{"id": 34, "title": "Car: tax"}"#
+        ])
+        XCTAssertEqual(findProject(titled: "flat", in: projects)?.title, "Flat 🏠")
+        XCTAssertEqual(findProject(titled: "shopping", in: projects)?.title, "Shopping list", "a unique prefix")
+        XCTAssertEqual(findProject(titled: "garden", in: projects)?.title, "The Garden", "a unique whole word")
+        XCTAssertNil(findProject(titled: "car", in: projects), "two projects fit: no guess")
+        XCTAssertNil(findProject(titled: "gard", in: projects), "part of a later word is not enough")
     }
 
     func testFallbackProject() throws {
