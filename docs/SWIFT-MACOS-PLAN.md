@@ -14,7 +14,7 @@ agent: each phase lists exact files, steps and a check that proves it is done.
 | 3 | Rich text editor on macOS | Partly done (compiles in CI, untested on a Mac; mention picker is a sheet, not a caret popover; link is ⌘L because ⌘K is the palette) |
 | 4 | Project views and settings | Partly done (compiles in CI, untested on a Mac; table uses the shared grid, not SwiftUI `Table`; no drag-and-drop or hover work beyond rows) |
 | 5 | Mac integrations | Partly done (compiles in CI, none of it tried on a Mac; global hotkey opens quick add in the main window, not a floating panel; no Dock badge) |
-| 6 | AI, OCR and speech | Not started |
+| 6 | AI, OCR and speech | Partly done (compiles in CI, untried on a Mac; photo uses file picker, Photos and paste; Ramble runs directly with no background task) |
 | 7 | Sparkle updates and release | Not started |
 | 8 | Handover from Tauri, parity audit, deprecation | Not started |
 
