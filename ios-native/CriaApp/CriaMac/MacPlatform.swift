@@ -105,7 +105,8 @@ struct MacSettingsView: View {
                 KeyboardShortcuts.Recorder("Global shortcut", name: .quickAdd)
             }
             Section("Startup") {
-                Toggle("Open Cria at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin))
+                Toggle("Open Cria at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                 if let loginError { Text(loginError).foregroundStyle(.red).font(.caption) }
             }
         }
@@ -113,12 +114,14 @@ struct MacSettingsView: View {
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
+        // Already what the system has (this also runs after the toggle snaps back from a failure).
+        guard enabled != (SMAppService.mainApp.status == .enabled) else { return }
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             loginError = nil
         } catch {
             loginError = String(describing: error)
+            launchAtLogin = SMAppService.mainApp.status == .enabled
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 }
