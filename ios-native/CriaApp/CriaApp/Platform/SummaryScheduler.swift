@@ -26,7 +26,7 @@ enum SummaryScheduler {
     private static func reconcile(store: CriaStore) async {
         let center = UNUserNotificationCenter.current()
         let status = await center.notificationSettings().authorizationStatus
-        let allowed = [UNAuthorizationStatus.authorized, .provisional, .ephemeral].contains(status)
+        let allowed = status.allowsDelivery
         let config = SummaryConfig(preferences: PreferencesStore().load(), weekStart: weekStart)
         let tasks = (try? store.tasks(matching: TaskQuery()))?.map {
             SummaryTask(title: $0.title, dueDate: $0.dueDate, done: $0.done, doneAt: $0.doneAt)

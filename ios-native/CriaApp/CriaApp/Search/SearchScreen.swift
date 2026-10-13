@@ -111,10 +111,14 @@ struct SearchScreen: View {
 /// iOS 26: the search field collapses into the detached search tab button.
 private struct MinimizeSearchField: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26, macOS 26, *) {
+        #if os(iOS)
+        if #available(iOS 26, *) {
             content.searchToolbarBehavior(.minimize)
         } else {
             content
         }
+        #else
+        content
+        #endif
     }
 }

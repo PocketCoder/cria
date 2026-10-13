@@ -89,13 +89,7 @@ struct SmartViewScreen: View {
             // Every group shown is on or after the selected day, so an empty selected day comes first.
             nothingPlanned
             ForEach(groups) { group in
-                Section {
-                    ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
-                        TaskRowLink(services: services, item: row.item, showProject: row.depth == 0, tree: tree(for: row))
-                    }
-                } header: {
-                    groupHeader(group)
-                }
+                groupSection(group)
             }
             if hasAnyTasks && allDisplayed.isEmpty && display.hasFilters {
                 Section {
@@ -201,6 +195,16 @@ struct SmartViewScreen: View {
                 .font(Theme.rowSubtitle)
                 .textCase(nil)
                 .foregroundStyle(Color(.mutedForeground))
+        }
+    }
+
+    private func groupSection(_ group: DisplaySection) -> some View {
+        Section {
+            ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
+                TaskRowLink(services: services, item: row.item, showProject: row.depth == 0, tree: tree(for: row))
+            }
+        } header: {
+            groupHeader(group)
         }
     }
 

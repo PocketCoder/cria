@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -168,6 +169,17 @@ enum PlatformApp {
         UIApplication.didBecomeActiveNotification
         #else
         NSApplication.didBecomeActiveNotification
+        #endif
+    }
+}
+
+extension UNAuthorizationStatus {
+    /// Notifications may be delivered: authorised, provisional, or (iOS only) an App Clip's ephemeral grant.
+    var allowsDelivery: Bool {
+        #if os(iOS)
+        [.authorized, .provisional, .ephemeral].contains(self)
+        #else
+        [.authorized, .provisional].contains(self)
         #endif
     }
 }

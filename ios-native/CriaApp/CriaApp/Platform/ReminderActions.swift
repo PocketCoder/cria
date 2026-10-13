@@ -73,7 +73,7 @@ enum LocalNotice {
         guard PreferencesStore().load().notificationsEnabled, SignedInFlag.isSignedIn() else { return }
         let center = UNUserNotificationCenter.current()
         let status = await center.notificationSettings().authorizationStatus
-        guard [UNAuthorizationStatus.authorized, .provisional, .ephemeral].contains(status) else { return }
+        guard status.allowsDelivery else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
