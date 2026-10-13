@@ -68,5 +68,5 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
-          name: Cria-Mac-${{ github.ref_name }}-unsigned
+          name: Cria-Mac-${{ github.sha }}-unsigned
           path: Cria-Mac-unsigned.zip
