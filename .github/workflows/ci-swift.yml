@@ -1,8 +1,12 @@
 name: CI (native Swift iOS)
 
+# The iOS app. Lint, CriaKit tests and a simulator build on every change to
+# ios-native/; pushes to dev and main also publish the unsigned .ipa to SideStore.
+# The Tauri iOS build is deprecated: nothing else builds for iOS.
+
 on:
   push:
-    branches: [feature/swift-ios, dev, main]
+    branches: [dev, main]
     paths:
       - 'ios-native/**'
       - '.github/workflows/ci-swift.yml'
@@ -52,10 +56,10 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO
 
-  # Alpha .ipa for SideStore. Runs on push only (not PRs), and only after the
-  # checks above pass. Publishes to a rolling `swift-alpha` prerelease and adds
-  # one app entry (io.cria.app.swift) to the shared sidestore.json, the same way
-  # nightly.yml does for its own entry.
+  # Rolling .ipa for SideStore. Runs on push only (not PRs), and only after the
+  # checks above pass. Publishes to a rolling `swift-alpha` prerelease and owns
+  # the shared sidestore.json: it writes the one iOS entry (io.cria.app.swift)
+  # and drops the deprecated Tauri iOS entries (io.cria.app, io.cria.app.nightly).
   publish-ipa:
     name: Publish Swift alpha .ipa
     if: github.event_name == 'push'
@@ -64,7 +68,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
-    # Serialises pushes from feature/swift-ios, dev and main so they don't race
+    # Serialises pushes from dev and main so they don't race
     # on the release or on gh-pages. Queued runs wait, not cancel.
     concurrency:
       group: ios-alpha-publish
@@ -126,9 +130,10 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "Swift alpha (${GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" \
-            --notes "Unsigned native Swift build of \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Install from the SideStore source as **Cria (Swift Alpha)**. Alpha, expect breakage."
+            --notes "Unsigned native Swift build of \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Install from the SideStore source as **Cria**. Prerelease."
 
-      # Merge into the shared source, keeping the stable and nightly entries.
+      # Rewrite the shared source: this app's entry only. The Tauri iOS entries are
+      # dropped (that build is deprecated), so SideStore stops offering them.
       # macOS runner: stat takes -f, not -c.
       - name: Write sidestore.json
         run: |
@@ -146,12 +151,13 @@ jobs:
             --slurpfile old existing.json '
               ($old[0].apps // []) as $apps
               | {name: "Cria", identifier: "io.cria.source", news: [],
-                 apps: (($apps | map(select(.bundleIdentifier != "io.cria.app.swift"))) + [{
-                   name: "Cria (Swift Alpha)",
+                 apps: (($apps | map(select(.bundleIdentifier as $id
+                          | ["io.cria.app.swift", "io.cria.app", "io.cria.app.nightly"] | index($id) | not))) + [{
+                   name: "Cria",
                    bundleIdentifier: "io.cria.app.swift",
                    developerName: "Cria",
-                   subtitle: "Native Swift alpha",
-                   localizedDescription: "Automated build of the native Swift app. Alpha, unstable.",
+                   subtitle: "Native iOS client for Vikunja",
+                   localizedDescription: "Automated build of the native iOS app from the latest dev or main push. Prerelease.",
                    iconURL: "https://raw.githubusercontent.com/\($repo)/dev/src-tauri/icons/icon.png",
                    versions: [{version: $v, buildVersion: $b, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
                  }] | sort_by(.bundleIdentifier))}

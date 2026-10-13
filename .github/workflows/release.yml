@@ -10,12 +10,11 @@ name: Release
 #   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (empty string is fine for an
 #                                           unprotected dev key)
 #
-# Also builds an UNSIGNED iOS .ipa (build-ios job) and attaches it to the
-# same release. It's deliberately unsigned: there's no paid Apple Developer
-# account, so no distribution certificate exists to sign with. The .ipa is
-# meant to be sideloaded via SideStore/iLoader, which sign it themselves
-# locally with a free Apple ID — no Apple secrets or device UDIDs needed in
-# this repo. PRs are still iOS-compile-checked by ci-ios.yml.
+# Also builds the native Swift iOS app (ios-native/) as an UNSIGNED .ipa
+# (build-ios job) and attaches it to the same release. It is unsigned on
+# purpose: there is no paid Apple Developer account. SideStore re-signs it
+# with a free Apple ID. The Tauri iOS build is deprecated and no longer built;
+# rolling iOS builds come from ci-swift.yml, which also owns the SideStore source.
 
 on:
   push:
@@ -185,11 +184,11 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
-  # Build an unsigned iOS .ipa for sideloading (SideStore/iLoader do their
-  # own signing with a free Apple ID, so no Apple secrets are needed here).
+  # Build the native Swift iOS app as an unsigned .ipa for sideloading
+  # (SideStore re-signs it with a free Apple ID, so no Apple secrets here).
   # ------------------------------------------------------------------
   build-ios:
-    name: Build unsigned iOS .ipa
+    name: Build unsigned iOS .ipa (native Swift)
     runs-on: macos-latest
     timeout-minutes: 45
     needs: verify-version
@@ -199,70 +198,48 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      - uses: pnpm/action-setup@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Install Rust toolchain (iOS target)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios
+      - name: Generate Xcode project
+        working-directory: ios-native/CriaApp
+        run: xcodegen generate
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-ios-ipa-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-ios-ipa-
-            ${{ runner.os }}-cargo-ios-
-
-      - name: Install JS deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Init iOS project
-        run: pnpm tauri ios init
-
-      # `tauri ios init` silently mis-copies some AppIcon.appiconset sizes
-      # (they end up as Tauri's default logo instead of ours, even though
-      # the source files in src-tauri/icons/ios are correct). Overwrite the
-      # generated catalog with our own source images as a workaround.
-      - name: Fix iOS app icon (tauri ios init copy bug workaround)
-        run: cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
-
-      - name: Build unsigned archive
-        run: pnpm tauri ios build --target aarch64 --no-sign --archive-only --ci
+      # The release version (checked against the tag by verify-version) as the
+      # marketing version; the run number as the build number.
+      - name: Build unsigned device app
+        working-directory: ios-native/CriaApp
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version "$GITHUB_WORKSPACE/package.json")"
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Package unsigned .ipa
         run: |
           set -euo pipefail
-          ARCHIVE=$(find src-tauri/gen/apple -name '*.xcarchive' -print -quit)
-          if [ -z "$ARCHIVE" ]; then
-            echo "No .xcarchive found" >&2
-            find src-tauri/gen/apple -maxdepth 4 >&2
-            exit 1
-          fi
-          APP=$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
-          if [ -z "$APP" ]; then
-            echo "No .app found in archive" >&2
-            exit 1
-          fi
-          mkdir -p ipa_out/Payload
-          cp -R "$APP" ipa_out/Payload/
-          (cd ipa_out && zip -qr ../Cria-unsigned.ipa Payload)
-          ls -la Cria-unsigned.ipa
+          APP="$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          [ -n "$APP" ] || { echo "No .app found" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cria-iOS-unsigned.ipa" Payload)
+          ls -la Cria-iOS-unsigned.ipa
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
           name: cria-ios-unsigned
-          path: Cria-unsigned.ipa
+          path: Cria-iOS-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
 
@@ -362,39 +339,6 @@ jobs:
           set -euo pipefail
           mkdir -p gh-pages-out
           cp update.json gh-pages-out/
-
-      # Stable app entry in the shared SideStore source (nightly.yml writes the
-      # nightly entry into the same file). The .ipa keeps the plain version as
-      # both CFBundleShortVersionString and CFBundleVersion, so version and
-      # buildVersion match (SideStore rejects a mismatch).
-      - name: Write sidestore.json
-        run: |
-          set -euo pipefail
-          tag="${{ steps.version.outputs.tag }}"
-          version="${{ steps.version.outputs.version }}"
-          ipa="$(ls release/*.ipa | head -n1)"
-          jq -n \
-            --arg v "$version" \
-            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg notes "Release $tag" \
-            --arg url "https://github.com/${{ github.repository }}/releases/download/${tag}/$(basename "$ipa")" \
-            --arg icon "https://raw.githubusercontent.com/${{ github.repository }}/${tag}/src-tauri/icons/icon.png" \
-            --argjson size "$(stat -c %s "$ipa")" '{
-              name: "Cria",
-              bundleIdentifier: "io.cria.app",
-              developerName: "Cria",
-              subtitle: "Native Vikunja client",
-              localizedDescription: "Native desktop and iOS client for Vikunja.",
-              iconURL: $icon,
-              versions: [{version: $v, buildVersion: $v, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
-            }' > app.json
-          # Merge into the shared source: keep the other channel's app entry.
-          git fetch --depth 1 origin gh-pages 2>/dev/null && git show origin/gh-pages:sidestore.json > existing.json 2>/dev/null || echo '{}' > existing.json
-          jq -n --slurpfile old existing.json --argjson app "$(cat app.json)" '
-            {name: "Cria", identifier: "io.cria.source", news: [],
-             apps: ((($old[0].apps // []) | map(select(.bundleIdentifier != $app.bundleIdentifier))) + [$app] | sort_by(.bundleIdentifier))}
-          ' > gh-pages-out/sidestore.json
-          cat gh-pages-out/sidestore.json
 
       - name: Publish update.json to gh-pages
         uses: peaceiris/actions-gh-pages@v4
