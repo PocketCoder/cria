@@ -89,13 +89,14 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO
 
-  # Rolling .ipa for SideStore. Runs on push only (not PRs), and only after the
-  # checks above pass. Publishes to a rolling `swift-alpha` prerelease and owns
-  # the shared sidestore.json: it writes the one iOS entry (io.cria.app.swift)
-  # and drops the deprecated Tauri iOS entries (io.cria.app, io.cria.app.nightly).
+  # Rolling .ipa for SideStore. Runs on pushes to dev only (not PRs), and only after
+  # the checks above pass. Attaches the .ipa to the one rolling `nightly` prerelease
+  # (nightly.yml owns that release's tag, title and Mac builds) and owns the shared
+  # sidestore.json: it writes the one iOS entry (io.cria.app.swift) and drops the
+  # deprecated Tauri iOS entries (io.cria.app, io.cria.app.nightly).
   publish-ipa:
-    name: Publish Swift alpha .ipa
-    if: github.event_name == 'push'
+    name: Publish iOS nightly .ipa
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     needs: [changes, test-and-build]
     runs-on: macos-latest
     timeout-minutes: 45
@@ -150,20 +151,24 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = "${{ github.run_number }}"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
-          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cria-Swift-Alpha-unsigned.ipa" Payload)
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cria-iOS-Nightly-unsigned.ipa" Payload)
 
-      # Recreate the release so the asset and notes track the latest push.
-      - name: Replace swift-alpha release
+      # Adds the .ipa to the rolling nightly release (nightly.yml moves its tag and rewrites its title). Created here
+      # only if no nightly exists yet. The separate swift-alpha release this replaces is deleted.
+      - name: Attach .ipa to the nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if ! gh release view nightly >/dev/null 2>&1; then
+            git tag -f nightly "$GITHUB_SHA"
+            git push -f origin refs/tags/nightly
+            gh release create nightly --verify-tag --prerelease \
+              --title "Nightly (dev @ ${GITHUB_SHA::7})" \
+              --notes "Automated build of \`dev\` at ${GITHUB_SHA}: the Mac app and the unsigned iOS .ipa. Unstable."
+          fi
+          gh release upload nightly Cria-iOS-Nightly-unsigned.ipa --clobber
           gh release delete swift-alpha --yes --cleanup-tag || true
-          gh release create swift-alpha Cria-Swift-Alpha-unsigned.ipa \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "Swift alpha (${GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" \
-            --notes "Unsigned native Swift build of \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Install from the SideStore source as **Cria**. Prerelease."
 
       # Rewrite the shared source: this app's entry only. The Tauri iOS entries are
       # dropped (that build is deprecated), so SideStore stops offering them.
@@ -179,8 +184,8 @@ jobs:
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg notes "${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}" \
             --arg repo "${{ github.repository }}" \
-            --arg url "https://github.com/${{ github.repository }}/releases/download/swift-alpha/Cria-Swift-Alpha-unsigned.ipa" \
-            --argjson size "$(stat -f %z Cria-Swift-Alpha-unsigned.ipa)" \
+            --arg url "https://github.com/${{ github.repository }}/releases/download/nightly/Cria-iOS-Nightly-unsigned.ipa" \
+            --argjson size "$(stat -f %z Cria-iOS-Nightly-unsigned.ipa)" \
             --slurpfile old existing.json '
               ($old[0].apps // []) as $apps
               | {name: "Cria", identifier: "io.cria.source", news: [],

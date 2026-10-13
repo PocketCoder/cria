@@ -506,8 +506,8 @@ The iOS app. It replaced the Tauri iOS build at parity (plan and status:
 [docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md); features and what syncs where: [ios-native/FEATURES.md](ios-native/FEATURES.md)). `CriaKit/` is a Swift package with all
 logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
 XcodeGen. CI ([ci-swift.yml](.github/workflows/ci-swift.yml)) runs `swiftlint lint --strict`, `swift test` and a
-simulator build; pushes to `dev` and `main` publish an unsigned `.ipa` (`io.cria.app.swift`, rolling
-`swift-alpha` release) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
+simulator build; pushes to `dev` attach an unsigned `.ipa` (`io.cria.app.swift`) to the rolling `nightly`
+release, which also holds the Mac build (nightly.yml) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
 also attach the Swift `.ipa` (release.yml `build-ios`).
 
 - Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
