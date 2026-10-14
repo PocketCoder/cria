@@ -44,7 +44,10 @@ struct RichTextEditor: NSViewRepresentable {
         scroll.documentView = view
         controller.attach(view)
         controller.imageProvider = imageProvider
+        let loading = TaskOpenSignposts.signposter.beginInterval("editor load")
         controller.load(initialHTML)
+        TaskOpenSignposts.signposter.endInterval("editor load", loading)
+        TaskOpenSignposts.event("editor ready", "\(initialHTML.count) chars")
         return scroll
     }
 

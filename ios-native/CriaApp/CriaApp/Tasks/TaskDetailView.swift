@@ -46,7 +46,19 @@ struct TaskDetailView: View {
         self.services = services
         self.taskLocalId = taskLocalId
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: TaskDetailData()) {
+        #if os(macOS)
+        TaskOpenSignposts.event("detail init", taskLocalId)
+        // The Mac shows the task the moment it is clicked, so the first frame already has it (iOS pushes, unchanged).
+        let initial = TaskOpenSignposts.seed(store, taskLocalId: taskLocalId)
+        if let seeded = initial.task {
+            _title = State(initialValue: seeded.title)
+            _loadedTitle = State(initialValue: seeded.title)
+            _didLoad = State(initialValue: true)
+        }
+        #else
+        let initial = TaskDetailData()
+        #endif
+        _live = State(initialValue: LiveValue(initial: initial) {
             observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
                 let task = try reading.task(localId: taskLocalId)
                 let all = try reading.projects()
@@ -111,6 +123,9 @@ struct TaskDetailView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { descriptionDraft.save() }
         }
+        #if os(macOS)
+        .onAppear { TaskOpenSignposts.event("detail first body", taskLocalId) }
+        #endif
         .onDisappear {
             saveText()
             descriptionDraft.save()
@@ -246,20 +261,6 @@ struct TaskDetailView: View {
         }
     }
 
-    private func loadDrafts() {
-        guard let task = live.value.task, !didLoad else { return }
-        title = task.title
-        loadedTitle = task.title
-        didLoad = true
-    }
-
-    /// The store's title changed. Follow it unless the user has typed something different.
-    private func followServerTitle(_ newTitle: String?) {
-        guard didLoad, let newTitle else { return }
-        if title == loadedTitle { title = newTitle }
-        loadedTitle = newTitle
-    }
-
     private func saveText() {
         guard let task = live.value.task, didLoad else { return }
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -278,6 +279,23 @@ struct TaskDetailView: View {
             sheets.failure = String(describing: error)
             return false
         }
+    }
+}
+
+// Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
+extension TaskDetailView {
+    private func loadDrafts() {
+        guard let task = live.value.task, !didLoad else { return }
+        title = task.title
+        loadedTitle = task.title
+        didLoad = true
+    }
+
+    /// The store's title changed. Follow it unless the user has typed something different.
+    private func followServerTitle(_ newTitle: String?) {
+        guard didLoad, let newTitle else { return }
+        if title == loadedTitle { title = newTitle }
+        loadedTitle = newTitle
     }
 
     /// Projects the task can move to, plus its current one when archived, so the picker never shows a blank value.

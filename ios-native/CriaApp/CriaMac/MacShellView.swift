@@ -23,10 +23,14 @@ struct MacShellView: View {
                 if let id = actions.openTaskId {
                     TaskDetailView(services: services, taskLocalId: id).id(id)
                         .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
+                        .transition(.opacity)
                 } else {
                     ContentUnavailableView("No task selected", systemImage: "checklist")
+                        .transition(.opacity)
                 }
             }
+            // One calm cross-fade (title included) when another task opens, instead of an abrupt jump.
+            .animation(.easeInOut(duration: 0.3), value: actions.openTaskId)
         }
         .focusable()
         .focusEffectDisabled()
@@ -87,7 +91,7 @@ struct MacShellView: View {
             root
                 .navigationDestination(for: Route.self) { MacRouteDestination(route: $0, services: services) }
         }
-        .environment(\.taskOpener) { actions.openTaskId = $0 }
+        .environment(\.taskOpener) { actions.openTask($0) }
         .environment(\.selectedTaskId, actions.openTaskId)
         .id(actions.selection)
         .navigationSplitViewColumnWidth(min: 320, ideal: 440)

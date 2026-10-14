@@ -47,6 +47,14 @@ final class MacActions {
         }
     }
 
+    /// Shows a task in the detail column. Clicking the task already open leaves it alone, so the detail (and any
+    /// edit in progress) is not rebuilt.
+    func openTask(_ id: String) {
+        TaskOpenSignposts.event("click", id)
+        guard openTaskId != id else { return }
+        openTaskId = id
+    }
+
     func newTask() {
         addRequest = QuickAddRequest(title: "")
     }
