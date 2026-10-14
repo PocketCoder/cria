@@ -225,16 +225,19 @@ public struct QuickAddBatchItem: Sendable {
     public var assigneeUsernames: [String]
     public var reminders: [QuickAddReminder]
     public var isSubtask: Bool
+    /// Subtasks typed under this task, created in its project and linked to it.
+    public var subtaskTitles: [String]
 
     public init(
         input: TaskInput, labelTitles: [String] = [], assigneeUsernames: [String] = [], reminders: [QuickAddReminder] = [],
-        isSubtask: Bool = false
+        isSubtask: Bool = false, subtaskTitles: [String] = []
     ) {
         self.input = input
         self.labelTitles = labelTitles
         self.assigneeUsernames = assigneeUsernames
         self.reminders = reminders
         self.isSubtask = isSubtask
+        self.subtaskTitles = subtaskTitles
     }
 }
 
@@ -261,8 +264,8 @@ extension CriaStore {
         return created
     }
 
-    /// Creates quick add's queued tasks in order. A subtask is created in the project of the task it belongs to and
-    /// linked to it; one queued first, with nothing above it, is added as a plain task.
+    /// Creates quick add's tasks in order, each followed by its typed subtasks. A queued subtask is created in the
+    /// project of the task it belongs to and linked to it; one queued first, with nothing above it, is a plain task.
     @discardableResult
     public func persistQuickAddBatch(_ items: [QuickAddBatchItem]) throws -> [TaskRecord] {
         var created: [TaskRecord] = []
@@ -280,6 +283,9 @@ extension CriaStore {
                 parent = record
             }
             created.append(record)
+            for title in item.subtaskTitles where !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                created.append(try createSubtask(parentLocalId: record.localId, title: title))
+            }
         }
         return created
     }

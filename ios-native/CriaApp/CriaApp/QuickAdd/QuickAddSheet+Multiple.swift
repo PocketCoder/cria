@@ -4,9 +4,6 @@ import SwiftUI
 /// Adding one task, or several: in multiple mode Return queues the typed task (with its date, labels and reminders)
 /// and send adds every queued one, subtasks linked to the task above them.
 extension QuickAddSheet {
-    /// Whether a queued task can take a subtask.
-    var hasQueuedParent: Bool { queue.contains { !$0.item.isSubtask } }
-
     var canSend: Bool { canSubmit || !queue.isEmpty }
 
     var sendLabel: String {
@@ -30,7 +27,7 @@ extension QuickAddSheet {
     }
 
     /// The typed task with everything set for it, or nil (with the reason shown) when it has nowhere to go.
-    func buildItem(isSubtask: Bool = false) -> QuickAddBatchItem? {
+    func buildItem() -> QuickAddBatchItem? {
         let result = parsed
         let fields = QuickAddFields(
             dueDate: dueISO.isEmpty ? nil : dueISO, priority: priority,
@@ -47,16 +44,14 @@ extension QuickAddSheet {
         if !description.isEmpty { input.description = Self.paragraphHTML(description) }
         return QuickAddBatchItem(
             input: input, labelTitles: labelTitles, assigneeUsernames: result.assigneeUsernames,
-            reminders: reminders + result.reminders, isSubtask: isSubtask
+            reminders: reminders + result.reminders, subtaskTitles: subtasks + [subtaskLine]
         )
     }
 
     func submit() {
         guard let item = buildItem() else { return }
         do {
-            try services.store.persistQuickAdd(
-                item.input, labelTitles: item.labelTitles, assigneeUsernames: item.assigneeUsernames, reminders: item.reminders
-            )
+            try services.store.persistQuickAddBatch([item])
             if addAnother { startNext(added: "Added ‘\(item.input.title)’") } else { dismiss() }
         } catch {
             errorMessage = String(describing: error)
@@ -65,7 +60,7 @@ extension QuickAddSheet {
 
     /// Adds the typed task to the list and clears the form for the next one.
     func queueCurrent() {
-        guard canSubmit, let item = buildItem(isSubtask: nextIsSubtask && hasQueuedParent) else { return }
+        guard canSubmit, let item = buildItem() else { return }
         withAnimation(.snappy) { queue.append(QueuedQuickAdd(item: item)) }
         startNext(added: nil)
     }
@@ -81,7 +76,6 @@ extension QuickAddSheet {
         do {
             let created = try services.store.persistQuickAddBatch(queue.map(\.item))
             queue = []
-            nextIsSubtask = false
             if addAnother { startNext(added: "Added \(created.count) task\(created.count == 1 ? "" : "s")") } else { dismiss() }
         } catch {
             errorMessage = String(describing: error)
@@ -99,6 +93,9 @@ extension QuickAddSheet {
         picked.subtract([.due, .priority])
         errorMessage = nil
         note = ""
+        subtasks = []
+        subtaskLine = ""
+        addingSubtask = false
         if let message { addedTitle = message }
         focused = .title
     }
@@ -117,16 +114,59 @@ extension QuickAddSheet {
         .accessibilityAddTraits(multiple ? .isSelected : [])
     }
 
-    var subtaskChip: some View {
-        Button { nextIsSubtask.toggle() } label: {
-            CriaChip(
-                text: "Subtask", systemImage: nextIsSubtask ? "checkmark" : "arrow.turn.down.right",
-                tint: nextIsSubtask ? Color(.primary) : Color(.mutedForeground)
-            )
+    /// The subtasks typed for this task, then a field for the next one: Return adds it and keeps the field open.
+    @ViewBuilder var subtaskSection: some View {
+        ForEach(Array(subtasks.enumerated()), id: \.offset) { index, title in
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.turn.down.right").font(.caption).foregroundStyle(Color(.mutedForeground))
+                    .accessibilityHidden(true)
+                Text(title).font(Theme.rowSubtitle).lineLimit(1)
+                Spacer(minLength: 4)
+                Button {
+                    withAnimation(.snappy) { _ = subtasks.remove(at: index) }
+                } label: {
+                    Image(systemName: "xmark").frame(width: 28, height: 28)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color(.mutedForeground))
+                .accessibilityLabel("Remove subtask \(title)")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add as a subtask")
-        .accessibilityAddTraits(nextIsSubtask ? .isSelected : [])
+        if addingSubtask {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.turn.down.right").font(.caption).foregroundStyle(Color(.mutedForeground))
+                    .accessibilityHidden(true)
+                TextField("Subtask", text: $subtaskLine)
+                    .font(Theme.rowSubtitle)
+                    .focused($focused, equals: .subtask)
+                    .submitLabel(.next)
+                    .onSubmit(addSubtaskLine)
+            }
+        } else {
+            Button {
+                addingSubtask = true
+                focused = .subtask
+            } label: {
+                Label("Add subtask", systemImage: "plus").font(Theme.caption)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Color(.primary))
+        }
+    }
+
+    /// Return in the subtask field: keeps the title and stays in the field for the next; an empty Return goes back
+    /// to the task name.
+    func addSubtaskLine() {
+        let title = subtaskLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            addingSubtask = false
+            focused = .title
+            return
+        }
+        withAnimation(.snappy) { subtasks.append(title) }
+        subtaskLine = ""
+        // Return ends editing; take the focus back for the next subtask.
+        Task { @MainActor in focused = .subtask }
     }
 }
 
@@ -136,7 +176,7 @@ struct QueuedQuickAdd: Identifiable {
     var item: QuickAddBatchItem
 }
 
-/// The queued tasks above the field. Each can be indented under the task above it, or removed.
+/// The queued tasks above the field, each with its subtask count. Any can be removed.
 struct QuickAddQueueList: View {
     @Binding var queue: [QueuedQuickAdd]
 
@@ -166,23 +206,17 @@ struct QuickAddQueueList: View {
     }
 
     private func row(_ index: Int, _ entry: QueuedQuickAdd) -> some View {
-        let isSubtask = entry.item.isSubtask
-        return HStack(spacing: 8) {
-            Image(systemName: isSubtask ? "arrow.turn.down.right" : "circle")
+        HStack(spacing: 8) {
+            Image(systemName: "circle")
                 .font(.caption)
                 .foregroundStyle(Color(.mutedForeground))
-                .padding(.leading, isSubtask ? 18 : 0)
                 .accessibilityHidden(true)
             Text(entry.item.input.title).font(Theme.rowSubtitle).lineLimit(1)
-            Spacer(minLength: 4)
-            Button {
-                withAnimation(.snappy) { queue[index].item.isSubtask.toggle() }
-            } label: {
-                Image(systemName: isSubtask ? "decrease.indent" : "increase.indent").frame(width: 32, height: 28)
+            let subtaskCount = entry.item.subtaskTitles.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+            if subtaskCount > 0 {
+                Text("\(subtaskCount) subtask\(subtaskCount == 1 ? "" : "s")").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
-            // The first task has nothing above it to belong to.
-            .disabled(index == 0 && !isSubtask)
-            .accessibilityLabel(isSubtask ? "Make it a task" : "Make it a subtask")
+            Spacer(minLength: 4)
             Button {
                 withAnimation(.snappy) { _ = queue.remove(at: index) }
             } label: {

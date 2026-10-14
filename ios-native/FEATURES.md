@@ -89,7 +89,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 
 | Feature | Where it lives | Notes |
 |---|---|---|
-| Quick add sheet | Vikunja for the task | Parses `*label +project !priority`, assignees, repeats, and dates ("tomorrow 5pm") from the line, with a live preview. Date, priority, reminders and labels are also pickers. "remind day before at 9am", "remind 2 hours before" and "remind at 5pm" add reminders. The list button turns on multiple mode: Return queues each task (optionally as a subtask of the one above), send adds them all. Offline adds file into the remembered default project. |
+| Quick add sheet | Vikunja for the task | Parses `*label +project !priority`, assignees, repeats, and dates ("tomorrow 5pm") from the line, with a live preview. Date, priority, reminders and labels are also pickers. "remind day before at 9am", "remind 2 hours before" and "remind at 5pm" add reminders. "Add subtask" types subtasks under the task being added. The list button turns on multiple mode: Return queues each task (with its subtasks), send adds them all. Offline adds file into the remembered default project. |
 | Quick Add Magic mode (Vikunja, Todoist, Off) | Vikunja | Stored in `frontend_settings.quick_add_magic_mode`, the key Vikunja-web uses. Cached locally in `cria.quickAddMagicMode`. |
 | Which chips show in the quick add row, labels on chips | Cria accounts | Customise > Quick Add (`quickAddActions`, `quickAddShowsLabels`). Others move to the ••• menu. |
 | Detect dates in the title | Cria accounts | `detectDates`. Off keeps dates as text. |

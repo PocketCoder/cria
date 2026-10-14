@@ -102,4 +102,14 @@ final class QuickAddReminderPhraseTests: XCTestCase {
         let created = try store.persistQuickAddBatch([alone])
         XCTAssertTrue(try store.relations(forTask: created[0].localId).isEmpty)
     }
+
+    func testTypedSubtasksAreCreatedUnderTheirTask() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let item = QuickAddBatchItem(input: TaskInput(title: "Pack", projectLocalId: project), subtaskTitles: ["Socks", " ", "Charger"])
+        let created = try store.persistQuickAddBatch([item])
+        XCTAssertEqual(created.map(\.title), ["Pack", "Socks", "Charger"])
+        let subtasks = try store.relations(forTask: created[0].localId).filter { $0.kind == "subtask" }
+        XCTAssertEqual(Set(subtasks.map(\.otherTitle)), ["Socks", "Charger"])
+    }
 }

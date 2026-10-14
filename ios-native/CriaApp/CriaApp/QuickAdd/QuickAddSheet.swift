@@ -42,8 +42,10 @@ struct QuickAddSheet: View {
     /// Multiple mode: Return queues the task and send adds every queued one. Remembered on this device.
     @AppStorage("cria.quickAddMultiple") var multiple = false
     @State var queue: [QueuedQuickAdd] = []
-    /// The next queued task is a subtask of the last queued one that is not.
-    @State var nextIsSubtask = false
+    /// Subtasks typed for the task being added, created under it.
+    @State var subtasks: [String] = []
+    @State var subtaskLine = ""
+    @State var addingSubtask = false
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
@@ -58,7 +60,7 @@ struct QuickAddSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
-            TextField(nextIsSubtask && hasQueuedParent ? "Subtask name" : "Task name", text: $line, axis: .vertical)
+            TextField("Task name", text: $line, axis: .vertical)
                 .font(.title3.weight(.semibold))
                 .focused($focused, equals: .title)
                 .submitLabel(multiple ? .next : .done)
@@ -71,6 +73,7 @@ struct QuickAddSheet: View {
                 .foregroundStyle(Color(.mutedForeground))
                 .lineLimit(1...4)
                 .focused($focused, equals: .description)
+            subtaskSection
             if !line.isEmpty && parsedSomething {
                 Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.caption)
             }
@@ -254,7 +257,6 @@ extension QuickAddSheet {
     private var pickers: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                if multiple && hasQueuedParent { subtaskChip }
                 ForEach(preferences.custom.quickAddActions) { chip($0) }
                 if parsed.repeatAfter != nil || parsed.repeatMode != nil {
                     CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
@@ -352,5 +354,5 @@ extension QuickAddSheet {
 }
 
 enum QuickAddFocus: Hashable {
-    case title, description
+    case title, description, subtask
 }
