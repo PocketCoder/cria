@@ -268,7 +268,7 @@ The Mac app (`CriaMac`) is a native SwiftUI app on macOS 15 and later. It uses t
 | Notifications | This device | Reminders, morning summary and weekly round-up as on iOS, scheduled while the app runs. |
 | `cria://` links and file drop | This device | The same links as iOS. Dropping files on a task's detail queues them as attachments. |
 | List from photo | Vikunja for the tasks | A file picker, Photos or paste instead of the camera. |
-| Account takeover from the Tauri app | This device | On the first launch with no native session, the Tauri desktop app's stored sign-in (Keychain service `Cria`, account `vikunja-token`, `.nightly` or `.dev`) is adopted once, then a full sync runs. A refused Keychain prompt ends the attempt; signing out does not bring it back. |
+| Account takeover from the Tauri app | This device | Never automatic: the app does not touch the Tauri app's Keychain item at launch (an unanswered access prompt there hung the launch). The sign-in screen offers "Use my Cria desktop sign-in", which reads the Tauri item (service `Cria`, account `vikunja-token`, `.nightly` or `.dev`) off the main thread with a 20 second timeout, saves it, then runs a full sync. A refused prompt or a missing item ends the offer; a timeout or failed save keeps it; signing out does not bring it back once adopted. Launch has a 10 second safety net that shows sign-in or Retry instead of spinning. |
 | Updates | This device | Sparkle is wired but inactive until a public key is set. Until then updates are manual: the DMG on the rolling `nightly` release. |
 
 ### Not on the Mac

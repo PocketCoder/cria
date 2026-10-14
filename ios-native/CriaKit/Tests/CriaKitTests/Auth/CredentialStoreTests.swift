@@ -98,11 +98,12 @@ final class LegacyCredentialImportTests: XCTestCase {
 
     func testFailedSaveIsRetried() async {
         let ran = LockedFlag()
-        let session = AuthSession(store: CredentialStore(slot: UnwritableSlot()), legacyImport: makeImport(MemorySlot(json), ran: ran))
-        await session.hydrate()
-        XCTAssertFalse(ran.value, "the save failed, so the import is tried again next launch")
+        let session = AuthSession(store: CredentialStore(slot: UnwritableSlot()))
+        let outcome = await makeImport(MemorySlot(json), ran: ran).adopt(into: session)
+        XCTAssertEqual(outcome, .saveFailed)
+        XCTAssertFalse(ran.value, "the save failed, so the takeover is still offered")
         let status = await session.status
-        XCTAssertEqual(status, .unauthenticated)
+        XCTAssertEqual(status, .unknown)
     }
 
     func testMissingItemMarksDone() {
@@ -117,25 +118,41 @@ final class LegacyCredentialImportTests: XCTestCase {
         XCTAssertFalse(ran.value)
     }
 
-    func testHydrateAdoptsAndSavesIntoTheNativeSlot() async throws {
-        let native = MemorySlot()
-        let session = AuthSession(store: CredentialStore(slot: native), legacyImport: makeImport(MemorySlot(json)))
+    func testHydrateNeverReadsTheTauriItem() async {
+        let session = AuthSession(store: CredentialStore(slot: MemorySlot()))
         await session.hydrate()
+        let status = await session.status
+        XCTAssertEqual(status, .unauthenticated, "launch must not touch another app's Keychain item")
+    }
+
+    func testAdoptSavesIntoTheNativeSlotAndEndsTheOffer() async throws {
+        let native = MemorySlot()
+        let ran = LockedFlag()
+        let legacy = makeImport(MemorySlot(json), ran: ran)
+        let session = AuthSession(store: CredentialStore(slot: native))
+        XCTAssertTrue(legacy.isAvailable)
+        let outcome = await legacy.adopt(into: session)
+        XCTAssertEqual(outcome, .adopted)
         let status = await session.status
         let expected = Credentials(serverURL: "https://vk.example", token: "tok", authMethod: .password, refreshToken: "ref")
         XCTAssertEqual(status, .authenticated(expected))
         XCTAssertNotNil(try native.read())
+        XCTAssertFalse(legacy.isAvailable, "signing out later does not bring the offer back")
     }
 
-    func testSignOutIsNotUndoneByTheImport() async {
+    func testRefusalReportsNothingAndEndsTheOffer() async {
+        let legacy = makeImport(RefusingSlot())
+        let outcome = await legacy.adopt(into: AuthSession(store: CredentialStore(slot: MemorySlot())))
+        XCTAssertEqual(outcome, .nothingToAdopt)
+        XCTAssertFalse(legacy.isAvailable)
+    }
+
+    func testHungKeychainTimesOutWithoutEndingTheOffer() async {
         let ran = LockedFlag()
-        let native = MemorySlot()
-        let session = AuthSession(store: CredentialStore(slot: native), legacyImport: makeImport(MemorySlot(json), ran: ran))
-        await session.hydrate()
-        await session.signOut()
-        await session.hydrate()
-        let status = await session.status
-        XCTAssertEqual(status, .unauthenticated)
+        let legacy = makeImport(HangingSlot(), ran: ran)
+        let outcome = await legacy.adopt(into: AuthSession(store: CredentialStore(slot: MemorySlot())), timeout: 0.2)
+        XCTAssertEqual(outcome, .timedOut)
+        XCTAssertFalse(ran.value)
     }
 
     func testTauriAccountNames() {
@@ -156,6 +173,16 @@ private final class UnwritableSlot: SecretSlot, @unchecked Sendable {
 /// A keychain item the user refused access to (errSecAuthFailed).
 private final class RefusingSlot: SecretSlot, @unchecked Sendable {
     func read() throws -> String? { throw KeychainError(status: -25293) }
+    func write(_ value: String) throws {}
+    func delete() throws {}
+}
+
+/// A Keychain read stuck behind an unanswered access prompt.
+private final class HangingSlot: SecretSlot, @unchecked Sendable {
+    func read() throws -> String? {
+        Thread.sleep(forTimeInterval: 2)
+        return nil
+    }
     func write(_ value: String) throws {}
     func delete() throws {}
 }
