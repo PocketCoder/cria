@@ -104,7 +104,8 @@ jobs:
           hdiutil create -volname "Cria Nightly" -srcfolder dmg -ov -format UDZO out/Cria-Nightly-macOS.dmg
 
       # Sparkle verifies every update against the public key in the app, so the zip is signed with the matching private
-      # key (the SPARKLE_PRIVATE_KEY secret). The signature line goes next to the zip for the publish job's appcast.
+      # key (the SPARKLE_PRIVATE_KEY secret). The signature line travels in out/ for the publish job's appcast and is not
+      # uploaded to the release.
       - name: Sign update (Sparkle)
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -117,7 +118,7 @@ jobs:
           TOOL="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*artifacts/sparkle/Sparkle/bin/sign_update' -print -quit)"
           [ -n "$TOOL" ] || { echo "::error::sign_update not found in the resolved Sparkle package"; exit 1; }
           printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
-          "$TOOL" out/Cria-Nightly-macOS.zip --ed-key-file "$RUNNER_TEMP/sparkle.key" | tee sparkle-sig.txt
+          "$TOOL" out/Cria-Nightly-macOS.zip --ed-key-file "$RUNNER_TEMP/sparkle.key" | tee out/sparkle-sig.txt
           rm -f "$RUNNER_TEMP/sparkle.key"
 
       # A build that cannot start must never reach the release (a missing or unloadable framework aborts in dyld before
@@ -141,9 +142,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: nightly-macos
-          path: |
-            out/*
-            sparkle-sig.txt
+          path: out/*
           if-no-files-found: error
           retention-days: 3
 
@@ -166,7 +165,7 @@ jobs:
             echo "::warning::no Sparkle signature, so the update feed is not written"
             exit 0
           fi
-          mv release/sparkle-sig.txt sparkle-sig.txt
+          mv release/sparkle-sig.txt sparkle-sig.txt  # the signature is not a release asset
           mkdir -p gh-pages-out
           version="$(jq -r .version package.json)"
           url="https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-macOS.zip"
