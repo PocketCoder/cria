@@ -331,7 +331,9 @@ jobs:
         working-directory: ios-native/CriaApp
         run: |
           set -euo pipefail
-          version="$(jq -r .version ../../package.json)"
+          # "0.15.0-nightly.380": nightlies differ only by build, so the version shown in About and in Sparkle's update
+          # window says which one it is (the same text goes in the appcast).
+          version="$(jq -r .version ../../package.json)-nightly.${{ github.run_number }}"
           xcodebuild archive \
             -project CriaApp.xcodeproj \
             -scheme CriaMac \
@@ -455,7 +457,7 @@ jobs:
             exit 0
           fi
           mkdir -p gh-pages-out
-          version="$(jq -r .version package.json)"
+          version="$(jq -r .version package.json)-nightly.${{ github.run_number }}"
           url="https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-macOS.zip"
           sig="$(tr -d '\n' < dist/mac/sparkle-sig.txt)"
           cat > gh-pages-out/nightly-appcast.xml <<XML
