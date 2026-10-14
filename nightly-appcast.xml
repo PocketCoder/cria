@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Cria Nightly</title>
+    <item>
+      <title>Nightly (dev @ db193b4)</title>
+      <pubDate>Wed, 14 Oct 2026 06:58:14 +0000</pubDate>
+      <sparkle:version>102</sparkle:version>
+      <sparkle:shortVersionString>0.15.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-macOS.zip" sparkle:edSignature="v3USBP0WK/HozBX0kqSlIXfDHICzvuW8XodSgnmD47EKtrQUN+tpbbasUpFM/ijyo8FPGcKqNzMv2V/cjFDCCA==" length="9895808" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
