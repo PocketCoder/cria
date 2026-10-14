@@ -16,22 +16,20 @@ struct MacShellView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $actions.columns) {
             MacSidebar(services: services, actions: actions)
-        } content: {
-            content
         } detail: {
+            content
+        }
+        // The open task is an inspector: it slides in when a task is clicked and closes with its X, Esc or a new list.
+        .inspector(isPresented: inspectorShown) {
             NavigationStack {
                 if let id = actions.openTaskId {
                     TaskDetailView(services: services, taskLocalId: id).id(id)
                         .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
-                        .transition(.opacity)
-                } else {
-                    ContentUnavailableView("No task selected", systemImage: "checklist")
-                        .transition(.opacity)
                 }
             }
-            // One calm cross-fade (title included) when another task opens, instead of an abrupt jump.
-            .animation(.easeInOut(duration: 0.3), value: actions.openTaskId)
+            .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
         }
+        .onExitCommand { actions.openTaskId = nil }
         .focusable()
         .focusEffectDisabled()
         .onKeyPress { keys.handle($0, actions: actions) }
@@ -59,6 +57,10 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $actions.showingPalette) { CommandPalette(services: services, actions: actions) }
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
+    }
+
+    private var inspectorShown: Binding<Bool> {
+        .distinct(get: { actions.openTaskId != nil }, set: { if !$0 { actions.openTaskId = nil } })
     }
 
     private func openPendingURL() {
@@ -94,7 +96,6 @@ struct MacShellView: View {
         .environment(\.taskOpener) { actions.openTask($0) }
         .environment(\.selectedTaskId, actions.openTaskId)
         .id(actions.selection)
-        .navigationSplitViewColumnWidth(min: 320, ideal: 440)
     }
 
     @ViewBuilder

@@ -95,6 +95,9 @@ struct TaskDetailView: View {
         .toolbar {
             if let task = live.value.task {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    if let closeTask {
+                        Button("Close", systemImage: "xmark", action: closeTask).help("Close (Esc)")
+                    }
                     TaskDetailMenu(services: services, task: task, state: sheets, onDuplicate: duplicateTask)
                     Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
                         _ = apply(TaskPatch(isFavorite: !task.isFavorite))
@@ -197,7 +200,9 @@ struct TaskDetailView: View {
                 HStack(alignment: .center, spacing: 8) {
                     PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { _ = apply(TaskPatch(done: !task.done)) }
                         .padding(.vertical, -6)
-                    TextField("Title", text: $title, axis: .vertical)
+                    TextField("", text: $title, prompt: Text("Title"), axis: .vertical)
+                        .labelsHidden()
+                        .accessibilityLabel("Title")
                         .font(Theme.title)
                         .focused($focus, equals: .title)
                         .submitLabel(.done)

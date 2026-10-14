@@ -93,6 +93,15 @@ struct DescriptionField: View {
     @State private var measured: CGFloat = 0
     private var height: CGFloat { max(measured, DescriptionDraft.minHeight(empty: draft.isEmpty)) }
 
+    /// Down from the top of the editor to its text: the Mac's formatting bar sits above it.
+    private static var placeholderInset: CGFloat {
+        #if os(macOS)
+        36
+        #else
+        6
+        #endif
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             EditorHost(
@@ -103,7 +112,7 @@ struct DescriptionField: View {
                 if draft.isEmpty {
                     Text("Add description")
                         .foregroundStyle(Color(.mutedForeground))
-                        .padding(.top, 6)
+                        .padding(.top, Self.placeholderInset)
                         .allowsHitTesting(false)
                 }
             }

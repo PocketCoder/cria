@@ -21,6 +21,14 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macTabs
+        #else
+        phoneBody
+        #endif
+    }
+
+    private var phoneBody: some View {
         NavigationStack {
             Form {
                 if isLinkShare {
@@ -177,11 +185,65 @@ struct SettingsView: View {
     }
 }
 
+extension SettingsView {
+#if os(macOS)
+    /// The Settings window: one pane per topic on the toolbar, each a system grouped form.
+    private var macTabs: some View {
+        TabView {
+            pane("General", "gearshape") {
+                if isLinkShare { linkShareNotice } else { accountCard }
+                loadStatus
+                GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
+                aboutSection
+            }
+            pane("Appearance", "paintbrush") {
+                AppearanceSettingsSection(prefs: prefs)
+                CustomiseSettingsSection(prefs: prefs)
+            }
+            pane("Notifications", "bell") {
+                NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs)
+                PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
+            }
+            pane("Account", "person.crop.circle") {
+                if !isLinkShare { accountSection }
+                syncSection
+                storageSection
+                if let message = model.errorMessage {
+                    Section { Text(message).foregroundStyle(Color(.destructive)) }
+                }
+                SignOutSettingsSection(services: services, version: Self.version, onSignOut: onSignOut)
+            }
+            MacSettingsView()
+                .tabItem { Label("Mac", systemImage: "desktopcomputer") }
+        }
+        .task { projects = ProjectTree.visible((try? services.store.projects()) ?? []) }
+        .task { await model.loadIfNeeded() }
+    }
+
+    private func pane<Content: View>(_ title: String, _ symbol: String, @ViewBuilder _ content: () -> Content) -> some View {
+        NavigationStack {
+            Form { content() }
+                .formStyle(.grouped)
+                .navigationTitle(title)
+        }
+        .tabItem { Label(title, systemImage: symbol) }
+    }
+#endif
+}
+
 /// Settings-app row label: 30pt rounded square in an accent colour with a white glyph.
 struct SettingsLabel: View {
     let title: String
     let symbol: String
     let token: ThemeToken
+
+    #if os(macOS)
+    private static let glyph: CGFloat = 13
+    private static let side: CGFloat = 22
+    #else
+    private static let glyph: CGFloat = 17
+    private static let side: CGFloat = 30
+    #endif
 
     init(_ title: String, symbol: String, token: ThemeToken) {
         self.title = title
@@ -194,10 +256,10 @@ struct SettingsLabel: View {
             Text(title)
         } icon: {
             Image(systemName: symbol)
-                .font(.system(size: 17))
+                .font(.system(size: Self.glyph))
                 .foregroundStyle(.white)
-                .frame(width: 30, height: 30)
-                .background(Color(token), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(width: Self.side, height: Self.side)
+                .background(Color(token), in: RoundedRectangle(cornerRadius: Self.side / 4, style: .continuous))
         }
     }
 }

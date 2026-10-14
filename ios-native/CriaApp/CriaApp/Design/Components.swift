@@ -274,9 +274,14 @@ extension View {
     /// Warm grouped background behind a `List` or `Form`, rows on the cell colour. Corner radius, separators,
     /// swipe, edit mode and the scroll-edge effect stay system-drawn.
     func criaSurface() -> some View {
+        #if os(macOS)
+        // The system's grouped look: a second background per row reads as a box inside a box.
+        self
+        #else
         scrollContentBackground(.hidden)
             .background(Color(.grouped))
             .listRowBackground(Color(.cell))
+        #endif
     }
 
     /// FAB pinned bottom-trailing, above the tab bar. For list screens only (not Search or task detail). The extra

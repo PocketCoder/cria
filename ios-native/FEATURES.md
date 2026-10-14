@@ -64,7 +64,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 | Select several tasks | Vikunja for the changes | Select beside the title; the bar completes, schedules, defers, moves, sets priority or deletes them together. |
 | Kanban cards and columns | Vikunja | Move a card by drag or "Move to" (bucket assignment, position); moves made elsewhere arrive at the next pull. Add, rename, delete columns; set a column limit that blocks drops. Subtasks in their parent's column sit inside its card ("2/3 subtasks"); ones in another column are their own card captioned with the parent. |
 | Kanban: sort cards by due date | Cria accounts | Settings > Customise > Projects (`kanbanSortByDue`, off by default). Each column lists its cards soonest due first, undated last; equal dates keep their order. Stored positions are not changed, so turning it off brings the dragged order back. Dragging then only moves a card between columns. Vikunja-web's board has no such sort. |
-| Kanban drag behaviour | This device | A drag starts as a reorder in the card's own column. When the card leaves that column all columns shrink to their headers so each fits on screen without edge-scrolling, and the column under the card opens to choose where in it the card goes. The column a card would land in is outlined. With the due-date sort on, every column stays a header. Drag start uses `onDrag`, not `draggable`, so it needs checking on a device. |
+| Kanban drag behaviour | This device | A drag starts as a reorder in the card's own column. On iOS, when the card leaves that column all columns shrink to their headers so each fits on screen without edge-scrolling, and the column under the card opens to choose where in it the card goes. The column a card would land in is outlined. With the due-date sort on, every column stays a header. Drag start uses `onDrag`, not `draggable`, so it needs checking on a device. |
 | Kanban done and default column | Vikunja | Stored on the view. |
 | Kanban for filter views | Vikunja | Read-only by design: each column is a saved search, so a card shows wherever it matches and is not dragged between columns (as in Vikunja-web). |
 | Table view | Vikunja for the tasks | Tap a row to open it; swipe to complete. |
@@ -256,7 +256,7 @@ The Mac app (`CriaMac`) is a native SwiftUI app on macOS 15 and later. It uses t
 
 | Feature | Where it lives | Notes |
 |---|---|---|
-| Three-column window | This device | Sidebar, the selected list or project, and the open task. Task rows and kanban cards open the task in the detail column (`\.taskOpener`) instead of pushing it. The sidebar collapses (⌘E or the toolbar button). |
+| Task inspector | This device | Sidebar and the selected list or project; the open task slides in as an inspector on the right and closes with its X, Esc or choosing another list. Task rows and kanban cards open it (`\.taskOpener`) instead of pushing. The sidebar collapses (⌘E or the toolbar button). |
 | Menu bar and shortcuts | This device | File, View and Go menus and a Task menu (done, due, priority, labels, move, favourite, copy link, delete). ⌘N new task, ⇧⌘N new project, ⌘1 to ⌘3 Today, Upcoming, Inbox, ⌘F search, ⌘K command palette, ⌘. copy link. |
 | Single-key shortcuts | This device | `g` then a letter to go somewhere, and `t`, `d`, `p`, `l`, `m`, `s` and Delete on the open task. Needs the window focused. |
 | Command palette (⌘K) | This device | Jump to a project, view or task, or run a command. |

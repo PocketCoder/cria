@@ -89,8 +89,13 @@ struct MacProjectBranch: View {
     }
 
     private func label(_ project: ProjectRecord) -> some View {
-        Label(project.title, systemImage: "folder")
-            .foregroundStyle(Color(hexString: project.hexColor) ?? .primary)
-            .tag(MacSelection.project(project.localId))
+        Label {
+            Text(project.title)
+        } icon: {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(Color(hexString: project.hexColor) ?? .secondary)
+        }
+        .tag(MacSelection.project(project.localId))
     }
 }

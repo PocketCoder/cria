@@ -136,19 +136,14 @@ struct MacSettingsScene: View {
     let model: AppModel
 
     var body: some View {
-        TabView {
-            Group {
-                if let services = model.services {
-                    SettingsView(services: services) { wipe in Task { await model.signOut(wipeLocalData: wipe) } }
-                } else {
-                    Text("Sign in to change settings.").foregroundStyle(.secondary).padding(40)
-                }
+        Group {
+            if let services = model.services {
+                SettingsView(services: services) { wipe in Task { await model.signOut(wipeLocalData: wipe) } }
+            } else {
+                Text("Sign in to change settings.").foregroundStyle(.secondary).padding(40)
             }
-            .tabItem { Label("Settings", systemImage: "gearshape") }
-            MacSettingsView()
-                .tabItem { Label("Mac", systemImage: "desktopcomputer") }
         }
-        .frame(width: 560, height: 640)
+        .frame(width: 600, height: 620)
         .modifier(MacPreferenceEnvironment())
     }
 }

@@ -101,7 +101,7 @@ struct KanbanBoardView: View {
                         expanded: $expandedCards,
                         labels: live.value.labels,
                         readOnly: readOnly,
-                        compact: dragging && leftSource && (sortByDue || hoverColumn != column.bucket.localId),
+                        compact: collapsesColumns && (sortByDue || hoverColumn != column.bucket.localId),
                         onDragStart: { beginDrag(from: column.bucket.localId) },
                         onOver: { columnOver(column.bucket.localId, $0) },
                         onDragEnd: { endDrag() },
@@ -115,7 +115,7 @@ struct KanbanBoardView: View {
                     )
                     .containerRelativeFrame(.horizontal) { length, _ in width(length) }
                 }
-                if !readOnly && !(dragging && leftSource) { addBucketButton }
+                if !readOnly && !collapsesColumns { addBucketButton }
             }
             .scrollTargetLayout()
         }
@@ -248,9 +248,19 @@ struct KanbanBoardView: View {
 // MARK: Drag state
 
 extension KanbanBoardView {
+    /// Columns shrink to headers while a card is dragged out of its own column. A touch behaviour: the Mac has room
+    /// for every column and a pointer to aim with.
+    private var collapsesColumns: Bool {
+        #if os(macOS)
+        false
+        #else
+        dragging && leftSource
+        #endif
+    }
+
     /// While a card is dragged every column shares the screen, so any of them can be reached without scrolling.
     private func width(_ available: CGFloat) -> CGFloat {
-        guard dragging && leftSource else { return Self.columnWidth(available, typeSize: typeSize) }
+        guard collapsesColumns else { return Self.columnWidth(available, typeSize: typeSize) }
         let count = CGFloat(max(columns.count, 1))
         return max(88, (available - 32 - 12 * (count - 1)) / count)
     }
