@@ -102,6 +102,23 @@ jobs:
           ditto "stage/Cria (Nightly).app" "dmg/Cria (Nightly).app"
           ln -s /Applications dmg/Applications
           hdiutil create -volname "Cria Nightly" -srcfolder dmg -ov -format UDZO out/Cria-Nightly-macOS.dmg
+
+      # A build that cannot start must never reach the release (a missing or unloadable framework aborts in dyld before
+      # any window opens). Launches the packaged binary for a few seconds and fails on a dyld error.
+      - name: Launch check
+        run: |
+          set -u
+          BIN="stage/Cria (Nightly).app/Contents/MacOS/Cria"
+          "$BIN" >launch.log 2>&1 &
+          pid=$!
+          sleep 8
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          cat launch.log
+          if grep -qiE "Library not loaded|dyld\[|Symbol not found" launch.log; then
+            echo "::error::The app failed to load at launch"
+            exit 1
+          fi
           ls -lh out
 
       - uses: actions/upload-artifact@v7

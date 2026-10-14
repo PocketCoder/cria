@@ -5,5 +5,10 @@
     <!-- Ramble listens through the microphone; the hardened runtime blocks it without this. -->
     <key>com.apple.security.device.audio-input</key>
     <true/>
+    <!-- Sparkle.framework keeps its own code signature (another team's), while the app is signed with a self-signed or
+         ad-hoc identity that has no team. The hardened runtime's library validation then refuses to load it and the app
+         dies at launch ("different Team IDs"). Revisit when the app is signed with a Developer ID. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
 </dict>
 </plist>
