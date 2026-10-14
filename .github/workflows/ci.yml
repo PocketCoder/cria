@@ -1,19 +1,106 @@
 name: CI
 
+# One workflow for everything that runs on a push or pull request.
+#
+#   changes   works out which parts of the repo the change touches, so each job below only runs when it matters
+#   versions, quality, build, rust   the Tauri desktop app (kept until its retirement, docs/SWIFT-MACOS-PLAN.md Phase 8)
+#   kit       SwiftLint over all Swift, then the CriaKit tests
+#   ios       the iOS app: a simulator build, and on a push to dev the unsigned .ipa
+#   mac       the Mac app: a build, and on a push to dev the signed, packaged "Cria (Nightly)" with a launch check
+#   publish   push to dev only: the one place that updates the rolling `nightly` release, the Sparkle feed
+#             (nightly-appcast.xml) and the SideStore source (sidestore.json)
+#
+# Release builds for tags stay in release.yml.
+
 on:
   push:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: read
+  pull-requests: read
+
+# A newer pull request push supersedes the older run. A push to dev is never cancelled halfway (it may be publishing);
+# a newer one waits its turn.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.decide.outputs.web }}
+      rust: ${{ steps.decide.outputs.rust }}
+      kit: ${{ steps.decide.outputs.kit }}
+      ios: ${{ steps.decide.outputs.ios }}
+      mac: ${{ steps.decide.outputs.mac }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            web:
+              - 'src/**'
+              - 'tests/**'
+              - 'public/**'
+              - 'index.html'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '*.config.*'
+              - 'tsconfig*.json'
+            rust:
+              - 'src-tauri/**'
+            apple:
+              - 'ios-native/**'
+              - '!ios-native/**/*.md'
+            ios:
+              - 'ios-native/**'
+              - '!ios-native/CriaApp/CriaMac/**'
+              - '!ios-native/**/*.md'
+            mac:
+              - 'ios-native/CriaApp/CriaMac/**'
+              - 'ios-native/CriaApp/CriaApp/**'
+              - 'ios-native/CriaApp/project.yml'
+              - 'ios-native/CriaKit/**'
+            ci:
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+      # Editing this workflow, or running it by hand, runs everything.
+      - id: decide
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          WEB: ${{ steps.filter.outputs.web }}
+          RUST: ${{ steps.filter.outputs.rust }}
+          APPLE: ${{ steps.filter.outputs.apple }}
+          IOS: ${{ steps.filter.outputs.ios }}
+          MAC: ${{ steps.filter.outputs.mac }}
+          CI_FILES: ${{ steps.filter.outputs.ci }}
+        run: |
+          all=false
+          if [ "$MANUAL" = true ] || [ "$CI_FILES" = true ]; then all=true; fi
+          pick() { if [ "$all" = true ] || [ "$1" = true ]; then echo true; else echo false; fi; }
+          {
+            echo "web=$(pick "$WEB")"
+            echo "rust=$(pick "$RUST")"
+            echo "kit=$(pick "$APPLE")"
+            echo "ios=$(pick "$IOS")"
+            echo "mac=$(pick "$MAC")"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  # ── Tauri desktop app (until Phase 8) ──────────────────────────────────────────────────────────────────────────
+
   versions:
     name: Version consistency
     runs-on: ubuntu-latest
@@ -24,49 +111,430 @@ jobs:
 
   quality:
     name: Typecheck & Test
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - uses: actions/checkout@v7
-
       - uses: pnpm/action-setup@v6
-
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: TypeScript check
         run: pnpm typecheck
-
       - name: Lint
         run: pnpm lint
-
       - name: Unit tests + coverage thresholds
         run: pnpm test:coverage
 
   build:
     name: Frontend build
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: quality
-
     steps:
       - uses: actions/checkout@v7
-
       - uses: pnpm/action-setup@v6
-
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Build frontend
         run: pnpm vite:build
+
+  # fmt, clippy and unit tests for the Tauri shell. A macOS runner because parts of the crate (Vision OCR, the Swift AI
+  # bridge) only compile on Apple targets.
+  rust:
+    name: fmt, clippy, test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-check-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-check-
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+      # tauri-build validates that `frontendDist` (../dist) exists.
+      - name: Build frontend
+        run: pnpm vite:build
+      - name: Format
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      # Advisory until the existing warnings are cleaned up; then drop continue-on-error and add `-- -D warnings`.
+      - name: Clippy
+        continue-on-error: true
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+      - name: Unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+  # ── Native Swift apps ──────────────────────────────────────────────────────────────────────────────────────────
+
+  kit:
+    name: Swift lint and CriaKit tests
+    needs: changes
+    if: needs.changes.outputs.kit == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/apple-setup
+        with:
+          swiftlint: 'true'
+          generate: 'false'
+      - name: Lint
+        working-directory: ios-native
+        run: swiftlint lint --strict
+      - name: Unit tests (CriaKit)
+        working-directory: ios-native/CriaKit
+        run: swift test
+
+  ios:
+    name: iOS app
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NIGHTLY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/apple-setup
+
+      - name: Build app for simulator
+        if: env.NIGHTLY != 'true'
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      # SideStore only offers an update when the marketing version changes, so each run gets MAJOR.MINOR.RUN and the same
+      # value goes into the source entry (see publish). Passed on the command line, so Info.plist matches.
+      - name: Set version
+        if: env.NIGHTLY == 'true'
+        id: ver
+        run: echo "short=$(jq -r .version package.json | cut -d. -f1,2).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # Unsigned device build, which also proves the app compiles. SideStore re-signs the .ipa with the user's Apple ID.
+      - name: Build unsigned device app
+        if: env.NIGHTLY == 'true'
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            MARKETING_VERSION=${{ steps.ver.outputs.short }} \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package unsigned .ipa
+        if: env.NIGHTLY == 'true'
+        run: |
+          set -euo pipefail
+          APP="$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          [ -n "$APP" ] || { echo "No .app found" >&2; exit 1; }
+          # SideStore refuses the install if these differ from the source entry.
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "${{ steps.ver.outputs.short }}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = "${{ github.run_number }}"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" ipa-out
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/ipa-out/Cria-iOS-Nightly-unsigned.ipa" Payload)
+
+      - uses: actions/upload-artifact@v7
+        if: env.NIGHTLY == 'true'
+        with:
+          name: ios-dist
+          path: ipa-out/*
+          if-no-files-found: error
+          retention-days: 3
+
+  mac:
+    name: Mac app
+    needs: changes
+    if: needs.changes.outputs.mac == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NIGHTLY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/apple-setup
+
+      - name: Build macOS app
+        if: env.NIGHTLY != 'true'
+        working-directory: ios-native/CriaApp
+        run: |
+          xcodebuild build \
+            -project CriaApp.xcodeproj \
+            -scheme CriaMac \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      # From here on: a push to dev builds the real thing, "Cria (Nightly)".
+      # Stable self-signed identity so the keychain "Always Allow" survives updates (scripts/make-signing-cert.sh).
+      # Imported into a temporary keychain; with no secrets the build is ad-hoc signed.
+      - name: Configure macOS code signing
+        if: env.NIGHTLY == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "No signing cert configured; using ad-hoc signing."
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/cria-signing.keychain-db"
+          KC_PASS="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cria.p12"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          security import "$RUNNER_TEMP/cria.p12" -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cria.p12"
+          security find-identity -p codesigning "$KC"
+          echo "SIGN_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Archive (universal)
+        if: env.NIGHTLY == 'true'
+        working-directory: ios-native/CriaApp
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version ../../package.json)"
+          xcodebuild archive \
+            -project CriaApp.xcodeproj \
+            -scheme CriaMac \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Cria.xcarchive" \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+            PRODUCT_BUNDLE_IDENTIFIER=io.cria.app.nightly \
+            MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CRIA_FEED_URL=https://pocketcoder.github.io/cria/nightly-appcast.xml \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="${SIGN_IDENTITY:--}" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package DMG and zip
+        if: env.NIGHTLY == 'true'
+        run: |
+          set -euo pipefail
+          APP="$(find "$RUNNER_TEMP/Cria.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)"
+          [ -n "$APP" ] || { echo "No .app in the archive" >&2; exit 1; }
+          codesign --verify --deep --strict "$APP" || echo "::warning::codesign verification failed for $APP"
+          # PRODUCT_NAME is not overridden at build time (a command-line override reaches every target, including
+          # package resource bundles, and two outputs then share a name). The app is renamed here instead.
+          mkdir -p out dmg stage
+          ditto "$APP" "stage/Cria (Nightly).app"
+          ditto -c -k --keepParent "stage/Cria (Nightly).app" out/Cria-Nightly-macOS.zip
+          ditto "stage/Cria (Nightly).app" "dmg/Cria (Nightly).app"
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Cria Nightly" -srcfolder dmg -ov -format UDZO out/Cria-Nightly-macOS.dmg
+
+      # Sparkle verifies every update against the public key in the app, so the zip is signed with the matching private
+      # key (the SPARKLE_PRIVATE_KEY secret). The signature line travels in out/ for the publish job's appcast and is not
+      # uploaded to the release.
+      - name: Sign update (Sparkle)
+        if: env.NIGHTLY == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::warning::SPARKLE_PRIVATE_KEY is not set, so no update feed is published"
+            exit 0
+          fi
+          TOOL="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*artifacts/sparkle/Sparkle/bin/sign_update' -print -quit)"
+          [ -n "$TOOL" ] || { echo "::error::sign_update not found in the resolved Sparkle package"; exit 1; }
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          "$TOOL" out/Cria-Nightly-macOS.zip --ed-key-file "$RUNNER_TEMP/sparkle.key" | tee out/sparkle-sig.txt
+          rm -f "$RUNNER_TEMP/sparkle.key"
+
+      # A build that cannot start must never reach the release (a missing or unloadable framework aborts in dyld before
+      # any window opens). Launches the packaged binary for a few seconds and fails on a dyld error.
+      - name: Launch check
+        if: env.NIGHTLY == 'true'
+        run: |
+          set -u
+          BIN="stage/Cria (Nightly).app/Contents/MacOS/Cria"
+          "$BIN" >launch.log 2>&1 &
+          pid=$!
+          sleep 8
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          cat launch.log
+          if grep -qiE "Library not loaded|dyld\[|Symbol not found" launch.log; then
+            echo "::error::The app failed to load at launch"
+            exit 1
+          fi
+          ls -lh out
+
+      - uses: actions/upload-artifact@v7
+        if: env.NIGHTLY == 'true'
+        with:
+          name: mac-dist
+          path: out/*
+          if-no-files-found: error
+          retention-days: 3
+
+  # ── Publishing (push to dev only) ──────────────────────────────────────────────────────────────────────────────
+
+  # The one place the rolling `nightly` release, the Sparkle feed and the SideStore source are written, so the Mac and
+  # iOS builds can never race each other. A platform whose code did not change keeps its previous assets and entry.
+  # Only the Swift jobs gate it: the Tauri checks do not hold back a native nightly.
+  publish:
+    name: Publish nightly
+    needs: [kit, ios, mac]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/dev' && !cancelled() && !contains(needs.*.result, 'failure')
+      && (needs.mac.result == 'success' || needs.ios.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly-publish
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HAVE_MAC: ${{ needs.mac.result == 'success' }}
+      HAVE_IOS: ${{ needs.ios.result == 'success' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        if: env.HAVE_MAC == 'true'
+        with:
+          name: mac-dist
+          path: dist/mac
+      - uses: actions/download-artifact@v8
+        if: env.HAVE_IOS == 'true'
+        with:
+          name: ios-dist
+          path: dist/ios
+
+      # SUFeedURL in the Mac app is nightly-appcast.xml on gh-pages. sparkle:version is the build number the app was
+      # built with (the run number), so it only ever grows.
+      - name: Write nightly-appcast.xml
+        if: env.HAVE_MAC == 'true'
+        run: |
+          set -euo pipefail
+          if [ ! -f dist/mac/sparkle-sig.txt ]; then
+            echo "::warning::no Sparkle signature, so the update feed is not written"
+            exit 0
+          fi
+          mkdir -p gh-pages-out
+          version="$(jq -r .version package.json)"
+          url="https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-macOS.zip"
+          sig="$(tr -d '\n' < dist/mac/sparkle-sig.txt)"
+          cat > gh-pages-out/nightly-appcast.xml <<XML
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Cria Nightly</title>
+              <item>
+                <title>Nightly (dev @ ${GITHUB_SHA::7})</title>
+                <pubDate>$(date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+                <sparkle:version>${{ github.run_number }}</sparkle:version>
+                <sparkle:shortVersionString>${version}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+                <enclosure url="${url}" ${sig} type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          XML
+          cat gh-pages-out/nightly-appcast.xml
+
+      # Rewrites this app's entry only. The deprecated Tauri iOS entries (io.cria.app, io.cria.app.nightly) are dropped.
+      - name: Write sidestore.json
+        if: env.HAVE_IOS == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p gh-pages-out
+          short="$(jq -r .version package.json | cut -d. -f1,2).${{ github.run_number }}"
+          git fetch --depth 1 origin gh-pages 2>/dev/null && git show origin/gh-pages:sidestore.json > existing.json 2>/dev/null || echo '{}' > existing.json
+          jq -n \
+            --arg v "$short" \
+            --arg b "${{ github.run_number }}" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg notes "${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}" \
+            --arg repo "${{ github.repository }}" \
+            --arg url "https://github.com/${{ github.repository }}/releases/download/nightly/Cria-iOS-Nightly-unsigned.ipa" \
+            --argjson size "$(stat -c %s dist/ios/Cria-iOS-Nightly-unsigned.ipa)" \
+            --slurpfile old existing.json '
+              ($old[0].apps // []) as $apps
+              | {name: "Cria", identifier: "io.cria.source", news: [],
+                 apps: (($apps | map(select(.bundleIdentifier as $id
+                          | ["io.cria.app.swift", "io.cria.app", "io.cria.app.nightly"] | index($id) | not))) + [{
+                   name: "Cria",
+                   bundleIdentifier: "io.cria.app.swift",
+                   developerName: "Cria",
+                   subtitle: "Native iOS client for Vikunja",
+                   localizedDescription: "Automated build of the native iOS app from the latest dev push. Prerelease.",
+                   iconURL: "https://raw.githubusercontent.com/\($repo)/dev/src-tauri/icons/icon.png",
+                   versions: [{version: $v, buildVersion: $b, date: $date, size: $size, downloadURL: $url, localizedDescription: $notes}]
+                 }] | sort_by(.bundleIdentifier))}
+            ' > gh-pages-out/sidestore.json
+          cat gh-pages-out/sidestore.json
+
+      # One rolling prerelease. Updated in place, so assets from a platform that was not rebuilt survive. The tag moves
+      # to the latest push.
+      - name: Update the nightly release
+        run: |
+          set -euo pipefail
+          git tag -f nightly "$GITHUB_SHA"
+          git push -f origin refs/tags/nightly
+          title="Nightly (dev @ ${GITHUB_SHA::7})"
+          notes="Automated build of \`dev\` at ${GITHUB_SHA}. The Mac app (**Cria (Nightly)**, DMG or zip; not notarised, so right-click > Open the first time; it updates itself through Sparkle) and the unsigned iOS .ipa for SideStore are each rebuilt when their code changes. Unstable."
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --prerelease --title "$title" --notes "$notes"
+          else
+            gh release create nightly --verify-tag --prerelease --title "$title" --notes "$notes"
+          fi
+          if [ "$HAVE_MAC" = true ]; then
+            gh release upload nightly dist/mac/Cria-Nightly-macOS.dmg dist/mac/Cria-Nightly-macOS.zip --clobber
+          fi
+          if [ "$HAVE_IOS" = true ]; then
+            gh release upload nightly dist/ios/Cria-iOS-Nightly-unsigned.ipa --clobber
+          fi
+
+      - name: Publish the feeds to gh-pages
+        if: hashFiles('gh-pages-out/*') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: gh-pages-out
+          keep_files: true
+          commit_message: 'nightly feeds: ${{ github.sha }}'

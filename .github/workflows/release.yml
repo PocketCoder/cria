@@ -14,7 +14,7 @@ name: Release
 # (build-ios job) and attaches it to the same release. It is unsigned on
 # purpose: there is no paid Apple Developer account. SideStore re-signs it
 # with a free Apple ID. The Tauri iOS build is deprecated and no longer built;
-# rolling iOS builds come from ci-swift.yml, which also owns the SideStore source.
+# rolling iOS builds come from ci.yml (the `ios` and `publish` jobs), which also owns the SideStore source.
 
 on:
   push:

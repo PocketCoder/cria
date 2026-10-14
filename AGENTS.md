@@ -550,10 +550,10 @@ control as 🟡 in FEATURE-COMPARISON.md, never ✅.
 The iOS app. It replaced the Tauri iOS build at parity (plan and status:
 [docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md); features and what syncs where: [ios-native/FEATURES.md](ios-native/FEATURES.md)). `CriaKit/` is a Swift package with all
 logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
-XcodeGen. CI ([ci-swift.yml](.github/workflows/ci-swift.yml)) runs `swiftlint lint --strict`, `swift test` and a
-simulator build; pushes to `dev` attach an unsigned `.ipa` (`io.cria.app.swift`) to the rolling `nightly`
-release, which also holds the Mac build (nightly.yml) and own the SideStore source (`sidestore.json`), which lists only this app. Tagged releases
-also attach the Swift `.ipa` (release.yml `build-ios`).
+XcodeGen. CI ([ci.yml](.github/workflows/ci.yml)) runs `swiftlint lint --strict`, `swift test` and a
+simulator build; pushes to `dev` build an unsigned `.ipa` (`io.cria.app.swift`) and the `publish` job attaches it to the
+rolling `nightly` release (which also holds the Mac build) and writes the SideStore source (`sidestore.json`), which lists
+only this app. Tagged releases also attach the Swift `.ipa` (release.yml `build-ios`).
 
 - Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
 - Same sync rules as above (silent upserts, outbox FIFO, pending-delete guard, settings merge-patch with v1
@@ -575,7 +575,7 @@ Replaces the Tauri desktop app (plan and status: [docs/SWIFT-MACOS-PLAN.md](docs
 project and `CriaKit` as iOS; the `CriaMac` target compiles `CriaMac/` plus the iOS app's `CriaApp/` sources (see the
 `excludes` in `project.yml`). Minimum macOS 15. Not sandboxed; no app group, so the database is in
 `Application Support/<bundle id>/Native/`. Nothing here compiles on Linux and nobody has run it on a Mac in this
-repo's history unless the plan says so: CI (`ci-macos.yml`, plus `ci-swift.yml` for shared code) is the only compiler.
+repo's history unless the plan says so: CI (the `mac`, `ios` and `kit` jobs in `ci.yml`) is the only compiler.
 
 - **Shared code, one rule:** a change to `CriaApp/CriaApp/` must keep iOS identical. Prefer `Platform/PlatformTypes.swift`
   (`PlatformImage`, `Pasteboard`, `ExternalLink`, `Haptics`) and `Platform/MacShims.swift` (macOS-only stand-ins for
@@ -592,16 +592,21 @@ repo's history unless the plan says so: CI (`ci-macos.yml`, plus `ci-swift.yml` 
 - **Reading CI failures:** `get_job_logs` output is huge; save it to a file and grep for ` error: `. A Swift compiler
   crash (`IRGenRequest`, `report_fatal_error`) names the file in "While evaluating request"; rewrite the construct
   (a `Binding(get:set:)` in `MacSettingsView` did it once).
-- **CI split:** `ci-swift.yml` is iOS (and skips pushes that only touch `CriaMac/`, so Mac pushes don't publish an
-  `.ipa`); `ci-macos.yml` builds and lints the Mac app.
+- **CI layout:** one workflow, [ci.yml](.github/workflows/ci.yml). A `changes` job (path filters) decides which jobs run:
+  `kit` (SwiftLint plus CriaKit tests), `ios`, `mac`, and for the Tauri app `versions`, `quality`, `build` and `rust`.
+  A push to `dev` makes `ios` and `mac` build the real thing (unsigned `.ipa`; signed, packaged, launch-checked
+  `Cria (Nightly)` DMG and zip, with the update zip signed for Sparkle) and the single `publish` job then writes the
+  rolling `nightly` release, `nightly-appcast.xml` (Sparkle) and `sidestore.json`. Only the Swift jobs gate publishing.
+  A Mac-only change does not rebuild the `.ipa`, and the other way round. Shared setup lives in
+  `.github/actions/apple-setup`. Tag releases are `release.yml`; `schema-drift.yml` and `pr-label.yml` are separate.
 
 ## Release channels and local dev
 
-> **Since 2026-10-13 the `dev` nightly is the native Swift Mac app** (`nightly.yml` archives `CriaMac` as `Cria (Nightly)`,
+> **Since 2026-10-13 the `dev` nightly is the native Swift Mac app** (the `mac` job in `ci.yml` archives `CriaMac` as `Cria (Nightly)`,
 > `io.cria.app.nightly`, and attaches `Cria-Nightly-macOS.dmg` and `.zip` to the rolling `nightly` release beside the iOS
-> `.ipa`). It is not notarised and has no Sparkle feed yet. The table below describes the Tauri app, which still ships
-> stable releases from `release.yml` until the Phase 8 handover; `nightly.json` and `scripts/nightly-config.sh` are
-> no longer used by CI.
+> `.ipa`). It is not notarised and updates itself through Sparkle (`nightly-appcast.xml` on gh-pages). The table below
+> describes the Tauri app, which still ships stable releases from `release.yml` until the Phase 8 handover;
+> `nightly.json` and `scripts/nightly-config.sh` are no longer used by CI.
 
 Three identifiers, three macOS data dirs. No cross-talk.
 
@@ -610,7 +615,7 @@ Three identifiers, three macOS data dirs. No cross-talk.
 | Source | `v*` tag on `main` | every push to `dev` | local checkout |
 | Bundle ID | `io.cria.app` | `io.cria.app.nightly` | `io.cria.app.dev` |
 | Updater feed | `update.json` | `nightly.json` | disabled (invalid endpoint, error swallowed) |
-| Workflow | `release.yml` | `nightly.yml` | n/a |
+| Workflow | `release.yml` | `ci.yml` (`mac`, `publish`; native app now) | n/a |
 
 Nightlies are published to a single rolling `nightly` prerelease (recreated on
 each push) with signed macOS bundles. CI turns the
@@ -618,7 +623,7 @@ stable config into the nightly one with
 [`scripts/nightly-config.sh`](scripts/nightly-config.sh), which rewrites
 `tauri.conf.json` in place; there is no committed nightly config. Nightly
 versions are `<package.json version>-nightly.<run_number>`, so they increase
-monotonically. The iOS app's rolling build (ci-swift.yml) can't carry a
+monotonically. The iOS app's rolling build (ci.yml) can't carry a
 prerelease suffix (`CFBundleShortVersionString` rejects it) and SideStore ignores
 build-number-only changes, so it uses `<major>.<minor>.<run_number>` as the
 marketing version.

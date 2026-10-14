@@ -1,0 +1,25 @@
+name: Apple setup
+description: Select the newest stable Xcode, install XcodeGen (and SwiftLint when asked) and generate the Xcode project.
+
+inputs:
+  swiftlint:
+    description: Install SwiftLint
+    default: 'false'
+  generate:
+    description: Run xcodegen generate for ios-native/CriaApp
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode
+      shell: bash
+      run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | grep -vi beta | sort -V | tail -1)"
+    - name: Install tools
+      shell: bash
+      run: brew install xcodegen ${{ inputs.swiftlint == 'true' && 'swiftlint' || '' }}
+    - name: Generate Xcode project
+      if: inputs.generate == 'true'
+      shell: bash
+      working-directory: ios-native/CriaApp
+      run: xcodegen generate

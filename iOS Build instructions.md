@@ -30,7 +30,7 @@ Download the `.ipa` from the [GitHub Releases](https://github.com/PocketCoder/cr
 
 ## How the source is built
 
-[`ci-swift.yml`](.github/workflows/ci-swift.yml) (`publish-ipa` job) owns `sidestore.json` on the `gh-pages` branch. On pushes to `dev` that pass its checks it uploads the `.ipa` to the rolling `nightly` prerelease (shared with the Mac build) and rewrites the source with the one app entry, dropping the deprecated Tauri entries. The marketing version is `<major>.<minor>.<run number>`, because SideStore ignores build-number-only changes.
+[`ci.yml`](.github/workflows/ci.yml) (the `ios` job builds the `.ipa`, the `publish` job) owns `sidestore.json` on the `gh-pages` branch. On pushes to `dev` that pass its checks it uploads the `.ipa` to the rolling `nightly` prerelease (shared with the Mac build) and rewrites the source with the one app entry, dropping the deprecated Tauri entries. The marketing version is `<major>.<minor>.<run number>`, because SideStore ignores build-number-only changes.
 
 SideStore refuses an install if `version` or `buildVersion` differs from the `.ipa`'s `Info.plist`; the workflow checks the two match before publishing.
 
