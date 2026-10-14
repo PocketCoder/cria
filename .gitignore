@@ -28,3 +28,6 @@ src-tauri/gen/
 coverage/
 .aider*
 PROJECT-VIEWS-REMAINING.md
+
+# Agent worktrees (temporary checkouts)
+.claude/worktrees/
