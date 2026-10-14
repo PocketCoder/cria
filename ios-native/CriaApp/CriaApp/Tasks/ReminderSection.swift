@@ -6,7 +6,7 @@ import UIKit
 import UserNotifications
 
 private let presets: [(title: String, period: Int)] = [
-    ("At due time", 0), ("5 minutes before", -300), ("1 hour before", -3600), ("1 day before", -86_400)
+    ("At due time", 0), ("5 minutes before", -300), ("1 hour before", -3600)
 ]
 
 /// The due date, its repeat and the reminders, together. Reminders ride the task update, so each change is queued
@@ -141,11 +141,19 @@ struct ReminderSection: View {
         return Calendar.cria.dateInterval(of: .hour, for: now)?.end ?? now.addingTimeInterval(3600)
     }
 
-    private var presetButtons: some View {
+    @ViewBuilder private var presetButtons: some View {
         ForEach(presets, id: \.period) { preset in
             Button { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) } label: {
                 Text(preset.title)
                 if let when = presetTime(preset.period) { Text(when) }
+            }
+        }
+        // The day before at the time set in Settings > Customise > Dates & tasks, not 24 hours before.
+        if let dayBefore = QuickAddReminder.daysBeforeDue(days: 1, minute: nil).input(dueDate: task.dueDate),
+           let period = dayBefore.period {
+            Button { add(dayBefore) } label: {
+                Text("Day before")
+                if let when = presetTime(period) { Text(when) }
             }
         }
     }
@@ -170,6 +178,10 @@ extension ReminderRecord {
 
     func summary(display: DateDisplay) -> String {
         if let period = relativePeriod, let anchor = relativeTo {
+            if let reminderAt, let fires = DueDates.parse(reminderAt),
+               let dayBased = ReminderText.dayBased(period: period, anchor: anchor, fires: fires, display: display) {
+                return dayBased
+            }
             return ReminderText.relative(period: period, anchor: anchor)
         }
         guard let reminderAt, let date = DueDates.parse(reminderAt) else { return "Pending" }

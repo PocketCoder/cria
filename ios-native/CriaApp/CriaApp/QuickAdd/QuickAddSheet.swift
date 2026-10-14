@@ -14,49 +14,58 @@ struct QuickAddSheet: View {
     /// Hand off to the Ramble or photo sheet. The parent dismisses this sheet and presents the other.
     var onRamble: (() -> Void)?
     var onPhoto: (() -> Void)?
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.preferences) private var preferences
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.preferences) var preferences
     @AppStorage("cria.quickAddMagicMode") private var modeRaw = QuickAddMagicMode.default.rawValue
-    @State private var line = ""
-    @State private var projects: [ProjectRecord] = []
-    @State private var projectId = ""
+    @State var line = ""
+    @State var projects: [ProjectRecord] = []
+    @State var projectId = ""
     /// The server's default (inbox) project: the remembered one at once, then the server's when it answers.
-    @State private var defaultServerId: Int?
-    @State private var priority = 0
-    @State private var dueISO = ""
-    @State private var labelTitles: [String] = []
-    @State private var reminders: [QuickAddReminder] = []
+    @State var defaultServerId: Int?
+    @State var priority = 0
+    @State var dueISO = ""
+    @State var labelTitles: [String] = []
+    @State var reminders: [QuickAddReminder] = []
     /// Fields set with a picker: the typed line no longer changes them.
-    @State private var picked: Set<QuickAddField> = []
-    @State private var pickerSheet: QuickAddPickerSheet?
-    @State private var addAnother = false
-    @State private var addedTitle: String?
+    @State var picked: Set<QuickAddField> = []
+    @State var pickerSheet: QuickAddPickerSheet?
+    @State var addAnother = false
+    @State var addedTitle: String?
     /// Clearing the line after "Add another" must not take the project back out with the typed `+project`.
-    @State private var skipNextFollow = false
-    @State private var errorMessage: String?
-    @FocusState private var focused: QuickAddFocus?
+    @State var skipNextFollow = false
+    @State var errorMessage: String?
+    @FocusState var focused: QuickAddFocus?
     /// Plain-text description, saved as a paragraph.
-    @State private var note = ""
+    @State var note = ""
     /// Height of the field, chips and hint, so the sheet hugs them above the keyboard.
-    @State private var contentHeight: CGFloat = 260
+    @State var contentHeight: CGFloat = 260
+    /// Multiple mode: Return queues the task and send adds every queued one. Remembered on this device.
+    @AppStorage("cria.quickAddMultiple") var multiple = false
+    @State var queue: [QueuedQuickAdd] = []
+    /// The next queued task is a subtask of the last queued one that is not.
+    @State var nextIsSubtask = false
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
-    private var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
+    var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
     /// The typed `+project`, unless a project was picked over it.
-    private var typedProjectTitle: String? { picked.contains(.project) ? nil : parsed.projectTitle }
+    var typedProjectTitle: String? { picked.contains(.project) ? nil : parsed.projectTitle }
     private var aiStatus: AIStatus { AIStatus.shared }
 
-    private var baseProjectId: String {
+    var baseProjectId: String {
         pickFallbackProjectId(projects: projects, selectedLocalId: contextProjectId, defaultServerProjectId: defaultServerId) ?? ""
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextField("Task name", text: $line, axis: .vertical)
+            if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
+            TextField(nextIsSubtask && hasQueuedParent ? "Subtask name" : "Task name", text: $line, axis: .vertical)
                 .font(.title3.weight(.semibold))
                 .focused($focused, equals: .title)
-                .submitLabel(.done)
-                .onSubmit(submit)
+                .submitLabel(multiple ? .next : .done)
+                .onSubmit(returnPressed)
+            if multiple && queue.isEmpty {
+                Text("Return adds it to the list; send adds them all.").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
             TextField("Description", text: $note, axis: .vertical)
                 .font(Theme.rowSubtitle)
                 .foregroundStyle(Color(.mutedForeground))
@@ -84,7 +93,7 @@ struct QuickAddSheet: View {
             // A multi-line field inserts a newline on Return instead of calling onSubmit: strip it and submit.
             if new.contains("\n") {
                 line = new.replacingOccurrences(of: "\n", with: "")
-                if canSubmit { submit() }
+                if canSubmit { returnPressed() }
             } else if skipNextFollow {
                 skipNextFollow = false
             } else {
@@ -106,6 +115,8 @@ struct QuickAddSheet: View {
         .presentationDetents([fittedDetent])
         // Solid, so nothing behind the sheet (the + button's glow, list rows) shows through the glass.
         .presentationBackground(Color(.background))
+        // Queued tasks would be lost to a swipe down; send adds them, Clear throws them away.
+        .interactiveDismissDisabled(!queue.isEmpty)
         .task { await aiStatus.refresh() }
         .task { await adoptServerDefault() }
     }
@@ -126,7 +137,7 @@ struct QuickAddSheet: View {
         contentHeight = height
     }
 
-    private var canSubmit: Bool {
+    var canSubmit: Bool {
         canSubmitQuickAdd(title: parsed.title, projectTitle: typedProjectTitle, projectLocalId: projectId.isEmpty ? nil : projectId)
     }
 
@@ -182,47 +193,6 @@ struct QuickAddSheet: View {
             projectId = followParsed(projectId, before: beforeProject, after: afterProject, empty: baseProjectId)
         }
     }
-
-    private func submit() {
-        let result = parsed
-        let fields = QuickAddFields(
-            dueDate: dueISO.isEmpty ? nil : dueISO, priority: priority,
-            repeatAfter: result.repeatAfter, repeatMode: result.repeatMode
-        )
-        guard let built = buildQuickAddInput(
-            title: result.title, projectTitle: typedProjectTitle, projects: projects,
-            selectedProjectId: projectId.isEmpty ? nil : projectId, fallbackProjectId: baseProjectId, fields: fields
-        ) else {
-            errorMessage = "Choose a project first."
-            return
-        }
-        var input = built
-        let description = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !description.isEmpty { input.description = Self.paragraphHTML(description) }
-        do {
-            try services.store.persistQuickAdd(
-                input, labelTitles: labelTitles, assigneeUsernames: result.assigneeUsernames, reminders: reminders
-            )
-            if addAnother { startNext(after: input.title) } else { dismiss() }
-        } catch {
-            errorMessage = String(describing: error)
-        }
-    }
-
-    /// Clears the form for the next task, keeping the project, as desktop's add-and-keep-open does.
-    private func startNext(after title: String) {
-        skipNextFollow = true
-        line = ""
-        priority = 0
-        dueISO = ""
-        labelTitles = []
-        reminders = []
-        picked.subtract([.due, .priority])
-        errorMessage = nil
-        note = ""
-        addedTitle = title
-        focused = .title
-    }
 }
 
 extension QuickAddSheet {
@@ -245,6 +215,7 @@ extension QuickAddSheet {
             }
             .accessibilityLabel("Project")
             Spacer(minLength: 8)
+            multipleToggle
             if let onRamble, aiStatus.isOfferable {
                 Button { dismiss(); onRamble() } label: {
                     Image(systemName: "waveform")
@@ -257,23 +228,23 @@ extension QuickAddSheet {
                 .disabled(aiStatus.notReadyMessage != nil)
                 .accessibilityLabel("Ramble")
             }
-            Button(action: submit) {
+            Button(action: sendPressed) {
                 Image(systemName: "arrow.up")
                     .font(.body.weight(.bold))
                     .frame(width: 40, height: 40)
                     .foregroundStyle(Color(.primaryForeground))
-                    .background(canSubmit ? Color(.primary) : Color(.mutedForeground).opacity(0.4), in: Circle())
+                    .background(canSend ? Color(.primary) : Color(.mutedForeground).opacity(0.4), in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(!canSubmit)
-            .accessibilityLabel(addAnother ? "Add and keep open" : "Add task")
+            .disabled(!canSend)
+            .accessibilityLabel(sendLabel)
         }
     }
 
     private var addedLine: some View {
         Group {
             if let addedTitle {
-                Text("Added ‘\(addedTitle)’").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                Text(addedTitle).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
         }
     }
@@ -283,6 +254,7 @@ extension QuickAddSheet {
     private var pickers: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if multiple && hasQueuedParent { subtaskChip }
                 ForEach(preferences.custom.quickAddActions) { chip($0) }
                 if parsed.repeatAfter != nil || parsed.repeatMode != nil {
                     CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
@@ -341,6 +313,7 @@ extension QuickAddSheet {
             }
             Section("Type to set") {
                 Text("*label  +project  !1–5  tomorrow 5pm")
+                Text("remind day before at 9am")
             }
         } label: {
             CriaChip(text: "•••", tint: Color(.mutedForeground))

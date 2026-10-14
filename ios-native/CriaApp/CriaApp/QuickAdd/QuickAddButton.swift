@@ -38,6 +38,7 @@ enum QuickAddPreview {
         case .assignee: return Color(.primary)
         case .project: return Color(.primary)
         case .recurrence: return Color(.mutedForeground)
+        case .reminder: return Color(.coral500)
         }
     }
 }

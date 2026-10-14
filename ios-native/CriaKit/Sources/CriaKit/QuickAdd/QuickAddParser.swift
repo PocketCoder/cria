@@ -8,6 +8,7 @@ public enum QuickAddTokenKind: Equatable, Sendable {
     case assignee(String)
     case project(String)
     case recurrence(repeatAfter: Int?, repeatMode: Int?)
+    case reminder(QuickAddReminder)
 }
 
 /// A slice of the input for live preview. `start` and `end` are UTF-16 offsets.
@@ -28,6 +29,8 @@ public struct QuickAddResult: Equatable, Sendable {
     public var repeatAfter: Int?
     public var repeatMode: Int?
     public var tokens: [QuickAddToken]
+    /// Typed "remind …" phrases, in order.
+    public var reminders: [QuickAddReminder] = []
 }
 
 private let bareName = "[A-Za-z0-9_-]+"
@@ -65,6 +68,8 @@ public func parseQuickAdd(
     let raw = NSString(string: input)
     var claimed = symbolTokens(raw, prefixes: prefixes)
     claimed += recurrenceTokens(raw, avoiding: claimed)
+    // Before the date scan, so the "at 9am" of "remind day before at 9am" is not read as the due time.
+    if detectDates { claimed += reminderTokens(raw, avoiding: claimed) }
     if let pending = openQuoteToken(raw, prefixes: prefixes), !overlaps(pending, claimed) { claimed.append(pending) }
     let claimedRanges = claimed.map { $0.start..<$0.end }
     if detectDates, let date = firstQuickAddDate(in: input, avoiding: claimedRanges, now: now, calendar: calendar) {
@@ -178,6 +183,14 @@ private func recurrenceTokens(_ raw: NSString, avoiding claimed: [QuickAddToken]
     return found
 }
 
+private func reminderTokens(_ raw: NSString, avoiding claimed: [QuickAddToken]) -> [QuickAddToken] {
+    groupMatches(reminderPhrasePattern, in: raw, caseInsensitive: true).compactMap { hit in
+        guard let reminder = parseReminderPhrase(hit.text) else { return nil }
+        let candidate = token(.reminder(reminder), hit)
+        return overlaps(candidate, claimed) ? nil : candidate
+    }
+}
+
 /// While typing `*"two words` with no closing quote yet, show the chip so the preview does not flicker.
 private func openQuoteToken(_ raw: NSString, prefixes: QuickAddPrefixes) -> QuickAddToken? {
     let pattern = "(?:^|\\s)(\(escaped(prefixes.label))|\(escaped(prefixes.project)))(\(quoteClass))(\(notQuote)*)$"
@@ -265,6 +278,7 @@ private func record(_ kind: QuickAddTokenKind, into result: inout QuickAddResult
     case .recurrence(let after, let mode):
         if result.repeatAfter == nil || result.repeatAfter == 0 { result.repeatAfter = after }
         if result.repeatMode == nil || result.repeatMode == 0 { result.repeatMode = mode }
+    case .reminder(let reminder): result.reminders.append(reminder)
     case .text: break
     }
 }

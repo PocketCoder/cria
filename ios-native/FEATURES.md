@@ -31,7 +31,7 @@ Two notes apply throughout:
 | Move to another project, priority | Vikunja | |
 | Due, start and end dates | Vikunja | Date-only values are pushed at midnight in the timezone set in Settings. Times can be added and removed. |
 | Repeat | Vikunja | Daily, weekly, monthly, yearly, or a custom interval in hours to months; counts from the due date or from completion. |
-| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. Once a reminder has gone off it is deleted, here and on Vikunja, except on repeating tasks (Vikunja moves those on) and done tasks. |
+| Reminders | Vikunja | Absolute, or relative to the due date. The server stores them; the phone alerts are a separate device feature (see [Reminders and notifications](#reminders-and-notifications)). Tap a reminder (or swipe) to edit it. "Day before" reminders go off at the day reminder time (Settings > Customise > Dates & tasks, 09:00 by default), stored as an offset from the due date so they move with it. Once a reminder has gone off it is deleted, here and on Vikunja, except on repeating tasks (Vikunja moves those on) and done tasks. |
 | Progress (percent done) | Vikunja | Follows the share of subtasks done, unless set by hand. |
 | "Progress set by hand" flag | This device | `ProgressOverride` in `UserDefaults`, keyed by task. Another install may overwrite the value by following subtasks. |
 | Favourite (star) | Vikunja | |
@@ -89,7 +89,7 @@ A project opens on its views, taken from Vikunja. Switch between them from the h
 
 | Feature | Where it lives | Notes |
 |---|---|---|
-| Quick add sheet | Vikunja for the task | Parses `*label +project !priority`, assignees, repeats, and dates ("tomorrow 5pm") from the line, with a live preview. Date, priority, reminders and labels are also pickers. Offline adds file into the remembered default project. |
+| Quick add sheet | Vikunja for the task | Parses `*label +project !priority`, assignees, repeats, and dates ("tomorrow 5pm") from the line, with a live preview. Date, priority, reminders and labels are also pickers. "remind day before at 9am", "remind 2 hours before" and "remind at 5pm" add reminders. The list button turns on multiple mode: Return queues each task (optionally as a subtask of the one above), send adds them all. Offline adds file into the remembered default project. |
 | Quick Add Magic mode (Vikunja, Todoist, Off) | Vikunja | Stored in `frontend_settings.quick_add_magic_mode`, the key Vikunja-web uses. Cached locally in `cria.quickAddMagicMode`. |
 | Which chips show in the quick add row, labels on chips | Cria accounts | Customise > Quick Add (`quickAddActions`, `quickAddShowsLabels`). Others move to the ••• menu. |
 | Detect dates in the title | Cria accounts | `detectDates`. Off keeps dates as text. |
@@ -208,7 +208,7 @@ All keys are in `Customisation.syncedKeys`. Vikunja-web and the desktop Cria app
 | Sync home view switch | This device | `syncHomeView` is never synced. |
 | Show task count | Cria accounts | `showTaskCount`. |
 | Swipe right, swipe left | Cria accounts | `swipeRight`, `swipeLeft`. |
-| Quick add actions and labels, date detection, next week, weekend | Cria accounts | See [Quick add](#quick-add-and-ramble). |
+| Quick add actions and labels, date detection, next week, weekend, day reminder time | Cria accounts | See [Quick add](#quick-add-and-ramble). |
 | Reset subtasks on repeat | Cria accounts | `resetSubtasksOnRepeat`. |
 | Open web links in Cria or the browser | Cria accounts | `openLinksInApp`. Opens a Safari view inside the app when on. |
 | Task layout | Cria accounts | `taskDetailOrder`; drag to reorder, Reset to default. |

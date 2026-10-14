@@ -161,22 +161,80 @@ public enum QuickAddDatePreset: String, CaseIterable, Sendable {
     }
 }
 
-/// A reminder chosen in quick add: an offset from the due date (0 = at the due time) or a fixed instant (ISO).
+/// A reminder chosen or typed in quick add. Every kind that follows the due date is stored as a relative reminder, so
+/// it moves when the date does.
 public enum QuickAddReminder: Hashable, Sendable {
+    /// An offset before the due date (0 = at the due time).
     case beforeDue(seconds: Int)
+    /// A fixed instant (ISO).
     case atTime(String)
+    /// That many days before the due day, at a time of day (minutes after midnight); nil uses the day reminder time
+    /// from Settings.
+    case daysBeforeDue(days: Int, minute: Int?)
+    /// A time of day: on the due day when there is one, else the next time the clock shows it.
+    case atTimeOfDay(minute: Int)
 
-    /// The relative options need a due date to follow.
+    /// The kinds that need a due date to follow.
     public var needsDueDate: Bool {
-        if case .beforeDue = self { return true }
-        return false
+        switch self {
+        case .beforeDue, .daysBeforeDue: return true
+        case .atTime, .atTimeOfDay: return false
+        }
     }
 
-    public var input: ReminderInput {
+    /// What to store for a task with this due date, or nil when it needs a due date and there is none.
+    public func input(
+        dueDate: String?, now: Date = Date(), calendar: Calendar = .cria, rules: CriaRules = .current
+    ) -> ReminderInput? {
+        let due = dueDate.flatMap { $0.isEmpty ? nil : DueDates.pickerDate($0, calendar: calendar) }
         switch self {
-        case .beforeDue(let seconds): return ReminderInput(period: -seconds, relativeTo: .dueDate)
-        case .atTime(let iso): return ReminderInput(triggerAt: iso)
+        case .beforeDue(let seconds):
+            return due == nil ? nil : ReminderInput(period: -seconds, relativeTo: .dueDate)
+        case .atTime(let iso):
+            return ReminderInput(triggerAt: iso)
+        case .daysBeforeDue(let days, let minute):
+            guard let due else { return nil }
+            let period = Self.offset(from: due, days: days, minute: minute ?? rules.dayReminderMinute, calendar: calendar)
+            return ReminderInput(period: period, relativeTo: .dueDate)
+        case .atTimeOfDay(let minute):
+            if let due {
+                let period = Self.offset(from: due, days: 0, minute: minute, calendar: calendar)
+                return ReminderInput(period: period, relativeTo: .dueDate)
+            }
+            let today = Self.time(minute, on: calendar.startOfDay(for: now), calendar: calendar)
+            let fires = today > now ? today : calendar.date(byAdding: .day, value: 1, to: today) ?? today
+            return ReminderInput(triggerAt: ISO8601DateFormatter().string(from: fires))
         }
+    }
+
+    /// Seconds from `due` to `minute` past midnight, `days` days before the due day (negative before).
+    static func offset(from due: Date, days: Int, minute: Int, calendar: Calendar) -> Int {
+        let day = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: due)) ?? due
+        return Int(time(minute, on: day, calendar: calendar).timeIntervalSince(due).rounded())
+    }
+
+    static func time(_ minute: Int, on day: Date, calendar: Calendar) -> Date {
+        calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: day) ?? day
+    }
+}
+
+/// One task queued in quick add's multiple mode. A subtask belongs to the nearest queued task above it that is not one.
+public struct QuickAddBatchItem: Sendable {
+    public var input: TaskInput
+    public var labelTitles: [String]
+    public var assigneeUsernames: [String]
+    public var reminders: [QuickAddReminder]
+    public var isSubtask: Bool
+
+    public init(
+        input: TaskInput, labelTitles: [String] = [], assigneeUsernames: [String] = [], reminders: [QuickAddReminder] = [],
+        isSubtask: Bool = false
+    ) {
+        self.input = input
+        self.labelTitles = labelTitles
+        self.assigneeUsernames = assigneeUsernames
+        self.reminders = reminders
+        self.isSubtask = isSubtask
     }
 }
 
@@ -194,12 +252,35 @@ extension CriaStore {
         if !labelTitles.isEmpty {
             try? applyLabels(byTitle: labelTitles, toTask: created.localId)
         }
-        let hasDueDate = !(input.dueDate ?? "").isEmpty
         var seen = Set<QuickAddReminder>()
-        for reminder in reminders where (hasDueDate || !reminder.needsDueDate) && seen.insert(reminder).inserted {
-            try? addReminder(taskLocalId: created.localId, reminder.input)
+        for reminder in reminders where seen.insert(reminder).inserted {
+            guard let reminderInput = reminder.input(dueDate: input.dueDate) else { continue }
+            try? addReminder(taskLocalId: created.localId, reminderInput)
         }
         try? queueAssignees(assigneeUsernames, toTask: created.localId)
+        return created
+    }
+
+    /// Creates quick add's queued tasks in order. A subtask is created in the project of the task it belongs to and
+    /// linked to it; one queued first, with nothing above it, is added as a plain task.
+    @discardableResult
+    public func persistQuickAddBatch(_ items: [QuickAddBatchItem]) throws -> [TaskRecord] {
+        var created: [TaskRecord] = []
+        var parent: TaskRecord?
+        for item in items {
+            var input = item.input
+            let owner = item.isSubtask ? parent : nil
+            if let owner { input.projectLocalId = owner.projectLocalId }
+            let record = try persistQuickAdd(
+                input, labelTitles: item.labelTitles, assigneeUsernames: item.assigneeUsernames, reminders: item.reminders
+            )
+            if let owner {
+                try addRelation(taskLocalId: owner.localId, otherTaskLocalId: record.localId, kind: .subtask)
+            } else {
+                parent = record
+            }
+            created.append(record)
+        }
         return created
     }
 

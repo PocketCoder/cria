@@ -67,6 +67,8 @@ public struct Customisation: Equatable, Sendable {
     public var completionTone: CompletionTone = .tink
     /// Boards list each column's cards soonest due first (no date last) instead of in the order they were dragged to.
     public var kanbanSortByDue = false
+    /// When a day-based reminder ("1 day before") goes off, in minutes after midnight. 540 is 09:00.
+    public var dayReminderMinute = 540
     /// Reopen each project on the view last used in it on any of the account's devices. Stays on the device: each one
     /// chooses whether to take part.
     public var syncProjectViews = false
@@ -85,14 +87,16 @@ public struct Customisation: Equatable, Sendable {
         CriaRules(
             nextWeekWeekday: (1...7).contains(nextWeekDay) ? nextWeekDay : nil,
             weekendWeekday: weekendDay == 1 ? 1 : 7,
-            resetsSubtasksOnRepeat: resetSubtasksOnRepeat
+            resetsSubtasksOnRepeat: resetSubtasksOnRepeat,
+            dayReminderMinute: dayReminderMinute
         )
     }
 
     /// Keys that follow the account. `syncHomeView` itself stays on the device, and `homeView` only travels while it is on.
     static let syncedKeys = [
         "tabs", "showTaskCount", "swipeRight", "swipeLeft", "quickAddShowsLabels", "quickAddActions", "detectDates",
-        "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue"
+        "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue",
+        "dayReminderMinute"
     ]
     static let homeViewKey = "homeView"
 
@@ -125,6 +129,7 @@ public struct Customisation: Equatable, Sendable {
         openLinksInApp = flag("openLinksInApp", base.openLinksInApp)
         completionTone = text("completionTone").flatMap(CompletionTone.init(rawValue:)) ?? base.completionTone
         kanbanSortByDue = flag("kanbanSortByDue", base.kanbanSortByDue)
+        dayReminderMinute = number("dayReminderMinute", base.dayReminderMinute, in: 0...1439)
         syncProjectViews = flag("syncProjectViews", base.syncProjectViews)
     }
 
@@ -145,6 +150,7 @@ public struct Customisation: Equatable, Sendable {
             "openLinksInApp": .bool(openLinksInApp),
             "completionTone": .string(completionTone.rawValue),
             "kanbanSortByDue": .bool(kanbanSortByDue),
+            "dayReminderMinute": .number(Double(dayReminderMinute)),
             "syncProjectViews": .bool(syncProjectViews)
         ]
     }
@@ -165,13 +171,16 @@ public struct CriaRules: Equatable, Sendable {
     public var weekendWeekday: Int
     /// Completing a repeating task marks its done subtasks not done again.
     public var resetsSubtasksOnRepeat: Bool
+    /// When a day-based reminder goes off, in minutes after midnight.
+    public var dayReminderMinute: Int
 
     public static let standard = CriaRules(nextWeekWeekday: nil, weekendWeekday: 7, resetsSubtasksOnRepeat: false)
 
-    public init(nextWeekWeekday: Int?, weekendWeekday: Int, resetsSubtasksOnRepeat: Bool) {
+    public init(nextWeekWeekday: Int?, weekendWeekday: Int, resetsSubtasksOnRepeat: Bool, dayReminderMinute: Int = 540) {
         self.nextWeekWeekday = nextWeekWeekday
         self.weekendWeekday = weekendWeekday
         self.resetsSubtasksOnRepeat = resetsSubtasksOnRepeat
+        self.dayReminderMinute = dayReminderMinute
     }
 
     private static let lock = NSLock()

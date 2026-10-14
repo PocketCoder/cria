@@ -41,15 +41,20 @@ struct QuickAddReminderMenu: View {
     let onCustom: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
-    private static let presets: [(title: String, seconds: Int)] = [
-        ("At due time", 0), ("1 hour before", 3_600), ("1 day before", 86_400)
-    ]
+    @Environment(\.preferences) private var preferences
+
+    private var presets: [(title: String, reminder: QuickAddReminder)] {
+        [
+            ("At due time", .beforeDue(seconds: 0)), ("1 hour before", .beforeDue(seconds: 3_600)),
+            ("Day before, \(Self.time(preferences.custom.dayReminderMinute, display: dateDisplay))", .daysBeforeDue(days: 1, minute: nil))
+        ]
+    }
 
     var body: some View {
         Menu {
             Section {
-                ForEach(Self.presets, id: \.seconds) { preset in
-                    Toggle(preset.title, isOn: binding(for: .beforeDue(seconds: preset.seconds)))
+                ForEach(presets, id: \.reminder) { preset in
+                    Toggle(preset.title, isOn: binding(for: preset.reminder))
                         .disabled(!hasDueDate)
                 }
             } header: {
@@ -85,7 +90,18 @@ struct QuickAddReminderMenu: View {
         case .atTime(let iso):
             guard let date = DueDates.parse(iso) else { return "Remind" }
             return DueDates.fullLabel(date, display: dateDisplay)
+        case .daysBeforeDue(let days, let minute):
+            let time = Self.time(minute ?? preferences.custom.dayReminderMinute, display: dateDisplay)
+            return "\(days == 1 ? "Day" : "\(days) days") before, \(time)"
+        case .atTimeOfDay(let minute):
+            return "At \(Self.time(minute, display: dateDisplay))"
         }
+    }
+
+    /// "09:00" (or "9:00 AM") for a time of day in minutes after midnight.
+    static func time(_ minute: Int, display: DateDisplay) -> String {
+        let date = Calendar.cria.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: Date()) ?? Date()
+        return DueDates.timeLabel(date, display: display)
     }
 }
 

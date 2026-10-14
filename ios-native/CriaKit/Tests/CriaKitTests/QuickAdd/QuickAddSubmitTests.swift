@@ -221,7 +221,7 @@ final class QuickAddSubmitTests: XCTestCase {
         XCTAssertEqual(day(.nextWeek), "2026-06-03T00:00:00Z")
         let saturday = DueDates.parse("2026-05-30T10:00:00Z") ?? Date()
         XCTAssertEqual(day(.thisWeekend, saturday), "2026-05-30T00:00:00Z")
-        XCTAssertEqual(QuickAddReminder.beforeDue(seconds: 86_400).input.period, -86_400)
+        XCTAssertEqual(QuickAddReminder.beforeDue(seconds: 86_400).input(dueDate: "2026-05-30T10:00:00Z")?.period, -86_400)
         XCTAssertFalse(QuickAddReminder.atTime("2026-05-30T10:00:00Z").needsDueDate)
     }
 }

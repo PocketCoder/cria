@@ -136,6 +136,13 @@ struct DatesAndTasksSettingsView: View {
                 }
             }
             Section {
+                DatePicker("Day reminders at", selection: dayReminderTime, displayedComponents: .hourAndMinute)
+            } header: {
+                Text("Reminders")
+            } footer: {
+                Text("A “day before” reminder, or “remind 2 days before” typed in quick add, goes off at this time on that day.")
+            }
+            Section {
                 Toggle("Reset subtasks", isOn: $prefs.value.custom.resetSubtasksOnRepeat)
             } header: {
                 Text("Subtasks")
@@ -152,6 +159,20 @@ struct DatesAndTasksSettingsView: View {
         .criaSurface()
         .navigationTitle("Dates & tasks")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The day reminder time as a clock time for the picker; stored as minutes after midnight.
+    private var dayReminderTime: Binding<Date> {
+        Binding(
+            get: {
+                let minute = prefs.value.custom.dayReminderMinute
+                return Calendar.cria.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let parts = Calendar.cria.dateComponents([.hour, .minute], from: date)
+                prefs.value.custom.dayReminderMinute = (parts.hour ?? 9) * 60 + (parts.minute ?? 0)
+            }
+        )
     }
 
     /// Monday first; numbers are `Calendar` weekdays (1 is Sunday).
