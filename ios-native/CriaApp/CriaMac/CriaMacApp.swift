@@ -26,7 +26,10 @@ struct CriaMacApp: App {
         }
         .defaultSize(width: 1100, height: 720)
         .commands { MacCommands() }
-        MenuBarExtra("Cria", systemImage: "checkmark.circle", isInserted: $showMenuBar) {
+        MenuBarExtra(
+            "Cria", systemImage: "checkmark.circle",
+            isInserted: .distinct(get: { showMenuBar }, set: { showMenuBar = $0 })
+        ) {
             MacMenuBarContent(model: model)
         }
         .menuBarExtraStyle(.window)
