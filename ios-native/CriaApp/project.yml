@@ -116,8 +116,7 @@ targets:
       path: Config/CriaMac-Info.plist
       properties:
         # Sparkle. The feed and key come from build settings below so CI can switch the nightly feed on the command
-        # line. SUPublicEDKey stays empty until the user generates the key pair (plan Phase 7 step 1); with no key the
-        # updater is not started (MacUpdater).
+        # line. A build with no key (CRIA_SPARKLE_PUBLIC_KEY empty) does not start the updater (MacUpdater).
         SUFeedURL: $(CRIA_FEED_URL)
         SUPublicEDKey: $(CRIA_SPARKLE_PUBLIC_KEY)
         SUEnableAutomaticChecks: true
@@ -135,7 +134,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: CriaMac/CriaMac.entitlements
         CRIA_FEED_URL: https://pocketcoder.github.io/cria/appcast.xml
-        CRIA_SPARKLE_PUBLIC_KEY: ""
+        # The EdDSA public key of the update signing pair; the private half is the SPARKLE_PRIVATE_KEY Actions secret.
+        CRIA_SPARKLE_PUBLIC_KEY: "W8oC2QATE2W96VY+cvU7g/v+Oftz/iayzhRSmop7V1o="
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.dev

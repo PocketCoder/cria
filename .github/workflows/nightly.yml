@@ -103,6 +103,23 @@ jobs:
           ln -s /Applications dmg/Applications
           hdiutil create -volname "Cria Nightly" -srcfolder dmg -ov -format UDZO out/Cria-Nightly-macOS.dmg
 
+      # Sparkle verifies every update against the public key in the app, so the zip is signed with the matching private
+      # key (the SPARKLE_PRIVATE_KEY secret). The signature line goes next to the zip for the publish job's appcast.
+      - name: Sign update (Sparkle)
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::warning::SPARKLE_PRIVATE_KEY is not set, so no update feed is published"
+            exit 0
+          fi
+          TOOL="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*artifacts/sparkle/Sparkle/bin/sign_update' -print -quit)"
+          [ -n "$TOOL" ] || { echo "::error::sign_update not found in the resolved Sparkle package"; exit 1; }
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          "$TOOL" out/Cria-Nightly-macOS.zip --ed-key-file "$RUNNER_TEMP/sparkle.key" | tee sparkle-sig.txt
+          rm -f "$RUNNER_TEMP/sparkle.key"
+
       # A build that cannot start must never reach the release (a missing or unloadable framework aborts in dyld before
       # any window opens). Launches the packaged binary for a few seconds and fails on a dyld error.
       - name: Launch check
@@ -124,7 +141,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: nightly-macos
-          path: out/*
+          path: |
+            out/*
+            sparkle-sig.txt
           if-no-files-found: error
           retention-days: 3
 
@@ -138,6 +157,37 @@ jobs:
         with:
           path: release
           merge-multiple: true
+      # The update feed the app reads (SUFeedURL = nightly-appcast.xml on gh-pages). sparkle:version must be the build
+      # number the app was built with (the run number), so it only ever grows.
+      - name: Write nightly-appcast.xml
+        run: |
+          set -euo pipefail
+          if [ ! -f release/sparkle-sig.txt ]; then
+            echo "::warning::no Sparkle signature, so the update feed is not written"
+            exit 0
+          fi
+          mv release/sparkle-sig.txt sparkle-sig.txt
+          mkdir -p gh-pages-out
+          version="$(jq -r .version package.json)"
+          url="https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-macOS.zip"
+          sig="$(tr -d '\n' < sparkle-sig.txt)"
+          cat > gh-pages-out/nightly-appcast.xml <<XML
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Cria Nightly</title>
+              <item>
+                <title>Nightly (dev @ ${GITHUB_SHA::7})</title>
+                <pubDate>$(date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+                <sparkle:version>${{ github.run_number }}</sparkle:version>
+                <sparkle:shortVersionString>${version}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+                <enclosure url="${url}" ${sig} type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          XML
+          cat gh-pages-out/nightly-appcast.xml
       # One rolling release for the nightly Mac build and the iOS .ipa (ci-swift.yml adds that). It is updated in place,
       # not deleted and recreated, so the .ipa survives a Mac-only push. The tag moves to the latest push.
       - name: Update nightly release
@@ -160,3 +210,12 @@ jobs:
             gh release delete-asset nightly "$old" --yes
           done
           gh release upload nightly release/* --clobber
+      - name: Publish nightly-appcast.xml to gh-pages
+        if: hashFiles('gh-pages-out/nightly-appcast.xml') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: gh-pages-out
+          keep_files: true
+          commit_message: 'nightly appcast: ${{ github.sha }}'
