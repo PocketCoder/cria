@@ -25,7 +25,7 @@ private let weekdayNumbers: [String: Int] = [
 
 /// Returns the first phrase that does not overlap `claimed` (UTF-16 ranges) and resolves to a date.
 func firstDatePhrase(in raw: String, avoiding claimed: [Range<Int>], now: Date, calendar: Calendar) -> DatePhraseMatch? {
-    guard let regex = try? NSRegularExpression(pattern: datePhrasePattern, options: [.caseInsensitive]) else {
+    guard let regex = RegexCache.regex(datePhrasePattern, options: [.caseInsensitive]) else {
         return nil
     }
     let nsRaw = NSString(string: raw)

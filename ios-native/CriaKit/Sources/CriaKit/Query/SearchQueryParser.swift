@@ -68,7 +68,7 @@ private let fillerWords: Set<String> = [
 
 /// Finds `pattern` and returns capture group 1 of each match as (UTF-16 range, text).
 private func captures(_ pattern: String, in raw: String, options: NSRegularExpression.Options = []) -> [(range: NSRange, text: String)] {
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
+    guard let regex = RegexCache.regex(pattern, options: options) else { return [] }
     let nsRaw = NSString(string: raw)
     return regex.matches(in: raw, range: NSRange(location: 0, length: nsRaw.length)).compactMap { match in
         let range = match.range(at: 1)

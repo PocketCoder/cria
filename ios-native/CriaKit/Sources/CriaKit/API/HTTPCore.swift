@@ -64,7 +64,7 @@ let refreshCookieName = "vikunja_refresh_token"
 public func readRefreshCookie(setCookie: String?) -> String? {
     guard let setCookie else { return nil }
     let pattern = "(?:^|[;,]\\s*)\(refreshCookieName)=([^;,]+)"
-    guard let regex = try? NSRegularExpression(pattern: pattern),
+    guard let regex = RegexCache.regex(pattern),
           let match = regex.firstMatch(in: setCookie, range: NSRange(setCookie.startIndex..., in: setCookie)),
           let range = Range(match.range(at: 1), in: setCookie) else { return nil }
     return String(setCookie[range]).removingPercentEncoding

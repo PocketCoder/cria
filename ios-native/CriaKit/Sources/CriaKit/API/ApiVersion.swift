@@ -27,7 +27,7 @@ public enum ApiVersionPolicy {
     /// The leading `vMAJOR.MINOR.PATCH` of `/info`'s `version` (`v2.7.0-16-g58f7cf47`), or nil.
     public static func parse(_ version: String?) -> (major: Int, minor: Int, patch: Int)? {
         guard let version,
-              let regex = try? NSRegularExpression(pattern: #"^\s*v?(\d+)\.(\d+)\.(\d+)"#),
+              let regex = RegexCache.regex(#"^\s*v?(\d+)\.(\d+)\.(\d+)"#),
               let match = regex.firstMatch(in: version, range: NSRange(version.startIndex..., in: version)) else { return nil }
         let parts = (1...3).compactMap { index -> Int? in
             Range(match.range(at: index), in: version).flatMap { Int(version[$0]) }
