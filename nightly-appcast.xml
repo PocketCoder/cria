@@ -3,12 +3,12 @@
   <channel>
     <title>Cria Nightly</title>
     <item>
-      <title>Nightly (dev @ 3c58ba3)</title>
-      <pubDate>Thu, 15 Oct 2026 08:08:03 +0000</pubDate>
-      <sparkle:version>396</sparkle:version>
-      <sparkle:shortVersionString>0.15.0-nightly.396</sparkle:shortVersionString>
+      <title>Nightly (dev @ bf140c9)</title>
+      <pubDate>Thu, 15 Oct 2026 08:21:45 +0000</pubDate>
+      <sparkle:version>397</sparkle:version>
+      <sparkle:shortVersionString>0.15.0-nightly.397</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <enclosure url="https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-macOS.zip" sparkle:edSignature="q776nto4rT1LycyEiocTDJsuFrS3fLDT0WYt9GMqIW5JYg/F5cAlnYk8EySPOEhYySiqhyHJMcWfKMJAxXZuBg==" length="9822062" type="application/octet-stream"/>
+      <enclosure url="https://github.com/PocketCoder/cria/releases/download/nightly/Cria-Nightly-macOS.zip" sparkle:edSignature="6t8bQhRCbeFwPXkzxOzyQul+3Uz0x0gbu7a5gblvtmbmmi33eItEtGZiZi/wYfJAB21e6sYqsdejQUjSMHP4CQ==" length="9820137" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>
