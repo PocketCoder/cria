@@ -216,6 +216,9 @@ struct TaskDetailView: View {
                         .labelsHidden()
                         .accessibilityLabel("Title")
                         .font(Theme.title)
+                        // Unfocused, a vertical field on the Mac drew only its first line; give it room for the rest.
+                        .lineLimit(1...8)
+                        .fixedSize(horizontal: false, vertical: true)
                         .focused($focus, equals: .title)
                         .submitLabel(.done)
                         .onSubmit(saveText)

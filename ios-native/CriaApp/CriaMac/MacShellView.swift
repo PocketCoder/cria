@@ -19,6 +19,9 @@ struct MacShellView: View {
         } detail: {
             content
         }
+        // A click anywhere outside the panel closes it. Simultaneous, so a row or the sidebar still gets its click;
+        // when that click opened another task the id has changed by the next turn and the panel stays.
+        .simultaneousGesture(TapGesture().onEnded { closePanelUnlessReplaced() })
         // The open task floats over the list on a glass panel, as in the old app, instead of being a split column: no
         // column to re-lay out when it opens, and the list keeps its full width underneath.
         .overlay(alignment: .trailing) { taskPanel }
@@ -66,6 +69,13 @@ struct MacShellView: View {
             .shadow(color: .black.opacity(0.22), radius: 22, x: -4, y: 8)
             .padding(10)
             .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+
+    private func closePanelUnlessReplaced() {
+        guard let id = actions.openTaskId else { return }
+        DispatchQueue.main.async {
+            if actions.openTaskId == id { actions.openTaskId = nil }
         }
     }
 
