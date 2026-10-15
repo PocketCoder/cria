@@ -16,7 +16,18 @@ final class LiveValue<Value: Sendable> {
 
     func run() async {
         for await next in makeStream() {
+            // A change notification that read the same data again must not re-render the screen.
+            if Self.unchanged(value, next) { continue }
             value = next
         }
+    }
+
+    private static func unchanged(_ old: Value, _ new: Value) -> Bool {
+        guard let old = old as? any Equatable else { return false }
+        return equal(old, new)
+    }
+
+    private static func equal<T: Equatable>(_ old: T, _ new: Any) -> Bool {
+        (new as? T) == old
     }
 }
