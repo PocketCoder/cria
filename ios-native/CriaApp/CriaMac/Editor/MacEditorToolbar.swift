@@ -10,6 +10,11 @@ struct MacEditorToolbar: View {
     private var state: EditorBarState { controller.barState }
 
     var body: some View {
+        // Scrolls sideways when the pane is narrower than the bar, so the bar never widens the task pane.
+        ScrollView(.horizontal, showsIndicators: false) { bar }
+    }
+
+    private var bar: some View {
         HStack(spacing: 2) {
             button("bold", "Bold", on: state.isOn(.bold), key: "b") { controller.toggleStyle(.bold) }
             button("italic", "Italic", on: state.isOn(.italic), key: "i") { controller.toggleStyle(.italic) }
@@ -31,7 +36,6 @@ struct MacEditorToolbar: View {
             button("link", "Link", key: "l") { actions.onLink() }
             button("photo", "Image") { actions.onPhoto() }
             button("at", "Mention") { actions.onMention() }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)

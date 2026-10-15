@@ -192,6 +192,14 @@ struct TableGridView: View {
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
+        GeometryReader { proxy in
+            scroller(minSize: proxy.size)
+        }
+    }
+
+    /// The card sits at the top left and is at least as big as the screen; a two-way scroll view would otherwise centre
+    /// a short table, leaving its top cut off.
+    private func scroller(minSize: CGSize) -> some View {
         ScrollView([.horizontal, .vertical]) {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                 // Padding goes on the cells: a modified GridRow would become one cell spanning the grid.
@@ -213,6 +221,7 @@ struct TableGridView: View {
             .padding(.horizontal, 16)
             .background(Color(.cell), in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
             .padding(16)
+            .frame(minWidth: minSize.width, minHeight: minSize.height, alignment: .topLeading)
         }
     }
 
