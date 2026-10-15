@@ -98,22 +98,19 @@ struct TaskDetailView: View {
                 ContentUnavailableView("Task not found", systemImage: "questionmark.circle")
             }
         }
+        #if os(macOS)
+        // Not a `.toolbar`: SwiftUI hands those to the one window toolbar, which re-tiled on every task switch (a Mac
+        // sample showed it at ~13% of the main thread). The same buttons live in a header inside the panel.
+        .safeAreaInset(edge: .top, spacing: 0) { panelHeader }
+        #else
         .navigationTitle(live.value.currentProject?.title ?? "Task")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let task = live.value.task {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if let closeTask {
-                        Button("Close", systemImage: "xmark", action: closeTask).help("Close (Esc)")
-                    }
-                    TaskDetailMenu(services: services, task: task, state: sheets, onDuplicate: duplicateTask)
-                    Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
-                        _ = apply(TaskPatch(isFavorite: !task.isFavorite))
-                    }
-                    .tint(task.isFavorite ? Color(.warning) : nil)
-                }
+                ToolbarItemGroup(placement: .topBarTrailing) { headerButtons(task) }
             }
         }
+        #endif
         // The section feeds run here, not on a Form row, so they keep updating whichever rows are on screen.
         .task { await live.run() }
         .task { await feeds.comments.run() }
@@ -189,6 +186,35 @@ struct TaskDetailView: View {
             }
         ))
     }
+
+    @ViewBuilder
+    private func headerButtons(_ task: TaskRecord) -> some View {
+        if let closeTask {
+            Button("Close", systemImage: "xmark", action: closeTask).help("Close (Esc)")
+        }
+        TaskDetailMenu(services: services, task: task, state: sheets, onDuplicate: duplicateTask)
+        Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
+            _ = apply(TaskPatch(isFavorite: !task.isFavorite))
+        }
+        .tint(task.isFavorite ? Color(.warning) : nil)
+    }
+
+    #if os(macOS)
+    @ViewBuilder private var panelHeader: some View {
+        if let task = live.value.task {
+            HStack(spacing: 6) {
+                Text(live.value.currentProject?.title ?? "Task")
+                    .font(.headline)
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                headerButtons(task).labelStyle(.iconOnly).buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+    #endif
 
     /// A menu-bar or keyboard command from the Mac shell, for the task on screen.
     private func perform(_ command: TaskCommand) {
