@@ -58,14 +58,14 @@ public final class AppServices: Sendable {
         let projectId = user["settings"]?["default_project_id"]?.intValue
         try? store.rememberCaptureProject(serverId: projectId.flatMap { $0 > 0 ? $0 : nil })
         let general = GeneralSettings(user: user)
-        UserDefaults.standard.set(general.quickAddMagicMode, forKey: GeneralSettings.quickAddDefaultsKey)
+        UserDefaults.standard.setIfChanged(general.quickAddMagicMode, forKey: GeneralSettings.quickAddDefaultsKey)
         // Which view a project without a remembered one opens on (Vikunja's Settings > Default view).
-        UserDefaults.standard.set(general.defaultView, forKey: GeneralSettings.defaultViewDefaultsKey)
+        UserDefaults.standard.setIfChanged(general.defaultView, forKey: GeneralSettings.defaultViewDefaultsKey)
         // The Upcoming week strip, the weekly round-up and pushed all-day dates read these without opening Settings.
-        UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
+        UserDefaults.standard.setIfChanged(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
         // Only a zone the server really holds; an unset one keeps the device's.
         if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
-            UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
+            UserDefaults.standard.setIfChanged(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
         }
         // Colour scheme, date and time format and the completion sound follow the account, as on desktop. Applied once
         // per launch, so a later read cannot revert a change made here before it was pushed.

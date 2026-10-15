@@ -114,7 +114,7 @@ extension AppServices {
     /// screen does); a copy from an earlier call is used until then.
     public func rememberServerBase() async {
         guard let base = await api.serverBase(), !base.isEmpty else { return }
-        UserDefaults.standard.set(base, forKey: Self.serverBaseKey)
+        UserDefaults.standard.setIfChanged(base, forKey: Self.serverBaseKey)
     }
 
     /// The Vikunja web address of a task, `<server>/tasks/<id>`. Nil until the task has synced (no server id), or

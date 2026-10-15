@@ -10,7 +10,7 @@ public enum ProjectViewMemory {
     }
 
     public static func remember(_ viewLocalId: String, projectLocalId: String, defaults: UserDefaults = .standard) {
-        defaults.set(viewLocalId, forKey: key(projectLocalId: projectLocalId))
+        defaults.setIfChanged(viewLocalId, forKey: key(projectLocalId: projectLocalId))
     }
 
     /// The view to open, as Vikunja-web picks it: the remembered one when the project still has it, else the first view
