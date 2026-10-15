@@ -91,6 +91,9 @@ struct TaskDetailView: View {
             if let task = live.value.task {
                 // Grouped on the Mac too (its default Form style is a two-column label layout, not the iOS cards).
                 form(task).formStyle(.grouped)
+                    #if os(macOS)
+                    .buttonStyle(FormRowButtonStyle())
+                    #endif
             } else {
                 ContentUnavailableView("Task not found", systemImage: "questionmark.circle")
             }

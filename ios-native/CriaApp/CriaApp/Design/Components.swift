@@ -270,6 +270,16 @@ struct CriaSecondaryButtonStyle: ButtonStyle {
     }
 }
 
+/// A button with no box of its own, for rows in a grouped form: the Mac draws a grey rounded box behind each one,
+/// inside the row's own card. The whole row stays tappable.
+struct FormRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
 extension View {
     /// Warm grouped background behind a `List` or `Form`, rows on the cell colour. Corner radius, separators,
     /// swipe, edit mode and the scroll-edge effect stay system-drawn.

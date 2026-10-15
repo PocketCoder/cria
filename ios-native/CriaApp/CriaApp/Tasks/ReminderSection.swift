@@ -51,12 +51,18 @@ struct ReminderSection: View {
     }
 
     /// Reminders are stored on the server either way, but this phone only alerts when the OS and Cria's switch allow it.
+    #if os(macOS)
+    private static let deviceName = "Mac"
+    #else
+    private static let deviceName = "iPhone"
+    #endif
+
     private var notificationWarning: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color(.warning)).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
                 Text(systemDenied
-                     ? "Notifications are off for Cria on this iPhone, so reminders will not alert you."
+                     ? "Notifications are off for Cria on this \(Self.deviceName), so reminders will not alert you."
                      : "Notifications are switched off in Cria, so reminders will not alert you.")
                     .font(Theme.caption)
                 Button("Open notification settings") {
