@@ -27,6 +27,9 @@ struct MacShellView: View {
                         .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
                 }
             }
+            // Bounded on both axes, so the pane takes the size it is offered instead of measuring its form (a scroll
+            // view of many rows) to find an ideal one on every pass.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
         }
         .onExitCommand { actions.openTaskId = nil }

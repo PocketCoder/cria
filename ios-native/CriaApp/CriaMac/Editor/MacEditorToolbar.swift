@@ -11,7 +11,11 @@ struct MacEditorToolbar: View {
 
     var body: some View {
         // Scrolls sideways when the pane is narrower than the bar, so the bar never widens the task pane.
+        // A fixed height and the offered width: a sideways scroll view otherwise reports its full content width as its
+        // ideal size, which the form around it measures on every layout pass.
         ScrollView(.horizontal, showsIndicators: false) { bar }
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
     }
 
     private var bar: some View {
