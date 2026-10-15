@@ -15,9 +15,9 @@ struct TaskDetailData: Equatable, Sendable {
 struct TaskDetailView: View {
     let services: AppServices
     let taskLocalId: String
-    @State var live: LiveValue<TaskDetailData>
+    @State private var live: LiveValue<TaskDetailData>
     @State private var feeds: TaskDetailFeeds
-    @State var sheets: TaskDetailPresentation
+    @State private var sheets: TaskDetailPresentation
     @State private var descriptionDraft: DescriptionDraft
     @State private var title = ""
     /// The title as last loaded from the store. Only a difference from this is the user's edit, so a title that
@@ -39,7 +39,7 @@ struct TaskDetailView: View {
     @State private var openedCopy: String?
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.taskCloser) var closeTask
+    @Environment(\.taskCloser) private var closeTask
     /// Nil when shown inside a sheet, outside the shell's environment: the delete then goes ahead without Undo.
     @Environment(UndoCenter.self) private var undo: UndoCenter?
     @Environment(\.scenePhase) private var scenePhase
@@ -100,11 +100,20 @@ struct TaskDetailView: View {
         }
         .navigationTitle(live.value.currentProject?.title ?? "Task")
         .navigationBarTitleDisplayMode(.inline)
-        #if os(macOS)
-        .toolbar(id: "cria.task") { macToolbar }
-        #else
-        .toolbar { phoneToolbar }
-        #endif
+        .toolbar {
+            if let task = live.value.task {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if let closeTask {
+                        Button("Close", systemImage: "xmark", action: closeTask).help("Close (Esc)")
+                    }
+                    TaskDetailMenu(services: services, task: task, state: sheets, onDuplicate: duplicateTask)
+                    Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star") {
+                        _ = apply(TaskPatch(isFavorite: !task.isFavorite))
+                    }
+                    .tint(task.isFavorite ? Color(.warning) : nil)
+                }
+            }
+        }
         // The section feeds run here, not on a Form row, so they keep updating whichever rows are on screen.
         .task { await live.run() }
         .task { await feeds.comments.run() }
@@ -257,7 +266,7 @@ struct TaskDetailView: View {
 
     /// Saves a patch; false (with the error shown) when that failed.
     @discardableResult
-    func apply(_ patch: TaskPatch) -> Bool {
+    private func apply(_ patch: TaskPatch) -> Bool {
         do {
             _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
             return true
@@ -271,7 +280,7 @@ struct TaskDetailView: View {
 // Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
 extension TaskDetailView {
     /// Saves what is being typed, then copies the task and opens the copy.
-    func duplicateTask() {
+    private func duplicateTask() {
         saveText()
         descriptionDraft.save()
         sheets.attempt { openedCopy = try services.store.duplicateTask(localId: taskLocalId).localId }
