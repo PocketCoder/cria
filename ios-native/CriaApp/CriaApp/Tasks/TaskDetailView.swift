@@ -256,6 +256,29 @@ struct TaskDetailView: View {
             .contentMargins(.top, 8, for: .scrollContent)
     }
 
+    private func saveText() {
+        guard let task = live.value.task, didLoad else { return }
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        var patch = TaskPatch()
+        if !name.isEmpty, name != loadedTitle, name != task.title { patch.title = name }
+        if patch.title != nil { apply(patch) }
+    }
+
+    /// Saves a patch; false (with the error shown) when that failed.
+    @discardableResult
+    private func apply(_ patch: TaskPatch) -> Bool {
+        do {
+            _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
+            return true
+        } catch {
+            sheets.failure = String(describing: error)
+            return false
+        }
+    }
+}
+
+// Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
+extension TaskDetailView {
     /// Saves what is being typed, then copies the task and opens the copy.
     private func duplicateTask() {
         saveText()
@@ -282,29 +305,6 @@ struct TaskDetailView: View {
         }
     }
 
-    private func saveText() {
-        guard let task = live.value.task, didLoad else { return }
-        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        var patch = TaskPatch()
-        if !name.isEmpty, name != loadedTitle, name != task.title { patch.title = name }
-        if patch.title != nil { apply(patch) }
-    }
-
-    /// Saves a patch; false (with the error shown) when that failed.
-    @discardableResult
-    private func apply(_ patch: TaskPatch) -> Bool {
-        do {
-            _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
-            return true
-        } catch {
-            sheets.failure = String(describing: error)
-            return false
-        }
-    }
-}
-
-// Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
-extension TaskDetailView {
     private func loadDrafts() {
         guard let task = live.value.task, !didLoad else { return }
         title = task.title
