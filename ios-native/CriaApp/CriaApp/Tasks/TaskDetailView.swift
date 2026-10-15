@@ -30,6 +30,11 @@ struct TaskDetailView: View {
     @State private var expandingDescription = false
     @State private var choosingPriority = false
     @State private var choosingMove = false
+    #if os(macOS)
+    @State private var sectionsReady = false
+    #else
+    private let sectionsReady = true
+    #endif
     /// The copy just made by Duplicate, pushed once it exists.
     @State private var openedCopy: String?
     @FocusState private var focus: Field?
@@ -128,6 +133,10 @@ struct TaskDetailView: View {
         }
         #if os(macOS)
         .onAppear { TaskOpenSignposts.event("detail first body", taskLocalId) }
+        .task {
+            await Task.yield()
+            sectionsReady = true
+        }
         #endif
         .onDisappear {
             saveText()
@@ -223,8 +232,12 @@ struct TaskDetailView: View {
                 }
             }
             // The order is the user's (Settings > Task layout); the title stays first and Delete last.
-            ForEach(preferences.taskDetailOrder) { kind in
-                section(kind, task: task)
+            // On the Mac the sections wait for the first frame: the title and description show at once, and the rest of
+            // the form (a lot of rows to measure) fills in right after, so a click opens the task without a pause.
+            if sectionsReady {
+                ForEach(preferences.taskDetailOrder) { kind in
+                    section(kind, task: task)
+                }
             }
             Section {
                 // No confirmation: the Undo toast takes the delete back.
