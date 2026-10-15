@@ -19,6 +19,10 @@ final class ClipboardPeek {
     }
 
     private(set) var content: Content?
+    #if !canImport(UIKit)
+    /// The answer for the clipboard as of `changeCount`, shared by every task screen.
+    private static var cached: (changeCount: Int, content: Content?) = (-1, nil)
+    #endif
 
     func refresh() {
         #if canImport(UIKit)
@@ -29,9 +33,14 @@ final class ClipboardPeek {
         #else
         // The type list alone: `pasteboardItems` builds an item (and can read an image) for everything copied, on the
         // main thread, every time a task opens.
-        let types = (NSPasteboard.general.types ?? []).map(\.rawValue)
-        let hasImages = types.contains { UTType($0)?.conforms(to: .image) == true }
-        let next = types.isEmpty ? nil : Self.content(types: types, hasImages: hasImages, count: 1)
+        // Nothing is read again until the clipboard changes: resolving its types is the slow part, and this runs for
+        // every task that opens.
+        let board = NSPasteboard.general
+        if board.changeCount != Self.cached.changeCount {
+            let types = (board.types ?? []).map(\.rawValue)
+            Self.cached = (board.changeCount, types.isEmpty ? nil : Self.content(types: types, hasImages: false, count: 1))
+        }
+        let next = Self.cached.content
         #endif
         if next != content { content = next }
     }
