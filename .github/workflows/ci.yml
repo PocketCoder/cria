@@ -460,7 +460,8 @@ jobs:
           fi
           mkdir -p gh-pages-out
           version="$(jq -r .version package.json)-nightly.${{ github.run_number }}"
-          url="https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-macOS.zip"
+          # A name that is unique to this build: the file at a URL never changes, so a signature cannot meet other bytes.
+          url="https://github.com/${{ github.repository }}/releases/download/nightly/Cria-Nightly-macOS-${{ github.run_number }}.zip"
           sig="$(tr -d '\n' < dist/mac/sparkle-sig.txt)"
           cat > gh-pages-out/nightly-appcast.xml <<XML
           <?xml version="1.0" encoding="utf-8"?>
@@ -528,6 +529,11 @@ jobs:
           fi
           if [ "$HAVE_MAC" = true ]; then
             gh release upload nightly dist/mac/Cria-Nightly-macOS.dmg dist/mac/Cria-Nightly-macOS.zip --clobber
+            # The update zip under this build's own name, then the older ones go (the last two stay for clients mid-update).
+            cp dist/mac/Cria-Nightly-macOS.zip "dist/mac/Cria-Nightly-macOS-${{ github.run_number }}.zip"
+            gh release upload nightly "dist/mac/Cria-Nightly-macOS-${{ github.run_number }}.zip" --clobber
+            gh release view nightly --json assets --jq '.assets[].name' | grep -E '^Cria-Nightly-macOS-[0-9]+\.zip$' \
+              | sort -t- -k4 -n | head -n -2 | while read -r old; do gh release delete-asset nightly "$old" --yes; done || true
             [ -f dist/mac/Cria-Nightly-macOS-dSYMs.zip ] && gh release upload nightly dist/mac/Cria-Nightly-macOS-dSYMs.zip --clobber || true
           fi
           if [ "$HAVE_IOS" = true ]; then
