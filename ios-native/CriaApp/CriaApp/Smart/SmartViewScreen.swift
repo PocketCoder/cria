@@ -198,10 +198,20 @@ struct SmartViewScreen: View {
         }
     }
 
+    /// On the Mac, Inbox is one project: its tasks need no project chip, and its one group needs no header repeating the title.
+    private var isInbox: Bool {
+        #if os(macOS)
+        if case .inbox = view { return true }
+        #endif
+        return false
+    }
+
+    private var showsProject: Bool { !isInbox }
+
     private func groupSection(_ group: DisplaySection) -> some View {
         Section {
             ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
-                TaskRowLink(services: services, item: row.item, showProject: row.depth == 0, tree: tree(for: row))
+                TaskRowLink(services: services, item: row.item, showProject: showsProject && row.depth == 0, tree: tree(for: row))
             }
         } header: {
             groupHeader(group)
@@ -219,7 +229,7 @@ struct SmartViewScreen: View {
                     .accessibilityLabel("Reschedule overdue tasks")
             }
             .textCase(nil)
-        } else {
+        } else if !isInbox {
             Text(group.label).font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
                 .accessibilityAddTraits(.isHeader)
         }

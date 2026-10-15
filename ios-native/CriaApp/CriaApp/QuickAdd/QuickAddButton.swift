@@ -57,8 +57,7 @@ struct QuickAddButton: ViewModifier {
     private var aiStatus: AIStatus { AIStatus.shared }
 
     func body(content: Content) -> some View {
-        content
-            .criaFab(menu: fabMenu) { sheet = .quickAdd }
+        addControl(content)
             .task { await aiStatus.refresh() }
             .sheet(item: $sheet) { which in
                 switch which {
@@ -73,6 +72,19 @@ struct QuickAddButton: ViewModifier {
                     ShoppingPhotoSheet(services: services)
                 }
             }
+    }
+
+    /// A floating + on iOS; a New Task button in the window toolbar on the Mac, which has no place for a floating one.
+    @ViewBuilder private func addControl(_ content: Content) -> some View {
+        #if os(macOS)
+        content.toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("New Task", systemImage: "plus") { sheet = .quickAdd }.help("New Task (\u{2318}N)")
+            }
+        }
+        #else
+        content.criaFab(menu: fabMenu) { sheet = .quickAdd }
+        #endif
     }
 
     /// Press and hold on +: the same Ramble and photo sheets as Browse's Add menu, with Ramble only where the on-device
