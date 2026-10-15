@@ -19,19 +19,10 @@ struct MacShellView: View {
         } detail: {
             content
         }
-        // The open task is an inspector: it slides in when a task is clicked and closes with its X, Esc or a new list.
-        .inspector(isPresented: inspectorShown) {
-            NavigationStack {
-                if let id = actions.openTaskId {
-                    TaskDetailView(services: services, taskLocalId: id).id(id)
-                        .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
-                }
-            }
-            // Bounded on both axes, so the pane takes the size it is offered instead of measuring its form (a scroll
-            // view of many rows) to find an ideal one on every pass.
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
-        }
+        // The open task floats over the list on a glass panel, as in the old app, instead of being a split column: no
+        // column to re-lay out when it opens, and the list keeps its full width underneath.
+        .overlay(alignment: .trailing) { taskPanel }
+        .animation(.snappy(duration: 0.28), value: actions.openTaskId != nil)
         .onExitCommand { actions.openTaskId = nil }
         .focusable()
         .focusEffectDisabled()
@@ -62,8 +53,20 @@ struct MacShellView: View {
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
     }
 
-    private var inspectorShown: Binding<Bool> {
-        .distinct(get: { actions.openTaskId != nil }, set: { if !$0 { actions.openTaskId = nil } })
+    @ViewBuilder private var taskPanel: some View {
+        if let id = actions.openTaskId {
+            NavigationStack {
+                TaskDetailView(services: services, taskLocalId: id).id(id)
+                    .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
+            }
+            .frame(width: 400)
+            .frame(maxHeight: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.18)))
+            .shadow(color: .black.opacity(0.22), radius: 22, x: -4, y: 8)
+            .padding(10)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
     }
 
     private func openPendingURL() {
