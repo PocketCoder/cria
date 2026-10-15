@@ -360,6 +360,8 @@ jobs:
           mkdir -p out dmg stage
           ditto "$APP" "stage/Cria (Nightly).app"
           ditto -c -k --keepParent "stage/Cria (Nightly).app" out/Cria-Nightly-macOS.zip
+          # Symbols, so a `sample` of the app can be read by name.
+          [ -d "$RUNNER_TEMP/Cria.xcarchive/dSYMs" ] && ditto -c -k --keepParent "$RUNNER_TEMP/Cria.xcarchive/dSYMs" out/Cria-Nightly-macOS-dSYMs.zip || true
           ditto "stage/Cria (Nightly).app" "dmg/Cria (Nightly).app"
           ln -s /Applications dmg/Applications
           hdiutil create -volname "Cria Nightly" -srcfolder dmg -ov -format UDZO out/Cria-Nightly-macOS.dmg
@@ -526,6 +528,7 @@ jobs:
           fi
           if [ "$HAVE_MAC" = true ]; then
             gh release upload nightly dist/mac/Cria-Nightly-macOS.dmg dist/mac/Cria-Nightly-macOS.zip --clobber
+            [ -f dist/mac/Cria-Nightly-macOS-dSYMs.zip ] && gh release upload nightly dist/mac/Cria-Nightly-macOS-dSYMs.zip --clobber || true
           fi
           if [ "$HAVE_IOS" = true ]; then
             gh release upload nightly dist/ios/Cria-iOS-Nightly-unsigned.ipa --clobber
