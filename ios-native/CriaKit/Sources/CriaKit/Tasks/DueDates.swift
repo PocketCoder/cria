@@ -12,8 +12,24 @@ public enum DueDates {
         return formatter
     }()
 
+    /// Parsed values by text. A row parses the same due date several times per render (chip, overdue, spoken label), so
+    /// the result is kept; the table is cleared when it grows large rather than tracking age.
+    private nonisolated(unsafe) static var parsed: [String: Date?] = [:]
+    private static let parsedLock = NSLock()
+
     public static func parse(_ iso: String) -> Date? {
-        plainFormatter.date(from: iso) ?? fractionalFormatter.date(from: iso)
+        parsedLock.lock()
+        if let hit = parsed[iso] {
+            parsedLock.unlock()
+            return hit
+        }
+        parsedLock.unlock()
+        let date = plainFormatter.date(from: iso) ?? fractionalFormatter.date(from: iso)
+        parsedLock.lock()
+        if parsed.count > 4000 { parsed.removeAll(keepingCapacity: true) }
+        parsed[iso] = .some(date)
+        parsedLock.unlock()
+        return date
     }
 
     /// True when the value carries a real time of day (anything but exactly UTC midnight).
@@ -107,12 +123,26 @@ public enum DueDates {
         hasTimeOfDay(iso) ? parse(iso) : calendarDate(iso, calendar: calendar)
     }
 
+    /// Formatters by pattern, locale and zone: building a `DateFormatter` costs far more than formatting with one, and
+    /// every visible row used to build one per label.
+    private nonisolated(unsafe) static var formatters: [String: DateFormatter] = [:]
+    private static let formattersLock = NSLock()
+
     private static func format(_ date: Date, _ pattern: String, calendar: Calendar, locale: Locale) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = locale
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = pattern
+        let key = "\(pattern)|\(locale.identifier)|\(calendar.identifier)|\(calendar.timeZone.identifier)"
+        formattersLock.lock()
+        defer { formattersLock.unlock() }
+        let formatter: DateFormatter
+        if let cached = formatters[key] {
+            formatter = cached
+        } else {
+            formatter = DateFormatter()
+            formatter.calendar = calendar
+            formatter.locale = locale
+            formatter.timeZone = calendar.timeZone
+            formatter.dateFormat = pattern
+            formatters[key] = formatter
+        }
         return formatter.string(from: date)
     }
 }

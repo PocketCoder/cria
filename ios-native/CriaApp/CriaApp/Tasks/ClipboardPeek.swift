@@ -27,10 +27,11 @@ final class ClipboardPeek {
             ? Self.content(types: board.types, hasImages: board.hasImages, count: board.numberOfItems)
             : nil
         #else
-        let items = NSPasteboard.general.pasteboardItems ?? []
-        let types = Array(Set(items.flatMap { $0.types.map(\.rawValue) }))
+        // The type list alone: `pasteboardItems` builds an item (and can read an image) for everything copied, on the
+        // main thread, every time a task opens.
+        let types = (NSPasteboard.general.types ?? []).map(\.rawValue)
         let hasImages = types.contains { UTType($0)?.conforms(to: .image) == true }
-        let next = items.isEmpty ? nil : Self.content(types: types, hasImages: hasImages, count: items.count)
+        let next = types.isEmpty ? nil : Self.content(types: types, hasImages: hasImages, count: 1)
         #endif
         if next != content { content = next }
     }

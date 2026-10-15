@@ -9,14 +9,32 @@ import AppKit
 extension Color {
     /// A colour that follows the system light or dark appearance, from a ported `globals.css` token.
     init(_ token: ThemeToken) {
+        self = Self.themed(token)
+    }
+
+    /// One `Color` per token: building a dynamic colour for every use, in every row of every render, was a visible
+    /// share of the main thread's time.
+    private nonisolated(unsafe) static var themedColours: [ThemeToken: Color] = [:]
+    private static let themedLock = NSLock()
+
+    private static func themed(_ token: ThemeToken) -> Color {
+        themedLock.lock()
+        defer { themedLock.unlock() }
+        if let cached = themedColours[token] { return cached }
+        let colour = makeThemed(token)
+        themedColours[token] = colour
+        return colour
+    }
+
+    private static func makeThemed(_ token: ThemeToken) -> Color {
         let pair = token.pair
         #if canImport(UIKit)
-        self.init(uiColor: UIColor { traits in
+        return Color(uiColor: UIColor { traits in
             let rgb = (traits.userInterfaceStyle == .dark ? pair.dark : pair.light).rgb
             return UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
         })
         #else
-        self.init(nsColor: NSColor(name: nil) { appearance in
+        return Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let rgb = (isDark ? pair.dark : pair.light).rgb
             return NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
