@@ -222,7 +222,8 @@ extension PlatformColor {
         #if canImport(UIKit)
         .tintColor
         #else
-        .controlAccentColor
+        // Llama purple, not the Mac's own accent colour (blue unless the user chose another).
+        NSColor(Color(.primary))
         #endif
     }
 

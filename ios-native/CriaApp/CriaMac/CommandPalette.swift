@@ -55,13 +55,13 @@ struct CommandPalette: View {
 
     private func row(_ item: PaletteItem, selected: Bool) -> some View {
         HStack {
-            Image(systemName: item.symbol).frame(width: 22).foregroundStyle(.secondary)
-            Text(item.title)
+            Image(systemName: item.symbol).frame(width: 22).foregroundStyle(Color(.mutedForeground))
+            Text(item.title).foregroundStyle(Color(.foreground))
             Spacer()
-            Text(item.detail).font(.caption).foregroundStyle(.secondary)
+            Text(item.detail).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
         }
         .padding(.vertical, 2)
-        .listRowBackground(selected ? Color.accentColor.opacity(0.2) : Color.clear)
+        .listRowBackground(selected ? Color(.primary).opacity(0.14) : Color.clear)
     }
 
     private var items: [PaletteItem] {

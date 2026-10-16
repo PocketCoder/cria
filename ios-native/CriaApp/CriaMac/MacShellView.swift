@@ -99,7 +99,8 @@ private struct MacContent: View {
     var body: some View {
         NavigationStack(path: navigation.pathBinding(for: .browse)) {
             root
-                .navigationDestination(for: Route.self) { MacRouteDestination(route: $0, services: services) }
+                .criaCanvas()
+                .navigationDestination(for: Route.self) { MacRouteDestination(route: $0, services: services).criaCanvas() }
         }
         .environment(\.taskOpener, actions.opener)
         .environment(\.openTaskState, actions.panel)
@@ -118,7 +119,18 @@ private struct MacContent: View {
             let title = (try? services.store.project(localId: localId))?.title ?? "Project"
             ProjectScreen(services: services, projectLocalId: localId, title: title)
         case .savedFilter(let serverId): SavedFilterScreen(services: services, serverId: serverId)
+        case .label(let localId):
+            let title = (try? services.store.labels())?.first { $0.localId == localId }?.title ?? "Label"
+            TaskListView(services: services, source: .label(localId), title: title)
         }
+    }
+}
+
+private extension View {
+    /// The warm page colour behind the list screens (the web's `--color-background`), in place of the system's
+    /// white or grey. Only here: the task panel keeps its glass and sheets keep the system look.
+    func criaCanvas() -> some View {
+        scrollContentBackground(.hidden).background(Color(.background))
     }
 }
 

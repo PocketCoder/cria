@@ -72,6 +72,15 @@ struct KanbanColumnView: View {
 
     private var isDropTarget: Bool { overColumn || !overCards.isEmpty }
 
+    /// Llama purple on the Mac, whose accent colour is the user's own (iOS unchanged).
+    private var dropOutline: Color {
+        #if os(macOS)
+        Color(.primary)
+        #else
+        Color.accentColor
+        #endif
+    }
+
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 8) {
@@ -93,7 +102,7 @@ struct KanbanColumnView: View {
             // The column a dragged card would land in.
             .overlay {
                 if isDropTarget {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 2)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(dropOutline.opacity(0.6), lineWidth: 2)
                 }
             }
             .animation(.easeOut(duration: 0.12), value: isDropTarget)

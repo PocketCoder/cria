@@ -1,5 +1,6 @@
 import AppKit
 import CriaKit
+import SwiftUI
 import UniformTypeIdentifiers
 
 /// The Mac editor's text view: `NSTextView` on a TextKit 1 stack, driven by the same `EditorController` as the iOS
@@ -236,7 +237,7 @@ final class MacEditorTextView: NSTextView, EditorSurface {
             let image = checked ? Self.checkedBox : Self.emptyBox
             image?.draw(in: CGRect(x: originX + 2, y: line.minY + 2, width: 16, height: 16))
         case .rule:
-            NSColor.separatorColor.setStroke()
+            Self.border.setStroke()
             let path = NSBezierPath()
             path.move(to: CGPoint(x: textContainerOrigin.x, y: line.midY))
             path.line(to: CGPoint(x: bounds.width - textContainerOrigin.x, y: line.midY))
@@ -251,26 +252,29 @@ final class MacEditorTextView: NSTextView, EditorSurface {
         let levels = paragraph.quoteLevels
         guard levels > 0 else { return }
         let box = fullRect(of: paragraph)
-        NSColor.separatorColor.setFill()
+        Self.border.setFill()
         for level in 0..<levels {
             let originX = textContainerOrigin.x + 2 + EditorMetrics.quoteIndent * CGFloat(level)
             NSBezierPath(rect: CGRect(x: originX, y: box.minY, width: 3, height: box.height)).fill()
         }
     }
 
+    /// The design system's border colour for rules and quote bars.
+    private static let border = NSColor(Color(.border))
+
     /// Made once rather than on every draw.
     private static let checkedBox = checkbox("checkmark.square.fill")
     private static let emptyBox = checkbox("square")
 
     private static func checkbox(_ name: String) -> NSImage? {
-        let configuration = NSImage.SymbolConfiguration(paletteColors: [.controlAccentColor])
+        let configuration = NSImage.SymbolConfiguration(paletteColors: [NSColor(Color(.primary))])
         return NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration)
     }
 
     private func drawText(_ text: String, at point: CGPoint) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.preferredFont(forTextStyle: .body),
-            .foregroundColor: NSColor.secondaryLabelColor
+            .foregroundColor: NSColor(Color(.mutedForeground))
         ]
         (text as NSString).draw(at: point, withAttributes: attributes)
     }

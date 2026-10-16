@@ -57,7 +57,7 @@ struct MacEditorToolbar: View {
         let base = Button(action: action) {
             Image(systemName: symbol)
                 .frame(width: 26, height: 24)
-                .background(isOn == true ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                .background(isOn == true ? Color(.primary).opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .help(label)

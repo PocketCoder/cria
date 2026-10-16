@@ -15,17 +15,17 @@ struct ShortcutsHelp: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Keyboard shortcuts").font(.title2.weight(.semibold))
+            Text("Keyboard shortcuts").font(Theme.title)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(Self.groups, id: \.0) { group in
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(group.0).font(.headline)
+                            Text(group.0).font(Theme.headline)
                             ForEach(group.1, id: \.0) { row in
                                 HStack {
                                     Text(row.1)
                                     Spacer()
-                                    Text(row.0).font(.body.monospaced()).foregroundStyle(.secondary)
+                                    Text(row.0).font(.body.monospaced()).foregroundStyle(Color(.mutedForeground))
                                 }
                             }
                         }

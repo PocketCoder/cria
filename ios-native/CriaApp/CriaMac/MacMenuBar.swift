@@ -10,7 +10,7 @@ struct MacMenuBarContent: View {
             if let services = model.services {
                 MacTodayList(services: services)
             } else {
-                Text("Sign in to see today's tasks.").foregroundStyle(.secondary)
+                Text("Sign in to see today's tasks.").foregroundStyle(Color(.mutedForeground))
             }
             Divider()
             Button("New Task…") { MacWindows.requestQuickAdd() }
@@ -39,9 +39,9 @@ private struct MacTodayList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Today").font(.headline)
+            Text("Today").font(Theme.headline)
             if live.value.isEmpty {
-                Text("Nothing due.").foregroundStyle(.secondary)
+                Text("Nothing due.").foregroundStyle(Color(.mutedForeground))
             }
             ForEach(live.value, id: \.task.localId) { item in
                 Button {

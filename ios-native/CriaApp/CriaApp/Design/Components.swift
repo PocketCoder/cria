@@ -132,7 +132,7 @@ struct PriorityCheck: View {
                 SpringKeyframe(1.0, duration: 0.12)
             }
             .background { BurstView(trigger: burst, color: color, size: ring) }
-            .frame(width: max(44, ring), height: max(44, ring))
+            .frame(width: max(Theme.checkTarget, ring), height: max(Theme.checkTarget, ring))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

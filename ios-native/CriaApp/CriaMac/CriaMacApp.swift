@@ -30,7 +30,7 @@ struct CriaMacApp: App {
             "Cria", systemImage: "checkmark.circle",
             isInserted: .distinct(get: { showMenuBar }, set: { showMenuBar = $0 })
         ) {
-            MacMenuBarContent(model: model)
+            MacMenuBarContent(model: model).tint(Color(.primary))
         }
         .menuBarExtraStyle(.window)
         Settings {

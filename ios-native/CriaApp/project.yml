@@ -107,7 +107,6 @@ targets:
           - AI/BackgroundRun.swift
           # The Mac target has its own asset catalogue (LoginIcon copied across).
           - Assets.xcassets
-          - Fonts
     dependencies:
       - package: CriaKit
       - package: KeyboardShortcuts
@@ -123,9 +122,13 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: io.cria.app
             CFBundleURLSchemes: [cria]
+        # Onest (Fonts/, copied to Resources) for the wordmark, as on iOS.
+        ATSApplicationFontsPath: "."
     settings:
       base:
         PRODUCT_NAME: Cria
+        # Llama purple for system controls when the Mac's accent is set to Multicolour.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity

@@ -5,14 +5,16 @@ struct MacSidebarData: Equatable, Sendable {
     /// Visible projects by parent (nil = roots), built once per read rather than twice per project per render.
     var children: [String?: [ProjectRecord]] = [:]
     var filters: [SavedFilterRecord] = []
+    var labels: [LabelRecord] = []
     var counts = TabCounts()
 }
 
-/// Inbox, Today, Upcoming, Favourites and Search, then the project tree, then saved filters. Counts show on the
-/// right when Settings > Customise > Show task count is on. The system draws the glass on macOS 26; no background.
+/// The desktop app's sidebar order: Today, Upcoming, Inbox, Favourites and Search, then saved filters, labels and the
+/// project tree. Titles and symbols are the iOS tabs'. Counts show on the right when Settings > Customise > Show task
+/// count is on. The system draws the glass on macOS 26; no background.
 struct MacSidebar: View {
     let services: AppServices
-    @Bindable var actions: MacActions
+    let actions: MacActions
     @State private var live: LiveValue<MacSidebarData>
     @Environment(\.preferences) private var preferences
 
@@ -21,10 +23,11 @@ struct MacSidebar: View {
         self.actions = actions
         let store = services.store
         _live = State(initialValue: LiveValue(initial: MacSidebarData()) {
-            observeStore(store, kinds: [.projects, .tasks, .savedFilters]) { (reading: CriaStore) throws -> MacSidebarData in
+            observeStore(store, kinds: [.projects, .tasks, .savedFilters, .labels]) { (reading: CriaStore) throws -> MacSidebarData in
                 MacSidebarData(
                     children: ProjectTree.childIndex(ProjectTree.visible(try reading.projects())),
                     filters: try reading.savedFilters(),
+                    labels: try reading.labels(),
                     counts: try TabCounts.read(reading, inboxLocalId: services.rememberedDefaultProjectLocalId())
                 )
             }
@@ -33,29 +36,62 @@ struct MacSidebar: View {
 
     var body: some View {
         List(selection: selection) {
-            row("Inbox", "tray", .inbox, count: live.value.counts.inbox)
-            row("Today", "sun.max", .today, count: live.value.counts.today)
-            row("Upcoming", "calendar", .upcoming)
-            row("Favourites", "star", .favorites)
-            row("Search", "magnifyingglass", .search)
-            Section("Projects") {
-                MacProjectBranch(parent: nil, children: live.value.children)
-            }
+            row(.today, .today, count: live.value.counts.today)
+            row(.upcoming, .upcoming)
+            row(.inbox, .inbox, count: live.value.counts.inbox)
+            row(.favorites, .favorites)
+            row(.search, .search)
             if !live.value.filters.isEmpty {
-                Section("Filters") {
+                Section {
                     ForEach(live.value.filters, id: \.serverId) { filter in
                         Label(filter.title, systemImage: "line.3.horizontal.decrease")
                             .tag(MacSelection.savedFilter(filter.serverId))
                     }
+                } header: {
+                    eyebrow("Filters")
                 }
             }
+            if !live.value.labels.isEmpty {
+                Section {
+                    ForEach(live.value.labels, id: \.localId) { label in
+                        Label {
+                            Text(label.title)
+                        } icon: {
+                            Image(systemName: "tag.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color(hexString: label.hexColor) ?? Color(.mutedForeground))
+                        }
+                        .tag(MacSelection.label(label.localId))
+                    }
+                } header: {
+                    eyebrow("Labels")
+                }
+            }
+            Section {
+                MacProjectBranch(parent: nil, children: live.value.children)
+            } header: {
+                eyebrow("Projects")
+            }
         }
-        .navigationSplitViewColumnWidth(min: 190, ideal: 230)
+        .navigationSplitViewColumnWidth(min: 190, ideal: 220)
         .task { await live.run() }
         .safeAreaInset(edge: .bottom) {
             SettingsLink { Label("Settings", systemImage: "gearshape") }
-                .buttonStyle(.link).padding(8)
+                .buttonStyle(.plain)
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
         }
+    }
+
+    /// The web sidebar's section heading: small, semibold, upper case, muted.
+    private func eyebrow(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .textCase(.uppercase)
+            .tracking(0.25)
+            .foregroundStyle(Color(.mutedForeground))
     }
 
     /// A click on empty space or a ⌘-click would clear the selection, leaving no row lit while Today shows; ignore it.
@@ -65,12 +101,12 @@ struct MacSidebar: View {
         })
     }
 
-    private func row(_ title: String, _ symbol: String, _ destination: MacSelection, count: Int = 0) -> some View {
+    private func row(_ tab: AppTab, _ destination: MacSelection, count: Int = 0) -> some View {
         HStack {
-            Label(title, systemImage: symbol)
+            Label(tab.title, systemImage: tab.symbol)
             Spacer()
             if preferences.custom.showTaskCount, count > 0 {
-                Text("\(count)").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text("\(count)").font(Theme.caption).foregroundStyle(Color(.mutedForeground)).monospacedDigit()
             }
         }
         .tag(destination)
@@ -102,7 +138,7 @@ struct MacProjectBranch: View {
         } icon: {
             Image(systemName: "circle.fill")
                 .font(.system(size: 9))
-                .foregroundStyle(Color(hexString: project.hexColor) ?? .secondary)
+                .foregroundStyle(Color(hexString: project.hexColor) ?? Color(.mutedForeground))
         }
         .tag(MacSelection.project(project.localId))
     }

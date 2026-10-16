@@ -6,6 +6,7 @@ enum MacSelection: Hashable {
     case inbox, today, upcoming, favorites, search
     case project(String)
     case savedFilter(Int)
+    case label(String)
 }
 
 /// What the window is showing and the things menus, keys and the palette ask it to do. One per window; menus reach
@@ -56,6 +57,7 @@ final class MacActions {
             case (_, .inbox?): go(.inbox)
             case (_, .favorites?): go(.favorites)
             case (_, .savedFilter(let id)?): go(.savedFilter(id))
+            case (_, .label(let id)?): go(.label(id))
             case (.upcoming, _): go(.upcoming)
             case (.search, _): go(.search)
             default: go(.today)

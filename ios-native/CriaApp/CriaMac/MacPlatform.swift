@@ -149,7 +149,7 @@ struct MacSettingsView: View {
             Section("Startup") {
                 Toggle("Open Cria at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
-                if let loginError { Text(loginError).foregroundStyle(.red).font(.caption) }
+                if let loginError { Text(loginError).foregroundStyle(Color(.destructive)).font(Theme.caption) }
             }
         }
         .formStyle(.grouped)

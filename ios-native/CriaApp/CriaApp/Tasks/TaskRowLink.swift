@@ -180,8 +180,9 @@ private struct PanelRowHighlight: ViewModifier {
     }
 
     private var fill: Color {
-        if openTask?.id == taskLocalId { return Color.accentColor.opacity(0.16) }
-        return hovering ? Color.primary.opacity(0.06) : .clear
+        // The web row's open and hover washes: primary at 10%, foreground at 5%.
+        if openTask?.id == taskLocalId { return Color(.primary).opacity(0.10) }
+        return hovering ? Color(.foreground).opacity(0.05) : .clear
     }
 }
 

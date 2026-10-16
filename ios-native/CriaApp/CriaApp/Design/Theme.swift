@@ -72,7 +72,14 @@ enum Theme {
     static let radius: CGFloat = 12
     static let cardRadius: CGFloat = 20
     static let chipHeight: CGFloat = 22
+    #if os(macOS)
+    /// The web's 18px check in a pointer-sized target; touch keeps the larger ring and the 44pt target.
+    static let checkSize: CGFloat = 18
+    static let checkTarget: CGFloat = 24
+    #else
     static let checkSize: CGFloat = 24
+    static let checkTarget: CGFloat = 44
+    #endif
 
     /// Onest Bold for large titles; inline titles stay SF Pro semibold. Does nothing until `Onest-Bold.ttf` is
     /// bundled and listed under `UIAppFonts`, so the system font stands in.

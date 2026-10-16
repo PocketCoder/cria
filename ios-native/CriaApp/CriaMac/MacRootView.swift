@@ -21,6 +21,7 @@ struct MacPreferenceEnvironment: ViewModifier {
             }
     }
 
+    @MainActor
     private static func applyAppearance(_ preference: ColorSchemePreference) {
         switch preference {
         case .system: NSApp.appearance = nil
@@ -142,7 +143,9 @@ private struct DesktopSignInOffer: View {
                     }
                     .disabled(isWorking)
                 }
-                if let message { Text(message).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center) }
+                if let message {
+                    Text(message).font(Theme.footnote).foregroundStyle(Color(.mutedForeground)).multilineTextAlignment(.center)
+                }
             }
             .padding()
         }
@@ -158,7 +161,7 @@ struct MacSettingsScene: View {
             if let services = model.services {
                 SettingsView(services: services) { wipe in Task { await model.signOut(wipeLocalData: wipe) } }
             } else {
-                Text("Sign in to change settings.").foregroundStyle(.secondary).padding(40)
+                Text("Sign in to change settings.").foregroundStyle(Color(.mutedForeground)).padding(40)
             }
         }
         .frame(width: 600, height: 620)
