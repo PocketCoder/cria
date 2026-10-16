@@ -12,12 +12,12 @@
       "iconURL": "https://raw.githubusercontent.com/PocketCoder/cria/dev/src-tauri/icons/icon.png",
       "versions": [
         {
-          "version": "0.15.413",
-          "buildVersion": "413",
-          "date": "2026-10-16T14:09:00Z",
-          "size": 12809775,
+          "version": "0.15.416",
+          "buildVersion": "416",
+          "date": "2026-10-16T21:56:35Z",
+          "size": 12810997,
           "downloadURL": "https://github.com/PocketCoder/cria/releases/download/nightly/Cria-iOS-Nightly-unsigned.ipa",
-          "localizedDescription": "dev @ bfacc0d"
+          "localizedDescription": "dev @ 0b45805"
         }
       ]
     }
