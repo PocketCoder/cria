@@ -12,12 +12,15 @@ struct MacShellView: View {
     @State private var navigation = NavigationModel()
     @State private var undoCenter = UndoCenter()
     @State private var keys = KeySequencer()
+    @State private var conflictPrompt = ConflictPrompt()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $actions.columns) {
             MacSidebar(services: services, actions: actions)
         } detail: {
             MacContent(services: services, actions: actions, navigation: navigation)
+                // Sync progress, errors with Retry, conflicts to resolve and changes that could not sync, as on iOS.
+                .safeAreaInset(edge: .top, spacing: 0) { SyncBanner(services: services, conflicts: conflictPrompt) }
         }
         // A click anywhere outside the panel closes it. Simultaneous, so a row or the sidebar still gets its click;
         // when that click opened another task the id has changed by the next turn and the panel stays.
@@ -41,10 +44,15 @@ struct MacShellView: View {
         .environment(undoCenter)
         .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
         .task { undoCenter.attach(services) }
+        // A conflicted change holds up the outbox until it is resolved, so the sheet opens as on iOS.
+        .task { await conflictPrompt.run(store: services.store) }
         .task {
             openPendingURL()
         }
         .onReceive(NotificationCenter.default.publisher(for: .criaQuickAdd)) { _ in actions.newTask() }
+        .task(id: actions.syncRequest) {
+            if actions.syncRequest > 0 { await services.refresh() }
+        }
         .onChange(of: pendingURL) { openPendingURL() }
         .sheet(item: $actions.addRequest) { request in
             QuickAddSheet(services: services, contextProjectId: contextProject, initialLine: request.title)
@@ -54,6 +62,11 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $actions.showingPalette) { CommandPalette(services: services, actions: actions) }
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
+        .sheet(
+            isPresented: $conflictPrompt.isPresented,
+            onDismiss: { conflictPrompt.sheetDismissed() },
+            content: { ConflictSheet(services: services, prompt: conflictPrompt).macSheetFrame() }
+        )
     }
 
     private func closePanelUnlessReplaced() {
@@ -121,6 +134,7 @@ private struct MacTaskPanel: View {
                 TaskDetailView(services: services, taskLocalId: id).id(id)
                     .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
             }
+            .environment(\.taskOpener, actions.opener)
             .frame(width: 400)
             .frame(maxHeight: .infinity)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -62,6 +62,7 @@ struct SyncBanner: View {
                         }
                     }
             }
+            .macSheetFrame()
         }
     }
 

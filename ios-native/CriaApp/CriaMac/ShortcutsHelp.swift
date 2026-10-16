@@ -6,7 +6,7 @@ struct ShortcutsHelp: View {
 
     private static let groups: [(String, [(String, String)])] = [
         ("General", [("⌘N", "New task"), ("⇧⌘N", "New project"), ("⌘K", "Command palette"), ("⌘E", "Toggle sidebar"),
-                     ("⌘F", "Search")]),
+                     ("⌘F", "Search"), ("⌘R", "Sync now")]),
         ("Go to", [("g o", "Today"), ("g u", "Upcoming"), ("⌘1 ⌘2 ⌘3", "Today, Upcoming, Inbox")]),
         ("Project views", [("g l", "List"), ("g k", "Kanban"), ("g t", "Table"), ("g g", "Gantt")]),
         ("Open task", [("t", "Toggle done"), ("d", "Due date"), ("p", "Priority"), ("l", "Labels"), ("m", "Move to project"),

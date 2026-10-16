@@ -23,6 +23,8 @@ final class MacActions {
     var showingPalette = false
     var showingShortcuts = false
     var columns = NavigationSplitViewVisibility.all
+    /// Bumped by Sync Now; the shell runs a sync for each new value.
+    var syncRequest = 0
 
     init() {
         opener = { [weak self] id in self?.openTask(id) }
@@ -71,6 +73,10 @@ final class MacActions {
 
     func newTask() {
         addRequest = QuickAddRequest(title: "")
+    }
+
+    func syncNow() {
+        syncRequest += 1
     }
 
     func toggleSidebar() {

@@ -1,3 +1,5 @@
+import AppKit
+import CoreSpotlight
 import CriaKit
 import SwiftUI
 
@@ -12,9 +14,19 @@ struct MacPreferenceEnvironment: ViewModifier {
             .environment(\.playsCompletionSound, preferences.playSoundWhenDone)
             .environment(\.preferences, preferences)
             .onChange(of: preferences.custom.rules, initial: true) { _, rules in CriaRules.current = rules }
+            // Settings > Appearance: set on the app, so every window, sheet and the menu bar popover follow it.
+            .onChange(of: preferences.colorScheme, initial: true) { _, scheme in Self.applyAppearance(scheme) }
             .onReceive(NotificationCenter.default.publisher(for: .criaPreferencesChanged)) { _ in
                 preferences = PreferencesStore().load()
             }
+    }
+
+    private static func applyAppearance(_ preference: ColorSchemePreference) {
+        switch preference {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
     }
 }
 
@@ -26,6 +38,12 @@ struct MacRootView: View {
         content
             .modifier(MacPreferenceEnvironment())
             .onOpenURL { model.pendingURL = $0 }
+            // A Spotlight result for a task opens it, as on iOS.
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                if let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                    model.pendingURL = DeepLink.taskURL(localId: identifier)
+                }
+            }
             // A tapped notification becomes a link the shell opens.
             .onChange(of: NotificationRouter.shared.pendingURL, initial: true) { _, url in
                 guard let url else { return }

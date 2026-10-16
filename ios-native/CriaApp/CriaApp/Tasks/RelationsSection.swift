@@ -18,6 +18,8 @@ struct RelationsSection: View {
     @State private var addingSubtask = false
     @State private var subtaskTitle = ""
     @State private var subtaskError: String?
+    /// Set on the Mac: a related task replaces the one in the task panel rather than pushing inside it.
+    @Environment(\.taskOpener) private var openTask
     /// Completions per subtask row, so only the row that was completed plays the haptic.
     @State private var completions: [String: Int] = [:]
     @FocusState private var subtaskFocused: Bool
@@ -26,7 +28,9 @@ struct RelationsSection: View {
         Section {
             ForEach(ordered, id: \.identity) { relation in
                 Group {
-                    if let otherId = relation.otherTaskLocalId {
+                    if let otherId = relation.otherTaskLocalId, let openTask {
+                        Button { openTask(otherId) } label: { relationLabel(relation) }
+                    } else if let otherId = relation.otherTaskLocalId {
                         NavigationLink(value: Route.task(otherId)) { relationLabel(relation) }
                     } else {
                         relationLabel(relation)

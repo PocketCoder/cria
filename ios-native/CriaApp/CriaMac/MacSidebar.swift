@@ -32,7 +32,7 @@ struct MacSidebar: View {
     }
 
     var body: some View {
-        List(selection: $actions.selection) {
+        List(selection: selection) {
             row("Inbox", "tray", .inbox, count: live.value.counts.inbox)
             row("Today", "sun.max", .today, count: live.value.counts.today)
             row("Upcoming", "calendar", .upcoming)
@@ -56,6 +56,13 @@ struct MacSidebar: View {
             SettingsLink { Label("Settings", systemImage: "gearshape") }
                 .buttonStyle(.link).padding(8)
         }
+    }
+
+    /// A click on empty space or a ⌘-click would clear the selection, leaving no row lit while Today shows; ignore it.
+    private var selection: Binding<MacSelection?> {
+        Binding(get: { actions.selection }, set: { newValue in
+            if let newValue { actions.selection = newValue }
+        })
     }
 
     private func row(_ title: String, _ symbol: String, _ destination: MacSelection, count: Int = 0) -> some View {

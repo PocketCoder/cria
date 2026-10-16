@@ -33,6 +33,8 @@ struct MacCommands: Commands {
             Button("Search") { actions?.go(.search) }.keyboardShortcut("f").disabled(actions == nil)
             Divider()
             Button("Command Palette") { actions?.showingPalette = true }.keyboardShortcut("k").disabled(actions == nil)
+            Divider()
+            Button("Sync Now") { actions?.syncNow() }.keyboardShortcut("r").disabled(actions == nil)
         }
         CommandMenu("Task") {
             let enabled = actions?.hasOpenTask == true
@@ -44,7 +46,9 @@ struct MacCommands: Commands {
             Button("Favourite") { actions?.task(.favourite) }.disabled(!enabled)
             Divider()
             Button("Copy Link") { actions?.task(.copyLink) }.keyboardShortcut(".").disabled(!enabled)
-            Button("Delete") { actions?.task(.delete) }.keyboardShortcut(.delete).disabled(!enabled)
+            // No key equivalent: ⌘⌫ there fired while editing the title or description. Plain ⌫ outside a text field
+            // still deletes (`KeySequencer`).
+            Button("Delete") { actions?.task(.delete) }.disabled(!enabled)
         }
         CommandGroup(replacing: .help) {
             Button("Keyboard Shortcuts") { actions?.showingShortcuts = true }.disabled(actions == nil)
