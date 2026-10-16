@@ -24,6 +24,8 @@ public struct TaskRecord: Equatable, Sendable {
     public internal(set) var createdAt: String?
     /// The creator's server user id, from the pull. Nil for tasks created here and not yet re-read.
     public internal(set) var createdById: Int?
+    /// The server's readable identifier, such as "PROJ-42" (read-only; nil until the task has been pulled).
+    public internal(set) var identifier: String?
 
     init(row: Row) {
         localId = row["local_id"]
@@ -46,6 +48,7 @@ public struct TaskRecord: Equatable, Sendable {
         updatedAt = row["updated_at"]
         createdAt = row["created_at"]
         createdById = row["created_by_id"]
+        identifier = row["identifier"]
     }
 }
 
@@ -120,7 +123,7 @@ extension CriaStore {
     static let taskColumns = """
         local_id, server_id, project_local_id, title, description, done, done_at, due_date, \
         start_date, end_date, priority, percent_done, hex_color, position, is_favorite, \
-        repeat_after, repeat_mode, updated_at, created_at, created_by_id
+        repeat_after, repeat_mode, updated_at, created_at, created_by_id, identifier
         """
 
     /// Same order as `listTasksForProject` in `src/db/tasks.ts`. Positions are local per view, so no server sort.

@@ -95,8 +95,8 @@ in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
 - **Frontend:** React 18 + Vite + Tailwind v4
 - **State:** Zustand (UI + auth) + TanStack Query (server cache backed by the
   local DB). No router yet — single shell view, navigation is Zustand state.
-- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 19 migrations in
-  `src/db/migrations/` (`001_initial.sql` → `019_attachment_uploads.sql`).
+- **Local DB:** `@tauri-apps/plugin-sql` (SQLite). 20 migrations in
+  `src/db/migrations/` (`001_initial.sql` → `020_fts_title_description_only.sql`).
   Forward-only; registered in [src-tauri/src/lib.rs](src-tauri/src/lib.rs).
   Never edit a shipped migration.
 - **API:** `openapi-fetch` against [src/api/schema.ts](src/api/schema.ts),

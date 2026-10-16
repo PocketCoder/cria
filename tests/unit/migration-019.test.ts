@@ -36,8 +36,8 @@ describe('migration 019 (attachment uploads)', () => {
     runMigrations(db, 1, 18);
   });
 
-  it('is the next migration and is registered Rust-side', () => {
-    expect(files.at(-1)).toBe('019_attachment_uploads.sql');
+  it('is registered Rust-side', () => {
+    expect(files).toContain('019_attachment_uploads.sql');
     const lib = readFileSync(path.join(__dirname, '../../src-tauri/src/lib.rs'), 'utf8');
     expect(lib).toContain('019_attachment_uploads.sql');
     expect(lib).toMatch(/version: 19,/);

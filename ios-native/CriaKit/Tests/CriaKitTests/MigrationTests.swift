@@ -3,21 +3,31 @@ import XCTest
 @testable import CriaKit
 
 final class MigrationTests: XCTestCase {
-    func testBundleContainsNineteenMigrationsInOrder() throws {
+    func testBundleContainsTwentyMigrationsInOrder() throws {
         let sources = try CriaMigrations.sources()
-        XCTAssertEqual(sources.count, 19)
+        XCTAssertEqual(sources.count, 20)
         XCTAssertEqual(sources.first?.id, "001_initial")
-        XCTAssertEqual(sources.last?.id, "019_attachment_uploads")
+        XCTAssertEqual(sources.last?.id, "020_fts_title_description_only")
     }
 
-    func testFreshDatabaseReachesVersionNineteen() throws {
+    func testFreshDatabaseReachesVersionTwenty() throws {
         let queue = try DatabaseQueue()
         try CriaMigrations.migrate(queue)
         let applied = try queue.read { database in
             try CriaMigrations.migrator().appliedMigrations(database)
         }
-        XCTAssertEqual(applied.count, 19)
-        XCTAssertEqual(applied.last, "019_attachment_uploads")
+        XCTAssertEqual(applied.count, 20)
+        XCTAssertEqual(applied.last, "020_fts_title_description_only")
+    }
+
+    /// 020: the search index follows title and description edits only.
+    func testSearchTriggerFiresOnlyOnTitleOrDescription() throws {
+        let queue = try DatabaseQueue()
+        try CriaMigrations.migrate(queue)
+        let sql = try queue.read { database in
+            try String.fetchOne(database, sql: "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'tasks_fts_au'")
+        }
+        XCTAssertTrue(sql?.contains("AFTER UPDATE OF title, description ON tasks") ?? false)
     }
 
     func testFTSTableExistsAfterMigration() throws {

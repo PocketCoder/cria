@@ -40,6 +40,8 @@ const MIGRATION_16_SQL: &str = include_str!("../../src/db/migrations/016_project
 const MIGRATION_17_SQL: &str = include_str!("../../src/db/migrations/017_reset_task_watermark.sql");
 const MIGRATION_18_SQL: &str = include_str!("../../src/db/migrations/018_saved_filters.sql");
 const MIGRATION_19_SQL: &str = include_str!("../../src/db/migrations/019_attachment_uploads.sql");
+const MIGRATION_20_SQL: &str =
+    include_str!("../../src/db/migrations/020_fts_title_description_only.sql");
 
 fn migrations() -> Vec<Migration> {
     vec![
@@ -155,6 +157,12 @@ fn migrations() -> Vec<Migration> {
             version: 19,
             description: "local-first attachment uploads (pending rows)",
             sql: MIGRATION_19_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 20,
+            description: "search index updates only on title or description",
+            sql: MIGRATION_20_SQL,
             kind: MigrationKind::Up,
         },
     ]

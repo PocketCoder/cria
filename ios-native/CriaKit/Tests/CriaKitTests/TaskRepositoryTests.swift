@@ -72,6 +72,14 @@ final class TaskRepositoryTests: XCTestCase {
         XCTAssertEqual(task.projectLocalId, project)
     }
 
+    func testPulledIdentifierIsRead() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let json = taskJSON(id: 12, projectId: 1, title: "Milk").replacingOccurrences(of: "{", with: "{\"identifier\": \"HOME-7\", ")
+        let localId = try XCTUnwrap(try store.upsertTaskFromServer(try decodeFixture(TaskResponse.self, json), rawJSON: json))
+        XCTAssertEqual(try store.task(localId: localId)?.identifier, "HOME-7")
+    }
+
     func testConflictRecordedOnlyWhenServerDivergedFromLastSync() throws {
         let store = try makeStore()
         try seedProject(store)

@@ -134,6 +134,21 @@ final class BulkAndTodayTests: XCTestCase {
         XCTAssertEqual(Set(upcoming.flatMap(\.items).map(\.task.title)), ["today open", "today done"])
     }
 
+    /// Completed tasks due well before today are left in the database, not read and then thrown away.
+    func testDatedTasksSkipOldCompletedTasks() throws {
+        let store = try makeStore()
+        let project = try seedProject(store, title: "Home")
+        let old = try store.createTask(TaskInput(title: "old done", projectLocalId: project, dueDate: "2026-05-20T00:00:00Z"))
+        let recent = try store.createTask(TaskInput(title: "today done", projectLocalId: project, dueDate: "2026-05-27T09:00:00+02:00"))
+        _ = try store.createTask(TaskInput(title: "old open", projectLocalId: project, dueDate: "2026-05-01T00:00:00Z"))
+        _ = try store.updateTask(localId: old.localId, patch: TaskPatch(done: true))
+        _ = try store.updateTask(localId: recent.localId, patch: TaskPatch(done: true))
+
+        let read = try store.datedTasks(includeDone: true, doneDueFrom: now, calendar: calendar).map(\.task.title)
+        XCTAssertEqual(Set(read), ["old open", "today done"])
+        XCTAssertEqual(try store.datedTasks(includeDone: true).count, 3)
+    }
+
     func testAssigneeMap() throws {
         let store = try makeStore()
         let project = try seedProject(store)

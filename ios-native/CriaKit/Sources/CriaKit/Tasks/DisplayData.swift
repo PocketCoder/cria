@@ -27,30 +27,45 @@ extension CriaStore {
         let start = calendar.startOfDay(for: now)
         switch view {
         case .today:
-            let items = try datedTasks(includeDone: true).filter { item in
+            let items = try datedTasks(includeDone: true, doneDueFrom: start, calendar: calendar).filter { item in
                 guard item.task.done else { return true }
                 return item.task.dueDate.flatMap { DueDates.calendarDate($0, calendar: calendar) } == start
             }
             return SmartViewGrouping.today(items, now: now, calendar: calendar)
         case .upcoming:
-            return SmartViewGrouping.upcoming(try datedTasks(includeDone: true), now: now, calendar: calendar)
+            let items = try datedTasks(includeDone: true, doneDueFrom: start, calendar: calendar)
+            return SmartViewGrouping.upcoming(items, now: now, calendar: calendar)
         default:
             return try smartGroups(view, now: now, calendar: calendar)
         }
     }
 
     /// Non-deleted tasks with a due date across live projects, soonest first; open only unless `includeDone`.
-    func datedTasks(includeDone: Bool) throws -> [TaskListItem] {
-        let doneClause = includeDone ? "" : "AND t.done = 0"
+    /// `doneDueFrom` limits the completed ones to those due on or after that day, so Today and Upcoming no longer
+    /// read every task ever finished. The SQL bound is a day earlier, as text, because stored dates carry different
+    /// offsets; the callers filter to the exact day.
+    func datedTasks(includeDone: Bool, doneDueFrom day: Date? = nil, calendar: Calendar = .cria) throws -> [TaskListItem] {
+        var doneClause = includeDone ? "" : "AND t.done = 0"
+        var arguments: StatementArguments = []
+        if includeDone, let day, let earlier = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: day)) {
+            doneClause = "AND (t.done = 0 OR t.due_date >= ?)"
+            arguments = [Self.dayBound(earlier, calendar: calendar)]
+        }
         let tasks = try database.writer.read { connection in
             try Row.fetchAll(connection, sql: """
                 SELECT \(CriaStore.qualifiedTaskColumns) FROM tasks t
                   JOIN projects p ON p.local_id = t.project_local_id
                  WHERE t.deleted = 0 AND t.due_date IS NOT NULL AND p.deleted = 0 \(doneClause)
                  ORDER BY t.due_date ASC, t.priority DESC
-                """).map(TaskRecord.init(row:))
+                """, arguments: arguments).map(TaskRecord.init(row:))
         }
         return try attachRowData(tasks)
+    }
+
+    /// `yyyy-MM-dd` for a day, which sorts before every ISO timestamp on that day whatever its offset.
+    static func dayBound(_ day: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: day)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 1, parts.day ?? 1)
     }
 
     /// Open tasks with no due date, the best first (highest priority, then oldest), capped.

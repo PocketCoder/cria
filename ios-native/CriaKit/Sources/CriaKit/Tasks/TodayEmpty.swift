@@ -67,7 +67,7 @@ public enum TodaySuggestions {
 
 extension CriaStore {
     public func todayEmptyData(now: Date = Date(), calendar: Calendar = .cria) throws -> TodayEmptyData {
-        let dated = try datedTasks(includeDone: true)
+        let dated = try datedTasks(includeDone: true, doneDueFrom: now, calendar: calendar)
         let open = dated.filter { !$0.task.done }
         let today = calendar.startOfDay(for: now)
         var data = TodayEmptyData()
