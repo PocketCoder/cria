@@ -30,7 +30,10 @@ struct CriaMacApp: App {
             "Cria", systemImage: "checkmark.circle",
             isInserted: .distinct(get: { showMenuBar }, set: { showMenuBar = $0 })
         ) {
-            MacMenuBarContent(model: model).tint(Color(.primary))
+            MacMenuBarContent(model: model)
+                .tint(Color(.primary))
+                // The completion sound and its tone, as in the window.
+                .modifier(MacPreferenceEnvironment())
         }
         .menuBarExtraStyle(.window)
         Settings {

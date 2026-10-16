@@ -26,6 +26,9 @@ struct MacMenuBarContent: View {
 private struct MacTodayList: View {
     let services: AppServices
     @State private var live: LiveValue<[TaskListItem]>
+    @State private var failure: String?
+    @Environment(\.playsCompletionSound) private var playsSound
+    @Environment(\.preferences) private var preferences
 
     init(services: AppServices) {
         self.services = services
@@ -45,13 +48,26 @@ private struct MacTodayList: View {
             }
             ForEach(live.value, id: \.task.localId) { item in
                 Button {
-                    try? services.store.updateTask(localId: item.task.localId, patch: TaskPatch(done: true))
+                    complete(item.task)
                 } label: {
                     Label(item.task.title, systemImage: "circle").lineLimit(1)
                 }
                 .buttonStyle(.plain)
             }
+            if let failure {
+                Text(failure).font(Theme.caption).foregroundStyle(Color(.destructive))
+            }
         }
         .task { await live.run() }
+    }
+
+    private func complete(_ task: TaskRecord) {
+        do {
+            _ = try services.store.updateTask(localId: task.localId, patch: TaskPatch(done: true))
+            failure = nil
+            if playsSound { CompletionSound.play(preferences.custom.completionTone) }
+        } catch {
+            failure = "Could not complete \u{201C}\(task.title)\u{201D}: \(error)"
+        }
     }
 }

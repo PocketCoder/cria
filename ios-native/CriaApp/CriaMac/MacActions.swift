@@ -7,6 +7,17 @@ enum MacSelection: Hashable {
     case project(String)
     case savedFilter(Int)
     case label(String)
+
+    /// Settings > Customise > Home view. Browse has no Mac counterpart, so it opens Today.
+    init(home tab: AppTab) {
+        switch tab {
+        case .upcoming: self = .upcoming
+        case .inbox: self = .inbox
+        case .favorites: self = .favorites
+        case .search: self = .search
+        case .today, .browse: self = .today
+        }
+    }
 }
 
 /// What the window is showing and the things menus, keys and the palette ask it to do. One per window; menus reach
@@ -16,6 +27,8 @@ final class MacActions {
     var selection: MacSelection? = .today
     /// The task open in the panel, kept in its own object so only the views that show it follow it.
     let panel = OpenTaskState()
+    /// The sidebar's sheets and confirmations (project, label and filter actions).
+    let sidebar = MacSidebarActions()
     /// Made once, so handing them to the environment on every shell update is not a change that redraws each row.
     @ObservationIgnored private(set) var opener: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored private(set) var closer: @MainActor () -> Void = {}

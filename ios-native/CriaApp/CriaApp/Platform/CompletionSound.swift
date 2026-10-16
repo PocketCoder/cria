@@ -1,13 +1,34 @@
 import AudioToolbox
 import CriaKit
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// "Play sound when a task is completed" (Settings > Appearance). A system sound, so the silent switch mutes it.
 /// The tone is chosen in Settings > Appearance.
 enum CompletionSound {
     static func play(_ tone: CompletionTone = .tink) {
+        #if os(macOS)
+        NSSound(named: macSoundName(tone))?.play()
+        #else
         AudioServicesPlaySystemSound(soundID(tone))
+        #endif
     }
+
+    #if os(macOS)
+    /// The iOS alert sound IDs do not exist on the Mac: the nearest of its built-in sounds for each tone.
+    private static func macSoundName(_ tone: CompletionTone) -> NSSound.Name {
+        switch tone {
+        case .tink: return "Tink"
+        case .tweet: return "Pop"
+        case .bloom: return "Glass"
+        case .calypso: return "Ping"
+        case .fanfare: return "Hero"
+        case .spell: return "Purr"
+        }
+    }
+    #endif
 
     /// Built-in iOS alert sounds.
     private static func soundID(_ tone: CompletionTone) -> SystemSoundID {

@@ -13,6 +13,7 @@ struct MacShellView: View {
     @State private var undoCenter = UndoCenter()
     @State private var keys = KeySequencer()
     @State private var conflictPrompt = ConflictPrompt()
+    @Environment(\.preferences) private var preferences
 
     var body: some View {
         NavigationSplitView(columnVisibility: $actions.columns) {
@@ -47,6 +48,8 @@ struct MacShellView: View {
         // A conflicted change holds up the outbox until it is resolved, so the sheet opens as on iOS.
         .task { await conflictPrompt.run(store: services.store) }
         .task {
+            // The home view from Settings > Customise first, so a link that opened the window still wins.
+            actions.selection = MacSelection(home: preferences.custom.homeView)
             openPendingURL()
         }
         .onReceive(NotificationCenter.default.publisher(for: .criaQuickAdd)) { _ in actions.newTask() }
@@ -62,6 +65,7 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $actions.showingPalette) { CommandPalette(services: services, actions: actions) }
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
+        .modifier(MacSidebarSheets(services: services, sheets: actions.sidebar))
         .sheet(
             isPresented: $conflictPrompt.isPresented,
             onDismiss: { conflictPrompt.sheetDismissed() },

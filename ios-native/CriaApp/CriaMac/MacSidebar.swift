@@ -17,6 +17,9 @@ struct MacSidebar: View {
     let actions: MacActions
     @State private var live: LiveValue<MacSidebarData>
     @Environment(\.preferences) private var preferences
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
+
+    private var sheets: MacSidebarActions { actions.sidebar }
 
     init(services: AppServices, actions: MacActions) {
         self.services = services
@@ -41,14 +44,27 @@ struct MacSidebar: View {
             row(.inbox, .inbox, count: live.value.counts.inbox)
             row(.favorites, .favorites)
             row(.search, .search)
-            if !live.value.filters.isEmpty {
+            // Shown when empty too, so its + is where a first filter is made. A share link has no saved filters.
+            if !isLinkShare {
                 Section {
                     ForEach(live.value.filters, id: \.serverId) { filter in
                         Label(filter.title, systemImage: "line.3.horizontal.decrease")
                             .tag(MacSelection.savedFilter(filter.serverId))
+                            .contextMenu {
+                                Button("Edit…", systemImage: "pencil") { sheets.filterEditor = FilterEditorTarget(record: filter) }
+                                Button("Delete…", systemImage: "trash", role: .destructive) { sheets.pendingFilterDelete = filter }
+                            }
                     }
                 } header: {
-                    eyebrow("Filters")
+                    HStack {
+                        eyebrow("Filters")
+                        Spacer()
+                        Button { sheets.newFilter() } label: { Image(systemName: "plus") }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color(.mutedForeground))
+                            .help("New saved filter")
+                            .accessibilityLabel("New saved filter")
+                    }
                 }
             }
             if !live.value.labels.isEmpty {
@@ -62,13 +78,19 @@ struct MacSidebar: View {
                                 .foregroundStyle(Color(hexString: label.hexColor) ?? Color(.mutedForeground))
                         }
                         .tag(MacSelection.label(label.localId))
+                        .contextMenu {
+                            Button("Edit…", systemImage: "pencil") { sheets.labelEditor = LabelEditTarget(label: label) }
+                            Button("Delete…", systemImage: "trash", role: .destructive) {
+                                sheets.askToDelete(label, services: services)
+                            }
+                        }
                     }
                 } header: {
                     eyebrow("Labels")
                 }
             }
             Section {
-                MacProjectBranch(parent: nil, children: live.value.children)
+                MacProjectBranch(parent: nil, children: live.value.children, services: services, sheets: sheets)
             } header: {
                 eyebrow("Projects")
             }
@@ -113,23 +135,28 @@ struct MacSidebar: View {
     }
 }
 
-/// One level of the project tree; parents with sub-projects expand with a disclosure triangle.
+/// One level of the project tree; parents with sub-projects expand with a disclosure triangle. Rows drag to reorder
+/// among their siblings, and right-click for Browse's project actions.
 struct MacProjectBranch: View {
     let parent: String?
     let children: [String?: [ProjectRecord]]
+    let services: AppServices
+    let sheets: MacSidebarActions
 
     var body: some View {
-        ForEach(children[parent] ?? [], id: \.localId) { project in
+        let siblings = children[parent] ?? []
+        ForEach(siblings, id: \.localId) { project in
             if children[project.localId]?.isEmpty ?? true {
                 label(project)
             } else {
                 DisclosureGroup {
-                    MacProjectBranch(parent: project.localId, children: children)
+                    MacProjectBranch(parent: project.localId, children: children, services: services, sheets: sheets)
                 } label: {
                     label(project)
                 }
             }
         }
+        .onMove { source, destination in sheets.move(siblings, from: source, to: destination, services: services) }
     }
 
     private func label(_ project: ProjectRecord) -> some View {
@@ -141,5 +168,7 @@ struct MacProjectBranch: View {
                 .foregroundStyle(Color(hexString: project.hexColor) ?? Color(.mutedForeground))
         }
         .tag(MacSelection.project(project.localId))
+        // On the row itself, not the disclosure group, so a sub-project's menu is its own.
+        .contextMenu { MacProjectMenu(project: project, services: services, sheets: sheets) }
     }
 }

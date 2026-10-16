@@ -15,6 +15,9 @@ struct MacCommands: Commands {
             Button("New Project") { actions?.creatingProject = true }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(actions == nil)
+            Button("New Saved Filter…") { actions?.sidebar.newFilter() }
+                .keyboardShortcut("n", modifiers: [.command, .option])
+                .disabled(actions == nil)
         }
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") { actions?.toggleSidebar() }
