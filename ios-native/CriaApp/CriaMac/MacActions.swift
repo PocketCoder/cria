@@ -13,13 +13,27 @@ enum MacSelection: Hashable {
 @MainActor @Observable
 final class MacActions {
     var selection: MacSelection? = .today
-    /// The task shown in the detail column.
-    var openTaskId: String?
+    /// The task open in the panel, kept in its own object so only the views that show it follow it.
+    let panel = OpenTaskState()
+    /// Made once, so handing them to the environment on every shell update is not a change that redraws each row.
+    @ObservationIgnored private(set) var opener: @MainActor (String) -> Void = { _ in }
+    @ObservationIgnored private(set) var closer: @MainActor () -> Void = {}
     var addRequest: QuickAddRequest?
     var creatingProject = false
     var showingPalette = false
     var showingShortcuts = false
     var columns = NavigationSplitViewVisibility.all
+
+    init() {
+        opener = { [weak self] id in self?.openTask(id) }
+        closer = { [weak self] in self?.openTaskId = nil }
+    }
+
+    /// The task shown in the panel.
+    var openTaskId: String? {
+        get { panel.id }
+        set { panel.id = newValue }
+    }
 
     func go(_ destination: MacSelection) {
         selection = destination

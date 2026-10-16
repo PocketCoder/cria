@@ -2,7 +2,8 @@ import CriaKit
 import SwiftUI
 
 struct MacSidebarData: Equatable, Sendable {
-    var projects: [ProjectRecord] = []
+    /// Visible projects by parent (nil = roots), built once per read rather than twice per project per render.
+    var children: [String?: [ProjectRecord]] = [:]
     var filters: [SavedFilterRecord] = []
     var counts = TabCounts()
 }
@@ -22,7 +23,7 @@ struct MacSidebar: View {
         _live = State(initialValue: LiveValue(initial: MacSidebarData()) {
             observeStore(store, kinds: [.projects, .tasks, .savedFilters]) { (reading: CriaStore) throws -> MacSidebarData in
                 MacSidebarData(
-                    projects: ProjectTree.visible(try reading.projects()),
+                    children: ProjectTree.childIndex(ProjectTree.visible(try reading.projects())),
                     filters: try reading.savedFilters(),
                     counts: try TabCounts.read(reading, inboxLocalId: services.rememberedDefaultProjectLocalId())
                 )
@@ -38,7 +39,7 @@ struct MacSidebar: View {
             row("Favourites", "star", .favorites)
             row("Search", "magnifyingglass", .search)
             Section("Projects") {
-                MacProjectBranch(parent: nil, all: live.value.projects)
+                MacProjectBranch(parent: nil, children: live.value.children)
             }
             if !live.value.filters.isEmpty {
                 Section("Filters") {
@@ -72,15 +73,15 @@ struct MacSidebar: View {
 /// One level of the project tree; parents with sub-projects expand with a disclosure triangle.
 struct MacProjectBranch: View {
     let parent: String?
-    let all: [ProjectRecord]
+    let children: [String?: [ProjectRecord]]
 
     var body: some View {
-        ForEach(ProjectTree.children(of: parent, in: all), id: \.localId) { project in
-            if ProjectTree.children(of: project.localId, in: all).isEmpty {
+        ForEach(children[parent] ?? [], id: \.localId) { project in
+            if children[project.localId]?.isEmpty ?? true {
                 label(project)
             } else {
                 DisclosureGroup {
-                    MacProjectBranch(parent: project.localId, all: all)
+                    MacProjectBranch(parent: project.localId, children: children)
                 } label: {
                     label(project)
                 }

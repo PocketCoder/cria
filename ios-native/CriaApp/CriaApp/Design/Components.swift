@@ -34,16 +34,35 @@ struct CriaChip: View {
     private var textColour: Color {
         guard !filled else { return Color(.primaryForeground) }
         let needed = contrast == .increased ? 7.0 : 4.5
-        var environment = EnvironmentValues()
-        environment.colorScheme = colorScheme
-        let cell = Color(.cell).resolve(in: environment)
-        let ink = tint.resolve(in: environment)
-        return ChipContrast.ratio(ink, over: cell) >= needed ? tint : Color(.foreground)
+        return ChipContrast.readable(tint, scheme: colorScheme, needed: needed) ? tint : Color(.foreground)
     }
 }
 
 /// WCAG contrast for chip text drawn in a colour over a 13% wash of that colour on a cell.
 enum ChipContrast {
+    private struct ReadableKey: Hashable {
+        let tint: Color
+        let isDark: Bool
+        let needed: Double
+    }
+
+    /// Answers per tint and appearance, so chips do not resolve two dynamic colours and redo the luminance maths on
+    /// every row pass. The set of tints is small (tokens and label colours); the bound only guards against a leak.
+    @MainActor private static var readableCache: [ReadableKey: Bool] = [:]
+
+    /// Whether text in `tint` reaches `needed` contrast over its own wash on a cell.
+    @MainActor
+    static func readable(_ tint: Color, scheme: ColorScheme, needed: Double) -> Bool {
+        let key = ReadableKey(tint: tint, isDark: scheme == .dark, needed: needed)
+        if let known = readableCache[key] { return known }
+        var environment = EnvironmentValues()
+        environment.colorScheme = scheme
+        let result = ratio(tint.resolve(in: environment), over: Color(.cell).resolve(in: environment)) >= needed
+        if readableCache.count > 512 { readableCache.removeAll() }
+        readableCache[key] = result
+        return result
+    }
+
     static func ratio(_ tint: Color.Resolved, over base: Color.Resolved) -> Double {
         let wash = 0.13
         let background = [

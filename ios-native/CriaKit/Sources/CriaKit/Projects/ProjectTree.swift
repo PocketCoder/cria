@@ -20,7 +20,7 @@ public enum ProjectTree {
 
     /// Children grouped by effective parent (nil = roots), built once so the tree walk is linear. A project whose
     /// parent is not in the list counts as a root, so nothing is hidden. Order follows the input.
-    private static func childIndex(_ projects: [ProjectRecord]) -> [String?: [ProjectRecord]] {
+    public static func childIndex(_ projects: [ProjectRecord]) -> [String?: [ProjectRecord]] {
         let ids = Set(projects.map(\.localId))
         var index: [String?: [ProjectRecord]] = [:]
         for project in projects {

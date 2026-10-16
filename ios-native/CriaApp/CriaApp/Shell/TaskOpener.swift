@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 /// What the Mac shell hands to the shared screens. All of it is inert on iOS: nothing sets the opener or posts the
@@ -14,15 +15,22 @@ extension EnvironmentValues {
     }
 }
 
-private struct SelectedTaskKey: EnvironmentKey {
-    static var defaultValue: String? { nil }
+/// The task open in the Mac's task panel. An object rather than a plain id in the environment: only the small highlight
+/// behind each row reads `id`, so opening a task redraws those highlights and not every row in the list.
+@MainActor @Observable
+final class OpenTaskState {
+    var id: String?
+}
+
+private struct OpenTaskStateKey: EnvironmentKey {
+    static var defaultValue: OpenTaskState? { nil }
 }
 
 extension EnvironmentValues {
-    /// The task open in the Mac's detail column, so its row can show as selected.
-    var selectedTaskId: String? {
-        get { self[SelectedTaskKey.self] }
-        set { self[SelectedTaskKey.self] = newValue }
+    /// Set by the Mac shell, so the open task's row can show as selected.
+    var openTaskState: OpenTaskState? {
+        get { self[OpenTaskStateKey.self] }
+        set { self[OpenTaskStateKey.self] = newValue }
     }
 }
 

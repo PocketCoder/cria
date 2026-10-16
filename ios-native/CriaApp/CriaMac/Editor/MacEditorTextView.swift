@@ -209,12 +209,16 @@ final class MacEditorTextView: NSTextView, EditorSurface {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        guard let layout = layoutManager, let container = textContainer else { return }
         let paragraphs = EditorParagraphs.all(in: storage)
+        // Numbers count from the top, so every paragraph is read; only those under the dirty rect are measured and drawn.
         let numbers = EditorRules.listNumbers(for: paragraphs.map { Block(kind: $0.kind, depth: $0.depth, context: $0.context) })
-        for (index, paragraph) in paragraphs.enumerated() {
-            let line = firstLineRect(of: paragraph)
-            guard line.maxY >= dirtyRect.minY, line.minY <= dirtyRect.maxY else { continue }
-            drawMarker(paragraph, number: numbers[index], line: line)
+        let inContainer = dirtyRect.offsetBy(dx: -textContainerOrigin.x, dy: -textContainerOrigin.y)
+        let glyphs = layout.glyphRange(forBoundingRect: inContainer, in: container)
+        let visible = layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let reach = NSRange(location: visible.location, length: visible.length + 1)
+        for (index, paragraph) in paragraphs.enumerated() where NSIntersectionRange(paragraph.range, reach).length > 0 {
+            drawMarker(paragraph, number: numbers[index], line: firstLineRect(of: paragraph))
         }
     }
 
@@ -229,9 +233,7 @@ final class MacEditorTextView: NSTextView, EditorSurface {
         case .ordered:
             drawText("\(number ?? 1).", at: CGPoint(x: originX + 2, y: line.minY))
         case .task(let checked):
-            let name = checked ? "checkmark.square.fill" : "square"
-            let configuration = NSImage.SymbolConfiguration(paletteColors: [.controlAccentColor])
-            let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration)
+            let image = checked ? Self.checkedBox : Self.emptyBox
             image?.draw(in: CGRect(x: originX + 2, y: line.minY + 2, width: 16, height: 16))
         case .rule:
             NSColor.separatorColor.setStroke()
@@ -254,6 +256,15 @@ final class MacEditorTextView: NSTextView, EditorSurface {
             let originX = textContainerOrigin.x + 2 + EditorMetrics.quoteIndent * CGFloat(level)
             NSBezierPath(rect: CGRect(x: originX, y: box.minY, width: 3, height: box.height)).fill()
         }
+    }
+
+    /// Made once rather than on every draw.
+    private static let checkedBox = checkbox("checkmark.square.fill")
+    private static let emptyBox = checkbox("square")
+
+    private static func checkbox(_ name: String) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(paletteColors: [.controlAccentColor])
+        return NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration)
     }
 
     private func drawText(_ text: String, at point: CGPoint) {

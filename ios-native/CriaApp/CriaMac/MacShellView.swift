@@ -2,8 +2,8 @@ import CriaKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Three columns: sidebar, the shared screens for the selection, and the open task. Task rows select into the detail
-/// column (through `taskOpener`) instead of pushing.
+/// The sidebar and the shared screens for the selection, with the open task in a panel over them. Task rows open into
+/// the panel (through `taskOpener`) instead of pushing.
 struct MacShellView: View {
     let services: AppServices
     let onSignOut: (_ wipeLocalData: Bool) -> Void
@@ -17,14 +17,14 @@ struct MacShellView: View {
         NavigationSplitView(columnVisibility: $actions.columns) {
             MacSidebar(services: services, actions: actions)
         } detail: {
-            content
+            MacContent(services: services, actions: actions, navigation: navigation)
         }
         // A click anywhere outside the panel closes it. Simultaneous, so a row or the sidebar still gets its click;
         // when that click opened another task the id has changed by the next turn and the panel stays.
         .simultaneousGesture(TapGesture().onEnded { closePanelUnlessReplaced() })
         // The open task floats over the list on a glass panel, as in the old app, instead of being a split column: no
         // column to re-lay out when it opens, and the list keeps its full width underneath.
-        .overlay(alignment: .trailing) { taskPanel }
+        .overlay(alignment: .trailing) { MacTaskPanel(services: services, actions: actions) }
         .animation(.snappy(duration: 0.28), value: actions.openTaskId != nil)
         .onExitCommand { actions.openTaskId = nil }
         .focusable()
@@ -36,7 +36,7 @@ struct MacShellView: View {
             navigation.state.setPath([], for: .browse)
             actions.openTaskId = nil
         }
-        .environment(\.taskCloser) { actions.openTaskId = nil }
+        .environment(\.taskCloser, actions.closer)
         .environment(navigation)
         .environment(undoCenter)
         .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
@@ -56,22 +56,6 @@ struct MacShellView: View {
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
     }
 
-    @ViewBuilder private var taskPanel: some View {
-        if let id = actions.openTaskId {
-            NavigationStack {
-                TaskDetailView(services: services, taskLocalId: id).id(id)
-                    .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
-            }
-            .frame(width: 400)
-            .frame(maxHeight: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.18)))
-            .shadow(color: .black.opacity(0.22), radius: 22, x: -4, y: 8)
-            .padding(10)
-            .transition(.move(edge: .trailing).combined(with: .opacity))
-        }
-    }
-
     private func closePanelUnlessReplaced() {
         guard let id = actions.openTaskId else { return }
         DispatchQueue.main.async {
@@ -85,32 +69,27 @@ struct MacShellView: View {
         actions.open(url, services: services)
     }
 
-    /// Files dropped on a task's detail are queued as attachments, as the iOS Add file does.
-    private func attach(_ urls: [URL], to taskLocalId: String) -> Bool {
-        var queued = false
-        for url in urls where url.isFileURL {
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-            if (try? services.attachFile(taskLocalId: taskLocalId, fileName: url.lastPathComponent, mime: mime, data: data)) != nil {
-                queued = true
-            }
-        }
-        return queued
-    }
-
     /// New tasks go to the project on screen.
     private var contextProject: String? {
         if case .project(let id)? = actions.selection { return id }
         return nil
     }
+}
 
-    private var content: some View {
+/// The list for the sidebar selection. Its own view reading only the selection, so opening or closing a task (which
+/// updates the shell) does not rebuild the screen and every row in it.
+private struct MacContent: View {
+    let services: AppServices
+    let actions: MacActions
+    let navigation: NavigationModel
+
+    var body: some View {
         NavigationStack(path: navigation.pathBinding(for: .browse)) {
             root
                 .navigationDestination(for: Route.self) { MacRouteDestination(route: $0, services: services) }
         }
-        .environment(\.taskOpener) { actions.openTask($0) }
-        .environment(\.selectedTaskId, actions.openTaskId)
+        .environment(\.taskOpener, actions.opener)
+        .environment(\.openTaskState, actions.panel)
         .id(actions.selection)
     }
 
@@ -127,6 +106,42 @@ struct MacShellView: View {
             ProjectScreen(services: services, projectLocalId: localId, title: title)
         case .savedFilter(let serverId): SavedFilterScreen(services: services, serverId: serverId)
         }
+    }
+}
+
+/// The open task, floating over the list on a glass panel. Its own view, so the detail is built when the open task
+/// changes and not on every shell update.
+private struct MacTaskPanel: View {
+    let services: AppServices
+    let actions: MacActions
+
+    var body: some View {
+        if let id = actions.openTaskId {
+            NavigationStack {
+                TaskDetailView(services: services, taskLocalId: id).id(id)
+                    .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
+            }
+            .frame(width: 400)
+            .frame(maxHeight: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.18)))
+            .shadow(color: .black.opacity(0.22), radius: 22, x: -4, y: 8)
+            .padding(10)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+
+    /// Files dropped on a task's detail are queued as attachments, as the iOS Add file does.
+    private func attach(_ urls: [URL], to taskLocalId: String) -> Bool {
+        var queued = false
+        for url in urls where url.isFileURL {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+            if (try? services.attachFile(taskLocalId: taskLocalId, fileName: url.lastPathComponent, mime: mime, data: data)) != nil {
+                queued = true
+            }
+        }
+        return queued
     }
 }
 

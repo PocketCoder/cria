@@ -58,10 +58,11 @@ struct SmartViewScreen: View {
         return DisplayEngine.refined(raw, config: display.config, showCompleted: showCompleted, context: context)
     }
 
-    private var groups: [DisplaySection] {
-        guard view == .upcoming else { return allDisplayed }
+    /// The sections shown: Upcoming starts at the selected day.
+    private func visible(_ displayed: [DisplaySection]) -> [DisplaySection] {
+        guard view == .upcoming else { return displayed }
         let from = Self.dayKey(selectedDay)
-        return allDisplayed.filter { $0.key >= from }
+        return displayed.filter { $0.key >= from }
     }
 
     private static func dayKey(_ date: Date) -> String {
@@ -83,15 +84,17 @@ struct SmartViewScreen: View {
     private var showsTodayEmpty: Bool { view == .today && live.value.loaded && openCount == 0 }
 
     var body: some View {
+        // Filtering, sorting and regrouping run once per pass, not once per place that needs the result.
+        let displayed = allDisplayed
         List {
-            header
+            header(displayed)
             if showsTodayEmpty { TodayEmptyView(services: services) }
             // Every group shown is on or after the selected day, so an empty selected day comes first.
-            nothingPlanned
-            ForEach(groups) { group in
+            nothingPlanned(displayed)
+            ForEach(visible(displayed)) { group in
                 groupSection(group)
             }
-            if hasAnyTasks && allDisplayed.isEmpty && display.hasFilters {
+            if hasAnyTasks && displayed.isEmpty && display.hasFilters {
                 Section {
                     DisplayNoMatchesRow(
                         hasFilters: true, onReset: { display.update { $0.filters = DisplayFilters() } }, onShowCompleted: {}
@@ -163,8 +166,8 @@ struct SmartViewScreen: View {
         return count == 1 ? "Move 1 overdue task to today?" : "Move \(count) overdue tasks to today?"
     }
 
-    @ViewBuilder private var nothingPlanned: some View {
-        if view == .upcoming && !allDisplayed.contains(where: { $0.key == Self.dayKey(selectedDay) }) {
+    @ViewBuilder private func nothingPlanned(_ displayed: [DisplaySection]) -> some View {
+        if view == .upcoming && !displayed.contains(where: { $0.key == Self.dayKey(selectedDay) }) {
             Section {
                 Button { addPresented = true } label: {
                     Label("Nothing planned", systemImage: "plus").foregroundStyle(Color(.mutedForeground))
@@ -176,10 +179,10 @@ struct SmartViewScreen: View {
         }
     }
 
-    @ViewBuilder private var header: some View {
+    @ViewBuilder private func header(_ displayed: [DisplaySection]) -> some View {
         if view == .upcoming {
             Section {
-                WeekStrip(selected: $selectedDay, busyDays: Set(allDisplayed.map(\.key)))
+                WeekStrip(selected: $selectedDay, busyDays: Set(displayed.map(\.key)))
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
             } header: {
                 subtitleText
@@ -252,7 +255,8 @@ struct SmartViewScreen: View {
 }
 
 /// A smart view's date groups, plus each shown subtask's parent title for the caption (these lists do not nest).
-struct SmartViewData: Sendable {
+/// Equatable, so a re-read that found nothing new does not re-render the screen (`LiveValue`).
+struct SmartViewData: Equatable, Sendable {
     var groups: [TaskGroup] = []
     var parentTitles: [String: String] = [:]
     var nesting = SmartNestingData()

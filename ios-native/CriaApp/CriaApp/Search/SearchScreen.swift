@@ -59,7 +59,7 @@ struct SearchScreen: View {
         // A swipe on a result (done, delete) changes the store, so re-run the query rather than keep a stale snapshot.
         .task {
             for await kind in services.store.bus.subscribe() where [.tasks, .projects, .labels].contains(kind) {
-                search()
+                await search()
             }
         }
     }
@@ -99,12 +99,21 @@ struct SearchScreen: View {
     private func runSearch() async {
         try? await Task.sleep(for: .milliseconds(200))
         if Task.isCancelled { return }
-        search()
+        await search()
     }
 
-    private func search() {
-        results = (try? services.store.search(text)) ?? SearchResults()
-        parentTitles = (try? TaskListNesting.parentTitles(services.store, for: results.tasks)) ?? [:]
+    /// Reads off the main thread (the index, every result's row data and the parent lookups), then shows the results
+    /// only if the text is still what was searched for.
+    private func search() async {
+        let store = services.store
+        let query = text
+        let found = await Task.detached(priority: .userInitiated) { () -> (SearchResults, [String: String]) in
+            let results = (try? store.search(query)) ?? SearchResults()
+            return (results, (try? TaskListNesting.parentTitles(store, for: results.tasks)) ?? [:])
+        }.value
+        guard !Task.isCancelled, query == text else { return }
+        results = found.0
+        parentTitles = found.1
     }
 }
 

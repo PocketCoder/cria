@@ -19,8 +19,6 @@ struct TaskRowLink: View {
     @Environment(\.preferences) private var preferences
     /// Set by the Mac shell: a tap selects the task for the detail column instead of pushing it.
     @Environment(\.taskOpener) private var openTask
-    @Environment(\.selectedTaskId) private var selectedTaskId
-    @State private var hovering = false
     @State private var failure: String?
     @State private var scheduling = false
     /// Counts completions made from a swipe or the menu; the ring plays its own haptic for a tap.
@@ -100,13 +98,7 @@ struct TaskRowLink: View {
                 TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(selectedTaskId == item.task.localId
-                        ? Color.accentColor.opacity(0.16) : (hovering ? Color.primary.opacity(0.06) : Color.clear))
-            )
-            .onHover { hovering = $0 }
+            .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
         } else {
             NavigationLink(value: Route.task(item.task.localId)) {
                 TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
@@ -170,6 +162,26 @@ struct TaskRowLink: View {
             Button("Delete", systemImage: "trash") { delete() }
                 .tint(Color(.destructive))
         }
+    }
+}
+
+/// The Mac row's hover and open-task highlight. A modifier with its own state, so hovering a row or opening a task
+/// redraws this background, not the row it sits behind.
+private struct PanelRowHighlight: ViewModifier {
+    let taskLocalId: String
+    @Environment(\.openTaskState) private var openTask
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 6)
+            .background(RoundedRectangle(cornerRadius: 6).fill(fill))
+            .onHover { hovering = $0 }
+    }
+
+    private var fill: Color {
+        if openTask?.id == taskLocalId { return Color.accentColor.opacity(0.16) }
+        return hovering ? Color.primary.opacity(0.06) : .clear
     }
 }
 
