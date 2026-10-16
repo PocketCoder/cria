@@ -67,6 +67,7 @@ struct QuickAddReminderMenu: View {
         } label: {
             CriaChip(text: chipText, systemImage: reminders.isEmpty ? "bell" : "bell.fill", tint: Color(.coral500))
         }
+        .macChipMenu()
         .accessibilityLabel("Reminders")
     }
 

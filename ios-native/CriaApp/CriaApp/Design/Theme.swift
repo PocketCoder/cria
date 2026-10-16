@@ -80,11 +80,14 @@ enum Theme {
     static let checkGap: CGFloat = 8
     /// A task row's title inset from the top of the row.
     static let rowTitleTop: CGFloat = 7
+    /// Round icon buttons (quick add's send, Ramble and several-tasks): pointer-sized on the Mac.
+    static let roundButton: CGFloat = 30
     #else
     static let checkSize: CGFloat = 24
     static let checkTarget: CGFloat = 44
     static let checkGap: CGFloat = 0
     static let rowTitleTop: CGFloat = 10
+    static let roundButton: CGFloat = 40
     #endif
 
     /// Onest Bold for large titles; inline titles stay SF Pro semibold. Does nothing until `Onest-Bold.ttf` is

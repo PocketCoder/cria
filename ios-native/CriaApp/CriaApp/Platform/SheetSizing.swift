@@ -25,6 +25,20 @@ extension View {
         #endif
     }
 
+    /// A menu whose label is a chip: on the Mac a `Menu` is otherwise a bordered pop-up button with its own font and
+    /// chevron, beside chips that are plain buttons. A no-op on iOS, where the label is drawn as given.
+    @ViewBuilder
+    func macChipMenu() -> some View {
+        #if os(macOS)
+        menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        #else
+        self
+        #endif
+    }
+
     /// A picker's option rows read as one group on the Mac, as the desktop app's menus do. A no-op on iOS.
     @ViewBuilder
     func macRowSeparatorHidden() -> some View {

@@ -104,7 +104,7 @@ extension QuickAddSheet {
         Button { multiple.toggle() } label: {
             Image(systemName: "list.bullet")
                 .font(.body.weight(.semibold))
-                .frame(width: 40, height: 40)
+                .frame(width: Theme.roundButton, height: Theme.roundButton)
                 .foregroundStyle(multiple ? Color(.primaryForeground) : Color(.primary))
                 .background(multiple ? Color(.primary) : Color(.primarySoft), in: Circle())
         }

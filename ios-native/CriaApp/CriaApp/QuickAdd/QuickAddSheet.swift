@@ -88,6 +88,11 @@ struct QuickAddSheet: View {
         .padding(.horizontal, 16)
         .padding(.top, 20)
         .padding(.bottom, 10)
+        #if os(macOS)
+        // Bare fields, as in the desktop app: no grey box per field and no focus ring round the one being typed in.
+        .textFieldStyle(.plain)
+        .focusEffectDisabled()
+        #endif
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fitContent($0) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .presentationDragIndicator(.visible)
@@ -216,6 +221,7 @@ extension QuickAddSheet {
                 .font(Theme.rowSubtitle.weight(.medium))
                 .foregroundStyle(Color(.foreground))
             }
+            .macChipMenu()
             .accessibilityLabel("Project")
             Spacer(minLength: 8)
             multipleToggle
@@ -223,7 +229,7 @@ extension QuickAddSheet {
                 Button { dismiss(); onRamble() } label: {
                     Image(systemName: "waveform")
                         .font(.body.weight(.semibold))
-                        .frame(width: 40, height: 40)
+                        .frame(width: Theme.roundButton, height: Theme.roundButton)
                         .foregroundStyle(Color(.primary))
                         .background(Color(.primarySoft), in: Circle())
                 }
@@ -234,7 +240,7 @@ extension QuickAddSheet {
             Button(action: sendPressed) {
                 Image(systemName: "arrow.up")
                     .font(.body.weight(.bold))
-                    .frame(width: 40, height: 40)
+                    .frame(width: Theme.roundButton, height: Theme.roundButton)
                     .foregroundStyle(Color(.primaryForeground))
                     .background(canSend ? Color(.primary) : Color(.mutedForeground).opacity(0.4), in: Circle())
             }
@@ -284,6 +290,7 @@ extension QuickAddSheet {
                     systemImage: "flag", tint: Color(.marigold700)
                 )
             }
+            .macChipMenu()
             .accessibilityLabel("Priority")
         case .reminders:
             QuickAddReminderMenu(
@@ -320,6 +327,7 @@ extension QuickAddSheet {
         } label: {
             CriaChip(text: "•••", tint: Color(.mutedForeground))
         }
+        .macChipMenu()
         .accessibilityLabel("More options")
     }
 
