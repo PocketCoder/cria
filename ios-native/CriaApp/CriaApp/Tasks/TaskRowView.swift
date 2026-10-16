@@ -15,8 +15,18 @@ struct TaskRowView: View {
 
     private var task: TaskRecord { item.task }
 
+    /// The Mac's smaller ring is centred on the title's line, whatever the text size. iOS keeps the top alignment its
+    /// 44pt target and the title's top inset were laid out for.
+    private static var ringAlignment: VerticalAlignment {
+        #if os(macOS)
+        .rowTitleMid
+        #else
+        .top
+        #endif
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
+        HStack(alignment: Self.ringAlignment, spacing: Theme.checkGap) {
             PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
@@ -29,7 +39,8 @@ struct TaskRowView: View {
                         Image(systemName: "star.fill").font(.footnote).foregroundStyle(Color(.warning))
                     }
                 }
-                .padding(.top, 10)
+                .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
+                .padding(.top, Theme.rowTitleTop)
                 if let parent = tree.parentTitle {
                     Text("Subtask of ‘\(parent)’")
                         .font(Theme.caption)
@@ -104,7 +115,7 @@ struct TaskRowView: View {
                     Rectangle()
                         .fill(Color(.mutedForeground).opacity(0.25))
                         .frame(width: 1.5)
-                        .offset(x: CGFloat(level) * TaskListNesting.indent + 21)
+                        .offset(x: CGFloat(level) * TaskListNesting.indent + Theme.checkTarget / 2 - 1)
                 }
             }
             .accessibilityHidden(true)
@@ -163,4 +174,13 @@ struct TaskRowView: View {
                 .accessibilityLabel("\(progress.done) of \(progress.total) subtasks done")
         }
     }
+}
+
+extension VerticalAlignment {
+    private enum RowTitleMid: AlignmentID {
+        static func defaultValue(in context: ViewDimensions) -> CGFloat { context[VerticalAlignment.center] }
+    }
+
+    /// The middle of a task row's title line, which the Mac's ring is centred on.
+    static let rowTitleMid = VerticalAlignment(RowTitleMid.self)
 }

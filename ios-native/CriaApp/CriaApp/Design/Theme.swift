@@ -76,9 +76,15 @@ enum Theme {
     /// The web's 18px check in a pointer-sized target; touch keeps the larger ring and the 44pt target.
     static let checkSize: CGFloat = 18
     static let checkTarget: CGFloat = 24
+    /// Space between a task row's ring and its title; the 44pt touch target already leaves a margin on iOS.
+    static let checkGap: CGFloat = 8
+    /// A task row's title inset from the top of the row.
+    static let rowTitleTop: CGFloat = 7
     #else
     static let checkSize: CGFloat = 24
     static let checkTarget: CGFloat = 44
+    static let checkGap: CGFloat = 0
+    static let rowTitleTop: CGFloat = 10
     #endif
 
     /// Onest Bold for large titles; inline titles stay SF Pro semibold. Does nothing until `Onest-Bold.ttf` is
