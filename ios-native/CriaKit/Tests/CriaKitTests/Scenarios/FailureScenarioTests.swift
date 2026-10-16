@@ -214,7 +214,9 @@ final class PermanentFailureScenarioTests: XCTestCase {
         try rig.create("Mine")
         let landed = await waitUntil { rig.server.applied == ["create Mine"] }
         XCTAssertTrue(landed)
-        XCTAssertEqual(try rig.store.deadLetters().count, 1)
+        // Fails now and then on CI with two; name them so the log shows which op and why.
+        let dead = try rig.store.deadLetters()
+        XCTAssertEqual(dead.count, 1, dead.map { "\($0.op) \($0.entityLocalId): \($0.lastError ?? "")" }.joined(separator: " | "))
         await rig.coordinator.stop()
     }
 
