@@ -8,7 +8,7 @@ import SwiftUI
 /// `g` and the dots wait one second for the rest of their sequence.
 @MainActor
 final class KeySequencer {
-    private enum Pending: Equatable { case go, dots(Int) }
+    private enum Pending: Equatable { case goTo, dots(Int) }
 
     private var pending: Pending?
     private var timeout: Task<Void, Never>?
@@ -59,7 +59,7 @@ final class KeySequencer {
             if key == "." { return dot(count + 1, actions) }
             fireDots(count, actions)
         }
-        if pending == .go {
+        if pending == .goTo {
             stopWaiting()
             return second(key, actions)
         }
@@ -69,7 +69,7 @@ final class KeySequencer {
     private func first(_ key: String, _ actions: MacActions) -> Bool {
         switch key {
         case "g":
-            wait(for: .go)
+            wait(for: .goTo)
             return true
         case "j": return actions.moveFocus(1)
         case "k": return actions.moveFocus(-1)
