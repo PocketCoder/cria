@@ -26,7 +26,7 @@ struct DateSheet: View {
     @State private var repeatChoice: RepeatValue?
     @State private var didLoad = false
 
-    var body: some View { sheetContent.macSheetFrame() }
+    var body: some View { sheetContent.macSheetFrame(width: 420, height: 640) }
 
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
@@ -36,17 +36,16 @@ struct DateSheet: View {
                     ForEach(QuickAddDatePreset.allCases, id: \.self) { presetRow($0) }
                     if iso != nil {
                         Button(role: .destructive) { finish("") } label: {
-                            Label("No date", systemImage: "calendar.badge.minus")
+                            HStack {
+                                Label("No date", systemImage: "calendar.badge.minus")
+                                Spacer()
+                            }
                         }
                     }
                 }
+                .macRowSeparatorHidden()
                 Section {
-                    DatePicker(
-                        "Day", selection: Binding(get: { day ?? Calendar.cria.startOfDay(for: Date()) }, set: { day = $0 }),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
+                    dayPicker
                 }
                 Section {
                     timeRows
@@ -67,6 +66,19 @@ struct DateSheet: View {
         }
         .presentationDetents([.large])
         .onAppear(perform: load)
+    }
+
+    /// The system's graphical calendar on iOS; on the Mac, where that one is a clipped mini calendar, the Cria grid.
+    @ViewBuilder private var dayPicker: some View {
+        let selection = Binding(get: { day ?? Calendar.cria.startOfDay(for: Date()) }, set: { day = $0 })
+        #if os(macOS)
+        CriaCalendar(selection: selection)
+            .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+        #else
+        DatePicker("Day", selection: selection, displayedComponents: .date)
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+        #endif
     }
 
     @ViewBuilder private var typeSection: some View {

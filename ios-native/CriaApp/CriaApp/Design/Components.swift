@@ -289,13 +289,32 @@ struct CriaSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// A button with no box of its own, for rows in a grouped form: the Mac draws a grey rounded box behind each one,
-/// inside the row's own card. The whole row stays tappable.
+/// A button with no box of its own, for rows in lists and forms: the Mac draws a grey rounded box behind each one,
+/// inside the row's own card. Text is primary (destructive for a destructive role) unless the label sets its own
+/// colour, a pointer over it shows the web rows' 5% wash, and the whole row stays clickable.
 struct FormRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        FormRowButtonBody(configuration: configuration)
+    }
+}
+
+private struct FormRowButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+
+    var body: some View {
         configuration.label
+            .foregroundStyle(configuration.role == .destructive ? Color(.destructive) : Color(.primary))
             .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.6 : 1)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color(.foreground).opacity(hovering && isEnabled ? 0.05 : 0))
+                    .padding(.horizontal, -6)
+                    .padding(.vertical, -3)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.6 : 1) : 0.4)
+            .onHover { hovering = $0 }
     }
 }
 
@@ -304,8 +323,12 @@ extension View {
     /// swipe, edit mode and the scroll-edge effect stay system-drawn.
     func criaSurface() -> some View {
         #if os(macOS)
-        // The system's grouped look: a second background per row reads as a box inside a box.
-        self
+        // The system's grouped look: a second background per row reads as a box inside a box. Row buttons lose the
+        // grey bezel the Mac gives a default button in a list; applied inside a sheet's toolbar, so Cancel and Save
+        // keep the system style.
+        // Forms take the grouped cards rather than the Mac's default two-column layout.
+        buttonStyle(FormRowButtonStyle())
+            .formStyle(.grouped)
         #else
         scrollContentBackground(.hidden)
             .background(Color(.grouped))

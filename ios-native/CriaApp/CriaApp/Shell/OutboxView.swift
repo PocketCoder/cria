@@ -40,6 +40,7 @@ struct OutboxView: View {
                                        description: Text("Nothing is waiting to sync."))
             }
         }
+        .macRowButtons()
         .navigationTitle("Sync queue")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

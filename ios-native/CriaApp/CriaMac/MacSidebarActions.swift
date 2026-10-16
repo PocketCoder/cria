@@ -224,6 +224,7 @@ private struct MacLabelManager: View {
                     }
                 }
             }
+            .macRowButtons()
             .overlay {
                 if live.value.isEmpty { ContentUnavailableView("No labels", systemImage: "tag") }
             }

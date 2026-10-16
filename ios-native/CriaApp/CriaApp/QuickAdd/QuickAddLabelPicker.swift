@@ -28,6 +28,7 @@ struct QuickAddLabelPicker: View {
                     ContentUnavailableView("No labels", systemImage: "tag", description: Text("Type a name to create one."))
                 }
             }
+            .macRowButtons()
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search or create")
             .textInputAutocapitalization(.never)
             .navigationTitle("Labels")
@@ -38,6 +39,7 @@ struct QuickAddLabelPicker: View {
                 }
             }
         }
+        .macSheetFrame(width: 380, height: 460)
         .onAppear { labels = (try? services.store.labels()) ?? [] }
     }
 

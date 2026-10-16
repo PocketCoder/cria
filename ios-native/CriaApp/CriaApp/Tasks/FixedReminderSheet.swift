@@ -24,14 +24,21 @@ struct FixedReminderSheet: View {
 
     private var isPast: Bool { date <= Date() }
 
-    var body: some View { sheetContent.macSheetFrame() }
+    var body: some View { sheetContent.macSheetFrame(width: 420, height: 520) }
 
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 Section {
+                    #if os(macOS)
+                    // AppKit's graphical picker is a clipped mini calendar: the Cria grid and a time field instead.
+                    CriaCalendar(selection: $date)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+                    DatePicker(selection: $date, displayedComponents: .hourAndMinute) { Label("Remind at", systemImage: "clock") }
+                    #else
                     DatePicker(selection: $date) { Label("Remind at", systemImage: "clock") }
                         .datePickerStyle(.graphical)
+                    #endif
                 } footer: {
                     if isPast { Text("Pick a future time.") }
                 }

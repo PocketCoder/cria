@@ -28,22 +28,39 @@ struct TaskCommandHandler: ViewModifier {
                     perform(command)
                 }
             }
-            .confirmationDialog("Priority", isPresented: $choosingPriority) {
-                ForEach(Array(TableCells.priorityNames.enumerated()), id: \.offset) { index, name in
-                    Button(name) { onPriority(index) }
-                }
+            .pickerDialog("Priority", isPresented: $choosingPriority, options: priorityOptions) { id in
+                if let value = Int(id) { onPriority(value) }
             }
-            .confirmationDialog("Move to project", isPresented: $choosingMove) {
-                ForEach(projects, id: \.localId) { project in
-                    Button(project.title) { onMove(project.localId) }
-                }
-            }
-            .confirmationDialog("Colour", isPresented: $choosingColour) {
-                ForEach(taskColours.indices, id: \.self) { index in
-                    Button(taskColourNames[index]) { setColour(taskColours[index]) }
-                }
-                Button("None") { setColour("") }
-            }
+            .pickerDialog("Move to project", isPresented: $choosingMove, options: projectOptions) { onMove($0) }
+            .pickerDialog("Colour", isPresented: $choosingColour, options: colourOptions) { setColour($0) }
+    }
+
+    private var priorityOptions: [PickerOption] {
+        TableCells.priorityNames.enumerated().map { index, name in
+            PickerOption(
+                id: "\(index)", title: name, tint: ThemeToken.priority(index).map { Color($0) }, isCurrent: task?.priority == index
+            )
+        }
+    }
+
+    private var projectOptions: [PickerOption] {
+        projects.map { project in
+            PickerOption(
+                id: project.localId, title: project.title, tint: Color(hexString: project.hexColor),
+                isCurrent: task?.projectLocalId == project.localId
+            )
+        }
+    }
+
+    /// The swatches, then None (an empty id clears the colour).
+    private var colourOptions: [PickerOption] {
+        let current = task?.hexColor?.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased() ?? ""
+        return taskColours.indices.map { index in
+            PickerOption(
+                id: taskColours[index], title: taskColourNames[index], tint: Color(hexString: taskColours[index]),
+                isCurrent: current == taskColours[index]
+            )
+        } + [PickerOption(id: "", title: "None", isCurrent: current.isEmpty)]
     }
 
     private func run(_ shortcut: TaskShortcut) {

@@ -121,14 +121,20 @@ struct QuickAddDateTimeSheet: View {
 
     private var isTimed: Bool { hasTime || !timeIsOptional }
 
-    var body: some View { sheetContent.macSheetFrame() }
+    var body: some View { sheetContent.macSheetFrame(width: 420, height: 520) }
 
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
+                #if os(macOS)
+                // AppKit's graphical picker is a clipped mini calendar: the Cria grid instead.
+                CriaCalendar(selection: $date)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+                #else
                 DatePicker(title, selection: $date, displayedComponents: .date)
                     .datePickerStyle(.graphical)
                     .labelsHidden()
+                #endif
                 if timeIsOptional {
                     Toggle("Time", isOn: $hasTime.animation())
                 }
@@ -139,6 +145,9 @@ struct QuickAddDateTimeSheet: View {
                     Text("Pick a future time").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                 }
             }
+            #if os(macOS)
+            .criaSurface()
+            #endif
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

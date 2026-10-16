@@ -108,6 +108,7 @@ struct ConflictSheet: View {
                                            description: Text("Your local edits are in sync."))
                 }
             }
+            .macRowButtons()
             .navigationTitle("Changed in two places")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
