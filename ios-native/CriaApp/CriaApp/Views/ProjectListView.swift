@@ -98,6 +98,7 @@ struct ProjectListView: View {
                 }
             }
         }
+        .publishesTaskOrder(openSections.flatMap { rows($0.items).map(\.id) } + rows(doneItems).map(\.id))
         .criaSurface()
         .environment(\.editMode, $editMode)
         .overlay { emptyState.allowsHitTesting(false) }

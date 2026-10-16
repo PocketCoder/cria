@@ -44,7 +44,11 @@ final class TaskDetailPresentation {
 
     /// Puts the address on the clipboard and confirms it with a haptic, a spoken announcement and a brief notice.
     func copyLink(_ url: URL, notice message: String = "Link copied") {
-        Pasteboard.copy(url.absoluteString)
+        copyText(url.absoluteString, notice: message)
+    }
+
+    func copyText(_ text: String, notice message: String) {
+        Pasteboard.copy(text)
         Haptics.success()
         notice = message
         PlatformApp.announce(message)

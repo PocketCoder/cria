@@ -5,12 +5,12 @@ import UIKit
 #endif
 
 /// The swatches offered for a task: the project and label editors' set (`PROJECT_COLORS` in `sidebarLogic.ts`).
-private let taskColours = [
+let taskColours = [
     "ef4444", "f97316", "eab308", "22c55e", "06b6d4", "3b82f6", "8b5cf6", "ec4899", "78716c", "000000"
 ]
 
 /// Spoken names for the swatches, in the same order, so VoiceOver does not read out raw hex.
-private let taskColourNames = ["Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink", "Grey", "Black"]
+let taskColourNames = ["Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink", "Grey", "Black"]
 
 /// A task's colour: one row that opens to the swatches, a colour picker for any other colour, and None. The colour
 /// syncs to Vikunja as the task's `hex_color`, so Vikunja-web shows it too. `apply` saves a patch and returns false

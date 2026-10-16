@@ -256,13 +256,16 @@ The Mac app (`CriaMac`) is a native SwiftUI app on macOS 15 and later. It uses t
 
 | Feature | Where it lives | Notes |
 |---|---|---|
-| Task inspector | This device | Sidebar and the selected list or project; the open task slides in as an inspector on the right and closes with its X, Esc or choosing another list. Task rows and kanban cards open it (`\.taskOpener`) instead of pushing. The sidebar collapses (⌘E or the toolbar button). |
-| Menu bar and shortcuts | This device | File, View and Go menus and a Task menu (done, due, priority, labels, move, favourite, copy link, delete). ⌘N new task, ⇧⌘N new project, ⌘1 to ⌘3 Today, Upcoming, Inbox, ⌘F search, ⌘K command palette, ⌘R sync now, ⌘. copy link. Delete has no key equivalent in the menu; plain ⌫ deletes the open task outside a text field. |
-| Single-key shortcuts | This device | `g` then a letter to go somewhere, and `t`, `d`, `p`, `l`, `m`, `s` and Delete on the open task. Needs the window focused. |
-| Command palette (⌘K) | This device | Jump to a smart view, project or saved filter, or run a command. No task or label search yet. |
+| Task panel | This device | Sidebar and the selected list or project; the open task floats over the list on a glass panel on the right and closes with its X, Esc, a click outside it or choosing another list. Task rows, kanban cards and related tasks open it (`\.taskOpener`) instead of pushing. The sidebar collapses (⌘E or the toolbar button). Opens on Settings > Customise > Home view. |
+| Sidebar | This device | Today, Upcoming, Inbox, Favourites and Search, then saved filters, labels and the project tree. Right-click a project for Info, Edit (including archive), New sub-project, Favourite, Share, Duplicate and Delete; a label or saved filter for Edit and Delete. The Filters + (and File > New Saved Filter, ⌥⌘N) makes a filter. Projects drag to reorder among their siblings. |
+| Sync status | This device | The iOS sync banner (progress, errors with Retry, conflicts, changes that could not sync) and conflict sheet. Go > Sync Now (⌘R). |
+| Dock badge | This device | Open tasks overdue or due today, as the desktop app. |
+| Menu bar and shortcuts | This device | File, View and Go menus and a Task menu (done, due, priority, labels, move, assign, colour, favourite, copy identifier, copy link, delete). ⌘N new task, ⇧⌘N new project, ⌘1 to ⌘3 Today, Upcoming, Inbox, ⌘F search, ⌘K command palette, ⌘R sync now, ⌘. copy link. Delete has no key equivalent in the menu; plain ⌫ deletes the open task outside a text field. |
+| Single-key shortcuts | This device | As the desktop app: `g` then `o`, `u`, `l`, `k`, `t`, `g`, `a` (labels) or `m` (teams); `j`/`k` move through the list and Return opens; on the open task `t`, `d`, `p`, `l`, `m`, `a`, `c`, `s`, `u` (its project), `.`/`..`/`...` (copy identifier, with title, with link) and Delete. Ignored while typing, with a sheet up or with a modifier held. |
+| Command palette (⌘K) | This device | Smart views, projects, labels, saved filters and commands by title; tasks from two characters (the search index, so descriptions too), with project and due date. Return opens, ⌘Return completes. |
 | Rich text editor | Vikunja | The shared editor on an AppKit text view, with a toolbar. Image paste and drop. Link is ⌘L because ⌘K is the palette. The @mention picker is a sheet, not a popover at the caret. |
 | Settings window (⌘,) | This device | The shared Settings plus a Mac tab: menu bar item, close to menu bar, launch at login, hide the Dock icon, global shortcut. |
-| Menu bar extra | This device | Add and open from the menu bar. Closing the window leaves the app running (reminders and summaries keep firing) when "close to menu bar" is on. |
+| Menu bar extra | This device | Today's open tasks to tick (with the completion sound), add and open from the menu bar. Closing the window leaves the app running (reminders and summaries keep firing) when "close to menu bar" is on. |
 | Global shortcut | This device | ⌘⇧A by default (changeable); opens quick add in the main window. Not a floating panel. |
 | Launch at login | This device | |
 | Notifications | This device | Reminders, morning summary and weekly round-up as on iOS, scheduled while the app runs. |

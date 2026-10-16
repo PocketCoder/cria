@@ -34,6 +34,8 @@ struct MacCommands: Commands {
             Button("Upcoming") { actions?.go(.upcoming) }.keyboardShortcut("2").disabled(actions == nil)
             Button("Inbox") { actions?.go(.inbox) }.keyboardShortcut("3").disabled(actions == nil)
             Button("Search") { actions?.go(.search) }.keyboardShortcut("f").disabled(actions == nil)
+            Button("Labels…") { actions?.sidebar.showingLabels = true }.disabled(actions == nil)
+            Button("Teams…") { actions?.sidebar.showingTeams = true }.disabled(actions == nil)
             Divider()
             Button("Command Palette") { actions?.showingPalette = true }.keyboardShortcut("k").disabled(actions == nil)
             Divider()
@@ -46,8 +48,11 @@ struct MacCommands: Commands {
             Button("Priority…") { actions?.task(.priority) }.disabled(!enabled)
             Button("Labels…") { actions?.task(.labels) }.disabled(!enabled)
             Button("Move to Project…") { actions?.task(.move) }.disabled(!enabled)
+            Button("Assign…") { actions?.task(TaskShortcut.assign) }.disabled(!enabled)
+            Button("Colour…") { actions?.task(TaskShortcut.colour) }.disabled(!enabled)
             Button("Favourite") { actions?.task(.favourite) }.disabled(!enabled)
             Divider()
+            Button("Copy Identifier") { actions?.task(TaskShortcut.copyIdentifier) }.disabled(!enabled)
             Button("Copy Link") { actions?.task(.copyLink) }.keyboardShortcut(".").disabled(!enabled)
             // No key equivalent: ⌘⌫ there fired while editing the title or description. Plain ⌫ outside a text field
             // still deletes (`KeySequencer`).

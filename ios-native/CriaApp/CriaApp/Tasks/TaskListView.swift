@@ -68,6 +68,7 @@ struct TaskListView: View {
                 }
             }
         }
+        .publishesTaskOrder(shown.flatMap { TaskListNesting.rows($0.items, children: live.value.children, collapsed: collapsed).map(\.id) })
         .criaSurface()
         .overlay {
             if live.value.items.isEmpty {

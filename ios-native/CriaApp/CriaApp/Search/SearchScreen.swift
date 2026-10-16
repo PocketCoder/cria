@@ -50,6 +50,7 @@ struct SearchScreen: View {
                 }
             }
         }
+        .publishesTaskOrder(results.tasks.map(\.task.localId))
             .criaSurface()
         .overlay { overlay }
         .navigationTitle("Search")

@@ -102,6 +102,7 @@ struct SmartViewScreen: View {
                 }
             }
         }
+        .publishesTaskOrder(visible(displayed).flatMap { live.value.nesting.rows(for: $0.items, expanded: expanded).map(\.id) })
         .criaSurface()
         // The default top margin and section gaps left a band of empty space under the title.
         .contentMargins(.top, 0, for: .scrollContent)

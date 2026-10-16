@@ -172,7 +172,7 @@ struct TaskDetailView: View {
         .modifier(TaskDetailDialogs(services: services, taskLocalId: taskLocalId, state: sheets))
         .modifier(TaskCommandHandler(
             taskLocalId: taskLocalId, choosingPriority: $choosingPriority, choosingMove: $choosingMove,
-            projects: moveChoices, perform: perform,
+            projects: moveChoices, perform: perform, task: live.value.task, services: services, sheets: sheets,
             onPriority: { value in apply(TaskPatch(priority: value)) },
             onMove: { id in
                 var patch = TaskPatch()

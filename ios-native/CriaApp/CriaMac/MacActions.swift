@@ -82,8 +82,34 @@ final class MacActions {
     /// edit in progress) is not rebuilt.
     func openTask(_ id: String) {
         TaskOpenSignposts.event("click", id)
+        panel.focusedId = id
         guard openTaskId != id else { return }
         openTaskId = id
+    }
+
+    /// `j` and `k`: moves the keyboard focus through the list on screen, from the focused or open task, stopping at
+    /// either end. False when there is no list.
+    func moveFocus(_ step: Int) -> Bool {
+        let ids = panel.visibleIds
+        guard !ids.isEmpty else { return false }
+        let index = (panel.focusedId ?? openTaskId).flatMap { ids.firstIndex(of: $0) }
+        let next = index.map { min(max($0 + step, 0), ids.count - 1) } ?? (step > 0 ? 0 : ids.count - 1)
+        panel.focusedId = ids[next]
+        return true
+    }
+
+    /// Return: opens the focused task. False when nothing is focused, so the key goes on to the control that has it.
+    func openFocused() -> Bool {
+        guard let id = panel.focusedId, panel.visibleIds.contains(id) else { return false }
+        openTask(id)
+        return true
+    }
+
+    /// `u`: shows the open task's project (which closes the task, as any new list does).
+    func goToOpenTasksProject(services: AppServices) -> Bool {
+        guard let id = openTaskId, let project = (try? services.store.task(localId: id))?.projectLocalId else { return false }
+        go(.project(project))
+        return true
     }
 
     func newTask() {
@@ -101,8 +127,16 @@ final class MacActions {
     var hasOpenTask: Bool { openTaskId != nil }
 
     func task(_ command: TaskCommand) {
+        post(command.rawValue)
+    }
+
+    func task(_ shortcut: TaskShortcut) {
+        post(shortcut.rawValue)
+    }
+
+    private func post(_ raw: String) {
         guard let id = openTaskId else { return }
-        NotificationCenter.default.post(name: .criaTaskCommand, object: command.rawValue, userInfo: ["task": id])
+        NotificationCenter.default.post(name: .criaTaskCommand, object: raw, userInfo: ["task": id])
     }
 
     func projectView(_ kind: String) {

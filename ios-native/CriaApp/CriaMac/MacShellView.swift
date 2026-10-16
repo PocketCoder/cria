@@ -31,14 +31,15 @@ struct MacShellView: View {
         .overlay(alignment: .trailing) { MacTaskPanel(services: services, actions: actions) }
         .animation(.snappy(duration: 0.28), value: actions.openTaskId != nil)
         .onExitCommand { actions.openTaskId = nil }
-        .focusable()
-        .focusEffectDisabled()
-        .onKeyPress { keys.handle($0, actions: actions) }
+        .background(HostWindowReader { keys.window = $0 })
+        .onAppear { keys.install(actions: actions, services: services) }
+        .onDisappear { keys.remove() }
         .focusedSceneValue(\.macActions, actions)
         // A new list starts clean: no pushed route from the old one, no task left open.
         .onChange(of: actions.selection) {
             navigation.state.setPath([], for: .browse)
             actions.openTaskId = nil
+            actions.panel.focusedId = nil
         }
         .environment(\.taskCloser, actions.closer)
         .environment(navigation)
