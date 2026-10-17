@@ -16,7 +16,7 @@ struct DescribeFilterRow: View {
     var body: some View {
         if AIStatus.shared.isOfferable {
             HStack {
-                TextField("Describe it: overdue work tasks with high priority", text: $text)
+                CriaTextField("Describe it: overdue work tasks with high priority", text: $text)
                     .submitLabel(.go)
                     .onSubmit { Task { await write() } }
                     .accessibilityLabel("Describe the filter")

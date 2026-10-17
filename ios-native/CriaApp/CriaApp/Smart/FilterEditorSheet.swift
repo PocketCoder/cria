@@ -29,23 +29,32 @@ struct FilterEditorSheet: View {
             && !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && parseError == nil
     }
 
-    var body: some View { sheetContent.macSheetFrame() }
+    var body: some View { sheetContent.macSheetFrame(width: 520, height: 560) }
 
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $title)
-                    TextField("Description", text: $details)
+                    CriaTextField("Title", text: $title)
+                    CriaTextField("Description", text: $details)
                 }
                 Section {
                     // Hidden where the on-device model is not offered.
                     DescribeFilterRow(services: services) { query = $0 }
-                    TextField("done = false && priority >= 3", text: $query, axis: .vertical)
+                    CriaTextField("done = false && priority >= 3", text: $query, axis: .vertical)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        #if os(macOS)
+                        // The same face as the coloured preview below it.
+                        .font(.callout.monospaced())
+                        #endif
                     if !query.isEmpty { Text(FilterHighlightStyle.attributed(query)).font(.callout.monospaced()) }
                     suggestionRow
+                    #if os(macOS)
+                    Text("Combine with && and ||. Compare with = != > >= < <=, in or like. Dates: now, now+7d, now-1w.")
+                        .font(Theme.caption)
+                        .foregroundStyle(Color(.mutedForeground))
+                    #endif
                     if let parseError { Text(parseError).font(Theme.caption).foregroundStyle(Color(.destructive)) }
                     Toggle("Include tasks with empty values", isOn: $includeNulls)
                 } header: {
@@ -69,14 +78,21 @@ struct FilterEditorSheet: View {
     @ViewBuilder private var suggestionRow: some View {
         let options = suggestions
         if !options.isEmpty, let context = autocompleteContext(query, cursor: query.utf16.count) {
+            #if os(macOS)
+            // Wrapped rather than a sideways scroller, which clipped the last chip.
+            ChipFlowLayout { suggestionChips(options, context: context) }
+            #else
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    ForEach(options, id: \.self) { option in
-                        Button { apply(option, context: context) } label: { CriaChip(text: option, tint: Color(.primary)) }
-                            .buttonStyle(.plain)
-                    }
-                }
+                HStack { suggestionChips(options, context: context) }
             }
+            #endif
+        }
+    }
+
+    private func suggestionChips(_ options: [String], context: AutocompleteContext) -> some View {
+        ForEach(options, id: \.self) { option in
+            Button { apply(option, context: context) } label: { CriaChip(text: option, tint: Color(.primary)) }
+                .buttonStyle(.plain)
         }
     }
 

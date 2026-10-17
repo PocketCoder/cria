@@ -24,7 +24,7 @@ struct TeamsView: View {
         .navigationTitle("Teams")
         .toolbar { Button("New", systemImage: "plus") { creating = true } }
         .alert("New team", isPresented: $creating) {
-            TextField("Name", text: $newName)
+            CriaTextField("Name", text: $newName)
             Button("Create") { Task { await create() } }
             Button("Cancel", role: .cancel) { newName = "" }
         }
@@ -69,7 +69,7 @@ struct TeamDetailView: View {
     var body: some View {
         Form {
             Section("Name") {
-                TextField("Name", text: $name).onSubmit { Task { await rename() } }
+                CriaTextField("Name", text: $name).onSubmit { Task { await rename() } }
             }
             Section("Members") {
                 ForEach(team?.members ?? []) { member in
@@ -86,7 +86,7 @@ struct TeamDetailView: View {
                     }
                 }
                 HStack {
-                    TextField("Add by username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    CriaTextField("Add by username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button("Add") { add() }.disabled(username.isEmpty)
                 }
             }

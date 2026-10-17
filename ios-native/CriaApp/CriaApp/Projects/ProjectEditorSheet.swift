@@ -73,8 +73,8 @@ struct ProjectEditorSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $title)
-                    TextField("Description", text: $details, axis: .vertical)
+                    CriaTextField("Title", text: $title)
+                    CriaTextField("Description", text: $details, axis: .vertical)
                 }
                 identifierSection
                 Section("Colour") {
@@ -126,7 +126,7 @@ struct ProjectEditorSheet: View {
     /// The task-number prefix (`PROJ-12`). Vikunja keeps it uppercase, at most 10 characters, unique across projects.
     private var identifierSection: some View {
         Section {
-            TextField("Identifier", text: $identifier)
+            CriaTextField("Identifier", text: $identifier)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
                 .onChange(of: identifier) { _, new in

@@ -60,7 +60,7 @@ struct LabelEditorSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $title)
+                    CriaTextField("Title", text: $title)
                 }
                 Section("Colour") {
                     ScrollView(.horizontal, showsIndicators: false) {

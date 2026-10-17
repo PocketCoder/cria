@@ -54,7 +54,7 @@ struct ViewSettingsSheet: View {
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
-                Section("Title") { TextField("Title", text: $title) }
+                Section("Title") { CriaTextField("Title", text: $title) }
                 Section {
                     FilterQueryField(text: $query)
                     Toggle("Include tasks without a value", isOn: $includeNulls)
@@ -106,7 +106,7 @@ struct ViewSettingsSheet: View {
         if filterBuckets {
             ForEach($rows) { $row in
                 Section {
-                    TextField("Title", text: $row.draft.title)
+                    CriaTextField("Title", text: $row.draft.title)
                     FilterQueryField(text: $row.draft.filter, placeholder: "priority >= 3")
                     Toggle("Include tasks without a value", isOn: $row.draft.includeNulls)
                     Button("Remove column", role: .destructive) { rows.removeAll { $0.id == row.id } }

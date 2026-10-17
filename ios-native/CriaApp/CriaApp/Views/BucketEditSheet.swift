@@ -17,8 +17,8 @@ struct BucketEditSheet: View {
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             Form {
-                TextField("Title", text: $title)
-                TextField("Limit (0 for none)", text: $limitText).keyboardType(.numberPad)
+                CriaTextField("Title", text: $title)
+                CriaTextField("Limit (0 for none)", text: $limitText).keyboardType(.numberPad)
                 Section {
                     Button("Delete column", role: .destructive) { confirmingDelete = true }
                         .disabled(!edit.canDelete)

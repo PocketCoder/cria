@@ -108,7 +108,7 @@ struct RelationsSection: View {
         HStack {
             Image(systemName: "circle").foregroundStyle(Color(.mutedForeground))
                 .accessibilityHidden(true)
-            TextField("Subtask title", text: $subtaskTitle)
+            CriaTextField("Subtask title", text: $subtaskTitle)
                 .focused($subtaskFocused)
                 .submitLabel(.next)
                 .onAppear { subtaskFocused = true }

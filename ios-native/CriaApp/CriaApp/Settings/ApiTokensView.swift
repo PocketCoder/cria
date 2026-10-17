@@ -100,7 +100,7 @@ private struct NewApiTokenSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $title)
+                    CriaTextField("Title", text: $title)
                     DatePicker("Expires", selection: $expiry, displayedComponents: .date)
                 }
                 routesSection

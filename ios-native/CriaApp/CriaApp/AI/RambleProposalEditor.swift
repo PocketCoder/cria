@@ -24,7 +24,7 @@ struct RambleProposalEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $proposal.title, axis: .vertical)
+                    CriaTextField("Title", text: $proposal.title, axis: .vertical)
                 }
                 Section {
                     DateFieldRow(title: "Due", iso: proposal.dueDate) { proposal.dueDate = $0.isEmpty ? nil : $0 }
@@ -42,7 +42,7 @@ struct RambleProposalEditor: View {
                 }
                 labelSection
                 Section("Notes") {
-                    TextField("Notes", text: notes, axis: .vertical)
+                    CriaTextField("Notes", text: notes, axis: .vertical)
                 }
             }
             .criaSurface()

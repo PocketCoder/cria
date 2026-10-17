@@ -14,7 +14,7 @@ struct KanbanFilterSheet: View {
         NavigationStack {
             Form {
                 Section("Search") {
-                    TextField("Title or description", text: $filter.text)
+                    CriaTextField("Title or description", text: $filter.text)
                         .submitLabel(.done)
                         .autocorrectionDisabled()
                 }

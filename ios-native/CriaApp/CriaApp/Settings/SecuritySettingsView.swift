@@ -71,7 +71,7 @@ private struct EmailSections: View {
 
     var body: some View {
         Section {
-            TextField("New email address", text: $newEmail)
+            CriaTextField("New email address", text: $newEmail)
                 .keyboardType(.emailAddress)
                 .textContentType(.emailAddress)
                 .textInputAutocapitalization(.never)
@@ -176,7 +176,7 @@ private struct TotpSections: View {
                 Text("Scan the QR code with your authenticator app, then enter the 6-digit code below.").font(Theme.caption)
             }
             Section("Confirm") {
-                TextField("6-digit code", text: Binding(
+                CriaTextField("6-digit code", text: Binding(
                     get: { passcode },
                     set: { value in passcode = TotpPasscode.sanitised(value) }
                 ))
