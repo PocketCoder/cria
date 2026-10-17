@@ -61,10 +61,13 @@ struct KanbanCardView: View {
     /// The ring, title and chips. One VoiceOver element per card: activating opens the task, and the ring, columns
     /// and delete are actions. The subtask disclosure below it stays a separate element.
     private var header: some View {
-        HStack(alignment: .top, spacing: 0) {
+        HStack(alignment: .top, spacing: Theme.checkGap) {
             PriorityCheck(priority: task.priority, isDone: task.done, size: 20) {
                 _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
             }
+            // The 44pt touch target makes the margin on iOS; the Mac's smaller target needs it set.
+            .padding(.leading, Theme.cardRingInset)
+            .padding(.top, Theme.cardRingTop)
             openLink {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(task.title)

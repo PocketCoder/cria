@@ -35,6 +35,12 @@ struct TaskRowLink: View {
             }
         }
         .sensoryFeedback(.success, trigger: completions)
+        #if os(macOS)
+        // One look in every list (Today, Inbox, projects, labels, search): no separators, which the Mac draws from the
+        // title rather than the ring, and the same insets, with room for the open and hover washes.
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 1, leading: 10, bottom: 1, trailing: 10))
+        #endif
         .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}

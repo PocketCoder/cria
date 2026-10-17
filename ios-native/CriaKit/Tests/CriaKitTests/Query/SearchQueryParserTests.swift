@@ -137,4 +137,15 @@ final class SearchQueryParserTests: XCTestCase {
         XCTAssertEqual(try parse("show the tasks").text, "show the tasks")
         XCTAssertEqual(try parse("dentist due friday").text, "dentist")
     }
+
+    func testHighlightsMarkWhatTheParserRecognised() throws {
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 6, day: 9, hour: 20)))
+        let input = "milk #home !3 tomorrow"
+        let marks = searchHighlights(input, now: now, calendar: calendar)
+        let text = input as NSString
+        XCTAssertEqual(marks.map(\.kind), [.label, .priority, .date])
+        XCTAssertEqual(marks.map { text.substring(with: NSRange(location: $0.start, length: $0.end - $0.start)) },
+                       ["#home", "!3", "tomorrow"])
+        XCTAssertTrue(searchHighlights("buy milk", now: now, calendar: calendar).isEmpty)
+    }
 }

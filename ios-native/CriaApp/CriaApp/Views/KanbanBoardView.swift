@@ -72,11 +72,21 @@ struct KanbanBoardView: View {
     /// full one.
     private var plan: KanbanBoardPlan {
         let filter = self.filter
-        guard filter.isActive else { return KanbanNesting.plan(columns: columns, children: live.value.children) }
+        guard filter.isActive else { return KanbanNesting.plan(columns: columns, children: live.value.children, nests: Self.nests) }
         let labelIds = live.value.labelIds
-        return KanbanNesting.plan(columns: columns, children: live.value.children) {
+        return KanbanNesting.plan(columns: columns, children: live.value.children, nests: Self.nests) {
             filter.shows($0, labelIds: labelIds[$0.localId] ?? [])
         }
+    }
+
+    /// On the Mac every subtask is its own card, so it can be dragged to another column by itself; iOS lists a
+    /// subtask inside its parent's card when they share a column.
+    private static var nests: Bool {
+        #if os(macOS)
+        false
+        #else
+        true
+        #endif
     }
 
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,

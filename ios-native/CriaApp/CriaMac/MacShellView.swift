@@ -152,10 +152,13 @@ private struct MacTaskPanel: View {
                     .dropDestination(for: URL.self) { urls, _ in attach(urls, to: id) }
             }
             .environment(\.taskOpener, actions.opener)
+            // A solid page, as the web inspector: the glass let the list show through and made the form's cards grey
+            // on grey.
+            .scrollContentBackground(.hidden)
             .frame(width: 400)
             .frame(maxHeight: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.18)))
+            .background(Color(.background), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(.border)))
             .shadow(color: .black.opacity(0.22), radius: 22, x: -4, y: 8)
             .padding(10)
             .transition(.move(edge: .trailing).combined(with: .opacity))

@@ -125,6 +125,10 @@ struct ProjectScreen: View {
                     KanbanBoardView(services: services, view: view)
                 }
                 .id(view.localId)
+                #if os(macOS)
+                // The list's New Task button, which iOS covers with each column's own add row.
+                .quickAdd(services: services, contextProjectId: projectLocalId)
+                #endif
             case .table:
                 TableViewScreen(services: services, projectLocalId: projectLocalId, viewLocalId: view.localId, header: header)
                     .id(view.localId)
@@ -133,6 +137,9 @@ struct ProjectScreen: View {
                     GanttScreen(services: services, projectLocalId: projectLocalId)
                 }
                 .id(view.localId)
+                #if os(macOS)
+                .quickAdd(services: services, contextProjectId: projectLocalId)
+                #endif
             case .list:
                 ProjectListView(services: services, projectLocalId: projectLocalId, header: header).id(view.localId)
             }

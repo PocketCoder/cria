@@ -115,5 +115,11 @@ struct DisplayNoMatchesRow: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
+        #if os(macOS)
+        // A Mac list row measured this at one line high and cut the button off.
+        .padding(.vertical, 6)
+        .fixedSize(horizontal: false, vertical: true)
+        .listRowSeparator(.hidden)
+        #endif
     }
 }

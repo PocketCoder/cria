@@ -59,9 +59,13 @@ struct MacSidebar: View {
                     HStack {
                         eyebrow("Filters")
                         Spacer()
-                        Button { sheets.newFilter() } label: { Image(systemName: "plus") }
+                        Button { sheets.newFilter() } label: {
+                            Image(systemName: "plus").frame(width: 20, height: 20).contentShape(Rectangle())
+                        }
                             .buttonStyle(.plain)
                             .foregroundStyle(Color(.mutedForeground))
+                            // Clear of the sidebar's edge, in line with the row counts.
+                            .padding(.trailing, 6)
                             .help("New saved filter")
                             .accessibilityLabel("New saved filter")
                     }

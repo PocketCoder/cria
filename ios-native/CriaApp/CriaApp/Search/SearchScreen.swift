@@ -67,10 +67,14 @@ struct SearchScreen: View {
 
     @ViewBuilder private var overlay: some View {
         if text.trimmingCharacters(in: .whitespaces).isEmpty {
-            ContentUnavailableView(
-                "Search", systemImage: "magnifyingglass",
-                description: Text("Try ‘due tomorrow’ or ‘overdue high priority’. Works offline.")
-            )
+            ContentUnavailableView {
+                Label("Search", systemImage: "magnifyingglass")
+            } description: {
+                Text("Words search titles and descriptions. Labels (#home), priorities (!3, high priority) and dates "
+                     + "(tomorrow, next week, overdue) become filters. Works offline.")
+            } actions: {
+                SearchExamples { text = $0 }
+            }
         } else if results.isEmpty {
             ContentUnavailableView.search(text: text)
         }
@@ -81,6 +85,11 @@ struct SearchScreen: View {
         let chips = SearchFilterChips.chips(for: parseSearchQuery(text), display: dateDisplay)
         if !chips.isEmpty {
             Section {
+                // The query as typed, with the parts read as filters coloured, so it is clear what was recognised.
+                Text(SearchHighlightStyle.attributed(text))
+                    .font(Theme.rowSubtitle)
+                    .listRowBackground(Color.clear)
+                    .accessibilityHidden(true)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(chips) { chip in
@@ -130,5 +139,54 @@ private struct MinimizeSearchField: ViewModifier {
         #else
         content
         #endif
+    }
+}
+
+/// Example searches under the empty Search screen: a tap runs one, which teaches the filter words by use.
+private struct SearchExamples: View {
+    let onPick: (String) -> Void
+
+    private static let examples = ["due tomorrow", "overdue high priority", "#home", "!3 this week", "soon"]
+
+    var body: some View {
+        ChipFlowLayout {
+            ForEach(Self.examples, id: \.self) { example in
+                Button { onPick(example) } label: {
+                    CriaChip(text: example, systemImage: "magnifyingglass", tint: Color(.primary))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search for \(example)")
+            }
+        }
+        .frame(maxWidth: 360)
+    }
+}
+
+/// Colours for the parts of a search the parser recognised, matching the filter chips' tints.
+enum SearchHighlightStyle {
+    static func attributed(_ query: String) -> AttributedString {
+        let text = query as NSString
+        var output = AttributedString()
+        var cursor = 0
+        for mark in searchHighlights(query) where mark.start >= cursor && mark.end <= text.length {
+            if mark.start > cursor {
+                output += AttributedString(text.substring(with: NSRange(location: cursor, length: mark.start - cursor)))
+            }
+            var piece = AttributedString(text.substring(with: NSRange(location: mark.start, length: mark.end - mark.start)))
+            piece.foregroundColor = colour(mark.kind)
+            piece.font = Theme.rowSubtitle.weight(.semibold)
+            output += piece
+            cursor = mark.end
+        }
+        if cursor < text.length { output += AttributedString(text.substring(from: cursor)) }
+        return output
+    }
+
+    private static func colour(_ kind: SearchHighlightKind) -> Color {
+        switch kind {
+        case .label: return Color(.meadow700)
+        case .priority: return Color(.marigold700)
+        case .date: return Color(.sky700)
+        }
     }
 }

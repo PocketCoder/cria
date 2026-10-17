@@ -49,6 +49,17 @@ struct RelationsSection: View {
                     }
                 }
                 .contextMenu { relationMenu(relation) }
+                #if os(macOS)
+                // A pointer has no press-and-hold: the same menu as a visible button.
+                .overlay(alignment: .trailing) {
+                    Menu { relationMenu(relation) } label: {
+                        Image(systemName: "ellipsis.circle").foregroundStyle(Color(.mutedForeground))
+                    }
+                    .macChipMenu()
+                    .help("Change the type or remove")
+                    .accessibilityLabel("Relation options")
+                }
+                #endif
             }
             if addingSubtask {
                 subtaskField
@@ -60,7 +71,13 @@ struct RelationsSection: View {
         } header: {
             Text("Relations")
         } footer: {
-            if !relations.isEmpty { Text("Press and hold a relation to change its type or remove it.") }
+            if !relations.isEmpty {
+                #if os(macOS)
+                Text("Use a relation's ••• or right-click it to change its type or remove it.")
+                #else
+                Text("Press and hold a relation to change its type or remove it.")
+                #endif
+            }
         }
     }
 

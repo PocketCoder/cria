@@ -82,12 +82,17 @@ enum Theme {
     static let rowTitleTop: CGFloat = 7
     /// Round icon buttons (quick add's send, Ramble and several-tasks): pointer-sized on the Mac.
     static let roundButton: CGFloat = 30
+    /// Where a Kanban card's ring sits: in from the card's edge, and down so it centres on the title's first line.
+    static let cardRingInset: CGFloat = 10
+    static let cardRingTop: CGFloat = 7
     #else
     static let checkSize: CGFloat = 24
     static let checkTarget: CGFloat = 44
     static let checkGap: CGFloat = 0
     static let rowTitleTop: CGFloat = 10
     static let roundButton: CGFloat = 40
+    static let cardRingInset: CGFloat = 0
+    static let cardRingTop: CGFloat = 0
     #endif
 
     /// Onest Bold for large titles; inline titles stay SF Pro semibold. Does nothing until `Onest-Bold.ttf` is

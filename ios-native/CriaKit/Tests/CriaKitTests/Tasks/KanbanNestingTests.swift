@@ -38,6 +38,18 @@ final class KanbanNestingTests: XCTestCase {
         XCTAssertNil(todo.cards[0].parentTitle)
     }
 
+    func testWithoutNestingEverySubtaskIsItsOwnCardNamingItsParent() throws {
+        let parent = try task("Parent"), one = try task("One"), other = try task("Other")
+        let plan = KanbanNesting.plan(
+            columns: [column("todo", [parent, one, other])], children: [parent.localId: [one.localId]], nests: false
+        )
+        let todo = plan.column("todo")
+        XCTAssertEqual(ids(todo), ["Parent", "One", "Other"])
+        XCTAssertTrue(todo.cards.allSatisfy { $0.subtasks.isEmpty })
+        XCTAssertEqual(todo.cards.map(\.parentTitle), [nil, "Parent", nil])
+        XCTAssertEqual(todo.hiddenCount, 0)
+    }
+
     func testSubtaskInAnotherColumnIsItsOwnCardNamingTheParent() throws {
         let parent = try task("Parent"), child = try task("Child")
         let plan = KanbanNesting.plan(

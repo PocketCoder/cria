@@ -172,6 +172,17 @@ struct SmartViewScreen: View {
             Section {
                 Button { addPresented = true } label: {
                     Label("Nothing planned", systemImage: "plus").foregroundStyle(Color(.mutedForeground))
+                        #if os(macOS)
+                        // A proper empty day on the Mac: full width, room to click, a dashed outline.
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(Color(.border), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        )
+                        .contentShape(Rectangle())
+                        #endif
                 }
                 .accessibilityHint("Adds a task on this day")
             } header: {

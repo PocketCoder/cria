@@ -182,7 +182,32 @@ private func tokenList(raw: String, claimed: [ClaimedToken]) -> [SearchToken] {
 
 /// Splits a search string into FTS text plus structured filters (`#label`, `!1`-`!5`, one date phrase, `soon`).
 /// Dates resolve against `now` in `calendar`'s time zone and are emitted as UTC day bounds.
-public func parseSearchQuery(_ input: String, now: Date = Date(), calendar: Calendar = .cria) -> SearchQuery {
+/// What a recognised part of a search is, for colouring it as the user types.
+public enum SearchHighlightKind: Equatable, Sendable {
+    case label, priority, date
+}
+
+/// A part of the search the parser turned into a filter. `start` and `end` are UTF-16 offsets.
+public struct SearchHighlight: Equatable, Sendable {
+    public let start: Int
+    public let end: Int
+    public let kind: SearchHighlightKind
+}
+
+/// The parts of `input` that `parseSearchQuery` reads as filters (labels, priorities, dates, "overdue"), in order.
+public func searchHighlights(_ input: String, now: Date = Date(), calendar: Calendar = .cria) -> [SearchHighlight] {
+    claimedTokens(in: input, now: now, calendar: calendar).map { token in
+        let kind: SearchHighlightKind
+        switch token.kind {
+        case .label: kind = .label
+        case .priority, .minimumPriority: kind = .priority
+        case .date, .overdue: kind = .date
+        }
+        return SearchHighlight(start: token.start, end: token.end, kind: kind)
+    }
+}
+
+private func claimedTokens(in input: String, now: Date, calendar: Calendar) -> [ClaimedToken] {
     var claimed = symbolTokens(in: input)
     let taken = claimed.map { $0.start..<$0.end }
     claimed += wordTokens(in: input, now: now, calendar: calendar).filter { word in
@@ -190,6 +215,11 @@ public func parseSearchQuery(_ input: String, now: Date = Date(), calendar: Cale
     }
     claimed += dateTokens(in: input, claimed: claimed, now: now, calendar: calendar)
     claimed.sort { $0.start < $1.start }
+    return claimed
+}
+
+public func parseSearchQuery(_ input: String, now: Date = Date(), calendar: Calendar = .cria) -> SearchQuery {
+    let claimed = claimedTokens(in: input, now: now, calendar: calendar)
 
     var text = plainText(raw: input, claimed: claimed)
     // Only after a worded filter: "task !3" still searches for "task".
