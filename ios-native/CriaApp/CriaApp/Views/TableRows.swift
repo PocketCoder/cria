@@ -321,27 +321,7 @@ struct TableGridView: View {
                 .foregroundStyle(names.isEmpty ? Self.emptyColour : Color(.foreground))
                 .accessibilityLabel(names.isEmpty ? "No assignees" : "Assignees: \(names)")
         case .title:
-            NavigationLink(value: Route.task(task.localId)) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(task.title)
-                            .font(Theme.rowTitle)
-                            .strikethrough(task.done)
-                            .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
-                            .lineLimit(2)
-                        if let progress = progress[task.localId] {
-                            SubtaskRing(progress: progress).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-                        }
-                    }
-                    if let parent = parentTitles[task.localId] {
-                        Text("Subtask of ‘\(parent)’")
-                            .font(Theme.caption)
-                            .foregroundStyle(Color(.mutedForeground))
-                            .lineLimit(1)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
+            titleCell(task)
         case .labels:
             Text(item.labels.isEmpty ? Self.emptyText : item.labels.map(\.title).joined(separator: ", "))
                 .font(Theme.caption).lineLimit(1)

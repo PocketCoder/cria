@@ -222,13 +222,18 @@ struct TaskRowLink: View {
 // MARK: Mac menu
 
 extension TaskRowLink {
+    /// Open, for the menu; nil where rows push instead (no opener), which leaves Open out.
+    fileprivate var macOpenAction: (@MainActor () -> Void)? {
+        guard let openTask else { return nil }
+        let localId = item.task.localId
+        return { openTask(localId) }
+    }
+
     /// The Mac task menu from the design handoff: done and open, the date, priority, label and project submenus, then
     /// favourite, link, duplicate and delete. Every item runs the same action as the iOS menu.
     @ViewBuilder fileprivate var macMenuItems: some View {
-        let localId = item.task.localId
-        let open: (@MainActor () -> Void)? = openTask.map { openTask in { openTask(localId) } }
         TaskMacMenuItems(
-            services: services, task: item.task, labels: item.labels, onOpen: open,
+            services: services, task: item.task, labels: item.labels, onOpen: macOpenAction,
             onToggleDone: { toggleWithHaptic() }, onPickDate: { scheduling = true }, onDuplicate: { duplicate() },
             onCopyLink: { copyLink() }, onDelete: { delete() }, onFailure: { failure = $0 }
         )

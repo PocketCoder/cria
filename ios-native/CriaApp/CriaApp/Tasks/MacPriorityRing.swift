@@ -167,12 +167,4 @@ enum SpringSmooth {
     }
 }
 
-/// The design's press feedback: scale 0.94 on the spring-bouncy curve over 180ms.
-struct MacPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.timingCurve(0.34, 1.56, 0.64, 1, duration: 0.18), value: configuration.isPressed)
-    }
-}
 #endif
