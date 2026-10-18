@@ -231,6 +231,8 @@ struct TableGridView: View {
                                 #if os(macOS)
                                 // Spacing moves into the cells so the alternating stripe runs across the row.
                                 .padding(.horizontal, 8)
+                                // Fill the column, not just the cell's content, or the stripes break into a checkerboard.
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                                 .background(striped.contains(item.task.localId) ? MacTheme.fill : Color.clear)
                                 #endif
                         }
