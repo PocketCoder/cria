@@ -26,6 +26,9 @@ struct TaskRowView: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macBody
+        #else
         HStack(alignment: Self.ringAlignment, spacing: Theme.checkGap) {
             PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
             VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +71,7 @@ struct TaskRowView: View {
         // as actions (the swipe actions and its own accessibility actions).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(spokenSummary))
+        #endif
     }
 
     /// "Buy milk, due tomorrow, high priority, not done", with the subtask, project and label details the chips show.
@@ -179,6 +183,142 @@ struct TaskRowView: View {
         }
     }
 }
+
+#if os(macOS)
+/// The Mac row from the macOS design: an 18pt ring, the title in SF 13 and one SF 11 meta line (due date, repeat,
+/// description, attachments and labels, then the project on the trailing edge). TaskRowLink draws the hover and
+/// selected fills.
+extension TaskRowView {
+    var macBody: some View {
+        HStack(alignment: .rowTitleMid, spacing: 7) {
+            PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(task.title)
+                        .font(.system(size: 13))
+                        .strikethrough(task.done || completing)
+                        .foregroundStyle(task.done || completing ? MacTheme.label3 : Color(.foreground))
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                    if task.isFavorite {
+                        Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(MacTheme.marigold)
+                    }
+                }
+                .frame(minHeight: 18)
+                .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
+                if let parent = tree.parentTitle {
+                    Text("Subtask of ‘\(parent)’")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MacTheme.label3)
+                        .lineLimit(1)
+                }
+                if macHasMeta { macMeta }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 6)
+        .padding(.leading, CGFloat(tree.depth) * TaskListNesting.indent)
+        // Fades once the ring's burst has played.
+        .opacity(completing && !task.done ? 0.45 : 1)
+        .animation(.easeOut(duration: 0.3).delay(0.35), value: completing)
+        .background(alignment: .leading) { guides }
+        // 8 by 12 around the content; the ring's 24pt target already gives 3 of the leading 12.
+        .padding(.leading, 9)
+        .padding(.trailing, 12)
+        .fixedSize(horizontal: false, vertical: true)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(spokenSummary))
+    }
+
+    private var macHasMeta: Bool {
+        guard !task.done else { return false }
+        return task.dueDate != nil || tree.progress != nil || task.repeatAfter > 0 || task.repeatMode != 0
+            || macHasDescription || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
+            || (showProject && item.projectTitle != nil)
+    }
+
+    /// A description with any text or image in it; an editor's empty paragraph does not count.
+    private var macHasDescription: Bool {
+        guard let html = task.description, !html.isEmpty else { return false }
+        if html.contains("<img") { return true }
+        let text = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var macMeta: some View {
+        HStack(spacing: 8) {
+            if let progress = tree.progress { macSubtasks(progress) }
+            if let due = task.dueDate {
+                HStack(spacing: 3) {
+                    Image(systemName: "calendar")
+                    Text(DueDates.label(due, now: Date(), display: dateDisplay))
+                }
+                .foregroundStyle(macDueTint(due))
+            }
+            if task.repeatAfter > 0 || task.repeatMode != 0 { Image(systemName: "repeat") }
+            if macHasDescription { Image(systemName: "text.alignleft") }
+            if item.hasAttachments { Image(systemName: "paperclip") }
+            if item.checklist.total > 0 {
+                HStack(spacing: 3) {
+                    Image(systemName: "checklist")
+                    Text("\(item.checklist.checked)/\(item.checklist.total)")
+                }
+            }
+            ForEach(item.labels.prefix(3), id: \.localId) { label in macLabelChip(label) }
+            Spacer(minLength: 0)
+            if showProject, let project = item.projectTitle {
+                HStack(spacing: 4) {
+                    Circle().fill(MacTheme.label3).frame(width: 6, height: 6)
+                    Text(project)
+                }
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(MacTheme.label2)
+        .lineLimit(1)
+        .frame(minHeight: 16)
+    }
+
+    /// Coral when overdue, the accent when due today, otherwise the secondary shade.
+    private func macDueTint(_ due: String) -> Color {
+        if DueDates.isOverdue(due, now: Date()) { return MacTheme.coral }
+        if let day = DueDates.calendarDate(due), Calendar.cria.isDateInToday(day) { return Color(.primary) }
+        return MacTheme.label2
+    }
+
+    private func macLabelChip(_ label: LabelRecord) -> some View {
+        let tint = Color(hexString: label.hexColor) ?? Color(.info)
+        return HStack(spacing: 4) {
+            Circle().fill(tint).frame(width: 6, height: 6)
+            Text(label.title)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1)
+        .background(tint.opacity(0.13), in: Capsule())
+    }
+
+    /// "2/5" subtasks done; where the children are nested here it also collapses them.
+    @ViewBuilder private func macSubtasks(_ progress: SubtaskProgress) -> some View {
+        let count = Text("\(progress.done)/\(progress.total)")
+        if let collapsed = tree.isCollapsed {
+            Button(action: tree.onToggleCollapsed) {
+                HStack(spacing: 3) {
+                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                    count
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(collapsed ? "Show subtasks" : "Hide subtasks")
+        } else {
+            HStack(spacing: 3) {
+                Image(systemName: "list.bullet.indent")
+                count
+            }
+        }
+    }
+}
+#endif
 
 extension VerticalAlignment {
     private enum RowTitleMid: AlignmentID {

@@ -27,6 +27,16 @@ struct ProjectHeader: View {
     var background: PlatformImage?
     /// Shorter when pinned above a board or timeline, which need the height.
     var bannerHeight: CGFloat = 120
+    #if os(macOS)
+    /// The Mac's in-content header (`MacProjectHeader`) in place of the subtitle and pills; the view picker is in the
+    /// toolbar there.
+    var macTitle = ""
+    var macProject: ProjectRecord?
+    var macProjectLocalId = ""
+    var macServices: AppServices?
+    /// List view: shows the ⓘ toggle for the project info rail.
+    var macShowsInfoToggle = false
+    #endif
 
     /// One view and nothing to manage: a single pill would only repeat the title.
     private var showsPills: Bool { views.count > 1 || canManage || onInfo != nil }
@@ -37,8 +47,16 @@ struct ProjectHeader: View {
                 ProjectBackgroundBanner(image: background, height: bannerHeight)
                     .transition(.opacity)
             }
+            #if os(macOS)
+            MacProjectHeader(
+                title: macTitle, colour: colour, subtitle: openCount == 1 ? "1 open task" : "\(openCount) open tasks",
+                project: macProject, projectLocalId: macProjectLocalId, services: macServices,
+                showsInfoToggle: macShowsInfoToggle, canManage: canManage, onManage: onManage
+            )
+            #else
             subtitle
             if showsPills { pills }
+            #endif
         }
         .textCase(nil)
         .frame(maxWidth: .infinity, alignment: .leading)

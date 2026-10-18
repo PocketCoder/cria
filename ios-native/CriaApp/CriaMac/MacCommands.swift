@@ -28,6 +28,10 @@ struct MacCommands: Commands {
             Button("Kanban") { actions?.projectView("kanban") }.disabled(actions == nil)
             Button("Table") { actions?.projectView("table") }.disabled(actions == nil)
             Button("Gantt") { actions?.projectView("gantt") }.disabled(actions == nil)
+            Divider()
+            Button("Show Project Info") { actions?.toggleProjectInfo() }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(actions == nil)
         }
         CommandMenu("Go") {
             Button("Today") { actions?.go(.today) }.keyboardShortcut("1").disabled(actions == nil)

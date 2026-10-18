@@ -105,6 +105,10 @@ struct TaskRowLink: View {
             }
             .buttonStyle(.plain)
             .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
+            #if os(macOS)
+            // Onto a sidebar project to move it there (MacProjectLabel); the same payload as a Kanban card's.
+            .draggable(KanbanPayload.make(item.task.localId))
+            #endif
         } else {
             NavigationLink(value: Route.task(item.task.localId)) {
                 TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
@@ -122,6 +126,14 @@ struct TaskRowLink: View {
     }
 
     @ViewBuilder private var menuItems: some View {
+        #if os(macOS)
+        macMenuItems
+        #else
+        iosMenuItems
+        #endif
+    }
+
+    @ViewBuilder private var iosMenuItems: some View {
         Button(item.task.done ? "Mark as not done" : "Complete", systemImage: "checkmark.circle") { toggleWithHaptic() }
         Button(item.task.isFavorite ? "Unstar" : "Star", systemImage: "star") { toggleStar() }
         Button("Due tomorrow", systemImage: "sunrise") { dueTomorrow() }
@@ -179,18 +191,139 @@ private struct PanelRowHighlight: ViewModifier {
     @State private var hovering = false
 
     func body(content: Content) -> some View {
+        #if os(macOS)
+        // The macOS design's row: radius 10 (the row pads itself 8 by 12), selection tint and hover fill.
+        content
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(fill))
+            .onHover { hovering = $0 }
+        #else
         content
             .padding(.horizontal, 6)
             .background(RoundedRectangle(cornerRadius: 6).fill(fill))
             .onHover { hovering = $0 }
+        #endif
     }
 
     private var fill: Color {
+        #if os(macOS)
+        if openTask?.id == taskLocalId { return MacTheme.selection }
+        return hovering || openTask?.focusedId == taskLocalId ? MacTheme.fill : .clear
+        #else
         // The web row's open and hover washes: primary at 10%, foreground at 5%. The j/k focus reads as a hover.
         if openTask?.id == taskLocalId { return Color(.primary).opacity(0.10) }
         return hovering || openTask?.focusedId == taskLocalId ? Color(.foreground).opacity(0.05) : .clear
+        #endif
     }
 }
+
+#if os(macOS)
+// MARK: Mac menu
+
+extension TaskRowLink {
+    /// The Mac task menu from the design handoff: done and open, the date, priority, label and project submenus, then
+    /// favourite, link, duplicate and delete. Every item runs the same action as the iOS menu.
+    @ViewBuilder fileprivate var macMenuItems: some View {
+        Button(item.task.done ? "Mark as Not Done" : "Mark as Done", systemImage: "checkmark.circle") { toggleWithHaptic() }
+        if let openTask {
+            Button("Open", systemImage: "arrow.up.forward.square") { openTask(item.task.localId) }
+        }
+        Divider()
+        Menu("Due Date", systemImage: "calendar") {
+            ForEach(QuickAddDatePreset.allCases, id: \.self) { preset in
+                Button(preset.title) { setDue(preset.iso(now: Date())) }
+            }
+            Divider()
+            Button("Pick a Date…") { scheduling = true }
+            // An empty value clears the date, as the detail's date rows do.
+            Button("No Date") { setDue("") }.disabled(item.task.dueDate == nil)
+        }
+        Menu("Priority", systemImage: "flag") {
+            ForEach(TableCells.priorityNames.indices.reversed(), id: \.self) { level in
+                Toggle(isOn: Binding(get: { item.task.priority == level }, set: { if $0 { setPriority(level) } })) {
+                    Label {
+                        Text(TableCells.priorityNames[level])
+                    } icon: {
+                        Image(systemName: "circle.fill")
+                            .foregroundStyle(ThemeToken.priority(level).map { Color($0) } ?? Color(.mutedForeground))
+                    }
+                }
+            }
+        }
+        Menu("Labels", systemImage: "tag") {
+            TaskRowLabelChoices(services: services, item: item) { failure = $0 }
+        }
+        Menu("Move to", systemImage: "folder") {
+            TaskRowProjectChoices(services: services, task: item.task) { failure = $0 }
+        }
+        Divider()
+        Button(item.task.isFavorite ? "Remove from Favourites" : "Add to Favourites", systemImage: "star") { toggleStar() }
+        // A task that has not synced has no web address yet.
+        Button("Copy Link", systemImage: "link") { copyLink() }
+            .disabled(services.taskWebURL(item.task) == nil)
+        Button("Duplicate", systemImage: "plus.square.on.square") { duplicate() }
+        Divider()
+        Button("Delete", systemImage: "trash", role: .destructive) { delete() }
+    }
+
+    private func setDue(_ iso: String) {
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: TaskPatch(dueDate: iso)) }
+    }
+
+    private func setPriority(_ level: Int) {
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: TaskPatch(priority: level)) }
+    }
+}
+
+/// The task menu's label submenu: every label, ticked when the task has it. Read when the menu is built.
+private struct TaskRowLabelChoices: View {
+    let services: AppServices
+    let item: TaskListItem
+    let onFailure: (String) -> Void
+
+    var body: some View {
+        let all = (try? services.store.labels()) ?? []
+        ForEach(all, id: \.localId) { label in
+            let has = item.labels.contains { $0.localId == label.localId }
+            Toggle(label.title, isOn: Binding(get: { has }, set: { _ in toggle(label) }))
+        }
+    }
+
+    private func toggle(_ label: LabelRecord) {
+        do {
+            try services.store.toggleTaskLabel(taskLocalId: item.task.localId, labelLocalId: label.localId)
+        } catch {
+            onFailure(String(describing: error))
+        }
+    }
+}
+
+/// The task menu's Move to submenu: the visible projects, the current one ticked.
+private struct TaskRowProjectChoices: View {
+    let services: AppServices
+    let task: TaskRecord
+    let onFailure: (String) -> Void
+
+    var body: some View {
+        let projects = ProjectTree.visible((try? services.store.projects()) ?? [])
+        ForEach(projects, id: \.localId) { project in
+            Toggle(project.title, isOn: Binding(get: { project.localId == task.projectLocalId }, set: { isOn in
+                if isOn { move(to: project.localId) }
+            }))
+        }
+    }
+
+    private func move(to projectLocalId: String) {
+        guard projectLocalId != task.projectLocalId else { return }
+        var patch = TaskPatch()
+        patch.projectLocalId = projectLocalId
+        do {
+            _ = try services.store.updateTask(localId: task.localId, patch: patch)
+        } catch {
+            onFailure(String(describing: error))
+        }
+    }
+}
+#endif
 
 // MARK: Actions
 

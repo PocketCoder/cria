@@ -14,6 +14,8 @@ struct SmartViewScreen: View {
     @AppStorage("cria.taskList.showDone") private var showDone = true
     @State private var selectedDay = Calendar.cria.startOfDay(for: Date())
     @State private var addPresented = false
+    /// The day a Mac group's New Task row asked for; the selected day otherwise.
+    @State private var addDay: Date?
     @State private var rescheduling: DisplaySection?
     @State private var failure: String?
     /// Parents whose subtasks are showing, for this screen only.
@@ -87,7 +89,14 @@ struct SmartViewScreen: View {
         // Filtering, sorting and regrouping run once per pass, not once per place that needs the result.
         let displayed = allDisplayed
         List {
+            #if os(macOS)
+            MacSmartHeader(
+                title: title, subtitle: macSubtitle, isUpcoming: view == .upcoming,
+                selectedDay: $selectedDay, busyDays: Set(displayed.map(\.key))
+            )
+            #else
             header(displayed)
+            #endif
             if showsTodayEmpty { TodayEmptyView(services: services) }
             // Every group shown is on or after the selected day, so an empty selected day comes first.
             nothingPlanned(displayed)
@@ -117,6 +126,9 @@ struct SmartViewScreen: View {
             }
         }
         .navigationTitle(title)
+        #if os(macOS)
+        .macHidesWindowTitle()
+        #endif
         .toolbar {
             DisplaySelectToolbar(
                 isCustomised: display.isCustomised, isSelecting: selection.isActive,
@@ -127,8 +139,8 @@ struct SmartViewScreen: View {
         .quickAdd(services: services)
         .displayOptions(display, services: services)
         .taskSelection(selection, services: services)
-        .sheet(isPresented: $addPresented) {
-            QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: selectedDay)
+        .sheet(isPresented: $addPresented, onDismiss: { addDay = nil }) {
+            QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: addDay ?? selectedDay)
         }
         // An alert, not a confirmation dialog: on iOS 26 that is a popover, anchored away from the header button.
         .alert(
@@ -164,11 +176,6 @@ struct SmartViewScreen: View {
             // Under its parent the caption would repeat what the indent already says.
             parentTitle: row.depth == 0 ? live.value.parentTitles[id] : nil
         )
-    }
-
-    private var rescheduleTitle: String {
-        let count = rescheduling?.items.count ?? 0
-        return count == 1 ? "Move 1 overdue task to today?" : "Move \(count) overdue tasks to today?"
     }
 
     @ViewBuilder private func nothingPlanned(_ displayed: [DisplaySection]) -> some View {
@@ -232,12 +239,18 @@ struct SmartViewScreen: View {
             ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
                 TaskRowLink(services: services, item: row.item, showProject: showsProject && row.depth == 0, tree: tree(for: row))
             }
+            #if os(macOS)
+            macNewTaskRow(group)
+            #endif
         } header: {
             groupHeader(group)
         }
     }
 
     @ViewBuilder private func groupHeader(_ group: DisplaySection) -> some View {
+        #if os(macOS)
+        macGroupHeader(group)
+        #else
         if view == .today && group.key == "overdue" {
             HStack {
                 Text(group.label).font(Theme.headline).foregroundStyle(Color(.destructive))
@@ -252,6 +265,14 @@ struct SmartViewScreen: View {
             Text(group.label).font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
                 .accessibilityAddTraits(.isHeader)
         }
+        #endif
+    }
+}
+
+extension SmartViewScreen {
+    private var rescheduleTitle: String {
+        let count = rescheduling?.items.count ?? 0
+        return count == 1 ? "Move 1 overdue task to today?" : "Move \(count) overdue tasks to today?"
     }
 
     /// Moves each overdue task to today. A timed due date keeps its time of day; only the day changes.
@@ -269,6 +290,45 @@ struct SmartViewScreen: View {
         if !failures.isEmpty { failure = failures.joined(separator: "\n") }
     }
 }
+
+#if os(macOS)
+extension SmartViewScreen {
+    /// "Sunday 11 October · 3 tasks" on Today, the month on Upcoming, the open count elsewhere.
+    private var macSubtitle: String? {
+        let count = openCount == 1 ? "1 task" : "\(openCount) tasks"
+        switch view {
+        case .today: return Date().formatted(.dateTime.weekday(.wide).day().month(.wide)) + " · " + count
+        case .upcoming: return subtitle
+        default: return live.value.loaded ? count : nil
+        }
+    }
+
+    @ViewBuilder private func macNewTaskRow(_ group: DisplaySection) -> some View {
+        if let day = MacSmartHeader.newTaskDay(view, groupKey: group.key) {
+            MacNewTaskRow {
+                addDay = day
+                addPresented = true
+            }
+        }
+    }
+
+    /// Overdue in coral with its reschedule action; Upcoming's current day as "Today · Sunday" in the accent.
+    @ViewBuilder private func macGroupHeader(_ group: DisplaySection) -> some View {
+        let open = group.items.filter { !$0.task.done }.count
+        if view == .today && group.key == "overdue" {
+            MacGroupHeader(title: group.label, count: open, tint: MacTheme.coral, actionTitle: "Reschedule to today") {
+                rescheduling = group
+            }
+        } else if !isInbox {
+            let isToday = view == .upcoming && group.key == Self.dayKey(Date())
+            MacGroupHeader(
+                title: isToday ? "Today · " + Date().formatted(.dateTime.weekday(.wide)) : group.label,
+                count: open, tint: isToday ? Color(.primary) : Color(.foreground)
+            )
+        }
+    }
+}
+#endif
 
 /// A smart view's date groups, plus each shown subtask's parent title for the caption (these lists do not nest).
 /// Equatable, so a re-read that found nothing new does not re-render the screen (`LiveValue`).

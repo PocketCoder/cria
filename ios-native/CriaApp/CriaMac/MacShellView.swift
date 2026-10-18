@@ -62,8 +62,11 @@ struct MacShellView: View {
             if actions.syncRequest > 0 { await services.refresh() }
         }
         .onChange(of: pendingURL) { openPendingURL() }
-        .sheet(item: $actions.addRequest) { request in
-            QuickAddSheet(services: services, contextProjectId: contextProject, initialLine: request.title)
+        // Quick add is a floating panel, not a sheet: it floats above other apps for the global hotkey too.
+        .onChange(of: actions.addRequest?.id) {
+            guard let request = actions.addRequest else { return }
+            actions.addRequest = nil
+            QuickAddPanel.shared.show(services: services, contextProjectId: contextProject, initialLine: request.title)
         }
         .sheet(isPresented: $actions.creatingProject) {
             ProjectEditorSheet(services: services, target: .create, projects: (try? services.store.projects()) ?? [])
@@ -110,6 +113,7 @@ private struct MacContent: View {
         }
         .environment(\.taskOpener, actions.opener)
         .environment(\.openTaskState, actions.panel)
+        .environment(\.macSidebarActions, actions.sidebar)
         .id(actions.selection)
     }
 

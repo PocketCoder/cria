@@ -12,6 +12,23 @@ struct LoginView: View {
     }
 
     var body: some View {
+        content
+            .onAppear {
+                model.adoptRecentServers(RecentServers())
+                if model.serverURL.isEmpty { model.serverURL = lastServerURL }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        macForm
+        #else
+        form
+        #endif
+    }
+
+    private var form: some View {
         Form {
             Section {
                 header
@@ -73,10 +90,6 @@ struct LoginView: View {
         }
         .criaSurface()
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear {
-            model.adoptRecentServers(RecentServers())
-            if model.serverURL.isEmpty { model.serverURL = lastServerURL }
-        }
     }
 
     /// Up to five servers signed in to before. A tap fills the server (and its remembered username); a long press
@@ -207,4 +220,73 @@ struct LoginView: View {
                 .foregroundStyle(Color(.mutedForeground))
         }
     }
+
+    #if os(macOS)
+    /// The Mac sign-in: the 84pt icon, "Welcome to Cria", labelled fields and a prominent Sign In. Same model and
+    /// fields as the iOS form.
+    private var macForm: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                VStack(spacing: 8) {
+                    Image("LoginIcon")
+                        .resizable()
+                        .frame(width: 84, height: 84)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: Color(red: 60 / 255, green: 20 / 255, blue: 110 / 255).opacity(0.4), radius: 15, y: 10)
+                        .accessibilityHidden(true)
+                    Text("Welcome to Cria").font(.custom(Theme.brandFont, size: 26)).tracking(-0.52).padding(.top, 6)
+                    Text("Sign in to your Vikunja server.").font(.system(size: 13)).foregroundStyle(MacTheme.label2)
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    macLabel("Server")
+                    TextField("https://vikunja.example.com", text: $model.serverURL)
+                        .focused($focus, equals: .server)
+                        .onSubmit { focus = firstField }
+                        .accessibilityIdentifier("login.server")
+                    if !model.recentServers.isEmpty { recentServerChips }
+                    if let error = model.serverURLError {
+                        Text(error).font(.system(size: 12)).foregroundStyle(Color(.destructive))
+                    }
+                    macLabel("Sign in with")
+                    Picker("Sign in with", selection: Binding(get: { model.method }, set: { model.switchMethod($0) })) {
+                        Text("API token").tag(LoginViewModel.Method.token)
+                        Text("Password").tag(LoginViewModel.Method.password)
+                        Text("Share link").tag(LoginViewModel.Method.linkShare)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    credentialFields
+                    if let error = model.submitError {
+                        Text(error).font(.system(size: 12)).foregroundStyle(Color(.destructive))
+                            .accessibilityIdentifier("login.error")
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.large)
+                Button(action: submit) {
+                    HStack(spacing: 8) {
+                        Text(model.totpRequired ? "Verify and Sign In" : "Sign In")
+                        if model.isSubmitting { ProgressView().controlSize(.small) }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.isSubmitting)
+                .accessibilityIdentifier("login.submit")
+            }
+            .frame(maxWidth: 360)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 40)
+            .frame(maxWidth: .infinity)
+        }
+        .background(MacTheme.window)
+    }
+
+    private func macLabel(_ text: String) -> some View {
+        Text(text).font(.system(size: 12, weight: .medium)).foregroundStyle(MacTheme.label2)
+    }
+    #endif
 }

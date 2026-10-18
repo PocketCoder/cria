@@ -23,6 +23,23 @@ struct TodayEmptyView: View {
     var body: some View {
         Section {
             VStack(spacing: 10) {
+                #if os(macOS)
+                // The macOS design's empty state: a sun in a soft accent tile, then the line and the ⌘N hint.
+                Image(systemName: "sun.max")
+                    .font(.system(size: 26))
+                    .foregroundStyle(Color(.primary))
+                    .frame(width: 56, height: 56)
+                    .background(Color(.primary).opacity(0.13), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .accessibilityHidden(true)
+                Text("All clear for today")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(.foreground))
+                    .accessibilityAddTraits(.isHeader)
+                Text("Nothing due. Press ⌘N to add something, or enjoy the quiet.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(MacTheme.label2)
+                    .multilineTextAlignment(.center)
+                #else
                 Image(systemName: "party.popper")
                     .font(.largeTitle)
                     .foregroundStyle(Color(.primary))
@@ -35,6 +52,7 @@ struct TodayEmptyView: View {
                     .font(Theme.rowSubtitle)
                     .foregroundStyle(Color(.mutedForeground))
                     .multilineTextAlignment(.center)
+                #endif
                 if !data.upcoming.isEmpty {
                     Button("Pull something forward") { picking = true }
                         .buttonStyle(.bordered)
@@ -42,7 +60,13 @@ struct TodayEmptyView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            #if os(macOS)
+            .padding(.vertical, 48)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            #else
             .padding(.vertical, 12)
+            #endif
             // On the row, not the Section: a modifier on a Section is applied to every row in it.
             .task { await live.run() }
             .sheet(isPresented: $picking) {
@@ -59,8 +83,12 @@ struct TodayEmptyView: View {
             Section {
                 ForEach(data.suggestions, id: \.task.localId) { item in suggestionRow(item) }
             } header: {
+                #if os(macOS)
+                MacGroupHeader(title: "You could work on")
+                #else
                 Text("You could work on").font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
                     .accessibilityAddTraits(.isHeader)
+                #endif
             }
         }
     }

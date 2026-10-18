@@ -18,6 +18,8 @@ struct TaskPropertiesSection: View {
 
     var body: some View {
         Section {
+            #if !os(macOS)
+            // The Mac inspector's field box has the project and priority.
             Picker(selection: Binding(get: { task.projectLocalId }, set: { moveTask(to: $0) })) {
                 ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
             } label: {
@@ -31,6 +33,7 @@ struct TaskPropertiesSection: View {
                         .foregroundStyle(ThemeToken.priority(task.priority).map { Color($0) } ?? Color(.mutedForeground))
                 }
             }
+            #endif
             PercentDoneRow(stored: task.percentDone, followsSubtasks: followsSubtasks) { value in
                 var patch = TaskPatch()
                 patch.percentDone = value

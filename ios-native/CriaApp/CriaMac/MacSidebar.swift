@@ -6,12 +6,13 @@ struct MacSidebarData: Equatable, Sendable {
     var children: [String?: [ProjectRecord]] = [:]
     var favourites: [ProjectRecord] = []
     var filters: [SavedFilterRecord] = []
+    var labels: [LabelRecord] = []
     var counts = TabCounts()
     /// Changes waiting in the outbox, for the footer.
     var waiting = 0
 }
 
-/// The sidebar from the macOS design: Inbox, Today and Upcoming, then collapsible Favourites, Projects and Filters,
+/// The sidebar from the macOS design: Inbox, Today and Upcoming, then collapsible Favourites, Projects, Filters and Labels,
 /// with sync status and Settings in the footer. Search is the toolbar's field, not a row. Icons take the accent
 /// colour; counts show on the right when Settings > Customise > Show task count is on. The system draws the glass on
 /// macOS 26; no background.
@@ -24,6 +25,7 @@ struct MacSidebar: View {
     @AppStorage("mac.sidebar.favourites") private var showFavourites = true
     @AppStorage("mac.sidebar.projects") private var showProjects = true
     @AppStorage("mac.sidebar.filters") private var showFilters = true
+    @AppStorage("mac.sidebar.labels") private var showLabels = true
 
     private var sheets: MacSidebarActions { actions.sidebar }
 
@@ -32,12 +34,14 @@ struct MacSidebar: View {
         self.actions = actions
         let store = services.store
         _live = State(initialValue: LiveValue(initial: MacSidebarData()) {
-            observeStore(store, kinds: [.projects, .tasks, .savedFilters, .outbox]) { (reading: CriaStore) throws -> MacSidebarData in
+            let kinds: Set<ChangeKind> = [.projects, .tasks, .savedFilters, .labels, .outbox]
+            return observeStore(store, kinds: kinds) { (reading: CriaStore) throws -> MacSidebarData in
                 let visible = ProjectTree.visible(try reading.projects())
                 return MacSidebarData(
                     children: ProjectTree.childIndex(visible),
                     favourites: visible.filter(\.isFavorite),
                     filters: try reading.savedFilters(),
+                    labels: try reading.labels(),
                     counts: try TabCounts.read(reading, inboxLocalId: services.rememberedDefaultProjectLocalId()),
                     waiting: try reading.outboxRows().count
                 )
@@ -77,6 +81,26 @@ struct MacSidebar: View {
                 } header: {
                     header("Filters", add: "New saved filter") { sheets.newFilter() }
                 }
+            }
+            Section(isExpanded: $showLabels) {
+                ForEach(live.value.labels, id: \.localId) { label in
+                    Label {
+                        Text(label.title)
+                    } icon: {
+                        Image(systemName: "tag.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color(hexString: label.hexColor) ?? MacTheme.label2)
+                    }
+                    .tag(MacSelection.label(label.localId))
+                    .contextMenu {
+                        Button("Edit…", systemImage: "pencil") { sheets.labelEditor = LabelEditTarget(label: label) }
+                        Button("Delete…", systemImage: "trash", role: .destructive) {
+                            sheets.askToDelete(label, services: services)
+                        }
+                    }
+                }
+            } header: {
+                header("Labels", add: "Manage labels") { sheets.showingLabels = true }
             }
         }
         .tint(Color(.primary))
@@ -180,11 +204,13 @@ struct MacProjectBranch: View {
     }
 }
 
-/// A project row: its colour dot, title and the project actions on right-click.
+/// A project row: its colour dot, title and the project actions on right-click. A task dragged from a list drops on it
+/// to move there, with a 22% tint and a 1.5pt accent ring while it is over the row.
 struct MacProjectLabel: View {
     let project: ProjectRecord
     let services: AppServices
     let sheets: MacSidebarActions
+    @State private var isTargeted = false
 
     var body: some View {
         Label {
@@ -197,5 +223,29 @@ struct MacProjectLabel: View {
         .tag(MacSelection.project(project.localId))
         // On the row itself, not the disclosure group, so a sub-project's menu is its own.
         .contextMenu { MacProjectMenu(project: project, services: services, sheets: sheets) }
+        .background {
+            if isTargeted {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(.primary).opacity(0.22))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color(.primary), lineWidth: 1.5))
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -4)
+            }
+        }
+        .dropDestination(for: String.self) { items, _ in
+            moveTasks(items.compactMap(KanbanPayload.taskId(from:)))
+        } isTargeted: { isTargeted = $0 }
+    }
+
+    /// Moves each dropped task here, as the inspector's Move to project does. Tasks already here are left alone.
+    private func moveTasks(_ ids: [String]) -> Bool {
+        var moved = false
+        for id in ids {
+            guard let task = try? services.store.task(localId: id), task.projectLocalId != project.localId else { continue }
+            var patch = TaskPatch()
+            patch.projectLocalId = project.localId
+            if (try? services.store.updateTask(localId: id, patch: patch)) != nil { moved = true }
+        }
+        return moved
     }
 }

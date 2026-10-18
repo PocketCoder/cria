@@ -31,6 +31,21 @@ private struct KanbanDropTarget: ViewModifier {
 /// The column is as tall as its content and scrolls only when that is taller than the screen. A filter-mode column
 /// is read-only: no dragging, no add row, no menu.
 struct KanbanColumnView: View {
+    #if os(macOS)
+    // The Mac design: radius 16, padding 8, the window's hover fill, a 1.5pt primary ring while dragged over.
+    private static let radius: CGFloat = 16
+    private static let padding: CGFloat = 8
+    private static let dropOpacity = 1.0
+    private static let dropWidth: CGFloat = 1.5
+    private var columnFill: Color { isDropTarget ? Color(.foreground).opacity(0.10) : MacTheme.fill }
+    #else
+    private static let radius: CGFloat = 20
+    private static let padding: CGFloat = 12
+    private static let dropOpacity = 0.6
+    private static let dropWidth: CGFloat = 2
+    private var columnFill: Color { Color(.foreground).opacity(isDropTarget ? 0.10 : 0.05) }
+    #endif
+
     let services: AppServices
     let view: ViewRecord
     let column: KanbanColumn
@@ -96,13 +111,13 @@ struct KanbanColumnView: View {
                 .allowsHitTesting(!compact)
                 if !readOnly && !compact { addRow }
             }
-            .padding(12)
-            .background(Color(.foreground).opacity(isDropTarget ? 0.10 : 0.05),
-                        in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(Self.padding)
+            .background(columnFill, in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
             // The column a dragged card would land in.
             .overlay {
                 if isDropTarget {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(dropOutline.opacity(0.6), lineWidth: 2)
+                    RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                        .strokeBorder(dropOutline.opacity(Self.dropOpacity), lineWidth: Self.dropWidth)
                 }
             }
             .animation(.easeOut(duration: 0.12), value: isDropTarget)

@@ -69,6 +69,20 @@ struct ProjectScreen: View {
     }
 
     private var header: ProjectHeader {
+        #if os(macOS)
+        var header = baseHeader
+        header.macTitle = live.value.project?.title ?? title
+        header.macProject = live.value.project
+        header.macProjectLocalId = projectLocalId
+        header.macServices = services
+        header.macShowsInfoToggle = (current?.viewKind ?? .list) == .list
+        return header
+        #else
+        return baseHeader
+        #endif
+    }
+
+    private var baseHeader: ProjectHeader {
         ProjectHeader(
             views: views,
             selectedId: current?.localId,
@@ -104,7 +118,36 @@ struct ProjectScreen: View {
                 guard let kind = note.object as? String, let match = views.first(where: { $0.viewKind.rawValue == kind }) else { return }
                 select(match.localId)
             }
+            #if os(macOS)
+            .toolbar { viewPicker }
+            #endif
     }
+
+    #if os(macOS)
+    /// The Mac's view picker: a segmented control in the toolbar, bound to the view on screen.
+    @ToolbarContentBuilder private var viewPicker: some ToolbarContent {
+        if views.count > 1 {
+            ToolbarItem(placement: .primaryAction) {
+                Picker("View", selection: pickerSelection) {
+                    ForEach(views, id: \.localId) { view in
+                        Label(ViewManagement.label(view.slot), systemImage: MacProjectChrome.icon(view.viewKind))
+                            .tag(view.localId)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelStyle(.titleAndIcon)
+                .help("Project view")
+            }
+        }
+    }
+
+    private var pickerSelection: Binding<String> {
+        Binding(
+            get: { current?.localId ?? "" },
+            set: { id in withAnimation(reduceMotion ? nil : .snappy) { select(id) } }
+        )
+    }
+    #endif
 
     /// Cached copy first, then the server's; nothing for a project that has not synced yet.
     private func loadBackground() async {

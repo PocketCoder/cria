@@ -160,6 +160,11 @@ final class MacActions {
     func projectView(_ kind: String) {
         NotificationCenter.default.post(name: .criaProjectViewCommand, object: kind)
     }
+
+    /// View > Show Project Info: the project on screen shows or hides its info rail.
+    func toggleProjectInfo() {
+        NotificationCenter.default.post(name: .criaProjectInfoCommand, object: nil)
+    }
 }
 
 private struct MacActionsKey: FocusedValueKey {

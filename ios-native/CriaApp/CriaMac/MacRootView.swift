@@ -164,7 +164,7 @@ struct MacSettingsScene: View {
                 Text("Sign in to change settings.").foregroundStyle(Color(.mutedForeground)).padding(40)
             }
         }
-        .frame(width: 600, height: 620)
+        .frame(width: 680, height: 600)
         .modifier(MacPreferenceEnvironment())
     }
 }

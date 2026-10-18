@@ -24,7 +24,13 @@ struct KanbanCardView: View {
     var parentTitle: String?
     var isExpanded: Binding<Bool> = .constant(false)
 
+    #if os(macOS)
+    static let radius: CGFloat = 11
+    /// The task open in the inspector, for the selected card's ring.
+    @Environment(\.openTaskState) private var openTaskState
+    #else
     static let radius: CGFloat = 14
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,7 +39,18 @@ struct KanbanCardView: View {
                 KanbanSubtaskList(services: services, subtasks: subtasks, isExpanded: isExpanded)
             }
         }
+        #if os(macOS)
+        // The Mac card: white (or #212128) with a soft shadow and a hairline ring, and a 2pt primary ring when open.
+        .background(MacTheme.card, in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+        .overlay {
+            let selected = openTaskState?.id == task.localId
+            RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                .strokeBorder(selected ? Color(.primary) : Color.primary.opacity(0.08), lineWidth: selected ? 2 : 0.5)
+        }
+        .shadow(color: Color(red: 30 / 255, green: 15 / 255, blue: 60 / 255).opacity(0.08), radius: 1, y: 1)
+        #else
         .background(Color(.cell), in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+        #endif
         .contentShape(.dragPreview, RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .contextMenu {
             if !moveTargets.isEmpty {

@@ -27,7 +27,11 @@ struct ReminderSection: View {
     @State private var systemDenied = false
 
     var body: some View {
-        Section("Due & reminders") {
+        Section(Self.sectionTitle) {
+            #if os(macOS)
+            // The inspector's field box has the due date and repeat; this section keeps the reminders.
+            if task.dueDate != nil && !task.done { postponeMenu }
+            #else
             DateValueRow(title: "Due", systemImage: "calendar", iso: task.dueDate, action: onEditDue)
                 .task(id: scenePhase) {
                     // Read again on coming back from iOS Settings, so the warning clears once notifications are allowed.
@@ -37,18 +41,41 @@ struct ReminderSection: View {
             if task.dueDate != nil || task.repeatAfter > 0 || task.repeatMode != 0 {
                 RepeatRow(task: task, apply: applyRepeat, onCustom: onCustomRepeat)
             }
+            #endif
             // Position as identity: two reminders can read the same ("1 day before due date" twice).
             ForEach(Array(reminders.enumerated()), id: \.offset) { _, reminder in
                 ReminderRow(services: services, taskLocalId: task.localId, reminder: reminder, state: state)
             }
             if !reminders.isEmpty && (systemDenied || !preferences.notificationsEnabled) { notificationWarning }
+            #if os(macOS)
+            // The Add row is always here, so it carries the read the iOS due row does.
+            Group {
+                if let custom {
+                    customRows(custom)
+                } else {
+                    addMenu
+                }
+            }
+            .task(id: scenePhase) { await readSystemDenied() }
+            #else
             if let custom {
                 customRows(custom)
             } else {
                 addMenu
             }
+            #endif
         }
     }
+
+    #if os(macOS)
+    private static var sectionTitle: LocalizedStringKey { "Reminders" }
+
+    private func readSystemDenied() async {
+        systemDenied = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
+    }
+    #else
+    private static var sectionTitle: LocalizedStringKey { "Due & reminders" }
+    #endif
 
     /// Reminders are stored on the server either way, but this phone only alerts when the OS and Cria's switch allow it.
     #if os(macOS)

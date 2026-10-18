@@ -79,7 +79,11 @@ struct UndoToast: View {
                     Image(systemName: "trash").foregroundStyle(.secondary)
                     Text("Deleted ‘\(offer.title)’").lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
+                    #if os(macOS)
+                    Button("Undo") { center.undo() }.buttonStyle(MacUndoButtonStyle())
+                    #else
                     Button("Undo") { center.undo() }.fontWeight(.semibold)
+                    #endif
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityAction(named: "Undo") { center.undo() }
@@ -102,6 +106,20 @@ struct UndoToast: View {
 
 private struct ToastChrome: ViewModifier {
     func body(content: Content) -> some View {
+        #if os(macOS)
+        // The Mac pill: 36pt of glass, 20pt above the bottom of the content column.
+        content
+            .font(.system(size: 13, weight: .medium))
+            .padding(.leading, 16)
+            .padding(.trailing, 5)
+            .frame(height: 36)
+            .fixedSize()
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+            .padding(.bottom, 20)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        #else
         content
             .font(.subheadline)
             .padding(.horizontal, 16)
@@ -111,5 +129,21 @@ private struct ToastChrome: ViewModifier {
             .padding(.horizontal, 16)
             .padding(.bottom, 72)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        #endif
     }
 }
+
+#if os(macOS)
+/// The toast's Undo: a 26pt capsule, primary at 13% with Semibold primary text.
+private struct MacUndoButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Color(.primary))
+            .padding(.horizontal, 12)
+            .frame(height: 26)
+            .background(Color(.primary).opacity(configuration.isPressed ? 0.22 : 0.13), in: Capsule())
+            .contentShape(Capsule())
+    }
+}
+#endif

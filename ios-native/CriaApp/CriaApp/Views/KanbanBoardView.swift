@@ -92,9 +92,14 @@ struct KanbanBoardView: View {
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
     /// and accessibility sizes take nearly the whole width so titles and chips are not squeezed.
     private static func columnWidth(_ available: CGFloat, typeSize: DynamicTypeSize) -> CGFloat {
+        #if os(macOS)
+        // The Mac design's fixed 272pt column; the board scrolls sideways.
+        return 272
+        #else
         if typeSize.isAccessibilitySize { return available * 0.94 }
         let cap: CGFloat = typeSize >= .xxLarge ? 400 : 340
         return min(max(available * 0.85, 280), cap)
+        #endif
     }
 
     var body: some View {
