@@ -75,8 +75,26 @@ struct TableViewScreen: View {
         availableColumns.filter { visible.contains($0) }
     }
 
-    /// Sorting uses every sortable column, shown or not, so the Sort menu always does something.
-    private var rows: [TaskListItem] {
+    /// Sorting uses every sortable column, shown or not, so the Sort menu always does something. Kept in state and
+    /// redone only when its inputs change, not on every render.
+    @State private var rows: [TaskListItem] = []
+
+    private struct SortInput: Equatable {
+        let items: [TaskListItem]
+        let sortText: String
+        let showDone: Bool
+        let currentUserId: Int?
+        let commentCounts: [Int: Int]
+    }
+
+    private var sortInput: SortInput {
+        SortInput(
+            items: live.value, sortText: sortText, showDone: showDone, currentUserId: currentUserId,
+            commentCounts: commentCounts
+        )
+    }
+
+    private func sortedRows() -> [TaskListItem] {
         let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
         let titles = Dictionary(live.value.map { ($0.task.projectLocalId, $0.projectTitle ?? "") }, uniquingKeysWith: { first, _ in first })
         let sorted = TableSort.sorted(
@@ -140,6 +158,7 @@ struct TableViewScreen: View {
         .task { await live.run() }
         .task { await assigneeFeed.run() }
         .task { await nesting.run() }
+        .onChange(of: sortInput, initial: true) { rows = sortedRows() }
         .task { currentUserId = await services.signedInUser()?.id }
         .task(id: showsComments) { await loadCommentCounts() }
     }

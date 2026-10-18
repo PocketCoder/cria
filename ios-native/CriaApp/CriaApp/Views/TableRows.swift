@@ -203,10 +203,6 @@ struct TableGridView: View {
 
     #if os(macOS)
     private static let columnSpacing: CGFloat = 0
-    /// Every other row, for the Mac's alternating stripes.
-    private var striped: Set<String> {
-        Set(rows.enumerated().filter { $0.offset % 2 == 1 }.map(\.element.task.localId))
-    }
     #else
     private static let columnSpacing: CGFloat = 16
     #endif
@@ -233,11 +229,10 @@ struct TableGridView: View {
                                 .frame(minWidth: width(column), alignment: .leading)
                                 .padding(.vertical, 10)
                                 #if os(macOS)
-                                // Spacing moves into the cells so the alternating stripe runs across the row.
+                                // No alternating stripes: a Grid can only paint them per cell, which broke into a
+                                // checkerboard, and stretching every cell to fill its row made each layout pass slow.
+                                // The dividers separate the rows.
                                 .padding(.horizontal, 8)
-                                // Fill the column, not just the cell's content, or the stripes break into a checkerboard.
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                                .background(striped.contains(item.task.localId) ? MacTheme.fill : Color.clear)
                                 #endif
                         }
                     }

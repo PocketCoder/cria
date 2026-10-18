@@ -275,12 +275,11 @@ extension TaskRowView {
             || (showProject && item.projectTitle != nil)
     }
 
-    /// A description with any text or image in it; an editor's empty paragraph does not count.
+    /// A description with any text or image in it; an editor's empty paragraph does not count. The text check uses
+    /// the summary the store read already made off the main thread, not a regex per row per render.
     private var macHasDescription: Bool {
         guard let html = task.description, !html.isEmpty else { return false }
-        if html.contains("<img") { return true }
-        let text = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return item.summary != nil || html.contains("<img")
     }
 
     private var macMeta: some View {
