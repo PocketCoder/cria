@@ -22,6 +22,8 @@ struct KanbanCardView: View {
     var subtasks: [KanbanSubtaskRow] = []
     /// The parent's title when it is on the board in another column: shown as "↳ Parent".
     var parentTitle: String?
+    /// The task's subtask progress, shown as a ring on the Mac (iOS lists same-column subtasks in the card).
+    var progress: SubtaskProgress?
     var isExpanded: Binding<Bool> = .constant(false)
 
     #if os(macOS)
@@ -94,11 +96,16 @@ struct KanbanCardView: View {
                         .multilineTextAlignment(.leading)
                         .lineLimit(4)
                     if let parentTitle {
-                        Text("↳ \(parentTitle)")
+                        Text("Subtask of ‘\(parentTitle)’")
                             .font(Theme.caption)
                             .foregroundStyle(Color(.mutedForeground))
                             .lineLimit(1)
                     }
+                    #if os(macOS)
+                    if let progress {
+                        SubtaskRing(progress: progress).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                    }
+                    #endif
                     if hasChips {
                         ChipFlowLayout { chips }
                     }

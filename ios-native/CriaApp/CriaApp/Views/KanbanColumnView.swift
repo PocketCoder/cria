@@ -58,6 +58,8 @@ struct KanbanColumnView: View {
     @Binding var expanded: Set<String>
     /// Labels by task local id.
     let labels: [String: [LabelRecord]]
+    /// Parent titles and subtask progress by task local id.
+    var subtaskInfo = KanbanSubtaskInfo()
     let readOnly: Bool
     /// A card is being dragged and has left its own column: this column shrinks to its header so every column is on
     /// screen at once to drop on. It opens again (not compact) while the card is over it. The cards stay in the view tree
@@ -150,7 +152,9 @@ struct KanbanColumnView: View {
         if readOnly {
             KanbanCardView(
                 services: services, task: task, labels: labels[task.localId] ?? [],
-                subtasks: plan.subtasks, parentTitle: plan.parentTitle, isExpanded: open
+                subtasks: plan.subtasks,
+                parentTitle: plan.parentTitle ?? subtaskInfo.parentTitles[task.localId],
+                progress: subtaskInfo.progress[task.localId], isExpanded: open
             )
         } else {
             KanbanCardView(
@@ -158,7 +162,9 @@ struct KanbanColumnView: View {
                 moveTargets: columns.filter { $0.bucket.localId != column.bucket.localId },
                 onMove: { target in onMoveTo(task.localId, target) },
                 onDelete: { delete(task) },
-                subtasks: plan.subtasks, parentTitle: plan.parentTitle, isExpanded: open
+                subtasks: plan.subtasks,
+                parentTitle: plan.parentTitle ?? subtaskInfo.parentTitles[task.localId],
+                progress: subtaskInfo.progress[task.localId], isExpanded: open
             )
             // onDrag (not draggable) so the board hears the drag begin and can shrink the columns.
             .onDrag {
