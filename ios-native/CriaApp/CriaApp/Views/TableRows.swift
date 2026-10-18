@@ -187,6 +187,10 @@ struct TableGridView: View {
     let extras: TableExtras
     let onHeaderTap: (TableViewColumn) -> Void
     var assignees: [String: [AssigneeRecord]] = [:]
+    /// A subtask's parent title, shown under its title.
+    var parentTitles: [String: String] = [:]
+    /// A parent's subtask progress, shown as a ring after its title.
+    var progress: [String: SubtaskProgress] = [:]
     /// Set while "Edit cells" is on: label, assignee and date cells then open their picker.
     var onEdit: ((TableCellEdit) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
@@ -298,11 +302,24 @@ struct TableGridView: View {
                 .accessibilityLabel(names.isEmpty ? "No assignees" : "Assignees: \(names)")
         case .title:
             NavigationLink(value: Route.task(task.localId)) {
-                Text(task.title)
-                    .font(Theme.rowTitle)
-                    .strikethrough(task.done)
-                    .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(task.title)
+                            .font(Theme.rowTitle)
+                            .strikethrough(task.done)
+                            .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                            .lineLimit(2)
+                        if let progress = progress[task.localId] {
+                            SubtaskRing(progress: progress).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                        }
+                    }
+                    if let parent = parentTitles[task.localId] {
+                        Text("Subtask of ‘\(parent)’")
+                            .font(Theme.caption)
+                            .foregroundStyle(Color(.mutedForeground))
+                            .lineLimit(1)
+                    }
+                }
             }
             .buttonStyle(.plain)
         case .labels:

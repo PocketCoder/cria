@@ -24,6 +24,8 @@ struct TableViewScreen: View {
     @State private var cellEdit: TableCellEdit?
     @State private var editFailure: String?
     @State private var assigneeFeed: LiveValue<[String: [AssigneeRecord]]>
+    /// Each subtask's parent title and each parent's subtask progress, for the title cell.
+    @State private var nesting: LiveValue<TaskListSnapshot>
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(services: AppServices, projectLocalId: String, viewLocalId: String? = nil, header: ProjectHeader) {
@@ -35,6 +37,11 @@ struct TableViewScreen: View {
         _live = State(initialValue: LiveValue(initial: []) {
             observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
                 try reading.taskItems(.project(projectLocalId), includeDone: true)
+            }
+        })
+        _nesting = State(initialValue: LiveValue(initial: TaskListSnapshot()) {
+            observeStore(store, kinds: [.tasks]) { reading in
+                try TaskListNesting.snapshot(reading, items: reading.taskItems(.project(projectLocalId), includeDone: true))
             }
         })
         _assigneeFeed = State(initialValue: LiveValue(initial: [:]) {
@@ -89,6 +96,8 @@ struct TableViewScreen: View {
                             sortText = TableConfigCodec.encodeSort(TableSort.cycle(sortKeys, column: column, additive: false))
                         },
                         assignees: assigneeFeed.value,
+                        parentTitles: nesting.value.parentTitles,
+                        progress: nesting.value.progress,
                         onEdit: editAction
                     )
                 }
@@ -130,6 +139,7 @@ struct TableViewScreen: View {
         .quickAdd(services: services, contextProjectId: projectLocalId)
         .task { await live.run() }
         .task { await assigneeFeed.run() }
+        .task { await nesting.run() }
         .task { currentUserId = await services.signedInUser()?.id }
         .task(id: showsComments) { await loadCommentCounts() }
     }

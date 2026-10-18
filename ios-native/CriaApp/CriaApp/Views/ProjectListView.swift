@@ -152,7 +152,9 @@ struct ProjectListView: View {
     private func taskRow(_ row: NestedTaskItem) -> some View {
         TaskRowLink(
             services: services, item: row.item,
-            tree: TaskListNesting.tree(for: row, progress: live.value.progress, collapsed: $collapsed)
+            tree: TaskListNesting.tree(
+                for: row, progress: live.value.progress, collapsed: $collapsed, parentTitles: live.value.parentTitles
+            )
         )
     }
 

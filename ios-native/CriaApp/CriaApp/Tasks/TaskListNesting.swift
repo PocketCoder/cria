@@ -12,6 +12,8 @@ struct TaskListSnapshot: Equatable, Sendable {
     var items: [TaskListItem] = []
     var children: [String: [String]] = [:]
     var progress: [String: SubtaskProgress] = [:]
+    /// A subtask's parent title, shown when its parent is not in the list to nest under.
+    var parentTitles: [String: String] = [:]
     /// Task local id to the user ids assigned, for the Display sheet's assignee filter.
     var assignees: [String: Set<Int>] = [:]
     /// False until the first read, so the list is not built empty and then filled while on screen.
@@ -58,7 +60,8 @@ enum TaskListNesting {
             if total > 0 { progress[item.task.localId] = SubtaskProgress(done: done, total: total) }
         }
         return TaskListSnapshot(
-            items: items, children: children, progress: progress, assignees: try reading.assigneeMap(), loaded: true
+            items: items, children: children, progress: progress,
+            parentTitles: try parentTitles(reading, for: items), assignees: try reading.assigneeMap(), loaded: true
         )
     }
 
@@ -105,7 +108,8 @@ enum TaskListNesting {
 
     /// The row's tree context in a nested list.
     @MainActor static func tree(
-        for row: NestedTaskItem, progress: [String: SubtaskProgress], collapsed: Binding<Set<String>>
+        for row: NestedTaskItem, progress: [String: SubtaskProgress], collapsed: Binding<Set<String>>,
+        parentTitles: [String: String] = [:]
     ) -> TaskRowTree {
         let id = row.id
         return TaskRowTree(
@@ -120,7 +124,9 @@ enum TaskListNesting {
                         collapsed.wrappedValue.insert(id)
                     }
                 }
-            }
+            },
+            // Under its parent the caption would repeat what the indent already says.
+            parentTitle: row.depth == 0 ? parentTitles[id] : nil
         )
     }
 }

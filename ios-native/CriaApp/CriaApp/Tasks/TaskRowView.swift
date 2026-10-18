@@ -335,24 +335,20 @@ extension TaskRowView {
         .background(tint.opacity(0.13), in: Capsule())
     }
 
-    /// "2/5" subtasks done; where the children are nested here it also collapses them.
+    /// A ring and "2/5" subtasks done; where the children are nested here it also collapses them.
     @ViewBuilder private func macSubtasks(_ progress: SubtaskProgress) -> some View {
-        let count = Text("\(progress.done)/\(progress.total)")
         if let collapsed = tree.isCollapsed {
             Button(action: tree.onToggleCollapsed) {
                 HStack(spacing: 3) {
                     Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                    count
+                    SubtaskRing(progress: progress)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(collapsed ? "Show subtasks" : "Hide subtasks")
         } else {
-            HStack(spacing: 3) {
-                Image(systemName: "list.bullet.indent")
-                count
-            }
+            SubtaskRing(progress: progress)
         }
     }
 }
