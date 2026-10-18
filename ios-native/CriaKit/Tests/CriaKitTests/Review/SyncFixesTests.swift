@@ -120,6 +120,21 @@ final class SyncFixesTests: XCTestCase {
         XCTAssertEqual(row?["server_id"] as Int?, 5)
     }
 
+    /// The CI flake in `testTheBusKicksTheNextDrainAfterADeadLetter`: a pull stored the task the create had just
+    /// made before the push recorded its server id, so recording it failed the UNIQUE index.
+    func testMarkSyncedReplacesTheCopyAPullStoredMidCreate() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let task = try store.createTask(TaskInput(title: "Mine", projectLocalId: project))
+        let json = taskJSON(id: 101, title: "Mine")
+        let copy = try XCTUnwrap(try store.upsertTaskFromServer(try decodeFixture(TaskResponse.self, json), rawJSON: json))
+        XCTAssertNotEqual(copy, task.localId)
+        try store.markTaskSynced(localId: task.localId, serverId: 101, updatedAt: nil)
+        let rows = try store.database.writer.read { try Row.fetchAll($0, sql: "SELECT local_id, server_id FROM tasks") }
+        XCTAssertEqual(rows.map { $0["local_id"] as String }, [task.localId])
+        XCTAssertEqual(rows.first?["server_id"] as Int?, 101)
+    }
+
     // MARK: Queue stalls
 
     func testLinkOpForADeletedTaskFinishesAsANoOp() async throws {

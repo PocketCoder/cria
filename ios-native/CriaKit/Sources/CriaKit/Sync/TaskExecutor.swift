@@ -155,6 +155,15 @@ extension CriaStore {
             var assignments = ["synced_at = ?"]
             var arguments: [(any DatabaseValueConvertible)?] = [now]
             if let serverId {
+                // A pull that ran while the create was in flight can already have stored the new task as a second,
+                // clean row with this server id: the duplicate would show twice and fail the UNIQUE index here,
+                // dead-lettering the create. That copy is the same task, so it goes and this row takes the id.
+                // A dirty copy (edited in that window) is left alone.
+                for duplicate in try String.fetchAll(connection, sql: """
+                    SELECT local_id FROM tasks WHERE server_id = ? AND local_id <> ? AND dirty = 0
+                    """, arguments: [serverId, localId]) {
+                    try CriaStore.deleteTaskCascade(connection, localId: duplicate)
+                }
                 assignments.append("server_id = ?")
                 arguments.append(serverId)
             }
