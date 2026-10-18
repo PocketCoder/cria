@@ -13,6 +13,7 @@ struct MacShellView: View {
     @State private var undoCenter = UndoCenter()
     @State private var keys = KeySequencer()
     @State private var conflictPrompt = ConflictPrompt()
+    @State private var menuChoices = TaskMenuChoices()
     @FocusState private var searchFocused: Bool
     @Environment(\.preferences) private var preferences
 
@@ -48,6 +49,8 @@ struct MacShellView: View {
         .environment(\.taskCloser, actions.closer)
         .environment(navigation)
         .environment(undoCenter)
+        .environment(menuChoices)
+        .task { await menuChoices.follow(services.store) }
         .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
         .task { undoCenter.attach(services) }
         // A conflicted change holds up the outbox until it is resolved, so the sheet opens as on iOS.
@@ -117,23 +120,38 @@ private struct MacContent: View {
         .id(actions.selection)
     }
 
-    @ViewBuilder
+    /// Its own view, so only it reads the search text: a keystroke re-evaluates this switch, not the stack around it.
     private var root: some View {
-        if !actions.query.trimmingCharacters(in: .whitespaces).isEmpty {
+        MacContentRoot(services: services, actions: actions)
+    }
+}
+
+/// Search results while the toolbar field has text, else the screen for the selection.
+private struct MacContentRoot: View {
+    let services: AppServices
+    let actions: MacActions
+
+    var body: some View {
+        if actions.selection == .search || !actions.query.trimmingCharacters(in: .whitespaces).isEmpty {
             SearchScreen(services: services, query: actions.query)
         } else {
-            screen
+            MacSelectionScreen(services: services, selection: actions.selection ?? .today)
         }
     }
+}
 
-    @ViewBuilder
-    private var screen: some View {
-        switch actions.selection ?? .today {
+/// The screen for a sidebar selection. Built from the selection alone, so search typing never re-evaluates it.
+private struct MacSelectionScreen: View {
+    let services: AppServices
+    let selection: MacSelection
+
+    var body: some View {
+        switch selection {
         case .inbox: InboxScreen(services: services)
         case .today: SmartViewScreen(services: services, view: .today, title: "Today")
         case .upcoming: SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
         case .favorites: TaskListView(services: services, source: .favorites, title: "Favourites")
-        case .search: SearchScreen(services: services, query: actions.query)
+        case .search: SearchScreen(services: services, query: "")
         case .project(let localId):
             let title = (try? services.store.project(localId: localId))?.title ?? "Project"
             ProjectScreen(services: services, projectLocalId: localId, title: title)

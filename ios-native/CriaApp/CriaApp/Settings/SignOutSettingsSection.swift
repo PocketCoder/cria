@@ -41,7 +41,7 @@ struct SignOutSettingsSection: View {
 
     private func askToWipe() {
         let store = services.store
-        wipePrompt = WipePrompt(pending: try? store.outboxRows().count, failed: try? store.deadLetters().count)
+        wipePrompt = WipePrompt(pending: try? store.outboxCount(), failed: try? store.deadLetters().count)
     }
 
     static func message(for prompt: WipePrompt) -> String {

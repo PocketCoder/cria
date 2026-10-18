@@ -59,6 +59,11 @@ extension CriaStore {
         try database.writer.read { try Row.fetchAll($0, sql: "SELECT * FROM outbox ORDER BY id ASC").map(OutboxRow.init(row:)) }
     }
 
+    /// How many changes are waiting, without loading their payloads.
+    public func outboxCount() throws -> Int {
+        try database.writer.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM outbox") ?? 0 }
+    }
+
     /// Always the oldest row, regardless of `next_attempt_at`: skipping a backing-off head would break FIFO.
     public func outboxHead() throws -> OutboxRow? {
         try database.writer.read { try Row.fetchOne($0, sql: "SELECT * FROM outbox ORDER BY id ASC LIMIT 1").map(OutboxRow.init(row:)) }

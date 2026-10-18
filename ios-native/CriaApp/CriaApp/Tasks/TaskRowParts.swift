@@ -1,4 +1,5 @@
 import CriaKit
+import Observation
 import SwiftUI
 
 /// The Mac row's hover and open-task highlight. A modifier with its own state, so hovering a row or opening a task
@@ -35,15 +36,34 @@ struct PanelRowHighlight: ViewModifier {
 }
 
 #if os(macOS)
-/// The task menu's label submenu: every label, ticked when the task has it. Read when the menu is built.
+/// Every label and the visible projects, for the task menu's submenus. One per window, kept current by the shell
+/// off the main thread, so building a row's menu reads nothing from the database.
+@MainActor @Observable
+final class TaskMenuChoices {
+    var labels: [LabelRecord] = []
+    var projects: [ProjectRecord] = []
+
+    /// Follows the store until the calling task is cancelled.
+    func follow(_ store: CriaStore) async {
+        let stream = observeStore(store, kinds: [.labels, .projects]) { reading in
+            (try reading.labels(), ProjectTree.visible(try reading.projects()))
+        }
+        for await (labels, projects) in stream {
+            if labels != self.labels { self.labels = labels }
+            if projects != self.projects { self.projects = projects }
+        }
+    }
+}
+
+/// The task menu's label submenu: every label, ticked when the task has it.
 struct TaskRowLabelChoices: View {
     let services: AppServices
     let item: TaskListItem
     let onFailure: (String) -> Void
+    @Environment(TaskMenuChoices.self) private var choices: TaskMenuChoices?
 
     var body: some View {
-        let all = (try? services.store.labels()) ?? []
-        ForEach(all, id: \.localId) { label in
+        ForEach(choices?.labels ?? [], id: \.localId) { label in
             let has = item.labels.contains { $0.localId == label.localId }
             Toggle(label.title, isOn: Binding(get: { has }, set: { _ in toggle(label) }))
         }
@@ -63,10 +83,10 @@ struct TaskRowProjectChoices: View {
     let services: AppServices
     let task: TaskRecord
     let onFailure: (String) -> Void
+    @Environment(TaskMenuChoices.self) private var choices: TaskMenuChoices?
 
     var body: some View {
-        let projects = ProjectTree.visible((try? services.store.projects()) ?? [])
-        ForEach(projects, id: \.localId) { project in
+        ForEach(choices?.projects ?? [], id: \.localId) { project in
             Toggle(project.title, isOn: Binding(get: { project.localId == task.projectLocalId }, set: { isOn in
                 if isOn { move(to: project.localId) }
             }))

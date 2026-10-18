@@ -7,9 +7,6 @@ struct MacSidebarData: Equatable, Sendable {
     var favourites: [ProjectRecord] = []
     var filters: [SavedFilterRecord] = []
     var labels: [LabelRecord] = []
-    var counts = TabCounts()
-    /// Changes waiting in the outbox, for the footer.
-    var waiting = 0
 }
 
 /// The sidebar from the macOS design: Inbox, Today and Upcoming, then collapsible Favourites, Projects, Filters and Labels,
@@ -19,7 +16,10 @@ struct MacSidebarData: Equatable, Sendable {
 struct MacSidebar: View {
     let services: AppServices
     let actions: MacActions
+    /// The tree, filters and labels: re-read only when those change, not on every task edit.
     @State private var live: LiveValue<MacSidebarData>
+    /// The Inbox and Today counts, on task changes.
+    @State private var counts: LiveValue<TabCounts>
     @Environment(\.preferences) private var preferences
     @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @AppStorage("mac.sidebar.favourites") private var showFavourites = true
@@ -34,25 +34,32 @@ struct MacSidebar: View {
         self.actions = actions
         let store = services.store
         _live = State(initialValue: LiveValue(initial: MacSidebarData()) {
-            let kinds: Set<ChangeKind> = [.projects, .tasks, .savedFilters, .labels, .outbox]
-            return observeStore(store, kinds: kinds) { (reading: CriaStore) throws -> MacSidebarData in
+            observeStore(store, kinds: [.projects, .savedFilters, .labels]) { (reading: CriaStore) throws -> MacSidebarData in
                 let visible = ProjectTree.visible(try reading.projects())
                 return MacSidebarData(
                     children: ProjectTree.childIndex(visible),
                     favourites: visible.filter(\.isFavorite),
                     filters: try reading.savedFilters(),
-                    labels: try reading.labels(),
-                    counts: try TabCounts.read(reading, inboxLocalId: services.rememberedDefaultProjectLocalId()),
-                    waiting: try reading.outboxRows().count
+                    labels: try reading.labels()
                 )
+            }
+        })
+        _counts = State(initialValue: LiveValue(initial: TabCounts()) {
+            observeStore(store, kinds: [.tasks, .projects]) { (reading: CriaStore) throws -> TabCounts in
+                let today = try reading.smartGroups(.today).reduce(0) { $0 + $1.items.count }
+                // A plain count, without the row data (labels, summaries) a list read builds.
+                let inbox = try services.rememberedDefaultProjectLocalId().map {
+                    try reading.tasks(matching: TaskQuery(projectLocalId: $0, includeDone: false)).count
+                } ?? 0
+                return TabCounts(today: today, inbox: inbox)
             }
         })
     }
 
     var body: some View {
         List(selection: selection) {
-            row(.inbox, .inbox, count: live.value.counts.inbox)
-            row(.today, .today, count: live.value.counts.today)
+            row(.inbox, .inbox, count: counts.value.inbox)
+            row(.today, .today, count: counts.value.today)
             row(.upcoming, .upcoming)
             Section(isExpanded: $showFavourites) {
                 Label("Starred", systemImage: "star").tag(MacSelection.favorites)
@@ -106,35 +113,8 @@ struct MacSidebar: View {
         .tint(Color(.primary))
         .navigationSplitViewColumnWidth(min: 200, ideal: 244)
         .task { await live.run() }
-        .safeAreaInset(edge: .bottom, spacing: 0) { footer }
-    }
-
-    /// Sync status and the Settings gear, under a hairline.
-    private var footer: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack(spacing: 6) {
-                if live.value.waiting > 0 {
-                    Label(Self.waitingText(live.value.waiting), systemImage: "icloud.slash")
-                } else {
-                    Label("Synced", systemImage: "checkmark.icloud")
-                }
-                Spacer(minLength: 4)
-                SettingsLink { Image(systemName: "gearshape") }
-                    .buttonStyle(.borderless)
-                    .help("Settings")
-                    .accessibilityLabel("Settings")
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(MacTheme.label2)
-            .lineLimit(1)
-            .padding(.horizontal, 14)
-            .frame(height: 40)
-        }
-    }
-
-    static func waitingText(_ count: Int) -> String {
-        count == 1 ? "1 change waiting to sync" : "\(count) changes waiting to sync"
+        .task { await counts.run() }
+        .safeAreaInset(edge: .bottom, spacing: 0) { MacSidebarFooter(store: services.store) }
     }
 
     /// A section heading: SF 11 semibold in the tertiary shade, with an optional + on the right.
@@ -247,5 +227,45 @@ struct MacProjectLabel: View {
             if (try? services.store.updateTask(localId: id, patch: patch)) != nil { moved = true }
         }
         return moved
+    }
+}
+
+/// Sync status and the Settings gear, under a hairline. Its own view on its own count, so the outbox filling and
+/// draining redraws only this line.
+private struct MacSidebarFooter: View {
+    @State private var waiting: LiveValue<Int>
+
+    init(store: CriaStore) {
+        _waiting = State(initialValue: LiveValue(initial: 0) {
+            observeStore(store, kinds: [.outbox]) { try $0.outboxCount() }
+        })
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 6) {
+                if waiting.value > 0 {
+                    Label(Self.waitingText(waiting.value), systemImage: "icloud.slash")
+                } else {
+                    Label("Synced", systemImage: "checkmark.icloud")
+                }
+                Spacer(minLength: 4)
+                SettingsLink { Image(systemName: "gearshape") }
+                    .buttonStyle(.borderless)
+                    .help("Settings")
+                    .accessibilityLabel("Settings")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(MacTheme.label2)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+        }
+        .task { await waiting.run() }
+    }
+
+    static func waitingText(_ count: Int) -> String {
+        count == 1 ? "1 change waiting to sync" : "\(count) changes waiting to sync"
     }
 }
