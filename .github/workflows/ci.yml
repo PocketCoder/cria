@@ -343,6 +343,7 @@ jobs:
             PRODUCT_BUNDLE_IDENTIFIER=io.cria.app.nightly \
             MARKETING_VERSION="$version" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            SWIFT_COMPILATION_MODE=singlefile \
             CRIA_FEED_URL=https://pocketcoder.github.io/cria/nightly-appcast.xml \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="${SIGN_IDENTITY:--}" \
