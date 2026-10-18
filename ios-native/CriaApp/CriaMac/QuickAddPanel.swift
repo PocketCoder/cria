@@ -13,16 +13,16 @@ final class QuickAddPanel {
     private static let width: CGFloat = 640
     private static let topInset: CGFloat = 190
 
-    func show(services: AppServices, contextProjectId: String?, initialLine: String) {
+    func show(services: AppServices, contextProjectId: String?, initialLine: String, screen: QuickAddPanelScreen = .add) {
         close()
-        let sheet = QuickAddSheet(
+        let sheet = QuickAddPanelRoot(
             services: services, contextProjectId: contextProjectId, initialLine: initialLine,
-            onClose: { [weak self] in self?.close() }
+            onClose: { [weak self] in self?.close() }, screen: screen
         )
         let root = sheet
             .frame(width: Self.width)
             .fixedSize(horizontal: false, vertical: true)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
@@ -84,5 +84,33 @@ private final class QuickAddWindow: NSPanel {
 
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
+    }
+}
+
+/// The panel's three screens.
+enum QuickAddPanelScreen { case add, ramble, photo }
+
+/// What the panel shows: quick add, or the Ramble or From photo screen it swaps to. Back on either returns to quick
+/// add; adding their tasks also returns, so the panel stays the one place new tasks come from.
+private struct QuickAddPanelRoot: View {
+
+    let services: AppServices
+    let contextProjectId: String?
+    let initialLine: String
+    let onClose: () -> Void
+    @State var screen: QuickAddPanelScreen
+
+    var body: some View {
+        switch screen {
+        case .add:
+            QuickAddSheet(
+                services: services, contextProjectId: contextProjectId, initialLine: initialLine,
+                onRamble: { screen = .ramble }, onPhoto: { screen = .photo }, onClose: onClose
+            )
+        case .ramble:
+            RambleSheet(services: services, onClose: { screen = .add })
+        case .photo:
+            ShoppingPhotoSheet(services: services, onClose: { screen = .add })
+        }
     }
 }

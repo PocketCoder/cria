@@ -9,7 +9,7 @@ struct ProjectListView: View {
     let services: AppServices
     let projectLocalId: String
     let header: ProjectHeader
-    @State private var live: LiveValue<TaskListSnapshot>
+    @State private var live: LiveValue<ProjectListData>
     @State private var display: DisplayModel
     @State private var selection = TaskSelection()
     /// Settings > General > Show completed: what the list does until its Display sheet says otherwise.
@@ -25,6 +25,8 @@ struct ProjectListView: View {
     #if os(macOS)
     /// The label chosen in the project info rail; nil shows every task.
     @State private var railLabel: String?
+    /// The Completed group starts collapsed at the bottom on the Mac.
+    @State private var completedOpen = false
     #endif
 
     init(services: AppServices, projectLocalId: String, header: ProjectHeader) {
@@ -33,9 +35,10 @@ struct ProjectListView: View {
         self.header = header
         _display = State(initialValue: DisplayModel(key: .project(projectLocalId)))
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: TaskListSnapshot()) {
-            observeStore(store, kinds: [.tasks, .labels, .projects]) { reading in
-                try TaskListNesting.snapshot(reading, items: reading.taskItems(.project(projectLocalId), includeDone: true))
+        _live = State(initialValue: LiveValue(initial: ProjectListData()) {
+            // The Mac also reads the board's columns (views) and the rail's figures here, so the rail has no read.
+            observeStore(store, kinds: [.tasks, .labels, .projects, .views]) { reading in
+                try ProjectListData.read(reading, projectLocalId: projectLocalId)
             }
         })
     }
@@ -44,7 +47,7 @@ struct ProjectListView: View {
 
     private var filtered: [TaskListItem] {
         let shown = DisplayEngine.filtered(
-            live.value.items, display.config.filters, display.context(assignees: live.value.assignees)
+            live.value.snapshot.items, display.config.filters, display.context(assignees: live.value.snapshot.assignees)
         )
         #if os(macOS)
         guard let railLabel else { return shown }
@@ -77,13 +80,19 @@ struct ProjectListView: View {
 
     /// The open tasks, one section each when grouped (a label's tasks may appear under several).
     private var openSections: [DisplaySection] {
-        DisplayEngine.grouped(
-            openItems, by: display.config.groupBy, context: display.context(assignees: live.value.assignees)
+        #if os(macOS)
+        // Ungrouped on the Mac means grouped by the board's columns ("To do", "Doing"), as the design has it.
+        if display.config.groupBy == .none, !live.value.columns.isEmpty {
+            return ProjectListGrouping.byColumn(openItems, columns: live.value.columns, columnOf: live.value.columnOf)
+        }
+        #endif
+        return DisplayEngine.grouped(
+            openItems, by: display.config.groupBy, context: display.context(assignees: live.value.snapshot.assignees)
         )
     }
 
     private func rows(_ items: [TaskListItem]) -> [NestedTaskItem] {
-        TaskListNesting.rows(items, children: live.value.children, collapsed: collapsed)
+        TaskListNesting.rows(items, children: live.value.snapshot.children, collapsed: collapsed)
     }
 
     var body: some View {
@@ -94,19 +103,24 @@ struct ProjectListView: View {
                     ForEach(rows(section.items)) { row in
                         taskRow(row).moveDisabled(row.depth > 0)
                     }
-                    .onMove(perform: isManual ? { move($0, $1) } : nil)
+                    .onMove(perform: isManual ? { move($0, $1, in: section.items) } : nil)
+                    #if os(macOS)
+                    if let column = ProjectListGrouping.column(of: section, in: live.value.columns), column.acceptsTasks {
+                        ProjectListAddRow(services: services, projectLocalId: projectLocalId, column: column)
+                    }
+                    #endif
                 } header: {
                     groupHeader(section.label)
                 }
             }
             if !doneItems.isEmpty {
                 Section {
-                    ForEach(rows(doneItems)) { row in taskRow(row) }
+                    if completedShown { ForEach(rows(doneItems)) { row in taskRow(row) } }
                 } header: {
-                    Text("Completed").font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
+                    completedHeader
                 }
             }
-            if display.hasFilters && !live.value.items.isEmpty && openItems.isEmpty && doneItems.isEmpty {
+            if display.hasFilters && !live.value.snapshot.items.isEmpty && openItems.isEmpty && doneItems.isEmpty {
                 Section {
                     DisplayNoMatchesRow(
                         hasFilters: true,
@@ -118,7 +132,7 @@ struct ProjectListView: View {
         }
         #if os(macOS)
         // Built once the first read is in, so rows do not draw title-high and then grow (see TaskListView).
-        .id(live.value.loaded)
+        .id(live.value.snapshot.loaded)
         #endif
         .publishesTaskOrder(openSections.flatMap { rows($0.items).map(\.id) } + rows(doneItems).map(\.id))
         .criaSurface()
@@ -138,7 +152,9 @@ struct ProjectListView: View {
         }
         .task { await live.run() }
         #if os(macOS)
-        .modifier(MacProjectRailHost(services: services, projectLocalId: projectLocalId, labelFilter: $railLabel))
+        .modifier(MacProjectRailHost(
+            services: services, projectLocalId: projectLocalId, summary: live.value.rail, labelFilter: $railLabel
+        ))
         #endif
     }
 
@@ -153,7 +169,8 @@ struct ProjectListView: View {
         TaskRowLink(
             services: services, item: row.item,
             tree: TaskListNesting.tree(
-                for: row, progress: live.value.progress, collapsed: $collapsed, parentTitles: live.value.parentTitles
+                for: row, progress: live.value.snapshot.progress, collapsed: $collapsed,
+                parentTitles: live.value.snapshot.parentTitles
             )
         )
     }
@@ -182,7 +199,7 @@ struct ProjectListView: View {
 
     /// Today's empty states: nothing at all, or everything done.
     @ViewBuilder private var emptyState: some View {
-        if live.value.loaded && live.value.items.isEmpty {
+        if live.value.snapshot.loaded && live.value.snapshot.items.isEmpty {
             ContentUnavailableView {
                 Label("No tasks yet", systemImage: "checklist")
             } description: {
@@ -196,17 +213,58 @@ struct ProjectListView: View {
             }
         }
     }
+}
+
+// MARK: Completed group and reordering
+
+extension ProjectListView {
+    #if os(macOS)
+    private var completedShown: Bool { completedOpen }
+
+    /// "Completed" with its count, collapsed until clicked.
+    private var completedHeader: some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .snappy) { completedOpen.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .rotationEffect(.degrees(completedOpen ? 90 : 0))
+                Text("Completed").font(Theme.headline)
+                Text("\(doneItems.count)").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
+            .foregroundStyle(Color(.foreground))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .textCase(nil)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(completedOpen ? "Expanded" : "Collapsed")
+    }
+    #else
+    private var completedShown: Bool { true }
+
+    private var completedHeader: some View {
+        Text("Completed").font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
+    }
+    #endif
 
     /// Moves an open top-level row, then writes the positions. Subtasks always follow their parent, so only the
     /// top-level order is written; a row dropped inside another's subtasks lands after that parent. Completed tasks
     /// are not part of the manual order.
-    private func move(_ indices: IndexSet, _ destination: Int) {
-        var shown = rows(openItems)
+    /// `sectionItems` is the group the drag happened in (all open tasks when ungrouped); its new order replaces the
+    /// same tasks' slots in the whole list.
+    private func move(_ indices: IndexSet, _ destination: Int, in sectionItems: [TaskListItem]) {
+        var shown = rows(sectionItems)
         guard let first = indices.first, shown.indices.contains(first), shown[first].depth == 0 else { return }
         let moved = shown[first].item.task
-        let stored = live.value.items.filter { !$0.task.done }.map(\.task.localId)
+        let stored = live.value.snapshot.items.filter { !$0.task.done }.map(\.task.localId)
+        let before = Set(shown.filter { $0.depth == 0 }.map(\.id))
         shown.move(fromOffsets: indices, toOffset: destination)
-        let roots = shown.filter { $0.depth == 0 }.map(\.id)
+        var reordered = shown.filter { $0.depth == 0 }.map(\.id).makeIterator()
+        let roots = rows(openItems).filter { $0.depth == 0 }.map { row in
+            before.contains(row.id) ? (reordered.next() ?? row.id) : row.id
+        }
         let rootSet = Set(roots)
         // Subtasks keep their stored order after the roots: nesting places them under their parent anyway.
         optimistic.set(roots + stored.filter { !rootSet.contains($0) }, over: stored)

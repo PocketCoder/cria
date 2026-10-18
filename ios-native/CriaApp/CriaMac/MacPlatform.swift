@@ -1,7 +1,6 @@
 import AppKit
 import CriaKit
 import KeyboardShortcuts
-import ServiceManagement
 import SwiftUI
 
 /// The Mac-only preferences, stored in `UserDefaults`. Defaults follow the Tauri app's `trayIconEnabled` (on),
@@ -10,15 +9,21 @@ enum MacPrefs {
     static let menuBar = "cria.mac.menuBarExtra"
     static let closeToMenuBar = "cria.mac.closeToMenuBar"
     static let hideDock = "cria.mac.hideDockIcon"
+    /// Settings > Customise > Show favourite projects (read by `MacSidebar`).
+    static let showFavourites = "cria.mac.showFavouriteProjects"
+    /// Settings > Notifications > Default reminder (`MacDefaultReminder`, read by Mac quick add).
+    static let defaultReminder = "cria.mac.defaultReminder"
 
     static func registerDefaults() {
-        UserDefaults.standard.register(defaults: [menuBar: true, closeToMenuBar: true, hideDock: false])
+        UserDefaults.standard.register(defaults: [
+            menuBar: true, closeToMenuBar: true, hideDock: false, showFavourites: true, defaultReminder: -1
+        ])
     }
 }
 
 extension KeyboardShortcuts.Name {
-    /// The Tauri app's global shortcut: ⌘⇧A.
-    static let quickAdd = Self("quickAdd", default: .init(.a, modifiers: [.command, .shift]))
+    /// The design's global shortcut: ⌥Space.
+    static let quickAdd = Self("quickAdd", default: .init(.space, modifiers: [.option]))
 }
 
 extension Notification.Name {
@@ -161,51 +166,5 @@ enum MacActivation {
         let hasWindow = NSApp.windows.contains { $0.isVisible && $0.canBecomeMain }
         let wanted: NSApplication.ActivationPolicy = hide && !hasWindow ? .accessory : .regular
         if NSApp.activationPolicy() != wanted { NSApp.setActivationPolicy(wanted) }
-    }
-}
-
-/// The Mac-only rows of the Settings window's General tab, as sections for the pane's grouped form.
-struct MacSettingsView: View {
-    @AppStorage(MacPrefs.menuBar) private var menuBar = true
-    @AppStorage(MacPrefs.closeToMenuBar) private var closeToMenuBar = true
-    @AppStorage(MacPrefs.hideDock) private var hideDock = false
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var loginError: String?
-
-    var body: some View {
-        Section("Startup") {
-            Toggle("Open Cria at login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
-            if let loginError { Text(loginError).foregroundStyle(Color(.destructive)).font(Theme.caption) }
-        }
-        Section {
-            Toggle("Show Cria in the menu bar", isOn: $menuBar)
-            Toggle("Keep running when the window closes", isOn: $closeToMenuBar)
-            Toggle("Hide Dock icon while the window is closed", isOn: $hideDock)
-                .onChange(of: hideDock) { MacActivation.update() }
-        } header: {
-            Text("Menu bar and Dock")
-        } footer: {
-            Text("Today\u{2019}s tasks and New Task, one click away.").font(Theme.caption)
-        }
-        Section {
-            KeyboardShortcuts.Recorder("Global shortcut", name: .quickAdd)
-        } header: {
-            Text("Quick add")
-        } footer: {
-            Text("Opens New Task from any app.").font(Theme.caption)
-        }
-    }
-
-    private func setLaunchAtLogin(_ enabled: Bool) {
-        // Already what the system has (this also runs after the toggle snaps back from a failure).
-        guard enabled != (SMAppService.mainApp.status == .enabled) else { return }
-        do {
-            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            loginError = nil
-        } catch {
-            loginError = String(describing: error)
-            launchAtLogin = SMAppService.mainApp.status == .enabled
-        }
     }
 }

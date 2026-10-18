@@ -124,28 +124,15 @@ struct ProjectScreen: View {
     }
 
     #if os(macOS)
-    /// The Mac's view picker: a segmented control in the toolbar, bound to the view on screen.
+    /// The Mac's view picker in the toolbar, bound to the view on screen (`MacViewPicker`).
     @ToolbarContentBuilder private var viewPicker: some ToolbarContent {
         if views.count > 1 {
             ToolbarItem(placement: .primaryAction) {
-                Picker("View", selection: pickerSelection) {
-                    ForEach(views, id: \.localId) { view in
-                        Label(ViewManagement.label(view.slot), systemImage: MacProjectChrome.icon(view.viewKind))
-                            .tag(view.localId)
-                    }
+                MacViewPicker(views: views, selectedId: current?.localId) { id in
+                    withAnimation(reduceMotion ? nil : .snappy) { select(id) }
                 }
-                .pickerStyle(.segmented)
-                .labelStyle(.titleAndIcon)
-                .help("Project view")
             }
         }
-    }
-
-    private var pickerSelection: Binding<String> {
-        Binding(
-            get: { current?.localId ?? "" },
-            set: { id in withAnimation(reduceMotion ? nil : .snappy) { select(id) } }
-        )
     }
     #endif
 
@@ -177,7 +164,7 @@ struct ProjectScreen: View {
                     .id(view.localId)
             case .gantt:
                 PinnedProjectHeader(header: header) {
-                    GanttScreen(services: services, projectLocalId: projectLocalId)
+                    GanttScreen(services: services, projectLocalId: projectLocalId, projectColour: live.value.project?.hexColor)
                 }
                 .id(view.localId)
                 #if os(macOS)

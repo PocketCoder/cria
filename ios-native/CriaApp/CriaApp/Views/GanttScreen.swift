@@ -6,6 +6,8 @@ import SwiftUI
 struct GanttScreen: View {
     let services: AppServices
     let projectLocalId: String
+    /// The project's colour, for bars without one of their own (the Mac's bars).
+    var projectColour: String?
     @State private var live: LiveValue<GanttData>
     @AppStorage("cria.gantt.weekZoom") private var weekZoom = false
     /// Off by default, as in the web app: finished tasks clutter the timeline.
@@ -14,9 +16,10 @@ struct GanttScreen: View {
     @AppStorage(GanttFilters.storageKey) private var filtersText = ""
     @State private var filtering = false
 
-    init(services: AppServices, projectLocalId: String) {
+    init(services: AppServices, projectLocalId: String, projectColour: String? = nil) {
         self.services = services
         self.projectLocalId = projectLocalId
+        self.projectColour = projectColour
         let store = services.store
         _live = State(initialValue: LiveValue(initial: GanttData(nodes: [], edges: [])) {
             observeStore(store, kinds: [.tasks, .projects]) { reading in
@@ -25,7 +28,14 @@ struct GanttScreen: View {
         })
     }
 
-    private var dayWidth: Double { weekZoom ? GanttMetrics.weekZoomDayWidth : GanttMetrics.dayWidth }
+    private var dayWidth: Double {
+        #if os(macOS)
+        // The Mac design's 56pt day columns.
+        weekZoom ? GanttMetrics.weekZoomDayWidth : 56
+        #else
+        weekZoom ? GanttMetrics.weekZoomDayWidth : GanttMetrics.dayWidth
+        #endif
+    }
     private var today: Int { GanttTree.localDay(of: Date()) }
     /// The loaded data without finished tasks unless "Show done" is on. The range and arrows follow what is shown.
     private var shown: GanttData {
@@ -54,7 +64,7 @@ struct GanttScreen: View {
             } else {
                 GanttChart(
                     services: services, data: shown, nodes: datedNodes, range: range,
-                    dayWidth: dayWidth, weekZoom: weekZoom
+                    dayWidth: dayWidth, weekZoom: weekZoom, projectColour: projectColour
                 )
                 if !datelessNodes.isEmpty {
                     GanttTray(services: services, nodes: datelessNodes, today: today)
@@ -145,6 +155,10 @@ struct GanttBar: View {
     let node: GanttNode
     let dayWidth: Double
     @Binding var drag: GanttDrag?
+    /// The bar's height, from the chart's layout.
+    let height: Double
+    /// The project's colour, used when the task has none.
+    var fallbackColour: String?
     let onOpen: () -> Void
     let onCommit: (Int, Int) -> Void
     /// When a gesture last moved the bar. A tap within `tapSuppression` of it is the lift of that drag, not a tap.
@@ -155,9 +169,8 @@ struct GanttBar: View {
     private static let tapSuppression: TimeInterval = 0.5
 
     var body: some View {
-        let fill = Color(hexString: place.color) ?? Color(.primary)
         ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 6).fill(fill.opacity(place.isPlaceholder ? 0.35 : 0.9))
+            barShape
             Text(node.title)
                 .font(Theme.caption)
                 .foregroundStyle(textColor)
@@ -166,7 +179,7 @@ struct GanttBar: View {
                 // Rows are a fixed height, so very large text would spill out of the bar; the label caps instead.
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
-        .frame(width: place.width, height: place.height)
+        .frame(width: place.width, height: height)
         .contentShape(Rectangle())
         .onTapGesture {
             if let lastDragAt, Date().timeIntervalSince(lastDragAt) < Self.tapSuppression { return }
@@ -212,10 +225,29 @@ struct GanttBar: View {
         return parts.joined(separator: ", ")
     }
 
-    /// White or black, whichever reads on the bar. A placeholder bar is a pale wash, so it takes the text colour.
+    /// The Mac design: radius 7, the task's (else the project's) colour at 26% with a 1pt ring at 55%. iOS: a solid bar.
+    @ViewBuilder private var barShape: some View {
+        #if os(macOS)
+        let tint = Color(hexString: place.color ?? fallbackColour) ?? Color(.primary)
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(tint.opacity(place.isPlaceholder ? 0.12 : 0.26))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(tint.opacity(0.55), lineWidth: 1)
+            }
+        #else
+        RoundedRectangle(cornerRadius: 6).fill((Color(hexString: place.color) ?? Color(.primary)).opacity(place.isPlaceholder ? 0.35 : 0.9))
+        #endif
+    }
+
+    /// White or black, whichever reads on the bar. A placeholder bar is a pale wash, so it takes the text colour, as
+    /// does every Mac bar (a 26% tint).
     private var textColor: Color {
+        #if os(macOS)
+        return Color(.foreground)
+        #else
         if place.isPlaceholder { return Color(.foreground) }
         return place.color == nil ? Color(.primaryForeground) : LegibleTint.onFill(place.color)
+        #endif
     }
 
     private func shift(_ days: Int) {
@@ -225,7 +257,7 @@ struct GanttBar: View {
     /// The resize handle, shown only when the bar is wide enough that it does not cover the whole bar.
     @ViewBuilder private func handle(_ mode: GanttDragMode) -> some View {
         if place.width > Self.minimumWidthForHandles {
-            Color.clear.frame(width: 16, height: place.height).contentShape(Rectangle()).gesture(dragGesture(mode))
+            Color.clear.frame(width: 16, height: height).contentShape(Rectangle()).gesture(dragGesture(mode))
         }
     }
 

@@ -68,6 +68,8 @@ struct MacShellView: View {
             openPendingURL()
         }
         .onReceive(NotificationCenter.default.publisher(for: .criaQuickAdd)) { _ in actions.newTask() }
+        // The inspector's breadcrumb opens the task's project.
+        .modifier(MacOpenProjectHandler(actions: actions))
         .task(id: actions.syncRequest) {
             if actions.syncRequest > 0 { await services.refresh() }
         }
@@ -81,10 +83,8 @@ struct MacShellView: View {
         .sheet(isPresented: $actions.creatingProject) {
             ProjectEditorSheet(services: services, target: .create, projects: (try? services.store.projects()) ?? [])
         }
-        .sheet(isPresented: $actions.showingPalette) { CommandPalette(services: services, actions: actions) }
-        .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
-        .sheet(isPresented: $actions.showingRamble) { RambleSheet(services: services) }
-        .sheet(isPresented: $actions.showingPhoto) { ShoppingPhotoSheet(services: services) }
+        // The palette and shortcuts as floating panels; Ramble and From photo from the menu or palette.
+        .modifier(MacOverlays(services: services, actions: actions))
         .modifier(MacSidebarSheets(services: services, sheets: actions.sidebar))
         .sheet(
             isPresented: $conflictPrompt.isPresented,
@@ -201,8 +201,6 @@ private struct MacTaskInspector: View {
             .environment(\.taskOpener, actions.opener)
             .scrollContentBackground(.hidden)
             .background(MacTheme.inspector)
-            // Slides in 24pt from the right with a fade.
-            .transition(.offset(x: 24).combined(with: .opacity))
         }
     }
 

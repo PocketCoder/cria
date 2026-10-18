@@ -28,10 +28,21 @@ struct KanbanCardView: View {
 
     #if os(macOS)
     static let radius: CGFloat = 11
+    // The Mac card: padding 10, a 16pt ring and an SF 13/17 title.
+    private static let ringSize: CGFloat = 16
+    private static let padding: CGFloat = 10
+    private static let titleFont = Font.system(size: 13, weight: .medium)
+    private static let titleLeading: CGFloat = 1
+    private static let ringTop: CGFloat = 10.5
     /// The task open in the inspector, for the selected card's ring.
     @Environment(\.openTaskState) private var openTaskState
     #else
     static let radius: CGFloat = 14
+    private static let ringSize: CGFloat = 20
+    private static let padding: CGFloat = 12
+    private static let titleFont = Theme.rowSubtitle.weight(.medium)
+    private static let titleLeading: CGFloat = 0
+    private static let ringTop = Theme.cardRingTop
     #endif
 
     var body: some View {
@@ -81,16 +92,17 @@ struct KanbanCardView: View {
     /// and delete are actions. The subtask disclosure below it stays a separate element.
     private var header: some View {
         HStack(alignment: .top, spacing: Theme.checkGap) {
-            PriorityCheck(priority: task.priority, isDone: task.done, size: 20) {
+            PriorityCheck(priority: task.priority, isDone: task.done, size: Self.ringSize) {
                 _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             // The 44pt touch target makes the margin on iOS; the Mac's smaller target needs it set.
             .padding(.leading, Theme.cardRingInset)
-            .padding(.top, Theme.cardRingTop)
+            .padding(.top, Self.ringTop)
             openLink {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(task.title)
-                        .font(Theme.rowSubtitle.weight(.medium))
+                        .font(Self.titleFont)
+                        .lineSpacing(Self.titleLeading)
                         .strikethrough(task.done)
                         .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
                         .multilineTextAlignment(.leading)
@@ -110,13 +122,13 @@ struct KanbanCardView: View {
                         ChipFlowLayout { chips }
                     }
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, Self.padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.trailing, 12)
+        .padding(.trailing, Self.padding)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)
         .accessibilityValue(task.done ? "Done" : "")

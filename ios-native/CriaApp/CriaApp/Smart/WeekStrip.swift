@@ -98,19 +98,23 @@ private struct MacWeekDay: View {
         let accent = isToday && !isSelected
         Button { selected = calendar.startOfDay(for: day) } label: {
             VStack(spacing: 3) {
+                // The weekday is in the accent for the selected day too; Semibold only for today.
                 Text(day.formatted(.dateTime.weekday(.abbreviated)))
                     .font(.system(size: 11, weight: accent ? .semibold : .medium))
-                    .foregroundStyle(accent ? Color(.primary) : MacTheme.label2)
+                    .foregroundStyle(accent || isSelected ? Color(.primary) : MacTheme.label2)
                 Text(day.formatted(.dateTime.day()))
-                    .font(.system(size: 15, weight: isSelected || isToday ? .semibold : .regular))
+                    .font(.system(size: 15, weight: isSelected || isToday ? .semibold : .medium))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? Color.white : (accent ? Color(.primary) : Color(.foreground)))
+                    .foregroundStyle(isSelected ? Color(.primaryForeground) : (accent ? Color(.primary) : Color(.foreground)))
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(isSelected ? Color(.primary) : (hovering ? MacTheme.fill : Color.clear)))
+                    .animation(.easeOut(duration: 0.16), value: isSelected)
+                    .animation(.easeOut(duration: 0.16), value: hovering)
                 Circle().fill(busy ? MacTheme.label3 : Color.clear).frame(width: 4, height: 4)
             }
             .lineLimit(1)
-            .frame(maxWidth: .infinity, minHeight: 58)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

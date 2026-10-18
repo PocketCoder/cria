@@ -224,8 +224,9 @@ struct LoginView: View {
 
 #if os(macOS)
 extension LoginView {
-    /// The Mac sign-in: the 84pt icon, "Welcome to Cria", labelled fields and a prominent Sign In. Same model and
-    /// fields as the iOS form.
+    /// The Mac sign-in (440×600): the 84pt icon, "Welcome to Cria", Server, Username or email and Password with SF 12
+    /// labels over 32pt filled fields, a prominent Sign In capsule, then links to the API token and share link flows.
+    /// No OpenID button: the app has no OpenID flow to offer. Same model as the iOS form.
     private var macForm: some View {
         ScrollView {
             VStack(spacing: 22) {
@@ -239,45 +240,40 @@ extension LoginView {
                     Text("Welcome to Cria").font(.custom(Theme.brandFont, size: 26)).tracking(-0.52).padding(.top, 6)
                     Text("Sign in to your Vikunja server.").font(.system(size: 13)).foregroundStyle(MacTheme.label2)
                 }
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
                     macLabel("Server")
                     TextField("https://vikunja.example.com", text: $model.serverURL)
                         .focused($focus, equals: .server)
                         .onSubmit { focus = firstField }
                         .accessibilityIdentifier("login.server")
+                        .macLoginField()
                     if !model.recentServers.isEmpty { recentServerChips }
                     if let error = model.serverURLError {
                         Text(error).font(.system(size: 12)).foregroundStyle(Color(.destructive))
                     }
-                    macLabel("Sign in with")
-                    Picker("Sign in with", selection: Binding(get: { model.method }, set: { model.switchMethod($0) })) {
-                        Text("API token").tag(LoginViewModel.Method.token)
-                        Text("Password").tag(LoginViewModel.Method.password)
-                        Text("Share link").tag(LoginViewModel.Method.linkShare)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    credentialFields
+                    macCredentials.padding(.top, 6)
                     if let error = model.submitError {
                         Text(error).font(.system(size: 12)).foregroundStyle(Color(.destructive))
                             .accessibilityIdentifier("login.error")
                     }
                 }
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.large)
-                Button(action: submit) {
-                    HStack(spacing: 8) {
-                        Text(model.totpRequired ? "Verify and Sign In" : "Sign In")
-                        if model.isSubmitting { ProgressView().controlSize(.small) }
+                .textFieldStyle(.plain)
+                VStack(spacing: 10) {
+                    Button(action: submit) {
+                        HStack(spacing: 8) {
+                            Text(model.totpRequired ? "Verify and Sign In" : "Sign In")
+                            if model.isSubmitting { ProgressView().controlSize(.small) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 26)
                     }
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(model.isSubmitting)
+                    .accessibilityIdentifier("login.submit")
+                    macMethodLinks
                 }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .keyboardShortcut(.defaultAction)
-                .disabled(model.isSubmitting)
-                .accessibilityIdentifier("login.submit")
             }
             .frame(maxWidth: 360)
             .padding(.horizontal, 24)
@@ -285,10 +281,82 @@ extension LoginView {
             .frame(maxWidth: .infinity)
         }
         .background(MacTheme.window)
+        .frame(minWidth: 440, minHeight: 600)
+        // The design leads with username and password; the token form is one link away.
+        .onAppear { if model.method == .token && model.token.isEmpty { model.switchMethod(.password) } }
+    }
+
+    @ViewBuilder private var macCredentials: some View {
+        switch model.method {
+        case .password:
+            macLabel("Username or email")
+            TextField("", text: $model.username)
+                .textContentType(.username)
+                .focused($focus, equals: .username)
+                .onSubmit { focus = .password }
+                .accessibilityIdentifier("login.username")
+                .macLoginField()
+            macLabel("Password").padding(.top, 6)
+            SecureField("", text: $model.password)
+                .textContentType(.password)
+                .onSubmit(submit)
+                .focused($focus, equals: .password)
+                .accessibilityIdentifier("login.password")
+                .macLoginField()
+            Toggle("Remember me", isOn: $model.rememberMe)
+                .font(.system(size: 12))
+                .accessibilityIdentifier("login.rememberMe")
+            if model.totpRequired {
+                macLabel("Two-factor code").padding(.top, 6)
+                TextField("", text: $model.totpCode)
+                    .textContentType(.oneTimeCode)
+                    .focused($focus, equals: .totp)
+                    .accessibilityIdentifier("login.totp")
+                    .macLoginField()
+            }
+        case .token:
+            macLabel("API token")
+            SecureField("", text: $model.token)
+                .onSubmit(submit)
+                .focused($focus, equals: .token)
+                .accessibilityIdentifier("login.token")
+                .macLoginField()
+            Text("Create one in Vikunja under Settings → API tokens.")
+                .font(.system(size: 11)).foregroundStyle(MacTheme.label2)
+        case .linkShare:
+            macLabel("Share link")
+            shareFields
+        }
+    }
+
+    /// "Use an API token instead" (or back to the password), and the share link flow.
+    private var macMethodLinks: some View {
+        HStack(spacing: 14) {
+            if model.method == .password {
+                Button("Use an API token instead") { model.switchMethod(.token) }
+            } else {
+                Button("Use a password instead") { model.switchMethod(.password) }
+            }
+            if model.method != .linkShare {
+                Button("Use a share link") { model.switchMethod(.linkShare) }
+            }
+        }
+        .buttonStyle(.link)
+        .font(.system(size: 12))
     }
 
     private func macLabel(_ text: String) -> some View {
         Text(text).font(.system(size: 12, weight: .medium)).foregroundStyle(MacTheme.label2)
+    }
+}
+
+private extension View {
+    /// The sign-in field: 32pt high, radius 8, on `fill`.
+    func macLoginField() -> some View {
+        padding(.horizontal, 10)
+            .frame(minHeight: 32)
+            .background(MacTheme.fill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .focusEffectDisabled()
     }
 }
 #endif

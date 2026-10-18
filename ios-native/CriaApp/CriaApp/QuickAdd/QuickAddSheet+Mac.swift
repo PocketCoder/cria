@@ -2,37 +2,26 @@ import CriaKit
 import SwiftUI
 
 #if os(macOS)
-/// The Mac quick-add panel's layout (`QuickAddPanel`): the line in SF 20, the parsed tokens tinted under it, the chips
-/// row, a hint and a footer with Add Task. Same state and actions as the sheet.
+/// The Mac quick-add panel's layout (`QuickAddPanel`): a 20pt priority ring, the line in SF 20/28 with its parsed
+/// tokens tinted in place, the chips row, a hint and a footer with Ramble, From photo and Add Task. Same state and
+/// actions as the sheet.
 extension QuickAddSheet {
     var panelForm: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
                 HStack(spacing: 12) {
-                    Circle()
-                        .strokeBorder(priorityTint, lineWidth: 1.5)
-                        .frame(width: 20, height: 20)
-                        .accessibilityHidden(true)
-                    TextField("Buy milk tomorrow *errand !2", text: $line)
-                        .font(.system(size: 20))
-                        .focused($focused, equals: .title)
-                        .onSubmit(returnPressed)
+                    QuickAddPriorityRing(priority: priority)
+                    tintedField
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    if !line.isEmpty && parsedSomething {
-                        Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(.system(size: 12))
-                    }
                     TextField("Description", text: $note, axis: .vertical)
                         .font(.system(size: 13))
                         .foregroundStyle(MacTheme.label2)
                         .lineLimit(1...4)
                         .focused($focused, equals: .description)
                     subtaskSection
-                    HStack(spacing: 6) {
-                        panelProjectMenu
-                        pickers
-                    }
+                    panelChips
                     panelHint
                     addedLine
                     if let errorMessage {
@@ -48,23 +37,54 @@ extension QuickAddSheet {
         .textFieldStyle(.plain)
         .focusEffectDisabled()
         .onExitCommand { closeSheet() }
-    }
-
-    private var priorityTint: Color {
-        ThemeToken.priority(priority).map { Color($0) } ?? MacTheme.label3
-    }
-
-    private var panelProjectMenu: some View {
-        Menu {
-            Picker("Project", selection: projectPick) {
-                ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
-            }
-        } label: {
-            let chip = resolveProjectChip(parsedProjectTitle: typedProjectTitle, projects: projects, projectLocalId: projectId)
-            CriaChip(text: chip.title ?? "Project", systemImage: "tray", tint: Color(.primary))
+        .task { allLabelTitles = ((try? services.store.labels()) ?? []).map(\.title) }
+        // Settings > Notifications > Default reminder: a task that gains a due date gets it, unless one is set.
+        .onChange(of: dueISO) { old, new in
+            guard old.isEmpty, !new.isEmpty, reminders.isEmpty, let reminder = MacDefaultReminder.current else { return }
+            reminders = [reminder]
         }
-        .macChipMenu()
-        .accessibilityLabel("Project")
+    }
+
+    /// The single-line field, with each recognised token's span tinted at 14% behind the typed text. The tint is a
+    /// copy of the line drawn underneath in the same font with clear glyphs, so it lines up with what is typed.
+    private var tintedField: some View {
+        ZStack(alignment: .leading) {
+            if parsedSomething {
+                Text(tokenUnderlay)
+                    .font(.system(size: 20))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            TextField("Buy milk tomorrow *errand !2", text: $line)
+                .font(.system(size: 20))
+                .focused($focused, equals: .title)
+                .onSubmit(returnPressed)
+        }
+        .frame(minHeight: 28)
+        .clipped()
+    }
+
+    private var tokenUnderlay: AttributedString {
+        var output = AttributedString()
+        for token in parsed.tokens {
+            var piece = AttributedString(token.text)
+            piece.foregroundColor = .clear
+            if let tint = Self.tokenTint(token.kind) { piece.backgroundColor = tint.opacity(0.14) }
+            output += piece
+        }
+        return output
+    }
+
+    static func tokenTint(_ kind: QuickAddTokenKind) -> Color? {
+        switch kind {
+        case .label: return Color(.meadow700)
+        case .project: return Color(.primary)
+        case .priority: return Color(.marigold700)
+        case .date: return Color(.sky700)
+        default: return nil
+        }
     }
 
     /// "Type *label, +project, !1–5 or a day like tomorrow.", each token in its colour.
@@ -80,26 +100,54 @@ extension QuickAddSheet {
 
     private var panelFooter: some View {
         HStack(spacing: 8) {
+            // The panel swaps itself to the Ramble or photo screen, so it is not closed first.
             if let onRamble, aiStatus.isOfferable {
-                Button { closeSheet(); onRamble() } label: { Label("Ramble", systemImage: "mic") }
+                Button(action: onRamble) { Label("Ramble", systemImage: "mic") }
+                    .macGlassButton()
                     .disabled(aiStatus.notReadyMessage != nil)
             }
             if let onPhoto {
-                Button { closeSheet(); onPhoto() } label: { Label("From photo", systemImage: "photo") }
+                Button(action: onPhoto) { Label("From photo", systemImage: "photo") }
+                    .macGlassButton()
             }
             multipleToggle.controlSize(.small)
             Spacer(minLength: 8)
             Text("esc to close").font(.system(size: 12)).foregroundStyle(MacTheme.label3)
             Button(action: sendPressed) {
-                Text(queue.isEmpty && !multiple ? "Add Task ↩" : "\(sendLabel) ↩").padding(.horizontal, 4)
+                Text(queue.isEmpty && !multiple ? "Add Task ↩" : "\(sendLabel) ↩")
+                    .padding(.horizontal, 4)
+                    .frame(height: 30)
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.large)
             .disabled(!canSend)
         }
         .font(.system(size: 13))
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
+    }
+}
+
+/// The 20pt ring before the field: grey with no priority, the priority's colour once one is set.
+struct QuickAddPriorityRing: View {
+    let priority: Int
+
+    var body: some View {
+        Circle()
+            .strokeBorder(ThemeToken.priority(priority).map { Color($0) } ?? MacTheme.label3, lineWidth: 1.5)
+            .frame(width: 20, height: 20)
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// A glass button on macOS 26, bordered before.
+    @ViewBuilder
+    func macGlassButton() -> some View {
+        if #available(macOS 26, *) {
+            buttonStyle(.glass)
+        } else {
+            buttonStyle(.bordered)
+        }
     }
 }
 #endif

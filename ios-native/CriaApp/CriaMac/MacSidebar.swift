@@ -23,6 +23,8 @@ struct MacSidebar: View {
     @Environment(\.preferences) private var preferences
     @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @AppStorage("mac.sidebar.favourites") private var showFavourites = true
+    /// Settings > Customise > Show favourite projects.
+    @AppStorage(MacPrefs.showFavourites) private var showFavouriteProjects = true
     @AppStorage("mac.sidebar.projects") private var showProjects = true
     @AppStorage("mac.sidebar.filters") private var showFilters = true
     @AppStorage("mac.sidebar.labels") private var showLabels = true
@@ -68,8 +70,10 @@ struct MacSidebar: View {
                     Label("Starred", systemImage: "star")
                         .macSidebarRow(selected: actions.selection == .favorites)
                         .tag(MacSelection.favorites)
-                    ForEach(live.value.favourites, id: \.localId) { project in
-                        MacProjectLabel(project: project, services: services, sheets: sheets)
+                    if showFavouriteProjects {
+                        ForEach(live.value.favourites, id: \.localId) { project in
+                            MacProjectLabel(project: project, services: services, sheets: sheets)
+                        }
                     }
                 }
             } header: {

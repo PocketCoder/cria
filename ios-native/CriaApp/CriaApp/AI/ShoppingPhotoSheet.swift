@@ -9,23 +9,35 @@ import Vision
 /// on the ticked lines, and "Undo tidy" restores the list from before the last tidy, since the model may drop lines.
 struct ShoppingPhotoSheet: View {
     let services: AppServices
+    #if os(macOS)
+    /// Set when hosted in the Mac quick-add panel: goes back to quick add instead of dismissing a sheet.
+    var onClose: (() -> Void)?
+    #endif
     @Environment(\.dismiss) private var dismiss
     @State private var picked: PhotosPickerItem?
     @State private var showCamera = false
-    @State private var items: [DraftItem] = []
-    @State private var projects: [ProjectRecord] = []
-    @State private var projectId = ""
-    @State private var label = "shopping"
-    @State private var working = false
-    @State private var errorMessage: String?
-    @State private var captured: PlatformImage?
+    @State var items: [DraftItem] = []
+    @State var projects: [ProjectRecord] = []
+    @State var projectId = ""
+    @State var label = "shopping"
+    @State var working = false
+    @State var errorMessage: String?
+    @State var captured: PlatformImage?
     /// The Mac has no camera: a file picker (and Paste) stand in for it.
     @State private var choosingFile = false
     @State private var libraryRequested = false
-    @State private var tidying = false
-    @State private var untidied: [DraftItem]?
+    @State var tidying = false
+    @State var untidied: [DraftItem]?
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        #if os(macOS)
+        if onClose != nil { macPanel } else { sheet }
+        #else
+        sheet
+        #endif
+    }
+
+    private var sheet: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
@@ -46,7 +58,7 @@ struct ShoppingPhotoSheet: View {
             .navigationTitle("List from photo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { finish() } }
                 if !items.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(ShoppingItems.addButtonLabel(ShoppingItems.selected(items).count), systemImage: "checkmark") { save() }
@@ -62,13 +74,7 @@ struct ShoppingPhotoSheet: View {
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { data in Task { await recognise(data) } }.ignoresSafeArea()
             }
-            .task {
-                projects = ProjectTree.visible((try? services.store.projects()) ?? [])
-                // Settings > Photo capture: a chosen project is preselected, blank asks each time.
-                let defaults = PreferencesStore().load()
-                if let chosen = defaults.photoProjectId, projects.contains(where: { $0.localId == chosen }) { projectId = chosen }
-                label = defaults.photoLabel
-            }
+            .task { loadDefaults() }
         }
         .presentationDetents([.large])
         .macSheetFrame()
@@ -174,7 +180,7 @@ struct ShoppingPhotoSheet: View {
         await recognise(data)
     }
 
-    private func recognise(_ data: Data) async {
+    func recognise(_ data: Data) async {
         working = true
         defer { working = false }
         captured = PlatformImage(data: data)
@@ -230,14 +236,14 @@ struct ShoppingPhotoSheet: View {
         untidied = nil
     }
 
-    private func save() {
+    func save() {
         // A pre-tidy list would bring back items saved below.
         untidied = nil
         do {
             try services.store.createTasks(fromItems: ShoppingItems.selected(items), projectId: projectId, label: label) { saved in
                 items.removeAll { $0.id == saved.id }
             }
-            dismiss()
+            finish()
         } catch {
             errorMessage = String(describing: error)
         }
@@ -245,6 +251,25 @@ struct ShoppingPhotoSheet: View {
 }
 
 extension ShoppingPhotoSheet {
+    /// Settings > Photo capture: a chosen project is preselected, blank asks each time.
+    func loadDefaults() {
+        projects = ProjectTree.visible((try? services.store.projects()) ?? [])
+        let defaults = PreferencesStore().load()
+        if let chosen = defaults.photoProjectId, projects.contains(where: { $0.localId == chosen }) { projectId = chosen }
+        label = defaults.photoLabel
+    }
+
+    /// Back to quick add in the Mac panel, else dismisses the sheet.
+    func finish() {
+        #if os(macOS)
+        if let onClose {
+            onClose()
+            return
+        }
+        #endif
+        dismiss()
+    }
+
     private static var viewportHint: String {
         #if os(macOS)
         "Choose a photo of a handwritten or printed list"

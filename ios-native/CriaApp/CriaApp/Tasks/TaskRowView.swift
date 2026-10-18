@@ -214,13 +214,15 @@ struct TaskRowView: View {
 #if os(macOS)
 /// The Mac row from the macOS design: an 18pt ring, the title in SF 13 and one SF 11 meta line (due date, repeat,
 /// description, attachments and labels, then the project on the trailing edge). TaskRowLink draws the hover and
-/// selected fills.
+/// selected fills. A completed row stays, struck through, until the screen goes (`RecentlyCompleted`).
 extension TaskRowView {
     var macBody: some View {
         HStack(alignment: .rowTitleMid, spacing: 7) {
             PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
+                // The ring's 24pt target overhangs the 18pt title line; it must not add to the row's height.
+                .padding(.vertical, -3)
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     if let rename {
                         RowTitleField(rename: rename)
                     } else {
@@ -236,7 +238,7 @@ extension TaskRowView {
                 }
                 .frame(minHeight: 18)
                 .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
-                // The description's first words, as the desktop app's rows show them.
+                // The description's first words: not in the handoff, kept from the earlier Mac rows by request.
                 if let summary = item.summary, !task.done {
                     Text(summary)
                         .font(.system(size: 11))
@@ -253,11 +255,9 @@ extension TaskRowView {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .padding(.leading, CGFloat(tree.depth) * TaskListNesting.indent)
-        // Fades once the ring's burst has played.
-        .opacity(completing && !task.done ? 0.45 : 1)
-        .animation(.easeOut(duration: 0.3).delay(0.35), value: completing)
+        .animation(.easeOut(duration: 0.2), value: completing)
         .background(alignment: .leading) { guides }
         // 8 by 12 around the content; the ring's 24pt target already gives 3 of the leading 12.
         .padding(.leading, 9)
@@ -269,8 +269,7 @@ extension TaskRowView {
     }
 
     private var macHasMeta: Bool {
-        guard !task.done else { return false }
-        return task.dueDate != nil || tree.progress != nil || task.repeatAfter > 0 || task.repeatMode != 0
+        task.dueDate != nil || tree.progress != nil || task.repeatAfter > 0 || task.repeatMode != 0
             || macHasDescription || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
             || (showProject && item.projectTitle != nil)
     }
@@ -305,7 +304,7 @@ extension TaskRowView {
             Spacer(minLength: 0)
             if showProject, let project = item.projectTitle {
                 HStack(spacing: 4) {
-                    Circle().fill(MacTheme.label3).frame(width: 6, height: 6)
+                    Circle().fill(MacTheme.label3).frame(width: 7, height: 7)
                     Text(project)
                 }
             }
@@ -316,8 +315,9 @@ extension TaskRowView {
         .frame(minHeight: 16)
     }
 
-    /// Coral when overdue, the accent when due today, otherwise the secondary shade.
+    /// Coral when overdue, the accent when due today, otherwise the secondary shade (always, once done).
     private func macDueTint(_ due: String) -> Color {
+        if task.done || completing { return MacTheme.label2 }
         if DueDates.isOverdue(due, now: Date()) { return MacTheme.coral }
         if let day = DueDates.calendarDate(due), Calendar.cria.isDateInToday(day) { return Color(.primary) }
         return MacTheme.label2
@@ -325,13 +325,13 @@ extension TaskRowView {
 
     private func macLabelChip(_ label: LabelRecord) -> some View {
         let tint = Color(hexString: label.hexColor) ?? Color(.info)
-        return HStack(spacing: 4) {
-            Circle().fill(tint).frame(width: 6, height: 6)
-            Text(label.title)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1)
-        .background(tint.opacity(0.13), in: Capsule())
+        // `MChip`: 18pt high, 7pt sides, SF 11 Medium in the label's colour on a 12% wash of it.
+        return Text(label.title)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .frame(height: 18)
+            .background(tint.opacity(0.12), in: Capsule())
     }
 
     /// A ring and "2/5" subtasks done; where the children are nested here it also collapses them.

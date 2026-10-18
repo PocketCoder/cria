@@ -19,6 +19,10 @@ struct TaskListView: View {
     /// The label being edited from the toolbar, and its new title once saved (the route passes the old one).
     @State private var labelEditor: LabelEditTarget?
     @State private var renamedTitle: String?
+    #if os(macOS)
+    /// Rows completed here, kept struck through until the screen goes, even with completed tasks hidden.
+    @State private var recent = RecentlyCompleted()
+    #endif
 
     init(services: AppServices, source: TaskListSource, title: String) {
         self.services = services
@@ -34,10 +38,19 @@ struct TaskListView: View {
     }
 
     private var sections: [DisplaySection] {
-        DisplayEngine.sections(
-            live.value.items, config: display.config, showCompleted: display.showsCompleted(default: showDone),
+        let showCompleted = display.showsCompleted(default: showDone)
+        #if os(macOS)
+        let sections = DisplayEngine.sections(
+            live.value.items, config: display.config, showCompleted: showCompleted || !recent.isEmpty,
             context: display.context(assignees: live.value.assignees)
         )
+        return recent.merged(sections, showsCompleted: showCompleted)
+        #else
+        return DisplayEngine.sections(
+            live.value.items, config: display.config, showCompleted: showCompleted,
+            context: display.context(assignees: live.value.assignees)
+        )
+        #endif
     }
 
     var body: some View {
@@ -59,6 +72,9 @@ struct TaskListView: View {
                             )
                         )
                     }
+                    #if os(macOS)
+                    .environment(\.completionGroup, CompletionGroup(key: section.key, label: section.label))
+                    #endif
                 } header: {
                     #if os(macOS)
                     if !section.label.isEmpty {
@@ -86,6 +102,9 @@ struct TaskListView: View {
         // Built once the first read is in: a Mac list filled while on screen drew each row title-high first, then
         // grew it to fit its chips.
         .id(live.value.loaded)
+        #endif
+        #if os(macOS)
+        .environment(\.recentlyCompleted, recent)
         #endif
         .publishesTaskOrder(shown.flatMap { TaskListNesting.rows($0.items, children: live.value.children, collapsed: collapsed).map(\.id) })
         .criaSurface()

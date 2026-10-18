@@ -8,14 +8,54 @@ struct SearchScreen: View {
     let services: AppServices
     /// The Mac toolbar's search text. When set, the screen shows results for it and has no field of its own.
     var query: String?
-    @State private var text = ""
-    @State private var results = SearchResults()
+    @State var text = ""
+    @State var results = SearchResults()
     /// Each found subtask's parent title, for the "Subtask of" caption.
-    @State private var parentTitles: [String: String] = [:]
+    @State var parentTitles: [String: String] = [:]
+    #if os(macOS)
+    /// The design's Open, Done and All scope for the task results.
+    @State var scope = MacSearchScope.open
+    /// Rows completed here stay, struck through, in the Open scope until the screen goes.
+    @State var recent = RecentlyCompleted()
+    #endif
 
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
+        resultsList
+        .publishesTaskOrder(shownTasks.map(\.task.localId))
+            .criaSurface()
+        .overlay { overlay }
+        .navigationTitle("Search")
+        .modifier(OwnSearchField(text: $text, isEnabled: query == nil))
+        .onChange(of: query, initial: true) { if let query { text = query } }
+        .task(id: text) { await runSearch() }
+        // A swipe on a result (done, delete) changes the store, so re-run the query rather than keep a stale snapshot.
+        .task {
+            for await kind in services.store.bus.subscribe() where [.tasks, .projects, .labels].contains(kind) {
+                await search()
+            }
+        }
+    }
+
+    /// The task results shown: on the Mac, those in the chosen scope.
+    private var shownTasks: [TaskListItem] {
+        #if os(macOS)
+        macScoped(results.tasks)
+        #else
+        results.tasks
+        #endif
+    }
+
+    @ViewBuilder private var resultsList: some View {
+        #if os(macOS)
+        macList
+        #else
+        iosList
+        #endif
+    }
+
+    private var iosList: some View {
         List {
             filterChips
             if !results.projects.isEmpty {
@@ -52,19 +92,6 @@ struct SearchScreen: View {
                 }
             }
         }
-        .publishesTaskOrder(results.tasks.map(\.task.localId))
-            .criaSurface()
-        .overlay { overlay }
-        .navigationTitle("Search")
-        .modifier(OwnSearchField(text: $text, isEnabled: query == nil))
-        .onChange(of: query, initial: true) { if let query { text = query } }
-        .task(id: text) { await runSearch() }
-        // A swipe on a result (done, delete) changes the store, so re-run the query rather than keep a stale snapshot.
-        .task {
-            for await kind in services.store.bus.subscribe() where [.tasks, .projects, .labels].contains(kind) {
-                await search()
-            }
-        }
     }
 
     @ViewBuilder private var overlay: some View {
@@ -78,12 +105,15 @@ struct SearchScreen: View {
                 SearchExamples { text = $0 }
             }
         } else if results.isEmpty {
+            #if !os(macOS)
+            // The Mac shows its own empty state in the list, under the results header.
             ContentUnavailableView.search(text: text)
+            #endif
         }
     }
 
     /// What the query was understood as, so a phrase like "due tomorrow" visibly became a filter.
-    @ViewBuilder private var filterChips: some View {
+    @ViewBuilder var filterChips: some View {
         let chips = SearchFilterChips.chips(for: parseSearchQuery(text), display: dateDisplay)
         if !chips.isEmpty {
             Section {

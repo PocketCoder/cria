@@ -11,19 +11,30 @@ struct TaskDetailHeaderButtons: View {
     let onClose: (() -> Void)?
     let onDuplicate: () -> Void
     let onToggleStar: () -> Void
+    #if os(macOS)
+    /// The ⋯ menu's other items: the task's labels, and done, date, delete as the detail runs them.
+    var macMenu: TaskDetailMacMenuActions?
+    #endif
 
     var body: some View {
         #if os(macOS)
-        // The inspector's order: star and ••• together, then close.
+        // The inspector's order: star and ⋯ together in one glass group, then close.
         if let task {
-            Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star", action: onToggleStar)
-                .foregroundStyle(task.isFavorite ? Color(.primary) : MacTheme.label2)
-            TaskDetailMenu(services: services, task: task, state: state, onDuplicate: onDuplicate)
-                .menuIndicator(.hidden)
-                .fixedSize()
+            HStack(spacing: 0) {
+                Button(task.isFavorite ? "Unstar" : "Star", systemImage: task.isFavorite ? "star.fill" : "star", action: onToggleStar)
+                    .foregroundStyle(task.isFavorite ? Color(.primary) : MacTheme.label2)
+                    .frame(width: 28, height: 28)
+                TaskDetailMenu(services: services, task: task, state: state, onDuplicate: onDuplicate, macMenu: macMenu)
+                    .menuIndicator(.hidden)
+                    .foregroundStyle(MacTheme.label2)
+                    .frame(width: 28, height: 28)
+            }
+            .padding(.horizontal, 2)
+            .modifier(HeaderGlass())
             if let onClose {
                 Button("Close", systemImage: "xmark", action: onClose).help("Close (Esc)")
                     .foregroundStyle(MacTheme.label2)
+                    .frame(width: 28, height: 28)
             }
         }
         #else
@@ -49,11 +60,19 @@ struct TaskPanelHeader<Buttons: View>: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(Color(hexString: project?.hexColor) ?? Color(.mutedForeground))
-                .frame(width: 8, height: 8)
-                .accessibilityHidden(true)
-            Text(breadcrumb).font(.system(size: 13)).foregroundStyle(MacTheme.label2).lineLimit(1)
+            Button(action: openProject) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color(hexString: project?.hexColor) ?? Color(.mutedForeground))
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text(breadcrumb).font(.system(size: 13)).foregroundStyle(MacTheme.label2).lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(project == nil)
+            .help("Show project")
             Spacer(minLength: 8)
             buttons.labelStyle(.iconOnly).buttonStyle(.borderless)
         }
@@ -62,12 +81,29 @@ struct TaskPanelHeader<Buttons: View>: View {
         .background(MacTheme.inspector)
     }
 
+    /// The Mac shell handles this (`MacOpenProjectHandler`) and shows the project.
+    private func openProject() {
+        guard let project else { return }
+        NotificationCenter.default.post(name: .criaOpenProject, object: project.localId)
+    }
+
     private var breadcrumb: String {
         guard let project else { return "Task" }
         guard let parentId = project.parentLocalId, let parent = projects.first(where: { $0.localId == parentId }) else {
             return project.title
         }
         return "\(parent.title) › \(project.title)"
+    }
+}
+
+/// The star and ⋯ group's background: Liquid Glass on macOS 26, a material capsule before it.
+private struct HeaderGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.glassEffect(.regular, in: Capsule())
+        } else {
+            content.background(.regularMaterial, in: Capsule())
+        }
     }
 }
 #endif

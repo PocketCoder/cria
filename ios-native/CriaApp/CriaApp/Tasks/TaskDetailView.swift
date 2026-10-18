@@ -103,6 +103,7 @@ struct TaskDetailView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             TaskPanelHeader(project: live.value.currentProject, projects: live.value.projects) { headerButtons }
         }
+        .modifier(InspectorEntrance())
         #else
         .navigationTitle(projectTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -185,12 +186,6 @@ struct TaskDetailView: View {
     }
 
     private var projectTitle: String { live.value.currentProject?.title ?? "Task" }
-    private var headerButtons: some View {
-        TaskDetailHeaderButtons(
-            services: services, task: live.value.task, state: sheets, onClose: closeTask, onDuplicate: duplicateTask,
-            onToggleStar: { if let task = live.value.task { _ = apply(TaskPatch(isFavorite: !task.isFavorite)) } }
-        )
-    }
 
     /// A menu-bar or keyboard command from the Mac shell, for the task on screen.
     private func perform(_ command: TaskCommand) {
@@ -313,9 +308,41 @@ extension TaskDetailView {
         Section { fieldBox(task) }
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
-        Section("Description") { descriptionField(task) }
+        Section {
+            descriptionField(task)
+        } header: {
+            // SF 12 semibold in `label2`, 20pt below the field box.
+            Text("Description")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MacTheme.label2)
+                .textCase(nil)
+                .padding(.top, 20)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
     }
     #endif
+
+    private var headerButtons: some View {
+        let star = { if let task = live.value.task { _ = apply(TaskPatch(isFavorite: !task.isFavorite)) } }
+        #if os(macOS)
+        let menu = TaskDetailMacMenuActions(
+            labels: live.value.labels,
+            onToggleDone: { if let task = live.value.task { _ = apply(TaskPatch(done: !task.done)) } },
+            onPickDate: { editingDate = .due },
+            onDelete: { deleteTask() }
+        )
+        return TaskDetailHeaderButtons(
+            services: services, task: live.value.task, state: sheets, onClose: closeTask, onDuplicate: duplicateTask,
+            onToggleStar: star, macMenu: menu
+        )
+        #else
+        return TaskDetailHeaderButtons(
+            services: services, task: live.value.task, state: sheets, onClose: closeTask, onDuplicate: duplicateTask,
+            onToggleStar: star
+        )
+        #endif
+    }
 
     /// Saves what is being typed, then copies the task and opens the copy.
     private func duplicateTask() {

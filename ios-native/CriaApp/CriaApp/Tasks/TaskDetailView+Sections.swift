@@ -24,7 +24,12 @@ extension TaskDetailView {
         case .subtasks:
             RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
         case .labels:
+            #if os(macOS)
+            // The field box's Labels row has the chips, and its + popover the Popular one-click labels.
+            EmptyView()
+            #else
             labelsSection
+            #endif
         case .assignees:
             AssigneesSection(services: services, taskLocalId: taskLocalId, assignees: feeds.assignees.value, state: sheets)
         case .attachments:
@@ -36,8 +41,7 @@ extension TaskDetailView {
         }
     }
 
-    /// The labels, with Edit. The Mac also lists them in the inspector's field box; this section keeps its Popular
-    /// one-click chips.
+    /// The labels, with Edit. The Mac shows them in the inspector's field box instead.
     @ViewBuilder private var labelsSection: some View {
         Section {
             TaskLabelsRows(services: services, taskLocalId: taskLocalId, labels: live.value.labels)

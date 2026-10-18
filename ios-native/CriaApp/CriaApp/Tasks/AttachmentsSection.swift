@@ -17,6 +17,17 @@ struct AttachmentsSection: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        // The inspector shows attachments only once there are some; files are added by dropping them on the task.
+        if !attachments.isEmpty {
+            MacAttachmentTiles(services: services, taskLocalId: taskLocalId, attachments: attachments, state: state)
+        }
+        #else
+        list
+        #endif
+    }
+
+    private var list: some View {
         Section("Attachments") {
             ForEach(attachments, id: \.localId) { attachment in
                 row(attachment)

@@ -205,6 +205,21 @@ struct KanbanBoardView: View {
     }
 
     private var addBucketButton: some View {
+        #if os(macOS)
+        // The Mac design's dashed "New column" tile, 200×46.
+        Button { addingBucket = true } label: {
+            Label("New column", systemImage: "plus")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(.primary))
+                .frame(width: 200, height: 46)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color(.primary).opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        #else
         Button { addingBucket = true } label: {
             Label("Add column", systemImage: "plus")
                 .font(Theme.rowSubtitle.weight(.medium))
@@ -217,6 +232,7 @@ struct KanbanBoardView: View {
                 )
         }
         .buttonStyle(.plain)
+        #endif
     }
 
     private func addBucket() {
@@ -256,6 +272,13 @@ struct KanbanBoardView: View {
                 taskLocalId: taskId, viewLocalId: view.localId, target: column, orderedIds: order
             )
             if result == .blockedByLimit { limitNotice = true }
+            #if os(macOS)
+            // Dropping on the done column marks the task done here at once; the server does the same on the move.
+            if result == .moved, Kanban.roles(of: column.bucket, in: view).isDone,
+               column.tasks.first(where: { $0.localId == taskId }) == nil {
+                _ = try services.store.updateTask(localId: taskId, patch: TaskPatch(done: true))
+            }
+            #endif
         } catch {
             failure = String(describing: error)
         }

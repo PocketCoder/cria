@@ -5,7 +5,8 @@ import UIKit
 #endif
 import UserNotifications
 
-private let presets: [(title: String, period: Int)] = [
+/// The reminder presets relative to the due date, shared by the Reminders section and the inspector's Add menu.
+let reminderPresets: [(title: String, period: Int)] = [
     ("At due time", 0), ("5 minutes before", -300), ("1 hour before", -3600)
 ]
 
@@ -175,7 +176,7 @@ struct ReminderSection: View {
     }
 
     @ViewBuilder private var presetButtons: some View {
-        ForEach(presets, id: \.period) { preset in
+        ForEach(reminderPresets, id: \.period) { preset in
             Button { add(ReminderInput(period: preset.period, relativeTo: .dueDate)) } label: {
                 Text(preset.title)
                 if let when = presetTime(preset.period) { Text(when) }

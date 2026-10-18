@@ -20,6 +20,7 @@ struct QuickAddSheet: View {
     #endif
     @Environment(\.dismiss) var dismiss
     @Environment(\.preferences) var preferences
+    @Environment(\.dateDisplay) var dateDisplay
     @AppStorage("cria.quickAddMagicMode") private var modeRaw = QuickAddMagicMode.default.rawValue
     @State var line = ""
     @State var projects: [ProjectRecord] = []
@@ -50,6 +51,8 @@ struct QuickAddSheet: View {
     @State var subtasks: [String] = []
     @State var subtaskLine = ""
     @State var addingSubtask = false
+    /// Every label title, for the Mac panel's Labels menu. Loaded off the body.
+    @State var allLabelTitles: [String] = []
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
@@ -206,7 +209,7 @@ struct QuickAddSheet: View {
     }
 
     /// A date chosen with the picker ("" for no date) wins over a typed one.
-    private func setDue(_ iso: String) {
+    func setDue(_ iso: String) {
         dueISO = iso
         picked.insert(.due)
     }
@@ -376,18 +379,4 @@ extension QuickAddSheet {
             Button("Labels", systemImage: "tag") { pickerSheet = .labels }
         }
     }
-
-    /// Plain text as a paragraph, escaped, with line breaks kept.
-    static func paragraphHTML(_ text: String) -> String {
-        let escaped = text
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\n", with: "<br>")
-        return "<p>\(escaped)</p>"
-    }
-}
-
-enum QuickAddFocus: Hashable {
-    case title, description, subtask
 }

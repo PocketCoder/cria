@@ -38,12 +38,21 @@ struct KanbanColumnView: View {
     private static let dropOpacity = 1.0
     private static let dropWidth: CGFloat = 1.5
     private var columnFill: Color { isDropTarget ? Color(.foreground).opacity(0.10) : MacTheme.fill }
+    /// The 30pt header with the name in SF 13 Semibold and the count in `l3`, and the 30pt Add task row.
+    private static let headerHeight: CGFloat = 30
+    private static let addRowHeight: CGFloat = 30
+    private static let titleFont = Font.system(size: 13, weight: .semibold)
+    private static let countColour = MacTheme.label3
     #else
     private static let radius: CGFloat = 20
     private static let padding: CGFloat = 12
     private static let dropOpacity = 0.6
     private static let dropWidth: CGFloat = 2
     private var columnFill: Color { Color(.foreground).opacity(isDropTarget ? 0.10 : 0.05) }
+    private static let headerHeight: CGFloat = 32
+    private static let addRowHeight: CGFloat = 40
+    private static let titleFont = Theme.rowSubtitle.weight(.semibold)
+    private static let countColour = Color(.mutedForeground)
     #endif
 
     let services: AppServices
@@ -86,6 +95,9 @@ struct KanbanColumnView: View {
     /// and SwiftUI tells only the innermost target).
     @State private var overColumn = false
     @State private var overCards: Set<String> = []
+    #if os(macOS)
+    @State private var confirmingDelete = false
+    #endif
 
     private var isDropTarget: Bool { overColumn || !overCards.isEmpty }
 
@@ -102,7 +114,8 @@ struct KanbanColumnView: View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 8) {
                 header
-                VStack(alignment: .leading, spacing: 8) {
+                // Lazy, so a long column builds only the cards on screen.
+                LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(cards) { plan in
                         card(plan)
                     }
@@ -141,6 +154,13 @@ struct KanbanColumnView: View {
         } message: {
             Text(failure ?? "")
         }
+        #if os(macOS)
+        .confirmationDialog(
+            "Delete \"\(column.bucket.title)\"?", isPresented: $confirmingDelete, titleVisibility: .visible
+        ) {
+            Button("Delete column", role: .destructive) { deleteColumn() }
+        }
+        #endif
     }
 
     @ViewBuilder private func card(_ plan: KanbanCardPlan) -> some View {
@@ -209,7 +229,7 @@ struct KanbanColumnView: View {
                     }
             }
             .padding(.horizontal, 12)
-            .frame(minHeight: 40)
+            .frame(minHeight: Self.addRowHeight)
         } else {
             Button {
                 adding = true
@@ -218,7 +238,7 @@ struct KanbanColumnView: View {
                 Label("Add task", systemImage: "plus")
                     .font(Theme.rowSubtitle)
                     .foregroundStyle(Color(.primary))
-                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: Self.addRowHeight, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -231,13 +251,13 @@ struct KanbanColumnView: View {
             // Title, count and role badges read as one heading, e.g. "To do, 3 of 5 tasks, full, Done column".
             HStack(spacing: 6) {
                 Text(column.bucket.title)
-                    .font(Theme.rowSubtitle.weight(.semibold))
+                    .font(Self.titleFont)
                     .foregroundStyle(Color(.foreground))
                     .lineLimit(2)
                 Text(countText)
                     .font(Theme.caption)
                     .monospacedDigit()
-                    .foregroundStyle(column.atLimit ? Color(.destructive) : Color(.mutedForeground))
+                    .foregroundStyle(column.atLimit ? Color(.destructive) : Self.countColour)
                     .accessibilityLabel(spokenCount)
                 roleBadge
             }
@@ -247,18 +267,15 @@ struct KanbanColumnView: View {
             if !readOnly && !compact { columnMenu }
         }
         .padding(.leading, 4)
-        .frame(minHeight: 32)
-    }
-
-    private var spokenCount: String {
-        let count = column.tasks.count
-        guard column.bucket.limit > 0 else { return SpokenText.tasks(count) }
-        return "\(count) of \(column.bucket.limit) tasks" + (column.atLimit ? ", full" : "")
+        .frame(minHeight: Self.headerHeight)
     }
 
     private var columnMenu: some View {
         let roles = Kanban.roles(of: column.bucket, in: view)
         return Menu {
+            #if os(macOS)
+            macColumnMenu(isDone: roles.isDone)
+            #else
             Button("Edit column", systemImage: "pencil") { onEdit() }
             // The roles are stored by server id, so a column that has not synced yet cannot take one.
             if column.bucket.serverId != nil {
@@ -269,18 +286,15 @@ struct KanbanColumnView: View {
                     onSetRole(.defaultColumn)
                 }
             }
+            #endif
         } label: {
             Image(systemName: "ellipsis")
                 .font(Theme.rowSubtitle.weight(.semibold))
                 .foregroundStyle(Color(.mutedForeground))
-                .frame(width: 36, height: 32)
+                .frame(width: 36, height: Self.headerHeight)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Options for \(column.bucket.title)")
-    }
-
-    private var countText: String {
-        column.bucket.limit > 0 ? "\(column.tasks.count)/\(column.bucket.limit)" : "\(column.tasks.count)"
     }
 
     @ViewBuilder private var roleBadge: some View {
@@ -303,6 +317,16 @@ struct KanbanColumnView: View {
 // MARK: Actions
 
 extension KanbanColumnView {
+    private var spokenCount: String {
+        let count = column.tasks.count
+        guard column.bucket.limit > 0 else { return SpokenText.tasks(count) }
+        return "\(count) of \(column.bucket.limit) tasks" + (column.atLimit ? ", full" : "")
+    }
+
+    private var countText: String {
+        column.bucket.limit > 0 ? "\(column.tasks.count)/\(column.bucket.limit)" : "\(column.tasks.count)"
+    }
+
     /// Deletes straight away; the Undo toast takes it back.
     private func delete(_ task: TaskRecord) {
         do {
@@ -336,3 +360,33 @@ extension KanbanColumnView {
         }
     }
 }
+
+#if os(macOS)
+// MARK: Mac column menu
+
+extension KanbanColumnView {
+    /// Rename column…, Set limit…, Mark as done column, Delete column. Rename and the limit are the edit sheet's
+    /// fields; the done role is stored by server id, so an unsynced column cannot take it.
+    @ViewBuilder fileprivate func macColumnMenu(isDone: Bool) -> some View {
+        Button("Rename column…", systemImage: "pencil") { onEdit() }
+        Button("Set limit…", systemImage: "number") { onEdit() }
+        Toggle(isOn: Binding(get: { isDone }, set: { _ in onSetRole(.done) })) {
+            Label("Mark as done column", systemImage: "checkmark.circle")
+        }
+        .disabled(column.bucket.serverId == nil)
+        Divider()
+        // The server refuses to delete the last column of a board.
+        Button("Delete column", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+            .disabled(columns.count < 2)
+    }
+
+    private func deleteColumn() {
+        guard columns.count > 1 else { return }
+        do {
+            try services.store.deleteBucket(localId: column.bucket.localId)
+        } catch {
+            failure = String(describing: error)
+        }
+    }
+}
+#endif

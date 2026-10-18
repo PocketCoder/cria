@@ -6,34 +6,44 @@ import SwiftUI
 /// anything is created.
 struct RambleSheet: View {
     let services: AppServices
+    #if os(macOS)
+    /// Set when hosted in the Mac quick-add panel, which has no sheet to dismiss: goes back to quick add.
+    var onClose: (() -> Void)?
+    #endif
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @State private var text = ""
-    @State private var proposals: [RambleProposal] = []
-    @State private var projects: [ProjectRecord] = []
-    @State private var working = false
-    @State private var speech = SpeechCapture()
-    @State private var typedBefore = ""
-    @State private var errorMessage: String?
+    @State var text = ""
+    @State var proposals: [RambleProposal] = []
+    @State var projects: [ProjectRecord] = []
+    @State var working = false
+    @State var speech = SpeechCapture()
+    @State var typedBefore = ""
+    @State var errorMessage: String?
     @State private var autoStarted = false
     @State private var editing: RambleProposal?
     @State private var detent = PresentationDetent.medium
     /// The model run. It keeps going if the app is switched away (see `BackgroundRun`) and stops with the sheet.
-    @State private var generation: Task<Void, Never>?
-    @State private var confirmingDiscard = false
+    @State var generation: Task<Void, Never>?
+    @State var confirmingDiscard = false
     @FocusState private var typing: Bool
 
     private var mode: QuickAddMagicMode {
         QuickAddMagicMode(rawValue: UserDefaults.standard.string(forKey: QuickAddStorage.key) ?? "") ?? .default
     }
 
-    private var chosen: [RambleProposal] { Ramble.chosen(proposals) }
+    var chosen: [RambleProposal] { Ramble.chosen(proposals) }
 
     /// Rows that would be lost by closing. Switching to another app never loses them; closing the sheet does.
     private var hasUnsavedRows: Bool { !chosen.isEmpty }
 
-    var body: some View { sheetContent.macSheetFrame() }
+    @ViewBuilder var body: some View {
+        #if os(macOS)
+        if onClose != nil { macPanel } else { sheetContent.macSheetFrame() }
+        #else
+        sheetContent.macSheetFrame()
+        #endif
+    }
 
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
@@ -130,7 +140,7 @@ struct RambleSheet: View {
         }
     }
 
-    private var isBlank: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isBlank: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     private var statusLine: String {
         if speech.isListening { return "Listening… say everything on your mind. Tap pause to stop, or tap the text to type." }
@@ -184,19 +194,19 @@ struct RambleSheet: View {
     }
 
     /// Listening starts as soon as the sheet opens (after the permission prompt the first time).
-    private func startOnOpen() async {
+    func startOnOpen() async {
         guard !autoStarted else { return }
         autoStarted = true
         await listen()
     }
 
     /// New words are appended after whatever is already in the box.
-    private func listen() async {
+    func listen() async {
         typedBefore = text.isEmpty || text.hasSuffix(" ") || text.hasSuffix("\n") ? text : text + " "
         await speech.start()
     }
 
-    private func generate() async {
+    func generate() async {
         working = true
         defer { working = false }
         typing = false
@@ -228,22 +238,22 @@ struct RambleSheet: View {
     }
 
     /// Cancel: closes straight away unless there are rows to lose.
-    private func close() {
+    func close() {
         if hasUnsavedRows {
             confirmingDiscard = true
         } else {
             generation?.cancel()
-            dismiss()
+            finish()
         }
     }
 
-    private func discardAndClose() {
+    func discardAndClose() {
         generation?.cancel()
         proposals = []
-        dismiss()
+        finish()
     }
 
-    private func save() {
+    func save() {
         do {
             let store = services.store
             guard let fallback = try store.captureProjectId() else {
@@ -253,9 +263,20 @@ struct RambleSheet: View {
             for proposal in chosen {
                 try store.createTask(from: proposal, fallbackProjectId: fallback)
             }
-            dismiss()
+            finish()
         } catch {
             errorMessage = String(describing: error)
         }
+    }
+
+    /// Back to quick add in the Mac panel, else dismisses the sheet.
+    func finish() {
+        #if os(macOS)
+        if let onClose {
+            onClose()
+            return
+        }
+        #endif
+        dismiss()
     }
 }

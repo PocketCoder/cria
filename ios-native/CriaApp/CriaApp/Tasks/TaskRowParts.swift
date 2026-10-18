@@ -58,20 +58,22 @@ final class TaskMenuChoices {
 /// The task menu's label submenu: every label, ticked when the task has it.
 struct TaskRowLabelChoices: View {
     let services: AppServices
-    let item: TaskListItem
+    let taskLocalId: String
+    /// The task's own labels, as the row or the inspector already holds them.
+    let labels: [LabelRecord]
     let onFailure: (String) -> Void
     @Environment(TaskMenuChoices.self) private var choices: TaskMenuChoices?
 
     var body: some View {
         ForEach(choices?.labels ?? [], id: \.localId) { label in
-            let has = item.labels.contains { $0.localId == label.localId }
+            let has = labels.contains { $0.localId == label.localId }
             Toggle(label.title, isOn: Binding(get: { has }, set: { _ in toggle(label) }))
         }
     }
 
     private func toggle(_ label: LabelRecord) {
         do {
-            try services.store.toggleTaskLabel(taskLocalId: item.task.localId, labelLocalId: label.localId)
+            try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
         } catch {
             onFailure(String(describing: error))
         }

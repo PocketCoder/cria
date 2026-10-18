@@ -39,6 +39,10 @@ struct QuickAddReminderMenu: View {
     /// Off: with no reminder the chip shows only its icon.
     var showsLabel = true
     let onCustom: () -> Void
+    /// The chip's colour with no reminder set (the Mac panel greys unset chips); nil keeps coral.
+    var unsetTint: Color?
+    /// The chip's text with no reminder set.
+    var emptyTitle = "Remind"
     @Environment(\.dateDisplay) private var dateDisplay
 
     @Environment(\.preferences) private var preferences
@@ -65,7 +69,8 @@ struct QuickAddReminderMenu: View {
                 Button("Remove reminders", systemImage: "bell.slash", role: .destructive) { reminders = [] }
             }
         } label: {
-            CriaChip(text: chipText, systemImage: reminders.isEmpty ? "bell" : "bell.fill", tint: Color(.coral500))
+            CriaChip(text: chipText, systemImage: reminders.isEmpty ? "bell" : "bell.fill",
+                     tint: reminders.isEmpty ? (unsetTint ?? Color(.coral500)) : Color(.coral500))
         }
         .macChipMenu()
         .accessibilityLabel("Reminders")
@@ -83,7 +88,7 @@ struct QuickAddReminderMenu: View {
 
     private var chipText: String {
         guard reminders.count == 1, let only = reminders.first else {
-            return reminders.isEmpty ? (showsLabel ? "Remind" : "") : "\(reminders.count) reminders"
+            return reminders.isEmpty ? (showsLabel ? emptyTitle : "") : "\(reminders.count) reminders"
         }
         switch only {
         case .beforeDue(let seconds):

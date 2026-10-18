@@ -28,6 +28,19 @@ struct TaskRowLink: View {
     /// Double-click (or Rename in the menu) on the Mac: the title is a field until Return, Esc or a click elsewhere.
     @State private var renaming = false
     @State private var draftTitle = ""
+    #if os(macOS)
+    /// The screen's completed rows, which stay struck through until the screen goes, and the section this row is in.
+    @Environment(\.recentlyCompleted) private var recent
+    @Environment(\.completionGroup) private var group
+    #endif
+
+    /// Shown done: just ticked, or (on the Mac) completed on this screen and kept in place.
+    private var showsCompleting: Bool {
+        #if os(macOS)
+        if recent?.contains(item.task.localId) == true { return true }
+        #endif
+        return completing
+    }
 
     var body: some View {
         Group {
@@ -107,7 +120,7 @@ struct TaskRowLink: View {
             if renaming {
                 // No button around the field, so clicks in it place the caret rather than open the task.
                 TaskRowView(
-                    item: item, showProject: showProject, tree: tree, completing: completing,
+                    item: item, showProject: showProject, tree: tree, completing: showsCompleting,
                     rename: RowRename(text: $draftTitle, commit: commitRename, cancel: { renaming = false })
                 ) { toggle() }
                 .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
@@ -121,14 +134,14 @@ struct TaskRowLink: View {
             #endif
         } else {
             NavigationLink(value: Route.task(item.task.localId)) {
-                TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
+                TaskRowView(item: item, showProject: showProject, tree: tree, completing: showsCompleting) { toggle() }
             }
         }
     }
 
     private func openButton(_ openTask: @escaping @MainActor (String) -> Void) -> some View {
         Button { click(openTask) } label: {
-            TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
+            TaskRowView(item: item, showProject: showProject, tree: tree, completing: showsCompleting) { toggle() }
         }
         .buttonStyle(.plain)
         .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
@@ -212,55 +225,13 @@ extension TaskRowLink {
     /// The Mac task menu from the design handoff: done and open, the date, priority, label and project submenus, then
     /// favourite, link, duplicate and delete. Every item runs the same action as the iOS menu.
     @ViewBuilder fileprivate var macMenuItems: some View {
-        Button(item.task.done ? "Mark as Not Done" : "Mark as Done", systemImage: "checkmark.circle") { toggleWithHaptic() }
-        if let openTask {
-            Button("Open", systemImage: "arrow.up.forward.square") { openTask(item.task.localId) }
-            Button("Rename", systemImage: "pencil") { startRename() }
-        }
-        Divider()
-        Menu("Due Date", systemImage: "calendar") {
-            ForEach(QuickAddDatePreset.allCases, id: \.self) { preset in
-                Button(preset.title) { setDue(preset.iso(now: Date())) }
-            }
-            Divider()
-            Button("Pick a Date…") { scheduling = true }
-            // An empty value clears the date, as the detail's date rows do.
-            Button("No Date") { setDue("") }.disabled(item.task.dueDate == nil)
-        }
-        Menu("Priority", systemImage: "flag") {
-            ForEach(TableCells.priorityNames.indices.reversed(), id: \.self) { level in
-                Toggle(isOn: Binding(get: { item.task.priority == level }, set: { if $0 { setPriority(level) } })) {
-                    Label {
-                        Text(TableCells.priorityNames[level])
-                    } icon: {
-                        Image(systemName: "circle.fill")
-                            .foregroundStyle(ThemeToken.priority(level).map { Color($0) } ?? Color(.mutedForeground))
-                    }
-                }
-            }
-        }
-        Menu("Labels", systemImage: "tag") {
-            TaskRowLabelChoices(services: services, item: item) { failure = $0 }
-        }
-        Menu("Move to", systemImage: "folder") {
-            TaskRowProjectChoices(services: services, task: item.task) { failure = $0 }
-        }
-        Divider()
-        Button(item.task.isFavorite ? "Remove from Favourites" : "Add to Favourites", systemImage: "star") { toggleStar() }
-        // A task that has not synced has no web address yet.
-        Button("Copy Link", systemImage: "link") { copyLink() }
-            .disabled(services.taskWebURL(item.task) == nil)
-        Button("Duplicate", systemImage: "plus.square.on.square") { duplicate() }
-        Divider()
-        Button("Delete", systemImage: "trash", role: .destructive) { delete() }
-    }
-
-    private func setDue(_ iso: String) {
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: TaskPatch(dueDate: iso)) }
-    }
-
-    private func setPriority(_ level: Int) {
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: TaskPatch(priority: level)) }
+        let localId = item.task.localId
+        let open: (@MainActor () -> Void)? = openTask.map { openTask in { openTask(localId) } }
+        TaskMacMenuItems(
+            services: services, task: item.task, labels: item.labels, onOpen: open,
+            onToggleDone: { toggleWithHaptic() }, onPickDate: { scheduling = true }, onDuplicate: { duplicate() },
+            onCopyLink: { copyLink() }, onDelete: { delete() }, onFailure: { failure = $0 }
+        )
     }
 }
 #endif
@@ -310,6 +281,15 @@ extension TaskRowLink {
     /// burst and the strikethrough are seen before the row leaves a list of open tasks.
     private func toggle() {
         let localId = item.task.localId
+        #if os(macOS)
+        // A row kept after completing still holds the open snapshot: unticking it reopens the task.
+        if let recent, recent.contains(localId) {
+            recent.forget(localId)
+            completing = false
+            attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: false)) }
+            return
+        }
+        #endif
         guard !item.task.done else {
             completing = false
             attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: false)) }
@@ -317,10 +297,22 @@ extension TaskRowLink {
         }
         guard !completing else { return }
         completing = true
+        #if os(macOS)
+        // Kept on screen once saved; the save waits only for the burst (60ms in, 560ms long).
+        recent?.record(item, group: group)
+        let delay = recent == nil ? 900 : 620
+        #else
+        let delay = 900
+        #endif
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(900))
+            try? await Task.sleep(for: .milliseconds(delay))
             attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: true)) }
-            if failure != nil { withAnimation { completing = false } }
+            if failure != nil {
+                #if os(macOS)
+                recent?.forget(localId)
+                #endif
+                withAnimation { completing = false }
+            }
         }
     }
 

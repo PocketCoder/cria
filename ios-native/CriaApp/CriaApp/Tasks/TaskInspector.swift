@@ -17,20 +17,26 @@ extension TaskDetailView {
     /// The inspector's field box. Every value writes through the same paths as the iOS rows: `apply`, the date and
     /// repeat sheets, and the label picker.
     func fieldBox(_ task: TaskRecord) -> some View {
-        TaskInspectorFieldBox(
-            task: task, labels: live.value.labels, projects: moveChoices,
+        let store = services.store
+        let state = sheets
+        return TaskInspectorFieldBox(
+            services: services, task: task, labels: live.value.labels, projects: moveChoices,
             reminders: feeds.reminders.value, assignees: feeds.assignees.value,
             apply: { _ = apply($0) },
             onPickDue: { editingDate = .due },
             onCustomRepeat: { editingRepeat = true },
-            onEditLabels: { showLabels = true }
+            onEditLabels: { showLabels = true },
+            onAddReminder: { input in state.attempt { try store.addReminder(taskLocalId: task.localId, input) } },
+            onRelativeReminder: { state.addingRelativeReminder = true },
+            onAssign: { state.assigning = true }
         )
     }
 }
 
 /// Project, Due, Repeat, Priority, Reminders, Labels and Assignees in one `cell` box with hairlines between rows.
-/// Reminders and assignees are edited in their own sections below; here they are a summary.
+/// Reminders and assignees are edited in full in their own sections below.
 struct TaskInspectorFieldBox: View {
+    let services: AppServices
     let task: TaskRecord
     let labels: [LabelRecord]
     let projects: [ProjectRecord]
@@ -40,6 +46,9 @@ struct TaskInspectorFieldBox: View {
     let onPickDue: () -> Void
     let onCustomRepeat: () -> Void
     let onEditLabels: () -> Void
+    let onAddReminder: (ReminderInput) -> Void
+    let onRelativeReminder: () -> Void
+    let onAssign: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
@@ -52,9 +61,13 @@ struct TaskInspectorFieldBox: View {
             Divider()
             row("Priority", systemImage: "flag") { priorityMenu }
             Divider()
-            row("Reminders", systemImage: "bell") { summary(reminderText) }
+            row("Reminders", systemImage: "bell") {
+                InspectorRemindersValue(task: task, reminders: reminders, onAdd: onAddReminder, onRelative: onRelativeReminder)
+            }
             Divider()
-            row("Labels", systemImage: "tag") { labelsValue }
+            row("Labels", systemImage: "tag") {
+                InspectorLabelsValue(services: services, taskLocalId: task.localId, labels: labels, onEditLabels: onEditLabels)
+            }
             Divider()
             row("Assignees", systemImage: "person.2") { assigneesValue }
         }
@@ -161,46 +174,27 @@ struct TaskInspectorFieldBox: View {
         }
     }
 
-    private var reminderText: String {
-        guard let first = reminders.first else { return "None" }
-        let more = reminders.count > 1 ? " +\(reminders.count - 1)" : ""
-        return first.summary(display: dateDisplay) + more
-    }
-
-    private var labelsValue: some View {
-        HStack(spacing: 4) {
-            ForEach(labels, id: \.localId) { label in
-                CriaChip(text: label.title, tint: Color(hexString: label.hexColor) ?? Color(.info))
-            }
-            Button(action: onEditLabels) {
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MacTheme.label2)
-                    .frame(width: 24, height: 24)
-                    .background(MacTheme.fill, in: RoundedRectangle(cornerRadius: 7))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Edit labels")
-        }
-        .lineLimit(1)
-    }
-
-    @ViewBuilder private var assigneesValue: some View {
-        if assignees.isEmpty {
-            summary("None")
-        } else {
-            HStack(spacing: -6) {
-                ForEach(assignees.prefix(5)) { person in
-                    Text(initials(person))
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 22, height: 22)
-                        .background(Color(.primary), in: Circle())
-                        .overlay(Circle().strokeBorder(MacTheme.cell, lineWidth: 2))
-                        .help(person.displayName ?? person.username ?? "")
+    /// Overlapping 22pt avatars with a 2pt ring, or "None"; either opens the assignee search.
+    private var assigneesValue: some View {
+        Button(action: onAssign) {
+            if assignees.isEmpty {
+                summary("None")
+            } else {
+                HStack(spacing: -6) {
+                    ForEach(assignees.prefix(5)) { person in
+                        Text(initials(person))
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 22, height: 22)
+                            .background(Color(.primary), in: Circle())
+                            .overlay(Circle().strokeBorder(MacTheme.cell, lineWidth: 2))
+                            .help(person.displayName ?? person.username ?? "")
+                    }
                 }
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(assignees.isEmpty ? "No assignees, add one" : "Assignees, add one")
     }
 
     private func initials(_ person: AssigneeRecord) -> String {

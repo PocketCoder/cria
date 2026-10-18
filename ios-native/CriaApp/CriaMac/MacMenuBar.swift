@@ -1,10 +1,13 @@
 import CriaKit
+import KeyboardShortcuts
 import SwiftUI
 
 /// The menu bar extra: today's open tasks with rings to complete them, a field that adds to Inbox due today, then New
 /// Task, Open Cria, Settings and Quit.
 struct MacMenuBarContent: View {
     let model: AppModel
+    /// The configured global shortcut (Settings > General), read when the popover opens.
+    @State private var quickAddShortcut: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -19,7 +22,7 @@ struct MacMenuBarContent: View {
             }
             Divider().padding(.vertical, 2)
             VStack(alignment: .leading, spacing: 0) {
-                MenuBarItem(title: "New Task…") { MacWindows.requestQuickAdd() }
+                MenuBarItem(title: "New Task…", shortcut: quickAddShortcut) { MacWindows.requestQuickAdd() }
                     .disabled(model.services == nil)
                 MenuBarItem(title: "Open Cria") { MacWindows.showMain() }
                 SettingsLink { MenuBarItemLabel(title: "Settings…", shortcut: "⌘,") }
@@ -29,6 +32,7 @@ struct MacMenuBarContent: View {
         }
         .padding(8)
         .frame(width: 330)
+        .onAppear { quickAddShortcut = KeyboardShortcuts.getShortcut(for: .quickAdd)?.description }
     }
 }
 

@@ -105,6 +105,14 @@ struct PriorityCheck: View {
     private var ring: CGFloat { size * min(max(typeScale, 1), 1.6) }
 
     var body: some View {
+        #if os(macOS)
+        MacPriorityRing(priority: priority, isDone: isDone, size: size, action: action)
+        #else
+        iosBody
+        #endif
+    }
+
+    private var iosBody: some View {
         Button {
             if !isDone {
                 completions += 1

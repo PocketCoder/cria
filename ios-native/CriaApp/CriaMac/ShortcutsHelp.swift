@@ -1,7 +1,10 @@
 import SwiftUI
 
-/// The Help > Keyboard Shortcuts sheet: what `MacKeyboard` and the menus answer to.
+/// The Help > Keyboard Shortcuts sheet: what `MacKeyboard` and the menus answer to. `MacOverlays` drops it from the
+/// top of the window (540pt, radius 0 0 18 18, 260ms).
 struct ShortcutsHelp: View {
+    /// Set when shown by `MacOverlays` rather than as a sheet.
+    var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     private static let groups: [(String, [(String, String)])] = [
@@ -30,11 +33,16 @@ struct ShortcutsHelp: View {
             }
             HStack {
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button("Done", action: close).keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
         .frame(width: 540, height: 520)
+        .onExitCommand(perform: close)
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 
     private func column(_ groups: ArraySlice<(String, [(String, String)])>) -> some View {

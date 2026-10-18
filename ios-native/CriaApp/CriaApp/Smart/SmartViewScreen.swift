@@ -7,16 +7,23 @@ struct SmartViewScreen: View {
     let services: AppServices
     let title: String
     let view: SmartView
-    @State private var live: LiveValue<SmartViewData>
-    @State private var display: DisplayModel
+    @State var live: LiveValue<SmartViewData>
+    @State var display: DisplayModel
     @State private var selection = TaskSelection()
     /// Settings > General > Show completed: what a view does until its Display sheet says otherwise.
     @AppStorage("cria.taskList.showDone") private var showDone = true
-    @State private var selectedDay = Calendar.cria.startOfDay(for: Date())
-    @State private var addPresented = false
+    @State var selectedDay = Calendar.cria.startOfDay(for: Date())
+    @State var addPresented = false
     /// The day a Mac group's New Task row asked for; the selected day otherwise.
-    @State private var addDay: Date?
-    @State private var rescheduling: DisplaySection?
+    @State var addDay: Date?
+    /// The project a Mac group's New Task row asked for (Inbox's); then no day is filled in.
+    @State var addProject: String?
+    @State var rescheduling: DisplaySection?
+    #if os(macOS)
+    /// Rows completed here, kept struck through until the screen goes.
+    @State var recent = RecentlyCompleted()
+    @AppStorage(GeneralSettings.weekStartDefaultsKey) var weekStart = GeneralSettings.defaultWeekStart
+    #endif
     @State private var failure: String?
     /// Parents whose subtasks are showing, for this screen only.
     @State private var expanded: Set<String> = []
@@ -30,13 +37,26 @@ struct SmartViewScreen: View {
         _live = State(initialValue: LiveValue(initial: SmartViewData()) {
             observeStore(store, kinds: [.tasks, .labels, .projects, .savedFilters]) { (reading: CriaStore) throws -> SmartViewData in
                 // Completed tasks come too: the Display sheet decides whether they show.
-                let groups = try reading.smartGroups(view, includeDone: true)
+                var groups = try reading.smartGroups(view, includeDone: true)
+                #if os(macOS)
+                // The Mac's Upcoming opens with Overdue while today is the selected day.
+                if view == .upcoming,
+                   let overdue = try reading.smartGroups(.today, includeDone: true).first(where: { $0.key == "overdue" }) {
+                    groups.insert(overdue, at: 0)
+                }
+                #endif
                 let items = groups.flatMap(\.items)
                 let parents = try TaskListNesting.parentTitles(reading, for: items)
-                return SmartViewData(
+                var data = SmartViewData(
                     groups: groups, parentTitles: parents, nesting: try SmartNestingData.read(reading, items: items),
                     assignees: try reading.assigneeMap(), loaded: true
                 )
+                #if os(macOS)
+                if case .inbox(let serverId?) = view {
+                    data.inboxLocalId = try reading.projects().first { $0.serverId == serverId }?.localId
+                }
+                #endif
+                return data
             }
         })
     }
@@ -44,7 +64,7 @@ struct SmartViewScreen: View {
     private var hasAnyTasks: Bool { live.value.groups.contains { !$0.items.isEmpty } }
 
     /// Open tasks in the view, before any Display filter: what "left today" means.
-    private var openCount: Int {
+    var openCount: Int {
         live.value.groups.reduce(0) { total, group in total + group.items.filter { !$0.task.done }.count }
     }
 
@@ -54,24 +74,41 @@ struct SmartViewScreen: View {
         let raw = live.value.groups.map { DisplaySection(key: $0.key, label: $0.label, items: $0.items) }
         let showCompleted = display.showsCompleted(default: showDone)
         let context = display.context(assignees: live.value.assignees)
+        #if os(macOS)
+        let keepsDone = showCompleted || !recent.isEmpty
+        #else
+        let keepsDone = showCompleted
+        #endif
+        let sections: [DisplaySection]
         if display.config.groupBy != .none && !display.sections.groupings.isEmpty {
-            return DisplayEngine.sections(raw.flatMap(\.items), config: display.config, showCompleted: showCompleted, context: context)
+            sections = DisplayEngine.sections(raw.flatMap(\.items), config: display.config, showCompleted: keepsDone, context: context)
+        } else {
+            sections = DisplayEngine.refined(raw, config: display.config, showCompleted: keepsDone, context: context)
         }
-        return DisplayEngine.refined(raw, config: display.config, showCompleted: showCompleted, context: context)
+        #if os(macOS)
+        return macArranged(recent.merged(sections, showsCompleted: showCompleted))
+        #else
+        return sections
+        #endif
     }
 
     /// The sections shown: Upcoming starts at the selected day.
     private func visible(_ displayed: [DisplaySection]) -> [DisplaySection] {
         guard view == .upcoming else { return displayed }
         let from = Self.dayKey(selectedDay)
+        #if os(macOS)
+        let todaySelected = Calendar.cria.isDateInToday(selectedDay)
+        return displayed.filter { $0.key == "overdue" ? todaySelected : $0.key >= from }
+        #else
         return displayed.filter { $0.key >= from }
+        #endif
     }
 
-    private static func dayKey(_ date: Date) -> String {
+    static func dayKey(_ date: Date) -> String {
         DueDates.dayKey(DueDates.allDayISO(for: date)) ?? ""
     }
 
-    private var subtitle: String? {
+    var subtitle: String? {
         switch view {
         case .today:
             return Date().formatted(.dateTime.weekday(.wide).day().month(.wide)) + " · \(openCount) open"
@@ -92,14 +129,17 @@ struct SmartViewScreen: View {
             #if os(macOS)
             MacSmartHeader(
                 title: title, subtitle: macSubtitle, isUpcoming: view == .upcoming,
-                selectedDay: $selectedDay, busyDays: Set(displayed.map(\.key))
+                selectedDay: $selectedDay, busyDays: Set(displayed.filter { !$0.items.isEmpty }.map(\.key))
             )
             #else
             header(displayed)
             #endif
             if showsTodayEmpty { TodayEmptyView(services: services) }
-            // Every group shown is on or after the selected day, so an empty selected day comes first.
+            // Every group shown is on or after the selected day, so an empty selected day comes first. The Mac lists
+            // every day of the week instead, each with its New Task row.
+            #if !os(macOS)
             nothingPlanned(displayed)
+            #endif
             ForEach(visible(displayed)) { group in
                 groupSection(group)
             }
@@ -119,6 +159,9 @@ struct SmartViewScreen: View {
         .criaSurface()
         // The default top margin and section gaps left a band of empty space under the title.
         .contentMargins(.top, 0, for: .scrollContent)
+        #if os(macOS)
+        .environment(\.recentlyCompleted, recent)
+        #endif
         .listSectionSpacing(.compact)
         .overlay {
             if live.value.loaded && !hasAnyTasks && view != .upcoming && view != .today {
@@ -139,8 +182,10 @@ struct SmartViewScreen: View {
         .quickAdd(services: services)
         .displayOptions(display, services: services)
         .taskSelection(selection, services: services)
-        .sheet(isPresented: $addPresented, onDismiss: { addDay = nil }, content: {
-            QuickAddSheet(services: services, contextProjectId: nil, initialDueDate: addDay ?? selectedDay)
+        .sheet(isPresented: $addPresented, onDismiss: { addDay = nil; addProject = nil }, content: {
+            QuickAddSheet(
+                services: services, contextProjectId: addProject, initialDueDate: addProject == nil ? addDay ?? selectedDay : nil
+            )
         })
         // An alert, not a confirmation dialog: on iOS 26 that is a popover, anchored away from the header button.
         .alert(
@@ -162,6 +207,9 @@ struct SmartViewScreen: View {
         .task { await live.run() }
     }
 
+}
+
+extension SmartViewScreen {
     private func tree(for row: NestedTaskItem) -> TaskRowTree {
         let id = row.id
         return TaskRowTree(
@@ -225,7 +273,7 @@ struct SmartViewScreen: View {
     }
 
     /// On the Mac, Inbox is one project: its tasks need no project chip, and its one group needs no header repeating the title.
-    private var isInbox: Bool {
+    var isInbox: Bool {
         #if os(macOS)
         if case .inbox = view { return true }
         #endif
@@ -239,6 +287,9 @@ struct SmartViewScreen: View {
             ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
                 TaskRowLink(services: services, item: row.item, showProject: showsProject && row.depth == 0, tree: tree(for: row))
             }
+            #if os(macOS)
+            .environment(\.completionGroup, CompletionGroup(key: group.key, label: group.label))
+            #endif
             #if os(macOS)
             macNewTaskRow(group)
             #endif
@@ -291,45 +342,6 @@ extension SmartViewScreen {
     }
 }
 
-#if os(macOS)
-extension SmartViewScreen {
-    /// "Sunday 11 October · 3 tasks" on Today, the month on Upcoming, the open count elsewhere.
-    private var macSubtitle: String? {
-        let count = openCount == 1 ? "1 task" : "\(openCount) tasks"
-        switch view {
-        case .today: return Date().formatted(.dateTime.weekday(.wide).day().month(.wide)) + " · " + count
-        case .upcoming: return subtitle
-        default: return live.value.loaded ? count : nil
-        }
-    }
-
-    @ViewBuilder private func macNewTaskRow(_ group: DisplaySection) -> some View {
-        if let day = MacSmartHeader.newTaskDay(view, groupKey: group.key) {
-            MacNewTaskRow {
-                addDay = day
-                addPresented = true
-            }
-        }
-    }
-
-    /// Overdue in coral with its reschedule action; Upcoming's current day as "Today · Sunday" in the accent.
-    @ViewBuilder private func macGroupHeader(_ group: DisplaySection) -> some View {
-        let open = group.items.filter { !$0.task.done }.count
-        if view == .today && group.key == "overdue" {
-            MacGroupHeader(title: group.label, count: open, tint: MacTheme.coral, actionTitle: "Reschedule to today") {
-                rescheduling = group
-            }
-        } else if !isInbox {
-            let isToday = view == .upcoming && group.key == Self.dayKey(Date())
-            MacGroupHeader(
-                title: isToday ? "Today · " + Date().formatted(.dateTime.weekday(.wide)) : group.label,
-                count: open, tint: isToday ? Color(.primary) : Color(.foreground)
-            )
-        }
-    }
-}
-#endif
-
 /// A smart view's date groups, plus each shown subtask's parent title for the caption (these lists do not nest).
 /// Equatable, so a re-read that found nothing new does not re-render the screen (`LiveValue`).
 struct SmartViewData: Equatable, Sendable {
@@ -340,6 +352,8 @@ struct SmartViewData: Equatable, Sendable {
     var assignees: [String: Set<Int>] = [:]
     /// False until the first read, so an empty state does not flash before the tasks arrive.
     var loaded = false
+    /// Inbox's project, for the Mac's New Task row.
+    var inboxLocalId: String?
 }
 
 /// Inbox needs the default project id from the server. Offline it falls back to the one remembered from the last

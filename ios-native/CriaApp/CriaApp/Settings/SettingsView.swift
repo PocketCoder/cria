@@ -187,39 +187,57 @@ struct SettingsView: View {
 
 extension SettingsView {
 #if os(macOS)
-    /// The Settings window: one pane per topic on the toolbar, each a system grouped form.
+    /// The Settings window: one pane per topic on the toolbar, each a system grouped form with exactly the design's
+    /// rows (`MacSettingsPanes`).
     private var macTabs: some View {
         TabView {
             pane("General", "gearshape") {
                 if isLinkShare { linkShareNotice }
                 loadStatus
-                MacSettingsView()
-                GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
-                PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
+                MacGeneralPane(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
+                // Every other synced preference (timezone, date format, Quick Add Magic, photo capture and so on):
+                // not in the design's rows, but they must stay settable on the Mac.
+                Section {
+                    NavigationLink {
+                        Form {
+                            GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
+                            PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
+                        }
+                        .formStyle(.grouped)
+                        .navigationTitle("More General Settings")
+                    } label: {
+                        Text("More General Settings")
+                    }
+                }
             }
             pane("Customise", "slider.horizontal.3") {
-                CustomiseSettingsSection(prefs: prefs)
-                AppearanceSettingsSection(prefs: prefs)
+                MacCustomisePane(prefs: prefs)
             }
             pane("Account", "person.crop.circle") {
-                if isLinkShare { linkShareNotice } else { accountCard; accountSection }
+                if isLinkShare {
+                    linkShareNotice
+                } else {
+                    MacAccountPane(services: services, model: model, onSignOut: onSignOut)
+                }
                 if let message = model.errorMessage {
                     Section { Text(message).foregroundStyle(Color(.destructive)) }
                 }
-                SignOutSettingsSection(services: services, version: Self.version, onSignOut: onSignOut)
             }
             pane("Notifications", "bell") {
-                NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs)
-            }
-            pane("Data", "cylinder") {
-                syncSection
-                if !isLinkShare {
-                    Section("Your data") {
-                        NavigationLink { DataSettingsView(services: services) } label: {
-                            SettingsLabel("Export and account data", symbol: "externaldrive", token: .fleece500)
-                        }
+                MacNotificationsPane(prefs: prefs)
+                // Email reminders, the weekly round-up and the rest of the server's notification settings.
+                Section {
+                    NavigationLink {
+                        Form { NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs) }
+                            .formStyle(.grouped)
+                            .navigationTitle("More Notification Settings")
+                    } label: {
+                        Text("More Notification Settings")
                     }
                 }
+            }
+            pane("Data", "cylinder") {
+                MacDataPane(services: services, onSignOut: onSignOut)
                 storageSection
                 aboutSection
             }
@@ -232,6 +250,7 @@ extension SettingsView {
         NavigationStack {
             Form { content() }
                 .formStyle(.grouped)
+                .contentMargins(.horizontal, 28, for: .scrollContent)
                 .navigationTitle(title)
         }
         .tabItem { Label(title, systemImage: symbol) }

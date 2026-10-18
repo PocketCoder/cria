@@ -29,7 +29,9 @@ struct TodayEmptyView: View {
                     .font(.system(size: 26))
                     .foregroundStyle(Color(.primary))
                     .frame(width: 56, height: 56)
-                    .background(Color(.primary).opacity(0.13), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background(MacTheme.selection, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    // 14pt to the title and 4pt from it to the line, within the stack's 10pt spacing.
+                    .padding(.bottom, 4)
                     .accessibilityHidden(true)
                 Text("All clear for today")
                     .font(.system(size: 15, weight: .semibold))
@@ -39,6 +41,8 @@ struct TodayEmptyView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(MacTheme.label2)
                     .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+                    .padding(.top, -6)
                 #else
                 Image(systemName: "party.popper")
                     .font(.largeTitle)
@@ -61,7 +65,7 @@ struct TodayEmptyView: View {
             }
             .frame(maxWidth: .infinity)
             #if os(macOS)
-            .padding(.vertical, 48)
+            .padding(.vertical, 80)
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
             #else

@@ -203,8 +203,29 @@ struct TableGridView: View {
 
     #if os(macOS)
     private static let columnSpacing: CGFloat = 0
+    // The Mac design: a 30pt header in SF 11 Semibold `l2`, 32pt rows, empty cells as "—" in `l3`.
+    private static let headerFont = Font.system(size: 11, weight: .semibold)
+    private static let headerColour = MacTheme.label2
+    private static let headerHeight: CGFloat? = 30
+    private static let rowPadding: CGFloat = 0
+    private static let rowHeight: CGFloat? = 32
+    private static let emptyText = "—"
+    private static let emptyColour = MacTheme.label3
+    private static let unknownColour = MacTheme.label3
+    /// The task open in the inspector, whose row is tinted.
+    @Environment(\.openTaskState) private var openTaskState
+    private func isSelected(_ item: TaskListItem) -> Bool { openTaskState?.id == item.task.localId }
     #else
     private static let columnSpacing: CGFloat = 16
+    private static let headerFont = Theme.caption.weight(.semibold)
+    private static let headerColour = Color(.mutedForeground)
+    private static let headerHeight: CGFloat? = nil
+    private static let rowPadding: CGFloat = 10
+    private static let rowHeight: CGFloat? = nil
+    private static let emptyText = ""
+    private static let emptyColour = Color(.foreground)
+    private static let unknownColour = Color(.mutedForeground)
+    private func isSelected(_ item: TaskListItem) -> Bool { false }
     #endif
 
     /// The card sits at the top left and is at least as big as the screen; a two-way scroll view would otherwise centre
@@ -215,7 +236,8 @@ struct TableGridView: View {
                 // Padding goes on the cells: a modified GridRow would become one cell spanning the grid.
                 GridRow {
                     ForEach(columns, id: \.self) { column in
-                        header(column).padding(.vertical, 10)
+                        header(column).padding(.vertical, Self.headerHeight == nil ? 10 : 0)
+                            .frame(height: Self.headerHeight)
                             #if os(macOS)
                             .padding(.horizontal, 8)
                             #endif
@@ -226,13 +248,15 @@ struct TableGridView: View {
                     GridRow {
                         ForEach(columns, id: \.self) { column in
                             cell(item, column)
-                                .frame(minWidth: width(column), alignment: .leading)
-                                .padding(.vertical, 10)
+                                .frame(minWidth: width(column), minHeight: Self.rowHeight, alignment: .leading)
+                                .padding(.vertical, Self.rowPadding)
                                 #if os(macOS)
                                 // No alternating stripes: a Grid can only paint them per cell, which broke into a
                                 // checkerboard, and stretching every cell to fill its row made each layout pass slow.
-                                // The dividers separate the rows.
+                                // The dividers separate the rows. Only the selected row's cells stretch to fill it, so
+                                // its 13% primary band is one piece and the cost is one row.
                                 .padding(.horizontal, 8)
+                                .modifier(TableSelectedBand(selected: isSelected(item)))
                                 #endif
                         }
                     }
@@ -262,9 +286,9 @@ struct TableGridView: View {
             onHeaderTap(column)
         } label: {
             HStack(spacing: 4) {
-                Text(column.label).font(Theme.caption.weight(.semibold)).foregroundStyle(Color(.mutedForeground))
+                Text(column.label).font(Self.headerFont).foregroundStyle(Self.headerColour)
                 if let key {
-                    Image(systemName: key.direction == .asc ? "arrow.up" : "arrow.down")
+                    Image(systemName: Self.sortSymbol(key.direction == .asc))
                         .font(Theme.footnote)
                         .foregroundStyle(Color(.primary))
                         .accessibilityHidden(true)
@@ -293,7 +317,8 @@ struct TableGridView: View {
         switch column {
         case .assignees:
             let names = (assignees[task.localId] ?? []).map(AssigneesSection.name).joined(separator: ", ")
-            Text(names).font(Theme.caption).lineLimit(1)
+            Text(names.isEmpty ? Self.emptyText : names).font(Theme.caption).lineLimit(1)
+                .foregroundStyle(names.isEmpty ? Self.emptyColour : Color(.foreground))
                 .accessibilityLabel(names.isEmpty ? "No assignees" : "Assignees: \(names)")
         case .title:
             NavigationLink(value: Route.task(task.localId)) {
@@ -318,7 +343,9 @@ struct TableGridView: View {
             }
             .buttonStyle(.plain)
         case .labels:
-            Text(item.labels.map(\.title).joined(separator: ", ")).font(Theme.caption).lineLimit(1)
+            Text(item.labels.isEmpty ? Self.emptyText : item.labels.map(\.title).joined(separator: ", "))
+                .font(Theme.caption).lineLimit(1)
+                .foregroundStyle(item.labels.isEmpty ? Self.emptyColour : Color(.foreground))
                 .accessibilityLabel(item.labels.isEmpty ? "No labels" : "Labels: " + item.labels.map(\.title).joined(separator: ", "))
         case .done:
             Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
@@ -327,18 +354,47 @@ struct TableGridView: View {
         case .createdBy, .commentCount:
             // Unknown (not yet read from the server) shows a dash rather than a blank that reads as none.
             let text = TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay, extras: extras)
-            Text(text ?? "–")
+            Text(text ?? (Self.emptyText.isEmpty ? "–" : Self.emptyText))
                 .font(Theme.caption)
-                .foregroundStyle(text == nil ? Color(.mutedForeground) : Color(.foreground))
+                .foregroundStyle(text == nil ? Self.unknownColour : Color(.foreground))
                 .accessibilityLabel("\(column.label): \(text ?? "unknown")")
         default:
             let text = TableCells.text(task, column, projectTitle: item.projectTitle, now: Date(), display: dateDisplay)
-            Text(text ?? "")
+            Text(text ?? Self.emptyText)
                 .font(Theme.caption)
-                .foregroundStyle(Color(.foreground))
+                .foregroundStyle(text == nil ? Self.emptyColour : Color(.foreground))
                 // Named per cell, so a row read cell by cell still says which column each value is.
                 .accessibilityLabel(text.map { "\(column.label): \($0)" } ?? "")
                 .accessibilityHidden(text == nil)
         }
     }
 }
+
+extension TableGridView {
+    /// The sort indicator: a chevron on the Mac, an arrow on iPad.
+    fileprivate static func sortSymbol(_ ascending: Bool) -> String {
+        #if os(macOS)
+        ascending ? "chevron.up" : "chevron.down"
+        #else
+        ascending ? "arrow.up" : "arrow.down"
+        #endif
+    }
+}
+
+#if os(macOS)
+/// The selected row's 13% primary band: its cells fill the row's height and their column's width, so the tint has no
+/// gaps. Unselected cells keep their own size (see the stripes note in `TableGridView`).
+private struct TableSelectedBand: ViewModifier {
+    let selected: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if selected {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .background(Color(.primary).opacity(0.13))
+        } else {
+            content
+        }
+    }
+}
+#endif

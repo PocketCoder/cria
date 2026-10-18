@@ -14,6 +14,9 @@ struct CommentsSection: View {
     @ScaledMetric(relativeTo: .caption) private var avatarSize: CGFloat = 30
 
     var body: some View {
+        #if os(macOS)
+        macThread
+        #else
         Section("Comments") {
             ForEach(comments, id: \.localId) { comment in
                 row(comment)
@@ -23,10 +26,11 @@ struct CommentsSection: View {
             }
             summarySection
         }
+        #endif
     }
 
     @ViewBuilder
-    private var summarySection: some View {
+    var summarySection: some View {
         if AIStatus.shared.isOfferable && comments.count >= 2 {
             Button(summarising ? "Summarising…" : "Summarise thread", systemImage: "sparkles") {
                 Task { await summarise() }
@@ -86,7 +90,7 @@ struct CommentsSection: View {
     }
 
     /// "3 hours ago", plus "edited" when the comment changed after it was posted (as the web client shows).
-    private static func timestamp(_ comment: CommentRecord) -> String? {
+    static func timestamp(_ comment: CommentRecord) -> String? {
         // Vikunja writes "no date" as year 1; a comment without a real creation time shows none.
         guard let created = comment.createdAt.flatMap(DueDates.parse), created.timeIntervalSince1970 > 0 else { return nil }
         let ago = created.formatted(.relative(presentation: .named))
@@ -94,12 +98,12 @@ struct CommentsSection: View {
         return edited ? "\(ago) · edited" : ago
     }
 
-    private func initials(_ name: String) -> String {
+    func initials(_ name: String) -> String {
         let letters = name.split(separator: " ").prefix(2).compactMap(\.first)
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
-    private func reactionBar(_ comment: CommentRecord) -> some View {
+    func reactionBar(_ comment: CommentRecord) -> some View {
         HStack {
             ForEach((comment.reactions ?? [:]).keys.sorted(), id: \.self) { emoji in
                 let count = comment.reactions?[emoji]?.count ?? 0

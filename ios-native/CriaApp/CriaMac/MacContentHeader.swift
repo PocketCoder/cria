@@ -83,8 +83,10 @@ struct MacGroupHeader: View {
                 .fill(Color.primary.opacity(0.1))
                 .frame(height: 0.5)
                 .padding(.horizontal, 12)
+                .padding(.bottom, 4)
         }
-        .padding(.top, 22)
+        // The handoff's 22pt between groups, less the first group's gap under the screen header.
+        .padding(.top, 16)
         .textCase(nil)
     }
 }

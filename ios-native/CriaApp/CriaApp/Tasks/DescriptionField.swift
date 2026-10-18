@@ -92,6 +92,9 @@ struct DescriptionField: View {
     /// What the text needs at the current width, as the editor last reported it.
     @State private var measured: CGFloat = 0
     private var height: CGFloat { max(measured, DescriptionDraft.minHeight(empty: draft.isEmpty)) }
+    #if os(macOS)
+    @State private var focused = false
+    #endif
 
     /// Down from the top of the editor to its text: the Mac's formatting bar sits above it.
     private static var placeholderInset: CGFloat {
@@ -103,19 +106,11 @@ struct DescriptionField: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macBox
+        #else
         HStack(alignment: .top, spacing: 8) {
-            EditorHost(
-                services: services, taskLocalId: taskLocalId, initialHTML: html, controller: draft.controller,
-                inlineHeight: height, onHeightChange: { measured = $0 }
-            )
-            .overlay(alignment: .topLeading) {
-                if draft.isEmpty {
-                    Text("Add description")
-                        .foregroundStyle(Color(.mutedForeground))
-                        .padding(.top, Self.placeholderInset)
-                        .allowsHitTesting(false)
-                }
-            }
+            editor
             // Beside the text rather than on a row of its own, so an empty description is one line tall.
             Button(action: onExpand) {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -126,5 +121,50 @@ struct DescriptionField: View {
             .buttonStyle(.borderless)
             .accessibilityLabel("Expand description")
         }
+        #endif
     }
+
+    private var editor: some View {
+        EditorHost(
+            services: services, taskLocalId: taskLocalId, initialHTML: html, controller: draft.controller,
+            inlineHeight: height, onHeightChange: { measured = $0 }
+        )
+        .overlay(alignment: .topLeading) {
+            if draft.isEmpty {
+                Text(Self.placeholder)
+                    .foregroundStyle(Color(.mutedForeground))
+                    .padding(.top, Self.placeholderInset)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    #if os(macOS)
+    private static var placeholder: LocalizedStringKey { "Add notes, links or a checklist" }
+
+    /// The inspector's description box: the formatting bar over the text, with a 1pt `primary` ring and a 3pt
+    /// llama-500 halo at 25% while the editor has the keyboard.
+    private var macBox: some View {
+        editor
+            .padding(.horizontal, 8)
+            .padding(.bottom, 6)
+            .background(MacTheme.card, in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(focused ? Color(.primary) : Color.primary.opacity(0.1), lineWidth: focused ? 1 : 0.5)
+            }
+            .overlay {
+                if focused {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.llama500).opacity(0.25), lineWidth: 3)
+                        .padding(-2)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: focused)
+            .modifier(MacEditorFocusReader(controller: draft.controller, focused: $focused))
+    }
+    #else
+    private static var placeholder: LocalizedStringKey { "Add description" }
+    #endif
 }

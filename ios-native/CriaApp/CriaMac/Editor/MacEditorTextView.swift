@@ -73,6 +73,18 @@ final class MacEditorTextView: NSTextView, EditorSurface {
 
     func focus() -> Bool { window?.makeFirstResponder(self) ?? false }
 
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { MacEditorFocus.post(self, focused: true) }
+        return became
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { MacEditorFocus.post(self, focused: false) }
+        return resigned
+    }
+
     func unfocus() { window?.makeFirstResponder(nil) }
 
     func endInlineEditing() {}

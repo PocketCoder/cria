@@ -7,6 +7,8 @@ private struct PaletteItem: Identifiable {
     let detail: String
     let symbol: String
     var tint: Color?
+    /// Its key equivalent, shown on the right in place of the detail.
+    var shortcut: String?
     /// Set for a task row, which ⌘Return completes.
     var taskId: String?
     let run: @MainActor () -> Void
@@ -17,7 +19,10 @@ private struct PaletteItem: Identifiable {
 struct CommandPalette: View {
     let services: AppServices
     let actions: MacActions
+    /// Set when shown as the floating panel (`MacOverlays`) rather than a sheet.
+    var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.playsCompletionSound) private var playsSound
     @Environment(\.preferences) private var preferences
@@ -85,6 +90,7 @@ struct CommandPalette: View {
         }
         .frame(width: 600)
         .focusEffectDisabled()
+        .onExitCommand { close() }
         .task {
             searching = true
             projects = ProjectTree.visible((try? services.store.projects()) ?? [])
@@ -103,7 +109,7 @@ struct CommandPalette: View {
                 .foregroundStyle(selected ? Color.white : (item.tint ?? Color(.primary)))
             Text(item.title).font(.system(size: 13)).foregroundStyle(selected ? Color.white : Color(.foreground)).lineLimit(1)
             Spacer()
-            Text(item.detail)
+            Text(item.shortcut ?? (item.taskId == nil ? "" : item.detail))
                 .font(.system(size: 11))
                 .foregroundStyle(selected ? Color.white.opacity(0.8) : MacTheme.label3)
                 .lineLimit(1)
@@ -151,33 +157,6 @@ struct CommandPalette: View {
             .padding(.vertical, 8)
     }
 
-    private var commands: [PaletteItem] {
-        var result = [
-            go("Today", "calendar", .today), go("Upcoming", "calendar.badge.clock", .upcoming), go("Inbox", "tray", .inbox),
-            go("Favourites", "star", .favorites), go("Search", "magnifyingglass", .search),
-            PaletteItem(id: "cmd.task", title: "New task", detail: "Command", symbol: "plus") { actions.newTask() },
-            PaletteItem(id: "cmd.project", title: "New project", detail: "Command", symbol: "folder.badge.plus") {
-                actions.creatingProject = true
-            },
-            PaletteItem(id: "cmd.labels", title: "Labels", detail: "Command", symbol: "tag") { actions.sidebar.showingLabels = true },
-            PaletteItem(id: "cmd.sync", title: "Sync now", detail: "Command", symbol: "arrow.triangle.2.circlepath") {
-                actions.syncNow()
-            },
-            PaletteItem(id: "cmd.shortcuts", title: "Keyboard shortcuts", detail: "Command", symbol: "keyboard") {
-                actions.showingShortcuts = true
-            }
-        ]
-        if !isLinkShare {
-            result.append(PaletteItem(
-                id: "cmd.filter", title: "New saved filter", detail: "Command", symbol: "line.3.horizontal.decrease"
-            ) { actions.sidebar.newFilter() })
-            result.append(PaletteItem(id: "cmd.teams", title: "Teams", detail: "Command", symbol: "person.2") {
-                actions.sidebar.showingTeams = true
-            })
-        }
-        return result
-    }
-
     /// Views, projects, labels, saved filters and commands that match the text by title.
     private var places: [PaletteItem] {
         var result = commands
@@ -185,6 +164,8 @@ struct CommandPalette: View {
             PaletteItem(id: "p.\(project.localId)", title: project.title, detail: "Project", symbol: "circle.fill",
                         tint: Color(hexString: project.hexColor)) { actions.go(.project(project.localId)) }
         }
+        // Labels and saved filters only come up when searching, so the empty palette shows Go to, Projects and Commands.
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return result }
         result += labels.map { label in
             PaletteItem(id: "l.\(label.localId)", title: label.title, detail: "Label", symbol: "tag.fill",
                         tint: Color(hexString: label.hexColor)) { actions.go(.label(label.localId)) }
@@ -210,10 +191,6 @@ struct CommandPalette: View {
         }
     }
 
-    private func go(_ title: String, _ symbol: String, _ destination: MacSelection) -> PaletteItem {
-        PaletteItem(id: "go.\(title)", title: title, detail: "Go to", symbol: symbol) { actions.go(destination) }
-    }
-
     private var shown: [PaletteItem] {
         let text = query.trimmingCharacters(in: .whitespaces)
         let matches = text.isEmpty ? places : places.filter { $0.title.localizedCaseInsensitiveContains(text) }
@@ -235,8 +212,12 @@ struct CommandPalette: View {
         if shown.indices.contains(chosen) { run(shown[chosen]) }
     }
 
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
     private func run(_ item: PaletteItem) {
-        dismiss()
+        close()
         // After the sheet has gone, so a command that opens another sheet is not swallowed by the dismissal.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
@@ -275,5 +256,43 @@ struct CommandPalette: View {
         let found = await Task.detached(priority: .userInitiated) { (try? store.search(input))?.tasks ?? [] }.value
         guard !Task.isCancelled, text == query else { return }
         tasks = Array(found.prefix(20))
+    }
+}
+
+extension CommandPalette {
+    /// Go to rows, then the seven commands the design lists, in its order.
+    private var commands: [PaletteItem] {
+        var result = [
+            go("Today", "calendar", .today, "⌘1"), go("Upcoming", "calendar.badge.clock", .upcoming, "⌘2"),
+            go("Inbox", "tray", .inbox, "⌘3"), go("Favourites", "star", .favorites), go("Search", "magnifyingglass", .search, "⌘F"),
+            PaletteItem(id: "go.labels", title: "Labels", detail: "Go to", symbol: "tag") { actions.sidebar.showingLabels = true }
+        ]
+        if !isLinkShare {
+            result.append(PaletteItem(id: "go.teams", title: "Teams", detail: "Go to", symbol: "person.2") {
+                actions.sidebar.showingTeams = true
+            })
+        }
+        result.append(command("task", "New task", "plus", "⌘N") { actions.newTask() })
+        if AIStatus.shared.isOfferable {
+            result.append(command("ramble", "Ramble to tasks", "mic") { actions.showingRamble = true })
+        }
+        result += [
+            command("photo", "List from photo", "photo") { actions.showingPhoto = true },
+            command("project", "New project", "folder.badge.plus", "⇧⌘N") { actions.creatingProject = true },
+            command("sidebar", "Toggle sidebar", "sidebar.left", "⌘E") { actions.toggleSidebar() },
+            command("settings", "Settings", "gearshape", "⌘,") { openSettings() },
+            command("shortcuts", "Keyboard shortcuts", "keyboard", "?") { actions.showingShortcuts = true }
+        ]
+        return result
+    }
+
+    private func command(
+        _ id: String, _ title: String, _ symbol: String, _ shortcut: String? = nil, run: @escaping @MainActor () -> Void
+    ) -> PaletteItem {
+        PaletteItem(id: "cmd.\(id)", title: title, detail: "Command", symbol: symbol, shortcut: shortcut, run: run)
+    }
+
+    private func go(_ title: String, _ symbol: String, _ destination: MacSelection, _ shortcut: String? = nil) -> PaletteItem {
+        PaletteItem(id: "go.\(title)", title: title, detail: "Go to", symbol: symbol, shortcut: shortcut) { actions.go(destination) }
     }
 }

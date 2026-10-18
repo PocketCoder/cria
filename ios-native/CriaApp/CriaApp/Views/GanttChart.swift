@@ -10,6 +10,8 @@ struct GanttChart: View {
     let range: GanttDayRange
     let dayWidth: Double
     let weekZoom: Bool
+    /// The project's colour, which the Mac's bars use when a task has none of its own.
+    var projectColour: String?
     @State private var drag: GanttDrag?
     @State private var dropTargeted = false
     /// Counts bars dropped in from the no-dates tray, for the drop haptic.
@@ -17,6 +19,25 @@ struct GanttChart: View {
     @Environment(NavigationModel.self) private var navigation
 
     private static let todayId = "gantt-today"
+
+    /// Row and header sizes. The Mac design: a 200pt task column, a 40pt header, 36pt rows with hairlines and 20pt
+    /// bars. iOS keeps CriaKit's metrics (bars inset 8pt in 40pt rows).
+    enum Layout {
+        #if os(macOS)
+        static let header = 40.0
+        static let row = 36.0
+        static let bar = 20.0
+        static let taskColumn = 200.0
+        #else
+        static let header = GanttMetrics.headerHeight
+        static let row = GanttMetrics.rowHeight
+        static let bar = GanttMetrics.rowHeight - 16
+        #endif
+
+        static func barTop(_ index: Int) -> Double { Double(index) * row + (row - bar) / 2 }
+
+        static func chartHeight(rows: Int, minimum: Double) -> Double { max(header + Double(max(rows, 0)) * row, minimum) }
+    }
 
     private var chartWidth: Double { Double(range.totalDays) * dayWidth }
 
@@ -26,11 +47,9 @@ struct GanttChart: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let height = GanttGeometry.chartHeight(rowCount: nodes.count, minimum: geometry.size.height)
+            let height = Layout.chartHeight(rows: nodes.count, minimum: geometry.size.height)
             ScrollViewReader { scroller in
-                ScrollView([.horizontal, .vertical]) {
-                    chart(height: height)
-                }
+                scrollers(height: height)
                 // Open on today, not the earliest date. Waiting a tick lets the content lay out first.
                 .task {
                     await Task.yield()
@@ -53,6 +72,27 @@ struct GanttChart: View {
         }
     }
 
+    @ViewBuilder private func scrollers(height: Double) -> some View {
+        #if os(macOS)
+        // The task column scrolls up and down with the rows but stays put while the days scroll sideways.
+        ScrollView(.vertical) {
+            HStack(alignment: .top, spacing: 0) {
+                GanttTaskColumn(nodes: nodes, height: height, onOpen: open)
+                Divider()
+                ScrollView(.horizontal) { chart(height: height) }
+            }
+        }
+        #else
+        ScrollView([.horizontal, .vertical]) {
+            chart(height: height)
+        }
+        #endif
+    }
+
+    private func open(_ taskLocalId: String) {
+        navigation.state.push(.task(taskLocalId))
+    }
+
     private func chart(height: Double) -> some View {
         ZStack(alignment: .topLeading) {
             Canvas { context, _ in
@@ -67,12 +107,13 @@ struct GanttChart: View {
             ForEach(Array(placements.enumerated()), id: \.element.taskLocalId) { index, place in
                 GanttBar(
                     place: place, node: nodes[index], dayWidth: dayWidth, drag: $drag,
-                    onOpen: { navigation.state.push(.task(place.taskLocalId)) },
+                    height: Layout.bar, fallbackColour: projectColour,
+                    onOpen: { open(place.taskLocalId) },
                     onCommit: { start, end in
                         _ = try? services.store.setGanttDates(taskLocalId: place.taskLocalId, start: start, end: end)
                     }
                 )
-                .offset(x: place.left, y: GanttMetrics.headerHeight + place.top)
+                .offset(x: place.left, y: Layout.header + Layout.barTop(index))
             }
         }
         .frame(width: chartWidth, height: height, alignment: .topLeading)
@@ -118,8 +159,15 @@ struct GanttChart: View {
             if !weekZoom && tick.isWeekend {
                 context.fill(Path(CGRect(x: tick.left, y: 0, width: dayWidth, height: height)), with: .color(Color(.muted).opacity(0.6)))
             }
-            context.fill(Path(CGRect(x: tick.left, y: GanttMetrics.headerHeight, width: 0.5, height: height)), with: .color(line))
+            context.fill(Path(CGRect(x: tick.left, y: Layout.header, width: 0.5, height: height)), with: .color(line))
         }
+        #if os(macOS)
+        // A hairline under each row.
+        for index in 1...max(nodes.count, 1) {
+            let rowY = Layout.header + Double(index) * Layout.row - 0.5
+            context.fill(Path(CGRect(x: 0, y: rowY, width: chartWidth, height: 0.5)), with: .color(line))
+        }
+        #endif
         for month in GanttGeometry.monthGroups(low: range.low, totalDays: range.totalDays, dayWidth: dayWidth) {
             context.fill(Path(CGRect(x: month.left, y: 0, width: 1, height: height)), with: .color(Color(.mutedForeground).opacity(0.3)))
         }
@@ -127,6 +175,12 @@ struct GanttChart: View {
 
     /// Month names on the first line, day numbers (or week starts) on the second, a rule under both.
     private func drawHeader(_ context: inout GraphicsContext) {
+        #if os(macOS)
+        if !weekZoom {
+            drawDayHeader(&context)
+            return
+        }
+        #endif
         for month in GanttGeometry.monthGroups(low: range.low, totalDays: range.totalDays, dayWidth: dayWidth) {
             let label = Text(month.label).font(Theme.caption.weight(.semibold)).foregroundStyle(Color(.foreground))
             context.draw(label, at: CGPoint(x: month.left + 8, y: 14), anchor: .leading)
@@ -139,7 +193,7 @@ struct GanttChart: View {
             let centre = weekZoom ? tick.left + 4 : tick.left + dayWidth / 2
             context.draw(label, at: CGPoint(x: centre, y: 38), anchor: weekZoom ? .leading : .center)
         }
-        let rule = Path(CGRect(x: 0, y: GanttMetrics.headerHeight - 0.5, width: chartWidth, height: 0.5))
+        let rule = Path(CGRect(x: 0, y: Layout.header - 0.5, width: chartWidth, height: 0.5))
         context.fill(rule, with: .color(Color(.mutedForeground).opacity(0.3)))
     }
 
@@ -147,7 +201,7 @@ struct GanttChart: View {
         // A date range chosen in the filters can leave today out of the chart.
         guard (range.low...range.high).contains(range.today) else { return }
         let todayX = Double(range.today - range.low) * dayWidth + dayWidth / 2
-        let marker = Path(CGRect(x: todayX - 1, y: GanttMetrics.headerHeight - 8, width: 2, height: height))
+        let marker = Path(CGRect(x: todayX - 1, y: Layout.header - 8, width: 2, height: height))
         #if os(macOS)
         // The Mac design draws today's line at 60%.
         context.fill(marker, with: .color(Color(.primary).opacity(0.6)))
@@ -157,12 +211,14 @@ struct GanttChart: View {
     }
 
     private func drawArrows(_ context: inout GraphicsContext) {
-        let rows = Dictionary(placements.map { ($0.taskLocalId, $0) }, uniquingKeysWith: { first, _ in first })
+        let rows = Dictionary(
+            placements.enumerated().map { ($0.element.taskLocalId, ($0.element, $0.offset)) }, uniquingKeysWith: { first, _ in first }
+        )
         for edge in data.edges {
             guard let from = rows[edge.fromLocalId], let target = rows[edge.toLocalId] else { continue }
             var path = Path()
-            let startPoint = CGPoint(x: from.left + from.width, y: GanttMetrics.headerHeight + from.top + from.height / 2)
-            let endPoint = CGPoint(x: target.left, y: GanttMetrics.headerHeight + target.top + target.height / 2)
+            let startPoint = CGPoint(x: from.0.left + from.0.width, y: Layout.header + Layout.barTop(from.1) + Layout.bar / 2)
+            let endPoint = CGPoint(x: target.0.left, y: Layout.header + Layout.barTop(target.1) + Layout.bar / 2)
             path.move(to: startPoint)
             path.addCurve(
                 to: endPoint,
@@ -173,3 +229,67 @@ struct GanttChart: View {
         }
     }
 }
+
+#if os(macOS)
+extension GanttChart {
+    /// The Mac's day header: the weekday in SF 10 over the date in SF 13 Semibold, centred in each 56pt day, today in
+    /// `primary`. A month's first day shows the month's name in place of its weekday.
+    fileprivate func drawDayHeader(_ context: inout GraphicsContext) {
+        let weekdays = Calendar.cria.shortWeekdaySymbols
+        let months = Calendar.cria.shortMonthSymbols
+        // Day numbers count UTC days (as CriaKit's ticks do).
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
+        for tick in ticks {
+            let isToday = tick.day == range.today
+            let colour = isToday ? Color(.primary) : MacTheme.label2
+            let centre = tick.left + dayWidth / 2
+            let weekday = weekdays[GanttGeometry.weekday(of: tick.day) - 1]
+            let date = Date(timeIntervalSince1970: Double(tick.day) * 86_400)
+            let month = utc.component(.month, from: date)
+            let top = tick.label == "1" ? months[month - 1] : weekday
+            context.draw(Text(top).font(.system(size: 10)).foregroundStyle(colour), at: CGPoint(x: centre, y: 12))
+            let dayText = Text(tick.label).font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isToday ? Color(.primary) : Color(.foreground))
+            context.draw(dayText, at: CGPoint(x: centre, y: 27))
+        }
+        let rule = Path(CGRect(x: 0, y: Layout.header - 0.5, width: chartWidth, height: 0.5))
+        context.fill(rule, with: .color(Color(.mutedForeground).opacity(0.3)))
+    }
+}
+
+/// The 200pt task column beside the timeline: a 40pt header, then one 36pt row per bar with a hairline under it.
+private struct GanttTaskColumn: View {
+    let nodes: [GanttNode]
+    let height: Double
+    let onOpen: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Task")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(MacTheme.label2)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: GanttChart.Layout.header, maxHeight: GanttChart.Layout.header, alignment: .leading)
+                .overlay(alignment: .bottom) { Divider() }
+            ForEach(nodes, id: \.taskLocalId) { node in
+                Button { onOpen(node.taskLocalId) } label: {
+                    Text(node.title)
+                        .font(.system(size: 13))
+                        .strikethrough(node.done)
+                        .foregroundStyle(node.done ? MacTheme.label2 : Color(.foreground))
+                        .lineLimit(1)
+                        .padding(.leading, 12 + Double(node.indentLevel) * 14)
+                        .padding(.trailing, 8)
+                        .frame(maxWidth: .infinity, minHeight: GanttChart.Layout.row, maxHeight: GanttChart.Layout.row, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .overlay(alignment: .bottom) { Divider() }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(width: GanttChart.Layout.taskColumn, height: height, alignment: .top)
+    }
+}
+#endif
