@@ -20,7 +20,7 @@ struct MacCommands: Commands {
                 .disabled(actions == nil)
         }
         CommandGroup(after: .sidebar) {
-            Button("Toggle Sidebar") { actions?.toggleSidebar() }
+            Button(actions?.columns == .detailOnly ? "Show Sidebar" : "Hide Sidebar") { actions?.toggleSidebar() }
                 .keyboardShortcut("e")
                 .disabled(actions == nil)
             Divider()
@@ -42,24 +42,34 @@ struct MacCommands: Commands {
             Button("Sync Now") { actions?.syncNow() }.keyboardShortcut("r").disabled(actions == nil)
         }
         CommandMenu("Task") {
-            let enabled = actions?.hasOpenTask == true
-            Button("Toggle Done") { actions?.task(.done) }.disabled(!enabled)
-            Button("Due Date…") { actions?.task(.due) }.disabled(!enabled)
-            Button("Priority…") { actions?.task(.priority) }.disabled(!enabled)
-            Button("Labels…") { actions?.task(.labels) }.disabled(!enabled)
-            Button("Move to Project…") { actions?.task(.move) }.disabled(!enabled)
-            Button("Assign…") { actions?.task(TaskShortcut.assign) }.disabled(!enabled)
-            Button("Colour…") { actions?.task(TaskShortcut.colour) }.disabled(!enabled)
-            Button("Favourite") { actions?.task(.favourite) }.disabled(!enabled)
-            Divider()
-            Button("Copy Identifier") { actions?.task(TaskShortcut.copyIdentifier) }.disabled(!enabled)
-            Button("Copy Link") { actions?.task(.copyLink) }.keyboardShortcut(".").disabled(!enabled)
-            // No key equivalent: ⌘⌫ there fired while editing the title or description. Plain ⌫ outside a text field
-            // still deletes (`KeySequencer`).
-            Button("Delete") { actions?.task(.delete) }.disabled(!enabled)
+            if actions?.hasOpenTask != true {
+                Button("Select a task to see its commands") {}.disabled(true)
+            } else {
+                taskItems
+            }
         }
         CommandGroup(replacing: .help) {
             Button("Keyboard Shortcuts") { actions?.showingShortcuts = true }.disabled(actions == nil)
+        }
+    }
+
+    /// The open task's commands, as its context menu.
+    @ViewBuilder private var taskItems: some View {
+        Group {
+            Button("Toggle Done") { actions?.task(.done) }
+            Button("Due Date…") { actions?.task(.due) }
+            Button("Priority…") { actions?.task(.priority) }
+            Button("Labels…") { actions?.task(.labels) }
+            Button("Move to Project…") { actions?.task(.move) }
+            Button("Assign…") { actions?.task(TaskShortcut.assign) }
+            Button("Colour…") { actions?.task(TaskShortcut.colour) }
+            Button("Favourite") { actions?.task(.favourite) }
+            Divider()
+            Button("Copy Identifier") { actions?.task(TaskShortcut.copyIdentifier) }
+            Button("Copy Link") { actions?.task(.copyLink) }.keyboardShortcut(".")
+            // No key equivalent: ⌘⌫ there fired while editing the title or description. Plain ⌫ outside a text field
+            // still deletes (`KeySequencer`).
+            Button("Delete") { actions?.task(.delete) }
         }
     }
 }
