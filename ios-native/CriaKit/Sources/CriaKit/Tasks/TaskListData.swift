@@ -17,14 +17,17 @@ public struct TaskListItem: Equatable, Sendable {
     public let hasAttachments: Bool
     /// Ticked and total task-list items in the description ("2/5" on the row).
     public let checklist: ChecklistCount
+    /// The description as one plain line (`TaskSummary`), nil when it has no text.
+    public let summary: String?
 
     public init(task: TaskRecord, labels: [LabelRecord], projectTitle: String?,
-                hasAttachments: Bool = false, checklist: ChecklistCount = .none) {
+                hasAttachments: Bool = false, checklist: ChecklistCount = .none, summary: String? = nil) {
         self.task = task
         self.labels = labels
         self.projectTitle = projectTitle
         self.hasAttachments = hasAttachments
         self.checklist = checklist
+        self.summary = summary
     }
 }
 
@@ -107,7 +110,8 @@ extension CriaStore {
         return tasks.map { task in
             TaskListItem(
                 task: task, labels: labelsByTask[task.localId] ?? [], projectTitle: titles[task.projectLocalId],
-                hasAttachments: withAttachments.contains(task.localId), checklist: ChecklistCount(html: task.description)
+                hasAttachments: withAttachments.contains(task.localId), checklist: ChecklistCount(html: task.description),
+                summary: TaskSummary.line(task.description)
             )
         }
     }

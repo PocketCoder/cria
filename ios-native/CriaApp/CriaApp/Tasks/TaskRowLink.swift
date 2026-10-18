@@ -25,6 +25,9 @@ struct TaskRowLink: View {
     @State private var completions = 0
     /// Ticked and waiting to be saved, so the tick, strikethrough and fade show before the row leaves the list.
     @State private var completing = false
+    /// Double-click (or Rename in the menu) on the Mac: the title is a field until Return, Esc or a click elsewhere.
+    @State private var renaming = false
+    @State private var draftTitle = ""
 
     var body: some View {
         Group {
@@ -100,16 +103,35 @@ struct TaskRowLink: View {
 
     @ViewBuilder private var rowLink: some View {
         if let openTask {
-            Button { click(openTask) } label: {
-                TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
+            #if os(macOS)
+            if renaming {
+                // No button around the field, so clicks in it place the caret rather than open the task.
+                TaskRowView(
+                    item: item, showProject: showProject, tree: tree, completing: completing,
+                    rename: RowRename(text: $draftTitle, commit: commitRename, cancel: { renaming = false })
+                ) { toggle() }
+                .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
+            } else {
+                openButton(openTask)
+                    // Alongside the button, so a single click still opens the task at once.
+                    .simultaneousGesture(TapGesture(count: 2).onEnded { startRename() })
             }
-            .buttonStyle(.plain)
-            .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
+            #else
+            openButton(openTask)
+            #endif
         } else {
             NavigationLink(value: Route.task(item.task.localId)) {
                 TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
             }
         }
+    }
+
+    private func openButton(_ openTask: @escaping @MainActor (String) -> Void) -> some View {
+        Button { click(openTask) } label: {
+            TaskRowView(item: item, showProject: showProject, tree: tree, completing: completing) { toggle() }
+        }
+        .buttonStyle(.plain)
+        .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
     }
 
     /// A plain click opens the task; ⌘ or ⇧ with a click starts multi-select with this row ticked.
@@ -137,6 +159,9 @@ struct TaskRowLink: View {
             }
         }
         Divider()
+        #if os(macOS)
+        if openTask != nil { Button("Rename", systemImage: "pencil") { startRename() } }
+        #endif
         Button("Duplicate", systemImage: "plus.square.on.square") { duplicate() }
         // A task that has not synced has no web address yet.
         Button("Copy link", systemImage: "link") { copyLink() }
@@ -261,6 +286,19 @@ extension TaskRowLink {
     private func deferTask(_ preset: DeferPreset) {
         let patch = TaskPatch(dueDate: preset.dueDate(from: item.task.dueDate))
         attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+    }
+
+    private func startRename() {
+        draftTitle = item.task.title
+        renaming = true
+    }
+
+    /// Saves a changed, non-empty title; an emptied field keeps the old one.
+    private func commitRename() {
+        renaming = false
+        let title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != item.task.title else { return }
+        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: TaskPatch(title: title)) }
     }
 
     private func duplicate() {

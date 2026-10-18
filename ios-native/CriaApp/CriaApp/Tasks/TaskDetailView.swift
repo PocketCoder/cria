@@ -355,7 +355,7 @@ extension TaskDetailView {
             RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
         case .labels:
             Section {
-                FlowLabels(labels: live.value.labels)
+                TaskLabelsRows(services: services, taskLocalId: taskLocalId, labels: live.value.labels)
             } header: {
                 HStack {
                     Text("Labels")

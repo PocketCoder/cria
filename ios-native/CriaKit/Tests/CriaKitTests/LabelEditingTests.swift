@@ -100,4 +100,19 @@ final class LabelEditingTests: XCTestCase {
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM labels"), 0)
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM outbox"), 0)
     }
+
+    func testPopularLabelsRankByUseAndSkipTheTasksOwn() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let tasks = try (0..<3).map { try store.createTask(TaskInput(title: "Task \($0)", projectLocalId: project)).localId }
+        let busy = try syncedLabel(store, id: 1, title: "busy")
+        let quiet = try syncedLabel(store, id: 2, title: "quiet")
+        _ = try syncedLabel(store, id: 3, title: "unused")
+        for task in tasks { try store.toggleTaskLabel(taskLocalId: task, labelLocalId: busy) }
+        try store.toggleTaskLabel(taskLocalId: tasks[1], labelLocalId: quiet)
+        let fresh = try store.createTask(TaskInput(title: "Fresh", projectLocalId: project)).localId
+        XCTAssertEqual(try store.popularLabels(excludingTask: fresh).map(\.title), ["busy", "quiet"])
+        XCTAssertEqual(try store.popularLabels(excludingTask: tasks[0]).map(\.title), ["quiet"])
+        XCTAssertEqual(try store.popularLabels(excludingTask: fresh, limit: 1).map(\.title), ["busy"])
+    }
 }

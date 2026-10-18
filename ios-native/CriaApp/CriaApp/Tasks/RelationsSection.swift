@@ -188,6 +188,12 @@ struct RelationsSection: View {
                 Text(kindTitles[relation.kind] ?? relation.kind).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
         }
+        #if os(macOS)
+        // Full width, with room for the ••• overlay: a Mac button label hugs its text, so the menu sat on the title.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 32)
+        .contentShape(Rectangle())
+        #endif
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(relation.otherTitle), \(kindTitles[relation.kind] ?? relation.kind)\(relation.otherDone ? ", done" : "")"
