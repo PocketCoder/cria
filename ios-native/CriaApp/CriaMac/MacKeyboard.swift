@@ -42,7 +42,8 @@ final class KeySequencer {
     private func accepts(_ event: NSEvent) -> Bool {
         guard let window = event.window, window === self.window, window.isKeyWindow, window.attachedSheet == nil else { return false }
         let held = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
-        guard held.isEmpty else { return false }
+        // `?` (shortcuts help) is typed with Shift; every other key here takes no modifier.
+        guard held.isEmpty || (held == .shift && event.charactersIgnoringModifiers == "?") else { return false }
         // Typing: the field editor and every text view are NSText.
         return !(window.firstResponder is NSText)
     }
@@ -70,6 +71,9 @@ final class KeySequencer {
         switch key {
         case "g":
             wait(for: .goTo)
+            return true
+        case "?":
+            actions.showingShortcuts = true
             return true
         case "j": return actions.moveFocus(1)
         case "k": return actions.moveFocus(-1)

@@ -43,6 +43,11 @@ struct TaskListView: View {
     var body: some View {
         let shown = sections
         List {
+            #if os(macOS)
+            if showsProject {
+                MacContentHeader(title: renamedTitle ?? title, subtitle: macSubtitle).asListRow()
+            }
+            #endif
             ForEach(shown) { section in
                 Section {
                     ForEach(TaskListNesting.rows(section.items, children: live.value.children, collapsed: collapsed)) { row in
@@ -52,10 +57,16 @@ struct TaskListView: View {
                         )
                     }
                 } header: {
+                    #if os(macOS)
+                    if !section.label.isEmpty {
+                        MacGroupHeader(title: section.label, count: section.items.filter { !$0.task.done }.count)
+                    }
+                    #else
                     if !section.label.isEmpty {
                         Text(section.label).font(Theme.headline).textCase(nil).foregroundStyle(Color(.foreground))
                             .accessibilityAddTraits(.isHeader)
                     }
+                    #endif
                 }
             }
             if shown.isEmpty && !live.value.items.isEmpty {
@@ -81,6 +92,9 @@ struct TaskListView: View {
             }
         }
         .navigationTitle(renamedTitle ?? title)
+        #if os(macOS)
+        .macHidesWindowTitle()
+        #endif
         .refreshable { await services.refresh() }
         .toolbar {
             DisplaySelectToolbar(
@@ -136,6 +150,15 @@ struct TaskListView: View {
         case .project: return "Nothing here yet."
         }
     }
+
+    #if os(macOS)
+    /// The open count under the Mac's large title, once the first read is in.
+    private var macSubtitle: String? {
+        guard live.value.loaded else { return nil }
+        let open = live.value.items.filter { !$0.task.done }.count
+        return open == 1 ? "1 task" : "\(open) tasks"
+    }
+    #endif
 
     /// The project chip is redundant inside a project.
     private var showsProject: Bool {

@@ -6,34 +6,26 @@ struct ShortcutsHelp: View {
 
     private static let groups: [(String, [(String, String)])] = [
         ("General", [("⌘N", "New task"), ("⇧⌘N", "New project"), ("⌘K", "Command palette"), ("⌘E", "Toggle sidebar"),
-                     ("⌘F", "Search"), ("⌘R", "Sync now")]),
+                     ("⌘F", "Search"), ("⌘R", "Sync now"), ("?", "Keyboard shortcuts")]),
         ("Go to", [("g o", "Today"), ("g u", "Upcoming"), ("⌘1 ⌘2 ⌘3", "Today, Upcoming, Inbox"), ("g a", "Labels"),
                    ("g m", "Teams")]),
-        ("List", [("j k", "Next and previous task"), ("Return", "Open it")]),
         ("Project views", [("g l", "List"), ("g k", "Kanban"), ("g t", "Table"), ("g g", "Gantt")]),
-        ("Open task", [("t", "Toggle done"), ("d", "Due date"), ("p", "Priority"), ("l", "Labels"), ("m", "Move to project"),
-                       ("a", "Assign"), ("c", "Colour"), ("s", "Favourite"), ("u", "Go to its project"),
-                       (".", "Copy identifier"), ("..", "Copy identifier and title"), ("...", "Copy identifier, title and link"),
-                       ("⌘.", "Copy link"), ("⌫", "Delete")])
+        ("Tasks", [("j k", "Next and previous task"), ("Return", "Open it"), ("t", "Toggle done"), ("d", "Due date"),
+                   ("p", "Priority"), ("l", "Labels"), ("m", "Move to project"), ("a", "Assign"), ("c", "Colour"),
+                   ("s", "Favourite"), ("u", "Go to its project"), (".", "Copy identifier"), ("..", "Copy identifier and title"),
+                   ("...", "Copy identifier, title and link"), ("⌘.", "Copy link"), ("⌫", "Delete")])
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Keyboard shortcuts").font(Theme.title)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Keyboard Shortcuts")
+                .font(.custom(Theme.brandFont, size: 22))
+                .tracking(-0.44)
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(Self.groups, id: \.0) { group in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(group.0).font(Theme.headline)
-                            ForEach(group.1, id: \.0) { row in
-                                HStack {
-                                    Text(row.1)
-                                    Spacer()
-                                    Text(row.0).font(.body.monospaced()).foregroundStyle(Color(.mutedForeground))
-                                }
-                            }
-                        }
-                    }
+                // Two columns: the short groups on the left, the task keys on the right.
+                HStack(alignment: .top, spacing: 28) {
+                    column(Self.groups.dropLast())
+                    column(Self.groups.suffix(1))
                 }
             }
             HStack {
@@ -42,6 +34,24 @@ struct ShortcutsHelp: View {
             }
         }
         .padding(24)
-        .frame(width: 420, height: 520)
+        .frame(width: 540, height: 520)
+    }
+
+    private func column(_ groups: ArraySlice<(String, [(String, String)])>) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(groups, id: \.0) { group in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(group.0).font(.system(size: 13, weight: .semibold))
+                    ForEach(group.1, id: \.0) { row in
+                        HStack {
+                            Text(row.1).font(.system(size: 13))
+                            Spacer(minLength: 8)
+                            Text(row.0).font(.system(size: 12, design: .monospaced)).foregroundStyle(MacTheme.label2)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }

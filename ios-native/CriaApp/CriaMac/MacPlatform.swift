@@ -115,9 +115,8 @@ enum MacWindows {
     }
 
     static func requestQuickAdd() {
-        if let window = mainWindow {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
+        if mainWindow != nil {
+            // The shell opens the floating quick-add panel, which activates the app itself; the window stays put.
             NotificationCenter.default.post(name: .criaQuickAdd, object: nil)
         } else {
             // A new window shows quick add for this link, as for any cria://add link.
@@ -165,7 +164,7 @@ enum MacActivation {
     }
 }
 
-/// The "Mac" tab of the Settings window.
+/// The Mac-only rows of the Settings window's General tab, as sections for the pane's grouped form.
 struct MacSettingsView: View {
     @AppStorage(MacPrefs.menuBar) private var menuBar = true
     @AppStorage(MacPrefs.closeToMenuBar) private var closeToMenuBar = true
@@ -174,23 +173,28 @@ struct MacSettingsView: View {
     @State private var loginError: String?
 
     var body: some View {
-        Form {
-            Section("Menu bar") {
-                Toggle("Show in menu bar", isOn: $menuBar)
-                Toggle("Keep running in the menu bar when the window is closed", isOn: $closeToMenuBar)
-                Toggle("Hide the Dock icon while no window is open", isOn: $hideDock)
-                    .onChange(of: hideDock) { MacActivation.update() }
-            }
-            Section("Quick add") {
-                KeyboardShortcuts.Recorder("Global shortcut", name: .quickAdd)
-            }
-            Section("Startup") {
-                Toggle("Open Cria at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
-                if let loginError { Text(loginError).foregroundStyle(Color(.destructive)).font(Theme.caption) }
-            }
+        Section("Startup") {
+            Toggle("Open Cria at login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
+            if let loginError { Text(loginError).foregroundStyle(Color(.destructive)).font(Theme.caption) }
         }
-        .formStyle(.grouped)
+        Section {
+            Toggle("Show Cria in the menu bar", isOn: $menuBar)
+            Toggle("Keep running when the window closes", isOn: $closeToMenuBar)
+            Toggle("Hide Dock icon while the window is closed", isOn: $hideDock)
+                .onChange(of: hideDock) { MacActivation.update() }
+        } header: {
+            Text("Menu bar and Dock")
+        } footer: {
+            Text("Today\u{2019}s tasks and New Task, one click away.").font(Theme.caption)
+        }
+        Section {
+            KeyboardShortcuts.Recorder("Global shortcut", name: .quickAdd)
+        } header: {
+            Text("Quick add")
+        } footer: {
+            Text("Opens New Task from any app.").font(Theme.caption)
+        }
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {

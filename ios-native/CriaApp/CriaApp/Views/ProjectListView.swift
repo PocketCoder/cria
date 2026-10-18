@@ -22,6 +22,10 @@ struct ProjectListView: View {
     @State private var reorders = 0
     /// Parents whose subtasks are hidden, for this screen only.
     @State private var collapsed: Set<String> = []
+    #if os(macOS)
+    /// The label chosen in the project info rail; nil shows every task.
+    @State private var railLabel: String?
+    #endif
 
     init(services: AppServices, projectLocalId: String, header: ProjectHeader) {
         self.services = services
@@ -39,11 +43,25 @@ struct ProjectListView: View {
     private var showCompleted: Bool { display.showsCompleted(default: showDone) }
 
     private var filtered: [TaskListItem] {
-        DisplayEngine.filtered(live.value.items, display.config.filters, display.context(assignees: live.value.assignees))
+        let shown = DisplayEngine.filtered(
+            live.value.items, display.config.filters, display.context(assignees: live.value.assignees)
+        )
+        #if os(macOS)
+        guard let railLabel else { return shown }
+        return shown.filter { item in item.labels.contains { $0.localId == railLabel } }
+        #else
+        return shown
+        #endif
     }
 
     /// Manual order: rows can be dragged, and the stored order is the display order.
-    private var isManual: Bool { display.config.sort.isManual && display.config.groupBy == .none && !display.hasFilters }
+    private var isManual: Bool {
+        #if os(macOS)
+        // A rail label filter hides rows, as the Display filters do.
+        if railLabel != nil { return false }
+        #endif
+        return display.config.sort.isManual && display.config.groupBy == .none && !display.hasFilters
+    }
 
     private var openItems: [TaskListItem] {
         let open = filtered.filter { !$0.task.done }
@@ -119,6 +137,9 @@ struct ProjectListView: View {
             Text(failure ?? "")
         }
         .task { await live.run() }
+        #if os(macOS)
+        .modifier(MacProjectRailHost(services: services, projectLocalId: projectLocalId, labelFilter: $railLabel))
+        #endif
     }
 
     @ViewBuilder private func groupHeader(_ label: String) -> some View {

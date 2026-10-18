@@ -15,18 +15,18 @@ struct TaskDetailData: Equatable, Sendable {
 struct TaskDetailView: View {
     let services: AppServices
     let taskLocalId: String
-    @State private var live: LiveValue<TaskDetailData>
-    @State private var feeds: TaskDetailFeeds
-    @State private var sheets: TaskDetailPresentation
+    @State var live: LiveValue<TaskDetailData>
+    @State var feeds: TaskDetailFeeds
+    @State var sheets: TaskDetailPresentation
     @State private var descriptionDraft: DescriptionDraft
     @State private var title = ""
     /// The title as last loaded from the store. Only a difference from this is the user's edit, so a title that
     /// changed elsewhere (another device, a pull) is never written back over.
     @State private var loadedTitle = ""
     @State private var didLoad = false
-    @State private var showLabels = false
-    @State private var editingRepeat = false
-    @State private var editingDate: TaskDateField?
+    @State var showLabels = false
+    @State var editingRepeat = false
+    @State var editingDate: TaskDateField?
     @State private var expandingDescription = false
     @State private var choosingPriority = false
     @State private var choosingMove = false
@@ -100,7 +100,9 @@ struct TaskDetailView: View {
         }
         #if os(macOS)
         // A header in the panel, not a `.toolbar`: that one lands in the window toolbar, which re-tiled per task switch.
-        .safeAreaInset(edge: .top, spacing: 0) { TaskPanelHeader(title: projectTitle) { headerButtons } }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            TaskPanelHeader(project: live.value.currentProject, projects: live.value.projects) { headerButtons }
+        }
         #else
         .navigationTitle(projectTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -210,12 +212,14 @@ struct TaskDetailView: View {
             Section {
                 // Centred on the check's 44pt tap area, which keeps its size but no longer pads the row below the title.
                 HStack(alignment: .center, spacing: 8) {
-                    PriorityCheck(priority: task.priority, isDone: task.done, size: 26) { _ = apply(TaskPatch(done: !task.done)) }
+                    PriorityCheck(priority: task.priority, isDone: task.done, size: TaskInspectorStyle.ringSize) {
+                        _ = apply(TaskPatch(done: !task.done))
+                    }
                         .padding(.vertical, -6)
                     TextField("", text: $title, prompt: Text("Title"), axis: .vertical)
                         .labelsHidden()
                         .accessibilityLabel("Title")
-                        .font(Theme.title)
+                        .font(TaskInspectorStyle.titleFont)
                         // Unfocused, a vertical field on the Mac drew only its first line; give it room for the rest.
                         .lineLimit(1...8)
                         .fixedSize(horizontal: false, vertical: true)
@@ -230,13 +234,13 @@ struct TaskDetailView: View {
                             focus = nil
                         }
                 }
-                DescriptionField(
-                    services: services, taskLocalId: taskLocalId, html: task.description ?? "", draft: descriptionDraft
-                ) {
-                    descriptionDraft.finishEditing()
-                    expandingDescription = true
-                }
+                #if !os(macOS)
+                descriptionField(task)
+                #endif
             }
+            #if os(macOS)
+            inspectorFields(task)
+            #endif
             // The order is the user's (Settings > Task layout); the title stays first and Delete last.
             // On the Mac the sections wait for the first frame: the title and description show at once, and the rest of
             // the form (a lot of rows to measure) fills in right after, so a click opens the task without a pause.
@@ -245,6 +249,9 @@ struct TaskDetailView: View {
                     section(kind, task: task)
                 }
             }
+            #if os(macOS)
+            Section { TaskInspectorFooter(task: task) }.listRowBackground(Color.clear)
+            #endif
             Section {
                 // No confirmation: the Undo toast takes the delete back.
                 Button(role: .destructive, action: deleteTask) {
@@ -257,6 +264,10 @@ struct TaskDetailView: View {
             .scrollDismissesKeyboard(.interactively)
             // A grouped form starts ~35pt below the bar; the task title belongs right under it.
             .contentMargins(.top, 8, for: .scrollContent)
+            #if os(macOS)
+            .scrollContentBackground(.hidden)
+            .background(MacTheme.inspector)
+            #endif
     }
 
     private func saveText() {
@@ -269,7 +280,7 @@ struct TaskDetailView: View {
 
     /// Saves a patch; false (with the error shown) when that failed.
     @discardableResult
-    private func apply(_ patch: TaskPatch) -> Bool {
+    func apply(_ patch: TaskPatch) -> Bool {
         do {
             _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
             return true
@@ -282,6 +293,26 @@ struct TaskDetailView: View {
 
 // Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
 extension TaskDetailView {
+    private func descriptionField(_ task: TaskRecord) -> some View {
+        DescriptionField(
+            services: services, taskLocalId: taskLocalId, html: task.description ?? "", draft: descriptionDraft
+        ) {
+            descriptionDraft.finishEditing()
+            expandingDescription = true
+        }
+    }
+
+    #if os(macOS)
+    /// The inspector: the field box, then the description under its own title.
+    @ViewBuilder
+    private func inspectorFields(_ task: TaskRecord) -> some View {
+        Section { fieldBox(task) }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        Section("Description") { descriptionField(task) }
+    }
+    #endif
+
     /// Saves what is being typed, then copies the task and opens the copy.
     private func duplicateTask() {
         saveText()
@@ -323,78 +354,11 @@ extension TaskDetailView {
     }
 
     /// Projects the task can move to, plus its current one when archived, so the picker never shows a blank value.
-    private var moveChoices: [ProjectRecord] {
+    var moveChoices: [ProjectRecord] {
         let visible = live.value.projects
         guard let current = live.value.currentProject, !visible.contains(where: { $0.localId == current.localId }) else {
             return visible
         }
         return visible + [current]
-    }
-}
-
-extension TaskDetailView {
-    @ViewBuilder
-    fileprivate func section(_ kind: TaskDetailSection, task: TaskRecord) -> some View {
-        switch kind {
-        case .details:
-            TaskPropertiesSection(
-                task: task, projects: moveChoices,
-                hasSubtasks: feeds.relations.value.contains { $0.kind == "subtask" },
-                apply: apply
-            ) {
-                sheets.attempt { try services.store.followSubtaskProgress(taskLocalId: taskLocalId) }
-            }
-        case .when:
-            ReminderSection(
-                services: services, task: task, reminders: feeds.reminders.value, state: sheets,
-                onEditDue: { editingDate = .due }, applyRepeat: { apply($0) }, onCustomRepeat: { editingRepeat = true }
-            )
-        case .schedule:
-            TaskScheduleSection(task: task) { editingDate = $0 }
-        case .subtasks:
-            RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
-        case .labels:
-            Section {
-                TaskLabelsRows(services: services, taskLocalId: taskLocalId, labels: live.value.labels)
-            } header: {
-                HStack {
-                    Text("Labels")
-                    Spacer()
-                    Button("Edit") { showLabels = true }.textCase(nil)
-                        .accessibilityLabel("Edit labels")
-                }
-            }
-        case .assignees:
-            AssigneesSection(services: services, taskLocalId: taskLocalId, assignees: feeds.assignees.value, state: sheets)
-        case .attachments:
-            AttachmentsSection(
-                services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets
-            )
-        case .comments:
-            CommentsSection(services: services, task: task, comments: feeds.comments.value, state: sheets)
-        }
-    }
-
-    /// The date sheet for one field. The due date carries the repeat too, saved in the same patch.
-    fileprivate func dateSheet(_ field: TaskDateField, task: TaskRecord) -> some View {
-        let current: String? = switch field {
-        case .due: task.dueDate
-        case .start: task.startDate
-        case .end: task.endDate
-        }
-        let repeatValue = field == .due ? RepeatValue(after: task.repeatAfter, mode: task.repeatMode) : nil
-        return DateSheet(title: field.title, iso: current, repeatValue: repeatValue) { iso, chosenRepeat in
-            var patch = TaskPatch()
-            switch field {
-            case .due: patch.dueDate = iso
-            case .start: patch.startDate = iso
-            case .end: patch.endDate = iso
-            }
-            if let chosenRepeat, chosenRepeat != repeatValue {
-                patch.repeatAfter = chosenRepeat.after
-                patch.repeatMode = chosenRepeat.mode
-            }
-            apply(patch)
-        }
     }
 }

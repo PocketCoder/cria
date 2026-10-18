@@ -52,7 +52,7 @@ extension QuickAddSheet {
         guard let item = buildItem() else { return }
         do {
             try services.store.persistQuickAddBatch([item])
-            if addAnother { startNext(added: "Added ‘\(item.input.title)’") } else { dismiss() }
+            if addAnother { startNext(added: "Added ‘\(item.input.title)’") } else { closeSheet() }
         } catch {
             errorMessage = String(describing: error)
         }
@@ -76,7 +76,7 @@ extension QuickAddSheet {
         do {
             let created = try services.store.persistQuickAddBatch(queue.map(\.item))
             queue = []
-            if addAnother { startNext(added: "Added \(created.count) task\(created.count == 1 ? "" : "s")") } else { dismiss() }
+            if addAnother { startNext(added: "Added \(created.count) task\(created.count == 1 ? "" : "s")") } else { closeSheet() }
         } catch {
             errorMessage = String(describing: error)
         }

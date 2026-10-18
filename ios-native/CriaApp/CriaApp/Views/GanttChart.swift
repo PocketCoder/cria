@@ -148,7 +148,12 @@ struct GanttChart: View {
         guard (range.low...range.high).contains(range.today) else { return }
         let todayX = Double(range.today - range.low) * dayWidth + dayWidth / 2
         let marker = Path(CGRect(x: todayX - 1, y: GanttMetrics.headerHeight - 8, width: 2, height: height))
+        #if os(macOS)
+        // The Mac design draws today's line at 60%.
+        context.fill(marker, with: .color(Color(.primary).opacity(0.6)))
+        #else
         context.fill(marker, with: .color(Color(.primary)))
+        #endif
     }
 
     private func drawArrows(_ context: inout GraphicsContext) {

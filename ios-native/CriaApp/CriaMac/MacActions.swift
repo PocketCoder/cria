@@ -39,6 +39,10 @@ final class MacActions {
     var columns = NavigationSplitViewVisibility.all
     /// Bumped by Sync Now; the shell runs a sync for each new value.
     var syncRequest = 0
+    /// The toolbar search text. While it has text the content column shows search results.
+    var query = ""
+    /// Bumped by Go > Search (⌘F); the shell focuses the toolbar field for each new value.
+    var searchRequest = 0
 
     init() {
         opener = { [weak self] id in self?.openTask(id) }
@@ -52,6 +56,11 @@ final class MacActions {
     }
 
     func go(_ destination: MacSelection) {
+        // Search is the toolbar field, not a screen.
+        if destination == .search {
+            searchRequest += 1
+            return
+        }
         selection = destination
         openTaskId = nil
     }
@@ -126,6 +135,15 @@ final class MacActions {
 
     var hasOpenTask: Bool { openTaskId != nil }
 
+    /// The toolbar's inspector button: closes the open task, or opens the focused one.
+    func toggleInspector() {
+        if openTaskId != nil {
+            openTaskId = nil
+        } else if let id = panel.focusedId {
+            openTask(id)
+        }
+    }
+
     func task(_ command: TaskCommand) {
         post(command.rawValue)
     }
@@ -141,6 +159,11 @@ final class MacActions {
 
     func projectView(_ kind: String) {
         NotificationCenter.default.post(name: .criaProjectViewCommand, object: kind)
+    }
+
+    /// View > Show Project Info: the project on screen shows or hides its info rail.
+    func toggleProjectInfo() {
+        NotificationCenter.default.post(name: .criaProjectInfoCommand, object: nil)
     }
 }
 

@@ -33,35 +33,58 @@ struct CommandPalette: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Go to a list, project, label or task, or run a command", text: $query)
-                .textFieldStyle(.plain)
-                .font(.title3)
-                .padding(14)
-                .focused($searching)
-                .onSubmit(runChosen)
-                .onKeyPress(.downArrow) { move(1) }
-                .onKeyPress(.upArrow) { move(-1) }
-                .onKeyPress(.return, phases: .down) { press in
-                    guard press.modifiers.contains(.command) else { return .ignored }
-                    completeChosen()
-                    return .handled
-                }
-                .onChange(of: query) { chosen = 0 }
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").font(.system(size: 17)).foregroundStyle(MacTheme.label2)
+                TextField("Go to a list, project or command", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 17))
+                    .focused($searching)
+                    .onSubmit(runChosen)
+                    .onKeyPress(.downArrow) { move(1) }
+                    .onKeyPress(.upArrow) { move(-1) }
+                    .onKeyPress(.return, phases: .down) { press in
+                        guard press.modifiers.contains(.command) else { return .ignored }
+                        completeChosen()
+                        return .handled
+                    }
+                    .onChange(of: query) { chosen = 0 }
+                Text("esc")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MacTheme.label3)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(MacTheme.fill, in: RoundedRectangle(cornerRadius: 5))
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 54)
             Divider()
             ScrollViewReader { proxy in
-                List(Array(shown.enumerated()), id: \.element.id) { index, item in
-                    row(item, selected: index == chosen)
-                        .id(item.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture { run(item) }
-                        .listRowSeparator(.hidden)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(groups, id: \.title) { group in
+                            Text(group.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(MacTheme.label3)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 8)
+                                .padding(.bottom, 4)
+                            ForEach(group.rows, id: \.item.id) { row in
+                                self.row(row.item, selected: row.index == chosen)
+                                    .id(row.item.id)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { run(row.item) }
+                            }
+                        }
+                    }
+                    .padding(6)
                 }
-                .listStyle(.plain)
+                .frame(maxHeight: 340)
                 .onChange(of: chosen) { if shown.indices.contains(chosen) { proxy.scrollTo(shown[chosen].id) } }
             }
             footer
         }
-        .frame(width: 560, height: 420)
+        .frame(width: 600)
+        .focusEffectDisabled()
         .task {
             searching = true
             projects = ProjectTree.visible((try? services.store.projects()) ?? [])
@@ -71,15 +94,50 @@ struct CommandPalette: View {
         .task(id: query) { await searchTasks() }
     }
 
+    /// A 32pt row, accent filled with white text when chosen.
     private func row(_ item: PaletteItem, selected: Bool) -> some View {
-        HStack {
-            Image(systemName: item.symbol).frame(width: 22).foregroundStyle(item.tint ?? Color(.mutedForeground))
-            Text(item.title).foregroundStyle(Color(.foreground)).lineLimit(1)
+        HStack(spacing: 10) {
+            Image(systemName: item.symbol)
+                .font(.system(size: 13))
+                .frame(width: 18)
+                .foregroundStyle(selected ? Color.white : (item.tint ?? Color(.primary)))
+            Text(item.title).font(.system(size: 13)).foregroundStyle(selected ? Color.white : Color(.foreground)).lineLimit(1)
             Spacer()
-            Text(item.detail).font(Theme.caption).foregroundStyle(Color(.mutedForeground)).lineLimit(1)
+            Text(item.detail)
+                .font(.system(size: 11))
+                .foregroundStyle(selected ? Color.white.opacity(0.8) : MacTheme.label3)
+                .lineLimit(1)
         }
-        .padding(.vertical, 2)
-        .listRowBackground(selected ? Color(.primary).opacity(0.14) : Color.clear)
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(selected ? Color(.primary) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    /// The palette's sections, in display order, each row carrying its index in `shown`.
+    private var groups: [(title: String, rows: [(index: Int, item: PaletteItem)])] {
+        var result: [(title: String, rows: [(index: Int, item: PaletteItem)])] = []
+        for (index, item) in shown.enumerated() {
+            let title = Self.group(of: item)
+            if result.last?.title == title {
+                result[result.count - 1].rows.append((index: index, item: item))
+            } else {
+                result.append((title: title, rows: [(index: index, item: item)]))
+            }
+        }
+        return result
+    }
+
+    private static let groupOrder = ["Go to", "Projects", "Labels", "Saved filters", "Commands", "Tasks"]
+
+    private static func group(of item: PaletteItem) -> String {
+        if item.taskId != nil { return "Tasks" }
+        switch item.detail {
+        case "Go to": return "Go to"
+        case "Project": return "Projects"
+        case "Label": return "Labels"
+        case "Saved filter": return "Saved filters"
+        default: return "Commands"
+        }
     }
 
     @ViewBuilder private var footer: some View {
@@ -159,7 +217,12 @@ struct CommandPalette: View {
     private var shown: [PaletteItem] {
         let text = query.trimmingCharacters(in: .whitespaces)
         let matches = text.isEmpty ? places : places.filter { $0.title.localizedCaseInsensitiveContains(text) }
-        return Array(matches.prefix(40)) + taskItems
+        // Grouped in display order (a stable sort keeps each group's own order), so ↑ ↓ follow the sections.
+        let rank = { (item: PaletteItem) in Self.groupOrder.firstIndex(of: Self.group(of: item)) ?? Self.groupOrder.count }
+        let grouped = Array(matches.prefix(40)).enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
+        return grouped + taskItems
     }
 
     private func move(_ step: Int) -> KeyPress.Result {

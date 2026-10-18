@@ -18,6 +18,14 @@ struct WeekStrip: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        // The macOS design's strip: seven equal days, no chevrons (the header has ‹, Today and ›).
+        HStack(spacing: 4) {
+            ForEach(days, id: \.self) { day in
+                MacWeekDay(day: day, selected: $selected, busy: busyDays.contains(DueDates.dayKey(DueDates.allDayISO(for: day)) ?? ""))
+            }
+        }
+        #else
         HStack(spacing: 0) {
             weekButton("Previous week", systemImage: "chevron.left", by: -7)
             ForEach(days, id: \.self) { day in dayButton(day) }
@@ -25,6 +33,7 @@ struct WeekStrip: View {
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .sensoryFeedback(.selection, trigger: selected)
+        #endif
     }
 
     private func weekButton(_ title: String, systemImage: String, by days: Int) -> some View {
@@ -72,3 +81,43 @@ struct WeekStrip: View {
         .accessibilityShowsLargeContentViewer { Text(day.formatted(.dateTime.weekday(.abbreviated).day())) }
     }
 }
+
+#if os(macOS)
+/// One day of the Mac strip: the weekday over a 30pt date circle, solid accent when selected, accent text for today,
+/// a hover fill, and a dot when the day has tasks.
+private struct MacWeekDay: View {
+    let day: Date
+    @Binding var selected: Date
+    let busy: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        let calendar = Calendar.cria
+        let isSelected = calendar.isDate(day, inSameDayAs: selected)
+        let isToday = calendar.isDateInToday(day)
+        let accent = isToday && !isSelected
+        Button { selected = calendar.startOfDay(for: day) } label: {
+            VStack(spacing: 3) {
+                Text(day.formatted(.dateTime.weekday(.abbreviated)))
+                    .font(.system(size: 11, weight: accent ? .semibold : .medium))
+                    .foregroundStyle(accent ? Color(.primary) : MacTheme.label2)
+                Text(day.formatted(.dateTime.day()))
+                    .font(.system(size: 15, weight: isSelected || isToday ? .semibold : .regular))
+                    .monospacedDigit()
+                    .foregroundStyle(isSelected ? Color.white : (accent ? Color(.primary) : Color(.foreground)))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(isSelected ? Color(.primary) : (hovering ? MacTheme.fill : Color.clear)))
+                Circle().fill(busy ? MacTheme.label3 : Color.clear).frame(width: 4, height: 4)
+            }
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+        .accessibilityValue([isToday ? "Today" : nil, busy ? "Has tasks" : nil].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+#endif

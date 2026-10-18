@@ -6,6 +6,8 @@ import SwiftUI
 /// `parseSearchQuery`); the filters it found show as chips above the results.
 struct SearchScreen: View {
     let services: AppServices
+    /// The Mac toolbar's search text. When set, the screen shows results for it and has no field of its own.
+    var query: String?
     @State private var text = ""
     @State private var results = SearchResults()
     /// Each found subtask's parent title, for the "Subtask of" caption.
@@ -54,8 +56,8 @@ struct SearchScreen: View {
             .criaSurface()
         .overlay { overlay }
         .navigationTitle("Search")
-        .searchable(text: $text, prompt: "Tasks, projects, filters")
-        .modifier(MinimizeSearchField())
+        .modifier(OwnSearchField(text: $text, isEnabled: query == nil))
+        .onChange(of: query, initial: true) { if let query { text = query } }
         .task(id: text) { await runSearch() }
         // A swipe on a result (done, delete) changes the store, so re-run the query rather than keep a stale snapshot.
         .task {
@@ -124,6 +126,22 @@ struct SearchScreen: View {
         guard !Task.isCancelled, query == text else { return }
         results = found.0
         parentTitles = found.1
+    }
+}
+
+/// The screen's own search field, left off when the Mac toolbar's field drives it.
+private struct OwnSearchField: ViewModifier {
+    @Binding var text: String
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .searchable(text: $text, prompt: "Tasks, projects, filters")
+                .modifier(MinimizeSearchField())
+        } else {
+            content
+        }
     }
 }
 

@@ -191,30 +191,38 @@ extension SettingsView {
     private var macTabs: some View {
         TabView {
             pane("General", "gearshape") {
-                if isLinkShare { linkShareNotice } else { accountCard }
+                if isLinkShare { linkShareNotice }
                 loadStatus
+                MacSettingsView()
                 GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
-                aboutSection
-            }
-            pane("Appearance", "paintbrush") {
-                AppearanceSettingsSection(prefs: prefs)
-                CustomiseSettingsSection(prefs: prefs)
-            }
-            pane("Notifications", "bell") {
-                NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs)
                 PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
             }
+            pane("Customise", "slider.horizontal.3") {
+                CustomiseSettingsSection(prefs: prefs)
+                AppearanceSettingsSection(prefs: prefs)
+            }
             pane("Account", "person.crop.circle") {
-                if !isLinkShare { accountSection }
-                syncSection
-                storageSection
+                if isLinkShare { linkShareNotice } else { accountCard; accountSection }
                 if let message = model.errorMessage {
                     Section { Text(message).foregroundStyle(Color(.destructive)) }
                 }
                 SignOutSettingsSection(services: services, version: Self.version, onSignOut: onSignOut)
             }
-            MacSettingsView()
-                .tabItem { Label("Mac", systemImage: "desktopcomputer") }
+            pane("Notifications", "bell") {
+                NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs)
+            }
+            pane("Data", "cylinder") {
+                syncSection
+                if !isLinkShare {
+                    Section("Your data") {
+                        NavigationLink { DataSettingsView(services: services) } label: {
+                            SettingsLabel("Export and account data", symbol: "externaldrive", token: .fleece500)
+                        }
+                    }
+                }
+                storageSection
+                aboutSection
+            }
         }
         .task { projects = ProjectTree.visible((try? services.store.projects()) ?? []) }
         .task { await model.loadIfNeeded() }

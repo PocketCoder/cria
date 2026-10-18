@@ -14,6 +14,10 @@ struct QuickAddSheet: View {
     /// Hand off to the Ramble or photo sheet. The parent dismisses this sheet and presents the other.
     var onRamble: (() -> Void)?
     var onPhoto: (() -> Void)?
+    #if os(macOS)
+    /// Set when the sheet is hosted in the Mac quick-add panel, which has no sheet to dismiss: closes the panel.
+    var onClose: (() -> Void)?
+    #endif
     @Environment(\.dismiss) var dismiss
     @Environment(\.preferences) var preferences
     @AppStorage("cria.quickAddMagicMode") private var modeRaw = QuickAddMagicMode.default.rawValue
@@ -51,48 +55,14 @@ struct QuickAddSheet: View {
     var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
     /// The typed `+project`, unless a project was picked over it.
     var typedProjectTitle: String? { picked.contains(.project) ? nil : parsed.projectTitle }
-    private var aiStatus: AIStatus { AIStatus.shared }
+    var aiStatus: AIStatus { AIStatus.shared }
 
     var baseProjectId: String {
         pickFallbackProjectId(projects: projects, selectedLocalId: contextProjectId, defaultServerProjectId: defaultServerId) ?? ""
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
-            TextField("Task name", text: $line, axis: .vertical)
-                .font(.title3.weight(.semibold))
-                .focused($focused, equals: .title)
-                .submitLabel(multiple ? .next : .done)
-                .onSubmit(returnPressed)
-            if multiple && queue.isEmpty {
-                Text("Return adds it to the list; send adds them all.").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-            }
-            TextField("Description", text: $note, axis: .vertical)
-                .font(Theme.rowSubtitle)
-                .foregroundStyle(Color(.mutedForeground))
-                .lineLimit(1...4)
-                .focused($focused, equals: .description)
-            subtaskSection
-            if !line.isEmpty && parsedSomething {
-                Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.caption)
-            }
-            pickers
-            addedLine
-            if let errorMessage {
-                Text(errorMessage).foregroundStyle(Color(.destructive)).font(Theme.caption)
-            }
-            Divider().padding(.horizontal, -16)
-            bottomBar
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 20)
-        .padding(.bottom, 10)
-        #if os(macOS)
-        // Bare fields, as in the desktop app: no grey box per field and no focus ring round the one being typed in.
-        .textFieldStyle(.plain)
-        .focusEffectDisabled()
-        #endif
+        form
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fitContent($0) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .presentationDragIndicator(.visible)
@@ -129,8 +99,65 @@ struct QuickAddSheet: View {
         .task { await adoptServerDefault() }
     }
 
+    @ViewBuilder private var form: some View {
+        #if os(macOS)
+        if onClose != nil { panelForm } else { sheetForm }
+        #else
+        sheetForm
+        #endif
+    }
+
+    private var sheetForm: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
+            TextField("Task name", text: $line, axis: .vertical)
+                .font(.title3.weight(.semibold))
+                .focused($focused, equals: .title)
+                .submitLabel(multiple ? .next : .done)
+                .onSubmit(returnPressed)
+            if multiple && queue.isEmpty {
+                Text("Return adds it to the list; send adds them all.").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
+            TextField("Description", text: $note, axis: .vertical)
+                .font(Theme.rowSubtitle)
+                .foregroundStyle(Color(.mutedForeground))
+                .lineLimit(1...4)
+                .focused($focused, equals: .description)
+            subtaskSection
+            if !line.isEmpty && parsedSomething {
+                Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.caption)
+            }
+            pickers
+            addedLine
+            if let errorMessage {
+                Text(errorMessage).foregroundStyle(Color(.destructive)).font(Theme.caption)
+            }
+            Divider().padding(.horizontal, -16)
+            bottomBar
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .padding(.bottom, 10)
+        #if os(macOS)
+        // Bare fields, as in the desktop app: no grey box per field and no focus ring round the one being typed in.
+        .textFieldStyle(.plain)
+        .focusEffectDisabled()
+        #endif
+    }
+
+    /// Closes the Mac panel when hosted in one, else dismisses the sheet.
+    func closeSheet() {
+        #if os(macOS)
+        if let onClose {
+            onClose()
+            return
+        }
+        #endif
+        dismiss()
+    }
+
     /// True when the typed line holds Quick Add Magic tokens, so the preview is worth showing.
-    private var parsedSomething: Bool {
+    var parsedSomething: Bool {
         parsed.title != line.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -150,11 +177,11 @@ struct QuickAddSheet: View {
     }
 
     /// Picker bindings that mark their field as set by hand, so the typed line stops changing it.
-    private var projectPick: Binding<String> {
+    var projectPick: Binding<String> {
         Binding(get: { projectId }, set: { projectId = $0; picked.insert(.project) })
     }
 
-    private var priorityPick: Binding<Int> {
+    var priorityPick: Binding<Int> {
         Binding(get: { priority }, set: { priority = $0; picked.insert(.priority) })
     }
 
@@ -226,7 +253,7 @@ extension QuickAddSheet {
             Spacer(minLength: 8)
             multipleToggle
             if let onRamble, aiStatus.isOfferable {
-                Button { dismiss(); onRamble() } label: {
+                Button { closeSheet(); onRamble() } label: {
                     Image(systemName: "waveform")
                         .font(.body.weight(.semibold))
                         .frame(width: Theme.roundButton, height: Theme.roundButton)
@@ -250,7 +277,7 @@ extension QuickAddSheet {
         }
     }
 
-    private var addedLine: some View {
+    var addedLine: some View {
         Group {
             if let addedTitle {
                 Text(addedTitle).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
@@ -260,7 +287,7 @@ extension QuickAddSheet {
 
     /// One row of compact chips, in the order Settings > Customise > Quick Add sets. Ones left out sit in the •••
     /// menu.
-    private var pickers: some View {
+    var pickers: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(preferences.custom.quickAddActions) { chip($0) }
@@ -318,7 +345,7 @@ extension QuickAddSheet {
             }
             Toggle("Keep open after adding", isOn: $addAnother)
             if let onPhoto {
-                Button("List from photo", systemImage: "camera") { dismiss(); onPhoto() }
+                Button("List from photo", systemImage: "camera") { closeSheet(); onPhoto() }
             }
             Section("Type to set") {
                 Text("*label  +project  !1–5  tomorrow 5pm")
@@ -364,3 +391,4 @@ extension QuickAddSheet {
 enum QuickAddFocus: Hashable {
     case title, description, subtask
 }
+

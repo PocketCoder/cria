@@ -197,14 +197,29 @@ struct TableGridView: View {
         }
     }
 
+    #if os(macOS)
+    private static let columnSpacing: CGFloat = 0
+    /// Every other row, for the Mac's alternating stripes.
+    private var striped: Set<String> {
+        Set(rows.enumerated().filter { $0.offset % 2 == 1 }.map(\.element.task.localId))
+    }
+    #else
+    private static let columnSpacing: CGFloat = 16
+    #endif
+
     /// The card sits at the top left and is at least as big as the screen; a two-way scroll view would otherwise centre
     /// a short table, leaving its top cut off.
     private func scroller(minSize: CGSize) -> some View {
         ScrollView([.horizontal, .vertical]) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
+            Grid(alignment: .leading, horizontalSpacing: Self.columnSpacing, verticalSpacing: 0) {
                 // Padding goes on the cells: a modified GridRow would become one cell spanning the grid.
                 GridRow {
-                    ForEach(columns, id: \.self) { column in header(column).padding(.vertical, 10) }
+                    ForEach(columns, id: \.self) { column in
+                        header(column).padding(.vertical, 10)
+                            #if os(macOS)
+                            .padding(.horizontal, 8)
+                            #endif
+                    }
                 }
                 Divider()
                 ForEach(rows, id: \.task.localId) { item in
@@ -213,6 +228,11 @@ struct TableGridView: View {
                             cell(item, column)
                                 .frame(minWidth: width(column), alignment: .leading)
                                 .padding(.vertical, 10)
+                                #if os(macOS)
+                                // Spacing moves into the cells so the alternating stripe runs across the row.
+                                .padding(.horizontal, 8)
+                                .background(striped.contains(item.task.localId) ? MacTheme.fill : Color.clear)
+                                #endif
                         }
                     }
                     Divider()
