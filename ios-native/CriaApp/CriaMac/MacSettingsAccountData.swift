@@ -110,6 +110,11 @@ struct MacDataPane: View {
     @State private var waiting = 0
     @State private var resetPrompt: SignOutSettingsSection.WipePrompt?
 
+    /// Built outside the view builder (see `MacGeneralPane`).
+    private var resetPromptShown: Binding<Bool> {
+        Binding(get: { resetPrompt != nil }, set: { if !$0 { resetPrompt = nil } })
+    }
+
     var body: some View {
         Section("Sync") {
             LabeledContent("Server") {
@@ -134,7 +139,7 @@ struct MacDataPane: View {
         }
         .alert(
             "Reset this Mac?",
-            isPresented: Binding(get: { resetPrompt != nil }, set: { if !$0 { resetPrompt = nil } }),
+            isPresented: resetPromptShown,
             presenting: resetPrompt
         ) { _ in
             // The sign-out-with-wipe path: signs out and deletes this Mac's copy of the database and queued uploads.

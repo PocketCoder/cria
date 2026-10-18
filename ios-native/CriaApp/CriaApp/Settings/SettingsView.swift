@@ -248,7 +248,9 @@ extension SettingsView {
 
     private func pane<Content: View>(_ title: String, _ symbol: String, @ViewBuilder _ content: () -> Content) -> some View {
         NavigationStack {
-            Form { content() }
+            // Type-erased: five panes of nested sections made one huge view type, a known trigger for compiler
+            // crashes in IRGen on this target.
+            Form { AnyView(content()) }
                 .formStyle(.grouped)
                 .contentMargins(.horizontal, 28, for: .scrollContent)
                 .navigationTitle(title)

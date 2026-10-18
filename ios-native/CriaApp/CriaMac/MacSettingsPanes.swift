@@ -57,22 +57,26 @@ struct MacGeneralPane: View {
             } label: {
                 MacSettingRow(title: "Global shortcut", help: "Opens New Task from any app.")
             }
-            Picker("New tasks go to", selection: Binding(
-                get: { model.general.defaultProjectId },
-                set: { id in Task { await model.setDefaultProject(id) } }
-            )) {
+            Picker("New tasks go to", selection: defaultProject) {
                 Text("Inbox").tag(0)
                 ForEach(projects.filter { ($0.serverId ?? 0) > 0 }, id: \.localId) { Text($0.title).tag($0.serverId ?? 0) }
             }
             .disabled(!canSave)
-            Picker("Week starts on", selection: Binding(
-                get: { model.general.weekStart },
-                set: { day in Task { await model.setWeekStart(day) } }
-            )) {
+            Picker("Week starts on", selection: weekStart) {
                 ForEach(Weekdays.names.indices, id: \.self) { Text(Weekdays.names[$0]).tag($0) }
             }
             .disabled(!canSave)
         }
+    }
+
+    // Bindings built outside the view builder: a `Binding(get:set:)` inline in a Mac settings body has crashed the
+    // compiler (IRGen) before.
+    private var defaultProject: Binding<Int> {
+        Binding(get: { model.general.defaultProjectId }, set: { id in Task { await model.setDefaultProject(id) } })
+    }
+
+    private var weekStart: Binding<Int> {
+        Binding(get: { model.general.weekStart }, set: { day in Task { await model.setWeekStart(day) } })
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
@@ -123,7 +127,7 @@ struct MacNotificationsPane: View {
 
     var body: some View {
         Section("Reminders") {
-            Toggle(isOn: Binding(get: { notificationsOn }, set: setNotifications)) {
+            Toggle(isOn: notificationsBinding) {
                 MacSettingRow(title: "Task reminders", help: "Notifications include Complete and Snooze buttons.")
             }
             Picker(selection: $defaultReminder) {
@@ -138,6 +142,10 @@ struct MacNotificationsPane: View {
                 .disabled(!notificationsOn)
         }
         .task { await refreshStatus() }
+    }
+
+    private var notificationsBinding: Binding<Bool> {
+        Binding(get: { notificationsOn }, set: setNotifications)
     }
 
     private func setNotifications(_ enabled: Bool) {
