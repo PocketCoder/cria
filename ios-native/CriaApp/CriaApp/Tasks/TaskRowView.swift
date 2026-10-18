@@ -59,6 +59,10 @@ struct TaskRowView: View {
         .opacity(completing && !task.done ? 0.45 : 1)
         .animation(.easeOut(duration: 0.3).delay(0.35), value: completing)
         .background(alignment: .leading) { guides }
+        #if os(macOS)
+        // The row's full height from the first layout, chips included.
+        .fixedSize(horizontal: false, vertical: true)
+        #endif
         .contentShape(Rectangle())
         // One VoiceOver element. The ring and the collapse chevron are not separate stops: TaskRowLink exposes them
         // as actions (the swipe actions and its own accessibility actions).

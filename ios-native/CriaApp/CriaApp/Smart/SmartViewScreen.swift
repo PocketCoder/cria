@@ -102,6 +102,10 @@ struct SmartViewScreen: View {
                 }
             }
         }
+        #if os(macOS)
+        // Built once the first read is in, so rows do not draw title-high and then grow (see TaskListView).
+        .id(live.value.loaded)
+        #endif
         .publishesTaskOrder(visible(displayed).flatMap { live.value.nesting.rows(for: $0.items, expanded: expanded).map(\.id) })
         .criaSurface()
         // The default top margin and section gaps left a band of empty space under the title.

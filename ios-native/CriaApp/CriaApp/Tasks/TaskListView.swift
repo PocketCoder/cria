@@ -68,10 +68,15 @@ struct TaskListView: View {
                 }
             }
         }
+        #if os(macOS)
+        // Built once the first read is in: a Mac list filled while on screen drew each row title-high first, then
+        // grew it to fit its chips.
+        .id(live.value.loaded)
+        #endif
         .publishesTaskOrder(shown.flatMap { TaskListNesting.rows($0.items, children: live.value.children, collapsed: collapsed).map(\.id) })
         .criaSurface()
         .overlay {
-            if live.value.items.isEmpty {
+            if live.value.loaded && live.value.items.isEmpty {
                 ContentUnavailableView("No tasks", systemImage: "checklist", description: Text(emptyMessage))
             }
         }

@@ -98,6 +98,10 @@ struct ProjectListView: View {
                 }
             }
         }
+        #if os(macOS)
+        // Built once the first read is in, so rows do not draw title-high and then grow (see TaskListView).
+        .id(live.value.loaded)
+        #endif
         .publishesTaskOrder(openSections.flatMap { rows($0.items).map(\.id) } + rows(doneItems).map(\.id))
         .criaSurface()
         .environment(\.editMode, $editMode)
@@ -155,7 +159,7 @@ struct ProjectListView: View {
 
     /// Today's empty states: nothing at all, or everything done.
     @ViewBuilder private var emptyState: some View {
-        if live.value.items.isEmpty {
+        if live.value.loaded && live.value.items.isEmpty {
             ContentUnavailableView {
                 Label("No tasks yet", systemImage: "checklist")
             } description: {
