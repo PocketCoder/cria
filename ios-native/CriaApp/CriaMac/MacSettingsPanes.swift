@@ -145,7 +145,9 @@ struct MacNotificationsPane: View {
     }
 
     private var notificationsBinding: Binding<Bool> {
-        Binding(get: { notificationsOn }, set: setNotifications)
+        // A closure, not the method reference: passing `setNotifications` itself made the compiler emit an
+        // isolation-erasing thunk that crashed IRGen on x86_64.
+        Binding(get: { notificationsOn }, set: { enabled in setNotifications(enabled) })
     }
 
     private func setNotifications(_ enabled: Bool) {
