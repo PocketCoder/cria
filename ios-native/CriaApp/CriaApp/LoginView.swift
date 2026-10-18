@@ -220,8 +220,10 @@ struct LoginView: View {
                 .foregroundStyle(Color(.mutedForeground))
         }
     }
+}
 
-    #if os(macOS)
+#if os(macOS)
+extension LoginView {
     /// The Mac sign-in: the 84pt icon, "Welcome to Cria", labelled fields and a prominent Sign In. Same model and
     /// fields as the iOS form.
     private var macForm: some View {
@@ -288,5 +290,5 @@ struct LoginView: View {
     private func macLabel(_ text: String) -> some View {
         Text(text).font(.system(size: 12, weight: .medium)).foregroundStyle(MacTheme.label2)
     }
-    #endif
 }
+#endif

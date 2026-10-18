@@ -391,4 +391,3 @@ extension QuickAddSheet {
 enum QuickAddFocus: Hashable {
     case title, description, subtask
 }
-

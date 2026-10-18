@@ -210,30 +210,7 @@ struct TaskDetailView: View {
     private func form(_ task: TaskRecord) -> some View {
         Form {
             Section {
-                // Centred on the check's 44pt tap area, which keeps its size but no longer pads the row below the title.
-                HStack(alignment: .center, spacing: 8) {
-                    PriorityCheck(priority: task.priority, isDone: task.done, size: TaskInspectorStyle.ringSize) {
-                        _ = apply(TaskPatch(done: !task.done))
-                    }
-                        .padding(.vertical, -6)
-                    TextField("", text: $title, prompt: Text("Title"), axis: .vertical)
-                        .labelsHidden()
-                        .accessibilityLabel("Title")
-                        .font(TaskInspectorStyle.titleFont)
-                        // Unfocused, a vertical field on the Mac drew only its first line; give it room for the rest.
-                        .lineLimit(1...8)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .focused($focus, equals: .title)
-                        .submitLabel(.done)
-                        .onSubmit(saveText)
-                        // A multi-line field inserts a newline on Return; treat that as "done" instead.
-                        .onChange(of: title) { _, text in
-                            guard text.contains("\n") else { return }
-                            title = text.replacingOccurrences(of: "\n", with: "")
-                            saveText()
-                            focus = nil
-                        }
-                }
+                titleRow(task)
                 #if !os(macOS)
                 descriptionField(task)
                 #endif
@@ -268,6 +245,33 @@ struct TaskDetailView: View {
             .scrollContentBackground(.hidden)
             .background(MacTheme.inspector)
             #endif
+    }
+
+    private func titleRow(_ task: TaskRecord) -> some View {
+        // Centred on the check's 44pt tap area, which keeps its size but no longer pads the row below the title.
+        HStack(alignment: .center, spacing: 8) {
+            PriorityCheck(priority: task.priority, isDone: task.done, size: TaskInspectorStyle.ringSize) {
+                _ = apply(TaskPatch(done: !task.done))
+            }
+                .padding(.vertical, -6)
+            TextField("", text: $title, prompt: Text("Title"), axis: .vertical)
+                .labelsHidden()
+                .accessibilityLabel("Title")
+                .font(TaskInspectorStyle.titleFont)
+                // Unfocused, a vertical field on the Mac drew only its first line; give it room for the rest.
+                .lineLimit(1...8)
+                .fixedSize(horizontal: false, vertical: true)
+                .focused($focus, equals: .title)
+                .submitLabel(.done)
+                .onSubmit(saveText)
+                // A multi-line field inserts a newline on Return; treat that as "done" instead.
+                .onChange(of: title) { _, text in
+                    guard text.contains("\n") else { return }
+                    title = text.replacingOccurrences(of: "\n", with: "")
+                    saveText()
+                    focus = nil
+                }
+        }
     }
 
     private func saveText() {

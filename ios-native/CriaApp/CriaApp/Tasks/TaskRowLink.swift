@@ -171,9 +171,6 @@ struct TaskRowLink: View {
             }
         }
         Divider()
-        #if os(macOS)
-        if openTask != nil { Button("Rename", systemImage: "pencil") { startRename() } }
-        #endif
         Button("Duplicate", systemImage: "plus.square.on.square") { duplicate() }
         // A task that has not synced has no web address yet.
         Button("Copy link", systemImage: "link") { copyLink() }
@@ -208,39 +205,6 @@ struct TaskRowLink: View {
     }
 }
 
-/// The Mac row's hover and open-task highlight. A modifier with its own state, so hovering a row or opening a task
-/// redraws this background, not the row it sits behind.
-private struct PanelRowHighlight: ViewModifier {
-    let taskLocalId: String
-    @Environment(\.openTaskState) private var openTask
-    @State private var hovering = false
-
-    func body(content: Content) -> some View {
-        #if os(macOS)
-        // The macOS design's row: radius 10 (the row pads itself 8 by 12), selection tint and hover fill.
-        content
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(fill))
-            .onHover { hovering = $0 }
-        #else
-        content
-            .padding(.horizontal, 6)
-            .background(RoundedRectangle(cornerRadius: 6).fill(fill))
-            .onHover { hovering = $0 }
-        #endif
-    }
-
-    private var fill: Color {
-        #if os(macOS)
-        if openTask?.id == taskLocalId { return MacTheme.selection }
-        return hovering || openTask?.focusedId == taskLocalId ? MacTheme.fill : .clear
-        #else
-        // The web row's open and hover washes: primary at 10%, foreground at 5%. The j/k focus reads as a hover.
-        if openTask?.id == taskLocalId { return Color(.primary).opacity(0.10) }
-        return hovering || openTask?.focusedId == taskLocalId ? Color(.foreground).opacity(0.05) : .clear
-        #endif
-    }
-}
-
 #if os(macOS)
 // MARK: Mac menu
 
@@ -251,6 +215,7 @@ extension TaskRowLink {
         Button(item.task.done ? "Mark as Not Done" : "Mark as Done", systemImage: "checkmark.circle") { toggleWithHaptic() }
         if let openTask {
             Button("Open", systemImage: "arrow.up.forward.square") { openTask(item.task.localId) }
+            Button("Rename", systemImage: "pencil") { startRename() }
         }
         Divider()
         Menu("Due Date", systemImage: "calendar") {
@@ -296,56 +261,6 @@ extension TaskRowLink {
 
     private func setPriority(_ level: Int) {
         attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: TaskPatch(priority: level)) }
-    }
-}
-
-/// The task menu's label submenu: every label, ticked when the task has it. Read when the menu is built.
-private struct TaskRowLabelChoices: View {
-    let services: AppServices
-    let item: TaskListItem
-    let onFailure: (String) -> Void
-
-    var body: some View {
-        let all = (try? services.store.labels()) ?? []
-        ForEach(all, id: \.localId) { label in
-            let has = item.labels.contains { $0.localId == label.localId }
-            Toggle(label.title, isOn: Binding(get: { has }, set: { _ in toggle(label) }))
-        }
-    }
-
-    private func toggle(_ label: LabelRecord) {
-        do {
-            try services.store.toggleTaskLabel(taskLocalId: item.task.localId, labelLocalId: label.localId)
-        } catch {
-            onFailure(String(describing: error))
-        }
-    }
-}
-
-/// The task menu's Move to submenu: the visible projects, the current one ticked.
-private struct TaskRowProjectChoices: View {
-    let services: AppServices
-    let task: TaskRecord
-    let onFailure: (String) -> Void
-
-    var body: some View {
-        let projects = ProjectTree.visible((try? services.store.projects()) ?? [])
-        ForEach(projects, id: \.localId) { project in
-            Toggle(project.title, isOn: Binding(get: { project.localId == task.projectLocalId }, set: { isOn in
-                if isOn { move(to: project.localId) }
-            }))
-        }
-    }
-
-    private func move(to projectLocalId: String) {
-        guard projectLocalId != task.projectLocalId else { return }
-        var patch = TaskPatch()
-        patch.projectLocalId = projectLocalId
-        do {
-            _ = try services.store.updateTask(localId: task.localId, patch: patch)
-        } catch {
-            onFailure(String(describing: error))
-        }
     }
 }
 #endif

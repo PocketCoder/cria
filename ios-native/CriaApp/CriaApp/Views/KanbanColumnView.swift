@@ -292,7 +292,11 @@ struct KanbanColumnView: View {
                 .accessibilityLabel("Default column")
         }
     }
+}
 
+// MARK: Actions
+
+extension KanbanColumnView {
     /// Deletes straight away; the Undo toast takes it back.
     private func delete(_ task: TaskRecord) {
         do {
