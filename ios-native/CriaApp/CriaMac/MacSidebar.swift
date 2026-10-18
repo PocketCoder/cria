@@ -61,77 +61,79 @@ struct MacSidebar: View {
             row(.inbox, .inbox, count: counts.value.inbox)
             row(.today, .today, count: counts.value.today)
             row(.upcoming, .upcoming)
-            Section(isExpanded: $showFavourites) {
-                Label("Starred", systemImage: "star").tag(MacSelection.favorites)
-                ForEach(live.value.favourites, id: \.localId) { project in
-                    MacProjectLabel(project: project, services: services, sheets: sheets)
+            // Collapsed by the heading's own chevron rather than `Section(isExpanded:)`, whose system chevron shows
+            // only on hover.
+            Section {
+                if showFavourites {
+                    Label("Starred", systemImage: "star")
+                        .macSidebarRow(selected: actions.selection == .favorites)
+                        .tag(MacSelection.favorites)
+                    ForEach(live.value.favourites, id: \.localId) { project in
+                        MacProjectLabel(project: project, services: services, sheets: sheets)
+                    }
                 }
             } header: {
-                header("Favourites")
+                MacSidebarHeader(title: "Favourites", isExpanded: $showFavourites)
             }
-            Section(isExpanded: $showProjects) {
-                MacProjectBranch(parent: nil, children: live.value.children, services: services, sheets: sheets)
+            Section {
+                if showProjects {
+                    MacProjectBranch(parent: nil, children: live.value.children, services: services, sheets: sheets)
+                }
             } header: {
-                header("Projects", add: "New project") { actions.creatingProject = true }
+                MacSidebarHeader(title: "Projects", isExpanded: $showProjects, addHelp: "New project") {
+                    actions.creatingProject = true
+                }
             }
             // Shown when empty too, so its + is where a first filter is made. A share link has no saved filters.
             if !isLinkShare {
-                Section(isExpanded: $showFilters) {
-                    ForEach(live.value.filters, id: \.serverId) { filter in
-                        Label(filter.title, systemImage: "line.3.horizontal.decrease")
-                            .tag(MacSelection.savedFilter(filter.serverId))
-                            .contextMenu {
-                                Button("Edit…", systemImage: "pencil") { sheets.filterEditor = FilterEditorTarget(record: filter) }
-                                Button("Delete…", systemImage: "trash", role: .destructive) { sheets.pendingFilterDelete = filter }
-                            }
-                    }
+                Section {
+                    if showFilters { filterRows }
                 } header: {
-                    header("Filters", add: "New saved filter") { sheets.newFilter() }
+                    MacSidebarHeader(title: "Filters", isExpanded: $showFilters, addHelp: "New saved filter") { sheets.newFilter() }
                 }
             }
-            Section(isExpanded: $showLabels) {
-                ForEach(live.value.labels, id: \.localId) { label in
-                    Label {
-                        Text(label.title)
-                    } icon: {
-                        Image(systemName: "tag.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color(hexString: label.hexColor) ?? MacTheme.label2)
-                    }
-                    .tag(MacSelection.label(label.localId))
-                    .contextMenu {
-                        Button("Edit…", systemImage: "pencil") { sheets.labelEditor = LabelEditTarget(label: label) }
-                        Button("Delete…", systemImage: "trash", role: .destructive) {
-                            sheets.askToDelete(label, services: services)
-                        }
-                    }
-                }
+            Section {
+                if showLabels { labelRows }
             } header: {
-                header("Labels", add: "Manage labels") { sheets.showingLabels = true }
+                MacSidebarHeader(title: "Labels", isExpanded: $showLabels, addHelp: "Manage labels") { sheets.showingLabels = true }
             }
         }
         .tint(Color(.primary))
+        .environment(\.macSidebarSelection, actions.selection)
         .navigationSplitViewColumnWidth(min: 200, ideal: 244)
         .task { await live.run() }
         .task { await counts.run() }
         .safeAreaInset(edge: .bottom, spacing: 0) { MacSidebarFooter(store: services.store) }
     }
 
-    /// A section heading: SF 11 semibold in the tertiary shade, with an optional + on the right.
-    private func header(_ title: String, add help: String? = nil, action: (() -> Void)? = nil) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(MacTheme.label3)
-            Spacer()
-            if let help, let action {
-                Button(action: action) {
-                    Image(systemName: "plus").frame(width: 20, height: 20).contentShape(Rectangle())
+    @ViewBuilder private var filterRows: some View {
+        ForEach(live.value.filters, id: \.serverId) { filter in
+            Label(filter.title, systemImage: "line.3.horizontal.decrease")
+                .macSidebarRow(selected: actions.selection == .savedFilter(filter.serverId))
+                .tag(MacSelection.savedFilter(filter.serverId))
+                .contextMenu {
+                    Button("Edit…", systemImage: "pencil") { sheets.filterEditor = FilterEditorTarget(record: filter) }
+                    Button("Delete…", systemImage: "trash", role: .destructive) { sheets.pendingFilterDelete = filter }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(MacTheme.label2)
-                .help(help)
-                .accessibilityLabel(help)
+        }
+    }
+
+    @ViewBuilder private var labelRows: some View {
+        ForEach(live.value.labels, id: \.localId) { label in
+            Label {
+                Text(label.title)
+            } icon: {
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(hexString: label.hexColor) ?? MacTheme.label2)
+            }
+            .macSidebarRow(selected: actions.selection == .label(label.localId))
+            .tag(MacSelection.label(label.localId))
+            .contextMenu {
+                Button("Edit…", systemImage: "pencil") { sheets.labelEditor = LabelEditTarget(label: label) }
+                Button("Delete…", systemImage: "trash", role: .destructive) {
+                    sheets.askToDelete(label, services: services)
+                }
             }
         }
     }
@@ -151,6 +153,7 @@ struct MacSidebar: View {
                 Text("\(count)").font(.system(size: 12)).foregroundStyle(MacTheme.label2).monospacedDigit()
             }
         }
+        .macSidebarRow(selected: actions.selection == destination)
         .tag(destination)
     }
 }
@@ -191,6 +194,7 @@ struct MacProjectLabel: View {
     let services: AppServices
     let sheets: MacSidebarActions
     @State private var isTargeted = false
+    @Environment(\.macSidebarSelection) private var selection
 
     var body: some View {
         Label {
@@ -200,6 +204,7 @@ struct MacProjectLabel: View {
                 .font(.system(size: 10))
                 .foregroundStyle(Color(hexString: project.hexColor) ?? MacTheme.label2)
         }
+        .macSidebarRow(selected: selection == .project(project.localId))
         .tag(MacSelection.project(project.localId))
         // On the row itself, not the disclosure group, so a sub-project's menu is its own.
         .contextMenu { MacProjectMenu(project: project, services: services, sheets: sheets) }
@@ -248,7 +253,7 @@ private struct MacSidebarFooter: View {
                 if waiting.value > 0 {
                     Label(Self.waitingText(waiting.value), systemImage: "icloud.slash")
                 } else {
-                    Label("Synced", systemImage: "checkmark.icloud")
+                    Label("Synced just now", systemImage: "checkmark.icloud")
                 }
                 Spacer(minLength: 4)
                 SettingsLink { Image(systemName: "gearshape") }

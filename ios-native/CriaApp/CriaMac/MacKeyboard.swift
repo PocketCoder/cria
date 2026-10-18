@@ -52,7 +52,7 @@ final class KeySequencer {
         guard let actions else { return false }
         switch event.keyCode {
         case 36, 76: return actions.openFocused()
-        case 51: return actions.hasOpenTask ? run(.delete, actions) : false
+        case 51: return actions.task(.delete)
         default: break
         }
         guard let key = event.charactersIgnoringModifiers, key.count == 1 else { return false }
@@ -77,7 +77,7 @@ final class KeySequencer {
             return true
         case "j": return actions.moveFocus(1)
         case "k": return actions.moveFocus(-1)
-        case ".": return actions.hasOpenTask ? dot(1, actions) : false
+        case ".": return actions.hasCommandTarget ? dot(1, actions) : false
         case "t": return run(.done, actions)
         case "d": return run(.due, actions)
         case "p": return run(.priority, actions)
@@ -142,16 +142,13 @@ final class KeySequencer {
         }
     }
 
+    /// The open task, else the selected row (`MacTaskTarget`). False lets the key through.
     private func run(_ command: TaskCommand, _ actions: MacActions) -> Bool {
-        guard actions.hasOpenTask else { return false }
         actions.task(command)
-        return true
     }
 
     private func run(_ shortcut: TaskShortcut, _ actions: MacActions) -> Bool {
-        guard actions.hasOpenTask else { return false }
         actions.task(shortcut)
-        return true
     }
 
     private func stopWaiting() {

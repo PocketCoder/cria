@@ -13,8 +13,13 @@ final class UndoCenter {
         let title: String
     }
 
-    /// Seconds the toast stays up. The outbox waits a little longer so Undo never races the push.
+    /// Seconds the toast stays up (3.2 on the Mac, from its design). The outbox waits longer so Undo never races
+    /// the push.
+    #if os(macOS)
+    static let visible: Double = 3.2
+    #else
     static let visible: Double = 5
+    #endif
     static let window: TimeInterval = 7
 
     private(set) var offer: Offer?
@@ -76,12 +81,14 @@ struct UndoToast: View {
         Group {
             if let offer = center.offer {
                 HStack(spacing: 12) {
+                    #if os(macOS)
+                    // The Mac pill: the message alone, then Undo.
+                    Text("Task deleted").lineLimit(1).accessibilityLabel("Deleted \(offer.title)")
+                    Button("Undo") { center.undo() }.buttonStyle(MacUndoButtonStyle())
+                    #else
                     Image(systemName: "trash").foregroundStyle(.secondary)
                     Text("Deleted ‘\(offer.title)’").lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
-                    #if os(macOS)
-                    Button("Undo") { center.undo() }.buttonStyle(MacUndoButtonStyle())
-                    #else
                     Button("Undo") { center.undo() }.fontWeight(.semibold)
                     #endif
                 }
@@ -114,9 +121,7 @@ private struct ToastChrome: ViewModifier {
             .padding(.trailing, 5)
             .frame(height: 36)
             .fixedSize()
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+            .modifier(MacGlassPill())
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         #else
@@ -134,6 +139,20 @@ private struct ToastChrome: ViewModifier {
 }
 
 #if os(macOS)
+/// System glass on macOS 26; before it, a material capsule with a hairline and soft shadow.
+private struct MacGlassPill: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.glassEffect(.regular, in: Capsule())
+        } else {
+            content
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        }
+    }
+}
+
 /// The toast's Undo: a 26pt capsule, primary at 13% with Semibold primary text.
 private struct MacUndoButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -144,6 +163,8 @@ private struct MacUndoButtonStyle: ButtonStyle {
             .frame(height: 26)
             .background(Color(.primary).opacity(configuration.isPressed ? 0.22 : 0.13), in: Capsule())
             .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.timingCurve(0.34, 1.56, 0.64, 1, duration: 0.18), value: configuration.isPressed)
     }
 }
 #endif

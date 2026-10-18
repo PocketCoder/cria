@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// The content column's trailing toolbar items after the search field: New Task as a solid purple circle, then the
-/// inspector toggle, accent coloured while the inspector is open.
+/// inspector toggle, accent coloured while the inspector is open. The project view picker (`ProjectScreen`) and the
+/// search field (`.searchable`) are the system's; with the sidebar hidden the system moves its toggle to the leading
+/// edge.
 struct MacToolbar: ToolbarContent {
     let actions: MacActions
 
@@ -10,6 +12,7 @@ struct MacToolbar: ToolbarContent {
             Button { actions.newTask() } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(MacTheme.onPrimary)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.borderedProminent)

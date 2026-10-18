@@ -36,6 +36,14 @@ final class MacActions {
     var creatingProject = false
     var showingPalette = false
     var showingShortcuts = false
+    /// File > Ramble to Tasks… and List from Photo….
+    var showingRamble = false
+    var showingPhoto = false
+    /// The view each project last showed through the View menu or `g` keys, for the menu's checkmarks.
+    var projectViews: [String: String] = [:]
+    /// Set by the shell, so keys and the Task menu can act on a selected task without opening it.
+    @ObservationIgnored var services: AppServices?
+    @ObservationIgnored weak var undo: UndoCenter?
     var columns = NavigationSplitViewVisibility.all
     /// Bumped by Sync Now; the shell runs a sync for each new value.
     var syncRequest = 0
@@ -96,6 +104,12 @@ final class MacActions {
         openTaskId = id
     }
 
+    /// The row `j`/`k` have moved to, separate from the task open in the inspector.
+    var selectedTaskId: String? {
+        get { panel.focusedId }
+        set { panel.focusedId = newValue }
+    }
+
     /// `j` and `k`: moves the keyboard focus through the list on screen, from the focused or open task, stopping at
     /// either end. False when there is no list.
     func moveFocus(_ step: Int) -> Bool {
@@ -104,6 +118,8 @@ final class MacActions {
         let index = (panel.focusedId ?? openTaskId).flatMap { ids.firstIndex(of: $0) }
         let next = index.map { min(max($0 + step, 0), ids.count - 1) } ?? (step > 0 ? 0 : ids.count - 1)
         panel.focusedId = ids[next]
+        // With the inspector open it follows the selection.
+        if openTaskId != nil { openTask(ids[next]) }
         return true
     }
 
@@ -144,21 +160,16 @@ final class MacActions {
         }
     }
 
-    func task(_ command: TaskCommand) {
-        post(command.rawValue)
-    }
-
-    func task(_ shortcut: TaskShortcut) {
-        post(shortcut.rawValue)
-    }
-
-    private func post(_ raw: String) {
-        guard let id = openTaskId else { return }
-        NotificationCenter.default.post(name: .criaTaskCommand, object: raw, userInfo: ["task": id])
-    }
-
     func projectView(_ kind: String) {
+        guard case .project(let id)? = selection else { return }
+        projectViews[id] = kind
         NotificationCenter.default.post(name: .criaProjectViewCommand, object: kind)
+    }
+
+    /// The project on screen, for the View menu's items (enabled only there).
+    var projectOnScreen: String? {
+        if case .project(let id)? = selection { return id }
+        return nil
     }
 
     /// View > Show Project Info: the project on screen shows or hides its info rail.

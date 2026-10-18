@@ -22,6 +22,8 @@ struct MacShellView: View {
             MacSidebar(services: services, actions: actions)
         } detail: {
             MacContent(services: services, actions: actions, navigation: navigation)
+                // The undo pill floats over the content column only, 20pt above its bottom.
+                .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
                 // Sync progress, errors with Retry, conflicts to resolve and changes that could not sync, as on iOS.
                 .safeAreaInset(edge: .top, spacing: 0) { SyncBanner(services: services, conflicts: conflictPrompt) }
                 // The open task in the system inspector column, attached to the window's right edge.
@@ -44,15 +46,20 @@ struct MacShellView: View {
             actions.query = ""
             navigation.state.setPath([], for: .browse)
             actions.openTaskId = nil
-            actions.panel.focusedId = nil
+            actions.selectedTaskId = nil
         }
         .environment(\.taskCloser, actions.closer)
         .environment(navigation)
         .environment(undoCenter)
         .environment(menuChoices)
         .task { await menuChoices.follow(services.store) }
-        .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
-        .task { undoCenter.attach(services) }
+        // File > Ramble to Tasks… is enabled once on-device AI is known to be available.
+        .task { await AIStatus.shared.refresh() }
+        .task {
+            undoCenter.attach(services)
+            actions.services = services
+            actions.undo = undoCenter
+        }
         // A conflicted change holds up the outbox until it is resolved, so the sheet opens as on iOS.
         .task { await conflictPrompt.run(store: services.store) }
         .task {
@@ -76,6 +83,8 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $actions.showingPalette) { CommandPalette(services: services, actions: actions) }
         .sheet(isPresented: $actions.showingShortcuts) { ShortcutsHelp() }
+        .sheet(isPresented: $actions.showingRamble) { RambleSheet(services: services) }
+        .sheet(isPresented: $actions.showingPhoto) { ShoppingPhotoSheet(services: services) }
         .modifier(MacSidebarSheets(services: services, sheets: actions.sidebar))
         .sheet(
             isPresented: $conflictPrompt.isPresented,
@@ -117,7 +126,13 @@ private struct MacContent: View {
         .environment(\.taskOpener, actions.opener)
         .environment(\.openTaskState, actions.panel)
         .environment(\.macSidebarActions, actions.sidebar)
+        .modifier(MacListColumn(isCapped: !isProject))
         .id(actions.selection)
+    }
+
+    private var isProject: Bool {
+        if case .project? = actions.selection { return true }
+        return false
     }
 
     /// Its own view, so only it reads the search text: a keystroke re-evaluates this switch, not the stack around it.

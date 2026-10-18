@@ -16,6 +16,8 @@ enum MacTheme {
     /// Secondary and tertiary text.
     static let label2 = dynamic(light: 0x5C5D66, dark: 0xA3A4AD)
     static let label3 = dynamic(light: 0x919199, dark: 0x6D6E77)
+    /// The New Task circle's icon on the solid purple: white in light, `#130A20` on the lighter dark-mode purple.
+    static let onPrimary = dynamic(light: 0xFFFFFF, dark: 0x130A20)
     /// Hover fill.
     static let fill = Color.primary.opacity(0.055)
     /// The selected row: primary at 13% in light, 22% in dark.
