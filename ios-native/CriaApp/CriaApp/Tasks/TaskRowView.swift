@@ -11,6 +11,8 @@ struct TaskRowView: View {
     var tree = TaskRowTree()
     /// Just ticked: shown done and faded while the row waits a beat before it is saved and leaves the list.
     var completing = false
+    /// Set while the title is being renamed in place (a double-click on the Mac).
+    var rename: RowRename?
     let onToggle: () -> Void
 
     private var task: TaskRecord { item.task }
@@ -33,17 +35,31 @@ struct TaskRowView: View {
             PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
-                    Text(task.title)
-                        .font(Theme.rowTitle)
-                        .strikethrough(task.done || completing)
-                        .foregroundStyle(task.done || completing ? Color(.mutedForeground) : Color(.foreground))
-                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                    #if os(macOS)
+                    if let rename {
+                        RowTitleField(rename: rename)
+                    } else {
+                        titleText
+                    }
+                    #else
+                    titleText
+                    #endif
                     if task.isFavorite {
                         Image(systemName: "star.fill").font(.footnote).foregroundStyle(Color(.warning))
                     }
                 }
                 .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
                 .padding(.top, Theme.rowTitleTop)
+                #if os(macOS)
+                // The description's first words, as the desktop app's rows show them.
+                if let summary = item.summary, !task.done {
+                    Text(summary)
+                        .font(Theme.caption)
+                        .foregroundStyle(Color(.mutedForeground))
+                        .lineLimit(1)
+                        .padding(.top, 2)
+                }
+                #endif
                 if let parent = tree.parentTitle {
                     Text("Subtask of ‘\(parent)’")
                         .font(Theme.caption)
@@ -69,14 +85,25 @@ struct TaskRowView: View {
         .contentShape(Rectangle())
         // One VoiceOver element. The ring and the collapse chevron are not separate stops: TaskRowLink exposes them
         // as actions (the swipe actions and its own accessibility actions).
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: rename == nil ? .ignore : .contain)
         .accessibilityLabel(Text(spokenSummary))
         #endif
+    }
+
+    private var titleText: some View {
+        Text(task.title)
+            .font(Theme.rowTitle)
+            .strikethrough(task.done || completing)
+            .foregroundStyle(task.done || completing ? Color(.mutedForeground) : Color(.foreground))
+            .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
     }
 
     /// "Buy milk, due tomorrow, high priority, not done", with the subtask, project and label details the chips show.
     private var spokenSummary: String {
         var parts = [task.title]
+        #if os(macOS)
+        if let summary = item.summary, !task.done { parts.append(summary) }
+        #endif
         if let parent = tree.parentTitle { parts.append("subtask of \(parent)") }
         if task.isFavorite { parts.append("starred") }
         if !task.done, let due = task.dueDate {
@@ -194,17 +221,28 @@ extension TaskRowView {
             PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text(task.title)
-                        .font(.system(size: 13))
-                        .strikethrough(task.done || completing)
-                        .foregroundStyle(task.done || completing ? MacTheme.label3 : Color(.foreground))
-                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                    if let rename {
+                        RowTitleField(rename: rename)
+                    } else {
+                        Text(task.title)
+                            .font(.system(size: 13))
+                            .strikethrough(task.done || completing)
+                            .foregroundStyle(task.done || completing ? MacTheme.label3 : Color(.foreground))
+                            .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                    }
                     if task.isFavorite {
                         Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(MacTheme.marigold)
                     }
                 }
                 .frame(minHeight: 18)
                 .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
+                // The description's first words, as the desktop app's rows show them.
+                if let summary = item.summary, !task.done {
+                    Text(summary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(MacTheme.label2)
+                        .lineLimit(1)
+                }
                 if let parent = tree.parentTitle {
                     Text("Subtask of ‘\(parent)’")
                         .font(.system(size: 11))
@@ -226,7 +264,7 @@ extension TaskRowView {
         .padding(.trailing, 12)
         .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: rename == nil ? .ignore : .contain)
         .accessibilityLabel(Text(spokenSummary))
     }
 
@@ -328,3 +366,42 @@ extension VerticalAlignment {
     /// The middle of a task row's title line, which the Mac's ring is centred on.
     static let rowTitleMid = VerticalAlignment(RowTitleMid.self)
 }
+
+/// A row title being renamed in place: the draft, and what Return (or leaving the field) and Esc do.
+struct RowRename {
+    var text: Binding<String>
+    var commit: () -> Void
+    var cancel: () -> Void
+}
+
+#if os(macOS)
+/// The title as a borderless field in the title's font, focused as it appears. Leaving it saves, as Return does.
+private struct RowTitleField: View {
+    let rename: RowRename
+    @FocusState private var focused: Bool
+    @State private var ended = false
+
+    var body: some View {
+        TextField("Title", text: rename.text)
+            .textFieldStyle(.plain)
+            .font(Theme.rowTitle)
+            .foregroundStyle(Color(.foreground))
+            .labelsHidden()
+            .focused($focused)
+            .onAppear { focused = true }
+            .onSubmit { end(rename.commit) }
+            .onExitCommand { end(rename.cancel) }
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { end(rename.commit) }
+            }
+            .accessibilityLabel("Task title")
+    }
+
+    /// Once only: Return also takes the focus away, which would save a second time.
+    private func end(_ action: () -> Void) {
+        guard !ended else { return }
+        ended = true
+        action()
+    }
+}
+#endif

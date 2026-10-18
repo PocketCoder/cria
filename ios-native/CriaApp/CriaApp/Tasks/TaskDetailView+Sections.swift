@@ -36,11 +36,11 @@ extension TaskDetailView {
         }
     }
 
-    /// The labels, with Edit. On the Mac they sit in the inspector's field box instead.
+    /// The labels, with Edit. The Mac also lists them in the inspector's field box; this section keeps its Popular
+    /// one-click chips.
     @ViewBuilder private var labelsSection: some View {
-        #if !os(macOS)
         Section {
-            FlowLabels(labels: live.value.labels)
+            TaskLabelsRows(services: services, taskLocalId: taskLocalId, labels: live.value.labels)
         } header: {
             HStack {
                 Text("Labels")
@@ -49,7 +49,6 @@ extension TaskDetailView {
                     .accessibilityLabel("Edit labels")
             }
         }
-        #endif
     }
 
     /// The date sheet for one field. The due date carries the repeat too, saved in the same patch.

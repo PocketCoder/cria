@@ -59,4 +59,22 @@ extension CriaStore {
                 """, arguments: [localId]) ?? 0
         }
     }
+
+    /// The labels on the most tasks (open and done), most used first, leaving out those already on `taskLocalId`:
+    /// the task panel's one-click suggestions.
+    public func popularLabels(excludingTask taskLocalId: String, limit: Int = 6) throws -> [LabelRecord] {
+        try database.writer.read { connection in
+            try Row.fetchAll(connection, sql: """
+                SELECT l.local_id, l.server_id, l.title, l.description, l.hex_color, l.updated_at
+                  FROM labels l
+                  JOIN task_labels tl ON tl.label_local_id = l.local_id AND tl.deleted = 0
+                  JOIN tasks t ON t.local_id = tl.task_local_id AND t.deleted = 0
+                 WHERE l.deleted = 0
+                   AND l.local_id NOT IN (SELECT label_local_id FROM task_labels WHERE task_local_id = ? AND deleted = 0)
+                 GROUP BY l.local_id
+                 ORDER BY COUNT(*) DESC, l.title COLLATE NOCASE ASC
+                 LIMIT ?
+                """, arguments: [taskLocalId, limit]).map(LabelRecord.init(row:))
+        }
+    }
 }
