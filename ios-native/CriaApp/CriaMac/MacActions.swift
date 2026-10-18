@@ -135,11 +135,11 @@ final class MacActions {
 
     var hasOpenTask: Bool { openTaskId != nil }
 
-    /// The toolbar's inspector button: closes the open task, or opens the focused one.
+    /// The toolbar's inspector button: closes the open task, or opens the focused one (else the first on screen).
     func toggleInspector() {
         if openTaskId != nil {
             openTaskId = nil
-        } else if let id = panel.focusedId {
+        } else if let id = panel.focusedId ?? panel.visibleIds.first {
             openTask(id)
         }
     }

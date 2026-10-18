@@ -50,8 +50,14 @@ struct PhotoCaptureSettingsSection: View {
                 SettingsLabel("Default project", symbol: "camera", token: .sky500)
             }
             LabeledContent {
-                TextField("None", text: $prefs.value.photoLabel)
+                TextField("Default label", text: $prefs.value.photoLabel, prompt: Text("None"))
                     .multilineTextAlignment(.trailing)
+                    #if os(macOS)
+                    // The Mac form would otherwise show the field's title as a second label beside the row's.
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 180)
+                    #endif
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             } label: {

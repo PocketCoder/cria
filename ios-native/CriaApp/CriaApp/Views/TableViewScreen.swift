@@ -19,6 +19,8 @@ struct TableViewScreen: View {
     @State private var pickingColumns = false
     /// Off by default: label, assignee and date cells then open their picker when tapped. Kept on this device.
     @AppStorage("cria.tableViewInlineEdit") private var inlineEdit = false
+    /// Settings > Show completed, as the list views honour it.
+    @AppStorage("cria.taskList.showDone") private var showDone = true
     @State private var cellEdit: TableCellEdit?
     @State private var editFailure: String?
     @State private var assigneeFeed: LiveValue<[String: [AssigneeRecord]]>
@@ -71,7 +73,7 @@ struct TableViewScreen: View {
         let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
         let titles = Dictionary(live.value.map { ($0.task.projectLocalId, $0.projectTitle ?? "") }, uniquingKeysWith: { first, _ in first })
         let sorted = TableSort.sorted(
-            live.value.map(\.task), keys: sortKeys, visible: Set(TableViewColumn.allCases),
+            live.value.map(\.task).filter { showDone || !$0.done }, keys: sortKeys, visible: Set(TableViewColumn.allCases),
             projectTitle: { titles[$0] ?? "" }, extras: extras
         )
         return sorted.compactMap { byId[$0.localId] }
@@ -94,6 +96,8 @@ struct TableViewScreen: View {
                 compactList
             }
         }
+        // j/k and the toolbar's inspector button walk the table's rows.
+        .publishesTaskOrder(rows.map(\.task.localId))
         .overlay {
             if live.value.isEmpty {
                 ContentUnavailableView {

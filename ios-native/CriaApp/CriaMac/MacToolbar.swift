@@ -23,6 +23,8 @@ struct MacToolbar: ToolbarContent {
                 Image(systemName: "sidebar.right")
             }
             .foregroundStyle(actions.hasOpenTask ? Color(.primary) : Color.primary)
+            // Nothing to show until a list on screen has a task.
+            .disabled(!actions.hasOpenTask && actions.panel.focusedId == nil && actions.panel.visibleIds.isEmpty)
             .help(actions.hasOpenTask ? "Hide Inspector" : "Show Inspector")
             .accessibilityLabel(actions.hasOpenTask ? "Hide Inspector" : "Show Inspector")
         }
