@@ -8,6 +8,7 @@ struct MacSidebarHeader: View {
     var addHelp: String?
     var onAdd: (() -> Void)?
     @State private var hovering = false
+    @State private var hoveringAdd = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -30,14 +31,18 @@ struct MacSidebarHeader: View {
             Spacer(minLength: 4)
             if let addHelp, let onAdd {
                 Button(action: onAdd) {
+                    // A bare glyph in the heading's shade; a fill only while the pointer is on it.
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(width: 20, height: 20)
-                        .background(MacTheme.fill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 18, height: 18)
+                        .background {
+                            if hoveringAdd { RoundedRectangle(cornerRadius: 5, style: .continuous).fill(MacTheme.fill) }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(MacPressStyle())
-                .foregroundStyle(MacTheme.label2)
+                .foregroundStyle(hoveringAdd ? MacTheme.label2 : MacTheme.label3)
+                .onHover { hoveringAdd = $0 }
                 .opacity(hovering ? 1 : 0)
                 .help(addHelp)
                 .accessibilityLabel(addHelp)

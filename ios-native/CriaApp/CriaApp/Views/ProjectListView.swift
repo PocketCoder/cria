@@ -80,12 +80,6 @@ struct ProjectListView: View {
 
     /// The open tasks, one section each when grouped (a label's tasks may appear under several).
     private var openSections: [DisplaySection] {
-        #if os(macOS)
-        // Ungrouped on the Mac means grouped by the board's columns ("To do", "Doing"), as the design has it.
-        if display.config.groupBy == .none, !live.value.columns.isEmpty {
-            return ProjectListGrouping.byColumn(openItems, columns: live.value.columns, columnOf: live.value.columnOf)
-        }
-        #endif
         return DisplayEngine.grouped(
             openItems, by: display.config.groupBy, context: display.context(assignees: live.value.snapshot.assignees)
         )
