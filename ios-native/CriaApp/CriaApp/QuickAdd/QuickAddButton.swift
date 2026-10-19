@@ -20,7 +20,7 @@ enum QuickAddPreview {
         return output
     }
 
-    private static func field(for kind: QuickAddTokenKind) -> QuickAddField? {
+    static func field(for kind: QuickAddTokenKind) -> QuickAddField? {
         switch kind {
         case .date: return .due
         case .priority: return .priority
@@ -29,7 +29,7 @@ enum QuickAddPreview {
         }
     }
 
-    private static func tint(for kind: QuickAddTokenKind) -> Color? {
+    static func tint(for kind: QuickAddTokenKind) -> Color? {
         switch kind {
         case .text: return nil
         case .date: return Color(.sky700)

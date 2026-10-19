@@ -12,6 +12,16 @@ extension QuickAddSheet {
         return addAnother ? "Add and keep open" : "Add task"
     }
 
+    /// Puts the caret in the task name.
+    func focusTitle() {
+        #if canImport(UIKit)
+        focused = nil
+        titleFocusRequest += 1
+        #else
+        focused = .title
+        #endif
+    }
+
     func returnPressed() {
         if multiple {
             queueCurrent()
@@ -97,7 +107,7 @@ extension QuickAddSheet {
         subtaskLine = ""
         addingSubtask = false
         if let message { addedTitle = message }
-        focused = .title
+        focusTitle()
     }
 
     var multipleToggle: some View {
@@ -160,7 +170,7 @@ extension QuickAddSheet {
         let title = subtaskLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else {
             addingSubtask = false
-            focused = .title
+            focusTitle()
             return
         }
         withAnimation(.snappy) { subtasks.append(title) }

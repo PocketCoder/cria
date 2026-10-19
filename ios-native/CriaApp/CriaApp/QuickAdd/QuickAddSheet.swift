@@ -44,6 +44,8 @@ struct QuickAddSheet: View {
     @State var note = ""
     /// Height of the field, chips and hint, so the sheet hugs them above the keyboard.
     @State var contentHeight: CGFloat = 260
+    /// Bumped to put the caret in the task name (a UIKit field on iOS, so not driven by `focused`).
+    @State var titleFocusRequest = 0
     /// Multiple mode: Return queues the task and send adds every queued one. Remembered on this device.
     @AppStorage("cria.quickAddMultiple") var multiple = false
     @State var queue: [QueuedQuickAdd] = []
@@ -85,7 +87,7 @@ struct QuickAddSheet: View {
         .onChange(of: dueISO) { _, new in
             if new.isEmpty { reminders.removeAll { $0.needsDueDate } }
         }
-        .sheet(item: $pickerSheet, onDismiss: { focused = .title }, content: { which in
+        .sheet(item: $pickerSheet, onDismiss: { focusTitle() }, content: { which in
             QuickAddPickerSheetView(
                 which: which, services: services, dueISO: dueISO, labelTitles: $labelTitles, reminders: $reminders,
                 onDue: { setDue($0) }
@@ -113,11 +115,18 @@ struct QuickAddSheet: View {
     private var sheetForm: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
+            #if canImport(UIKit)
+            QuickAddTitleField(
+                text: $line, tokens: parsed.tokens, overridden: picked, returnKey: multiple ? .next : .done,
+                focusRequest: titleFocusRequest, onReturn: returnPressed
+            )
+            #else
             TextField("Task name", text: $line, axis: .vertical)
                 .font(.title3.weight(.semibold))
                 .focused($focused, equals: .title)
                 .submitLabel(multiple ? .next : .done)
                 .onSubmit(returnPressed)
+            #endif
             if multiple && queue.isEmpty {
                 Text("Return adds it to the list; send adds them all.").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
@@ -127,9 +136,12 @@ struct QuickAddSheet: View {
                 .lineLimit(1...4)
                 .focused($focused, equals: .description)
             subtaskSection
+            #if !canImport(UIKit)
+            // On iOS the tokens are pills in the task name itself.
             if !line.isEmpty && parsedSomething {
                 Text(QuickAddPreview.highlighted(parsed, overridden: picked)).font(Theme.caption)
             }
+            #endif
             pickers
             addedLine
             if let errorMessage {
@@ -205,7 +217,7 @@ struct QuickAddSheet: View {
         projectId = baseProjectId
         if line.isEmpty { line = initialLine }
         if dueISO.isEmpty, let initialDueDate { dueISO = DueDates.allDayISO(for: initialDueDate) }
-        focused = .title
+        focusTitle()
     }
 
     /// A date chosen with the picker ("" for no date) wins over a typed one.
