@@ -25,6 +25,8 @@ public struct GeneralSettings: Equatable, Sendable {
     public var language: String
     /// IANA identifier, e.g. "Europe/London".
     public var timezone: String
+    /// New-task defaults shared with Vikunja-web: the due time and the quick-add reminders.
+    public var quickAddDefaults: QuickAddDefaults
 
     public static let defaultQuickAddMode = "vikunja"
     public static let defaultDefaultView = "first"
@@ -55,6 +57,7 @@ public struct GeneralSettings: Equatable, Sendable {
         timezone = settings?["timezone"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultTimezone
         let frontend = FrontendSettings.frontendSettings(of: settings?.objectValue)
         quickAddMagicMode = FrontendSettings.quickAddMagicMode(of: frontend) ?? Self.defaultQuickAddMode
+        quickAddDefaults = QuickAddDefaults(frontend: frontend)
         defaultView = FrontendSettings.defaultView(of: frontend) ?? Self.defaultDefaultView
     }
 
@@ -142,6 +145,7 @@ public struct GeneralSettings: Equatable, Sendable {
         restore(\.discoverableByName)
         restore(\.language)
         restore(\.timezone)
+        restore(\.quickAddDefaults)
         return result
     }
 }

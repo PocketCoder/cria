@@ -102,6 +102,7 @@ struct GeneralSettingsSection: View {
                 SettingsLabel("Default view", symbol: "rectangle.3.group", token: .sky500)
             }
             .disabled(!canSave)
+            QuickAddDefaultsRows(model: model, canSave: canSave)
             // Read by RambleSheet when it builds the prompt. Tags need the magic's syntax, so it is off with it.
             if AIStatus.shared.isOfferable {
                 Toggle(isOn: $prefs.value.rambleChoosesTags) {

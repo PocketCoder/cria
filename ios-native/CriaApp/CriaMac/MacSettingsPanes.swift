@@ -66,6 +66,7 @@ struct MacGeneralPane: View {
                 ForEach(Weekdays.names.indices, id: \.self) { Text(Weekdays.names[$0]).tag($0) }
             }
             .disabled(!canSave)
+            QuickAddDefaultsRows(model: model, canSave: canSave, icons: false)
         }
     }
 
@@ -120,7 +121,6 @@ struct MacCustomisePane: View {
 /// Settings > Notifications: Reminders and Summaries.
 struct MacNotificationsPane: View {
     @ObservedObject var prefs: PreferencesModel
-    @AppStorage(MacPrefs.defaultReminder) private var defaultReminder = MacDefaultReminder.off.rawValue
     @State private var status = UNAuthorizationStatus.notDetermined
 
     private var notificationsOn: Bool { prefs.value.notificationsEnabled && status != .denied }
@@ -130,12 +130,6 @@ struct MacNotificationsPane: View {
             Toggle(isOn: notificationsBinding) {
                 MacSettingRow(title: "Task reminders", help: "Notifications include Complete and Snooze buttons.")
             }
-            Picker(selection: $defaultReminder) {
-                ForEach(MacDefaultReminder.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
-            } label: {
-                MacSettingRow(title: "Default reminder", help: "Added by quick add when a new task has a due date.")
-            }
-            .disabled(!notificationsOn)
         }
         Section("Summaries") {
             Toggle("Morning summary", isOn: $prefs.value.morningSummaryEnabled)
@@ -165,26 +159,5 @@ struct MacNotificationsPane: View {
 
     private func refreshStatus() async {
         status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-    }
-}
-
-/// The reminder Mac quick add gives a new task with a due date (Settings > Notifications > Default reminder).
-enum MacDefaultReminder: Int, CaseIterable {
-    case off = -1, atDue = 0, hourBefore = 3_600, dayBefore = 86_400
-
-    var title: String {
-        switch self {
-        case .off: return "None"
-        case .atDue: return "On the due time"
-        case .hourBefore: return "1 hour before"
-        case .dayBefore: return "1 day before"
-        }
-    }
-
-    /// The stored choice as a quick-add reminder; nil for none.
-    static var current: QuickAddReminder? {
-        let raw = UserDefaults.standard.object(forKey: MacPrefs.defaultReminder) as? Int ?? off.rawValue
-        guard let choice = MacDefaultReminder(rawValue: raw), choice != .off else { return nil }
-        return .beforeDue(seconds: choice.rawValue)
     }
 }

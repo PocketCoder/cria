@@ -55,7 +55,11 @@ struct QuickAddSheet: View {
     @State var allLabelTitles: [String] = []
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
-    var parsed: QuickAddResult { parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates) }
+    var parsed: QuickAddResult {
+        parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates, defaultDueTime: defaultDueTime)
+    }
+    /// The account's default due time (Vikunja-web's `default_due_time`), kept in UserDefaults by Settings.
+    private var defaultDueTime: DefaultDueTime? { QuickAddDefaults.current().dueTime }
     /// The typed `+project`, unless a project was picked over it.
     var typedProjectTitle: String? { picked.contains(.project) ? nil : parsed.projectTitle }
     var aiStatus: AIStatus { AIStatus.shared }
@@ -82,8 +86,11 @@ struct QuickAddSheet: View {
             }
         }
         // Relative reminders follow the due date, so they go when it does.
-        .onChange(of: dueISO) { _, new in
+        .onChange(of: dueISO) { old, new in
             if new.isEmpty { reminders.removeAll { $0.needsDueDate } }
+            // Settings > General > Default reminders (Vikunja-web's quick_add_default_reminders): a task that gains a
+            // due date gets them, as in Vikunja-web, unless reminders were already chosen. They show in the chip.
+            if old.isEmpty, !new.isEmpty, reminders.isEmpty { reminders = QuickAddDefaults.current().reminders }
         }
         .sheet(item: $pickerSheet, onDismiss: { focused = .title }, content: { which in
             QuickAddPickerSheetView(
@@ -216,8 +223,9 @@ struct QuickAddSheet: View {
 
     /// Keeps the pickers in step with what the typed line parses to, except fields set by hand.
     private func lineChanged(from old: String, to new: String) {
-        let before = parseQuickAddTask(old, mode: mode, detectDates: preferences.custom.detectDates)
-        let after = parseQuickAddTask(new, mode: mode, detectDates: preferences.custom.detectDates)
+        let detect = preferences.custom.detectDates
+        let before = parseQuickAddTask(old, mode: mode, detectDates: detect, defaultDueTime: defaultDueTime)
+        let after = parseQuickAddTask(new, mode: mode, detectDates: detect, defaultDueTime: defaultDueTime)
         if !picked.contains(.priority) {
             priority = followParsed(priority, before: before.priority, after: after.priority, empty: 0)
         }
