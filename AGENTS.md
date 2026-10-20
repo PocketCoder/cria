@@ -76,8 +76,8 @@ offered a perpetual update. `pnpm bump` touches all four at once.
 | Purple refresh (Llama `#643B9F` palette, Onest, joy-layer motion) replaces the Ledger theme | ✅ v0.15.0; tokens + motion in `src/styles/globals.css` |
 | Native glass: macOS sidebar material (iOS 26 tab bar part deprecated with the Tauri iOS build) | 🟡 on `dev`, CI compile-checked, not yet verified on device |
 
-**Next up:** polish from daily use of the native iOS app (`ios-native/`, see below). Feature-level status vs Vikunja lives
-in [FEATURE-COMPARISON.md](FEATURE-COMPARISON.md).
+**Next up:** polish from daily use of the native iOS app (`ios-native/`, see below). What is left on the native apps lives in
+[REMAINING.md](REMAINING.md).
 
 **Known gaps / deferred:**
 - **Live sync (WebSockets)** not merged; sync is a 60s poll. Vikunja's socket
@@ -226,8 +226,12 @@ v1: `GET = read`, **`PUT = create`**, **`POST = update`**, `DELETE = delete`.
 v2 (Vikunja 2.7.0+): `POST = create`, `PUT = full replace`, `PATCH` = merge-patch
 (`application/merge-patch+json`), `DELETE` answers 204, lists are
 `{ items, total_pages, ... }`, errors are problem+json, the search parameter is
-`q`. The contract and per-route table are in
-[docs/V2-MIGRATION.md](docs/V2-MIGRATION.md).
+`q`. The per-route table is `V1_ONLY_ROUTES`/`SAME_VERB_ROUTES` in `src/api/adapter.ts`, mirrored in
+`ios-native/CriaKit/Sources/CriaKit/API/ApiRoutes.swift`. Other v2 facts: a validation error is 422 (TOTP-required stays
+412 / code 1017); `PUT /notifications/{id}` needs `{ "read": true }`; the bucket move body is a `TaskBucket` with
+`task_id` (bucket and view come from the URL); attachment upload is field `files`; renamed paths are
+`/projects/{p}/users/search?q=`, `/avatar/{username}` and `POST /logout`. The Swift client sends task, project and team
+updates as a full v2 `PUT` (no merge-patch yet), and does not cache a failed `/info` probe.
 
 **Callers keep writing v1-shaped calls** (`client.PUT('/labels')` creates,
 `client.POST('/tasks/{id}')` updates, `s=`, bare arrays, `x-pagination-*`).
@@ -543,12 +547,11 @@ the new `useSettings` field and wire the value into the code that should honour
 it. Seed effects that read async query data (e.g. the server `user`) must
 depend on that data, not run once on `[]` mount — otherwise they fire before
 the data loads and never re-run. If wiring is genuinely out of scope, ship the
-control as 🟡 in FEATURE-COMPARISON.md, never ✅.
+control as a known gap in REMAINING.md, never as done.
 
 ## Native Swift iOS app (`ios-native/`)
 
-The iOS app. It replaced the Tauri iOS build at parity (plan and status:
-[docs/SWIFT-IOS-PLAN.md](docs/SWIFT-IOS-PLAN.md); features and what syncs where: [ios-native/FEATURES.md](ios-native/FEATURES.md)). `CriaKit/` is a Swift package with all
+The iOS app. It replaced the Tauri iOS build at parity (what is left: [REMAINING.md](REMAINING.md)). `CriaKit/` is a Swift package with all
 logic (data, API, sync, parsers) and `swift test` coverage; `CriaApp/` is the SwiftUI app, generated with
 XcodeGen. CI ([ci.yml](.github/workflows/ci.yml)) runs `swiftlint lint --strict`, `swift test` and a
 simulator build; pushes to `dev` build an unsigned `.ipa` (`io.cria.app.swift`) and the `publish` job attaches it to the
@@ -558,8 +561,10 @@ only this app. Tagged releases also attach the Swift `.ipa` (release.yml `build-
 - Same SQLite schema: the migrations are byte-identical copies of `src/db/migrations`; never edit them there either.
 - Same sync rules as above (silent upserts, outbox FIFO, pending-delete guard, settings merge-patch with v1
   fallback). Where the Swift port deliberately differs from the TS spec because the TS behaviour is a bug, it says
-  so in a comment; the list is in the plan's "Review 2026-10-12" section (label update verb, `percent_done`
-  sent unscaled, comments deleted before their task, project identifier and cover image kept on push).
+  so in a comment: label update verb, `percent_done` sent unscaled, comments deleted before their task, project
+  identifier and cover image kept on push, offline failures not using outbox attempts, "keep mine" re-baselining
+  and pushing, a 401 during a drain keeping the op queued instead of dead-lettering it. The TS app still has these
+  bugs and the `percent_done` "quirk" note under `taskToBody()` is wrong for the server (it stores 0 to 1).
 - Dates: all date maths use `Calendar.cria` (Gregorian in the device zone), never `Calendar.current`. Server and
   local timestamps can carry different offsets, so compare instants (`DueDates.parse`, `julianday()` in SQL),
   never ISO text.
@@ -571,11 +576,11 @@ only this app. Tagged releases also attach the Swift `.ipa` (release.yml `build-
 
 ## Native macOS app (`ios-native/CriaApp/CriaMac/`)
 
-Replaces the Tauri desktop app (plan and status: [docs/SWIFT-MACOS-PLAN.md](docs/SWIFT-MACOS-PLAN.md)). Same XcodeGen
+Replaces the Tauri desktop app (what is left: [REMAINING.md](REMAINING.md)). Same XcodeGen
 project and `CriaKit` as iOS; the `CriaMac` target compiles `CriaMac/` plus the iOS app's `CriaApp/` sources (see the
 `excludes` in `project.yml`). Minimum macOS 15. Not sandboxed; no app group, so the database is in
 `Application Support/<bundle id>/Native/`. Nothing here compiles on Linux and nobody has run it on a Mac in this
-repo's history unless the plan says so: CI (the `mac`, `ios` and `kit` jobs in `ci.yml`) is the only compiler.
+repo's history: CI (the `mac`, `ios` and `kit` jobs in `ci.yml`) is the only compiler.
 
 - **Shared code, one rule:** a change to `CriaApp/CriaApp/` must keep iOS identical. Prefer `Platform/PlatformTypes.swift`
   (`PlatformImage`, `Pasteboard`, `ExternalLink`, `Haptics`) and `Platform/MacShims.swift` (macOS-only stand-ins for
@@ -585,6 +590,9 @@ repo's history unless the plan says so: CI (the `mac`, `ios` and `kit` jobs in `
 - **Editor:** `EditorController`, `EditorStyling` and the paragraph rules are shared; they talk to the text view through
   `EditorSurface`. `Editor/EditorTextView.swift` is the UIKit host, `CriaMac/Editor/MacEditorTextView.swift` the AppKit
   one. Never rename `EditorStyling.typingAttributes` when renaming the surface's `typing` property.
+- **Updates and quick add:** Sparkle is wired with the EdDSA public key set in `project.yml`
+  (`CRIA_SPARKLE_PUBLIC_KEY`; the private half is the `SPARKLE_PRIVATE_KEY` Actions secret); `MacUpdater` only starts
+  with a key. The global hotkey opens a floating quick-add panel (`QuickAddPanel.swift`), not the main window.
 - **Mac shell:** `MacShellView` (three columns), `MacActions` (selection, menus, palette), `MacCommands`, `MacKeyboard`
   (`g`-sequences, task keys). Shared task rows select into the detail column through the `\.taskOpener` environment
   value; `TaskDetailView` carries out menu and key commands posted as `TaskCommand` notifications. Reminder and
@@ -605,7 +613,7 @@ repo's history unless the plan says so: CI (the `mac`, `ios` and `kit` jobs in `
 > **Since 2026-10-13 the `dev` nightly is the native Swift Mac app** (the `mac` job in `ci.yml` archives `CriaMac` as `Cria (Nightly)`,
 > `io.cria.app.nightly`, and attaches `Cria-Nightly-macOS.dmg` and `.zip` to the rolling `nightly` release beside the iOS
 > `.ipa`). It is not notarised and updates itself through Sparkle (`nightly-appcast.xml` on gh-pages). The table below
-> describes the Tauri app, which still ships stable releases from `release.yml` until the Phase 8 handover;
+> describes the Tauri app, which still ships stable releases from `release.yml` until the Mac handover (see REMAINING.md);
 > `nightly.json` and `scripts/nightly-config.sh` are no longer used by CI.
 
 Three identifiers, three macOS data dirs. No cross-talk.

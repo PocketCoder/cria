@@ -2,7 +2,7 @@ import Foundation
 
 /// The one place where v1 and v2 differ in shape. Callers keep writing the v1 call (`PUT` creates, `POST` updates,
 /// `s` searches); on a v2 server `translate` rewrites verb, path and query. Verified against Vikunja's
-/// `/api/v2/openapi-3.0.json` (docs/V2-MIGRATION.md).
+/// `/api/v2/openapi-3.0.json` (see the v1/v2 section of AGENTS.md).
 public enum ApiRoutes {
     struct Translated {
         var method: HTTPMethod

@@ -3,7 +3,7 @@ name: CI
 # One workflow for everything that runs on a push or pull request.
 #
 #   changes   works out which parts of the repo the change touches, so each job below only runs when it matters
-#   versions, quality, build, rust   the Tauri desktop app (kept until its retirement, docs/SWIFT-MACOS-PLAN.md Phase 8)
+#   versions, quality, build, rust   the Tauri desktop app (kept until its retirement, the Mac handover, REMAINING.md)
 #   kit       SwiftLint over all Swift, then the CriaKit tests
 #   ios       the iOS app: a simulator build, and on a push to dev the unsigned .ipa
 #   mac       the Mac app: a build, and on a push to dev the signed, packaged "Cria (Nightly)" with a launch check

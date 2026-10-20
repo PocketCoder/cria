@@ -19,7 +19,7 @@ A native desktop and iOS client for [Vikunja](https://vikunja.io) — an offline
 
 Download the macOS `.dmg` (Apple silicon or Intel) from [GitHub Releases](https://github.com/PocketCoder/cria/releases/latest). The app isn't notarised yet, so macOS blocks the first launch: open **System Settings → Privacy & Security** and choose **Open Anyway**. After that it updates itself.
 
-iOS: the native app is sideloaded with SideStore; each release also attaches its unsigned `.ipa`. To install and auto-update from SideStore, add `https://pocketcoder.github.io/cria/sidestore.json` as a source (full steps in [iOS Build instructions](iOS%20Build%20instructions.md)).
+iOS: the native app is sideloaded with SideStore; each release also attaches its unsigned `.ipa`. To install and auto-update from SideStore, add `https://pocketcoder.github.io/cria/sidestore.json` as a source.
 
 ## Stack
 
@@ -67,7 +67,7 @@ pnpm vite:build
 
 ### iOS
 
-The iOS app is the native Swift app in [`ios-native/`](ios-native/); build and install steps are in [iOS Build instructions](iOS%20Build%20instructions.md). The Tauri iOS build (`pnpm tauri ios …`) is deprecated: its code stays in the tree but is no longer built, checked in CI or released.
+The iOS app is the native Swift app in [`ios-native/`](ios-native/); build and test commands are in [`ios-native/README.md`](ios-native/README.md). The Tauri iOS build (`pnpm tauri ios …`) is deprecated: its code stays in the tree but is no longer built, checked in CI or released.
 
 ### Regenerating API types
 
