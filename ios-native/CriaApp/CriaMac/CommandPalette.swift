@@ -280,7 +280,8 @@ extension CommandPalette {
         }
         result += [
             command("photo", "List from photo", "photo") { actions.showingPhoto = true },
-            command("project", "New project", "folder.badge.plus", "⇧⌘N") { actions.creatingProject = true },            command("sidebar", "Toggle sidebar", "sidebar.left", "⌘E") { actions.toggleSidebar() },
+            command("project", "New project", "folder.badge.plus", "⇧⌘N") { actions.creatingProject = true },
+            command("sidebar", "Toggle sidebar", "sidebar.left", "⌘E") { actions.toggleSidebar() },
             command("settings", "Settings", "gearshape", "⌘,") { openSettings() },
             command("shortcuts", "Keyboard shortcuts", "keyboard", "?") { actions.showingShortcuts = true }
         ]
