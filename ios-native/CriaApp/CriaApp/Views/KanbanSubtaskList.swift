@@ -9,6 +9,8 @@ struct KanbanSubtaskList: View {
     @Binding var isExpanded: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(UndoCenter.self) private var undo: UndoCenter?
+    /// The Mac's detail column opens tasks through this; without it (iOS) the row pushes the task route.
+    @Environment(\.taskOpener) private var openTask
 
     private var doneCount: Int { subtasks.filter { $0.task.done }.count }
 
@@ -51,7 +53,7 @@ struct KanbanSubtaskList: View {
             PriorityCheck(priority: task.priority, isDone: task.done, size: 16) {
                 _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
-            NavigationLink(value: Route.task(task.localId)) {
+            openLink(task.localId) {
                 Text(task.title)
                     .font(Theme.caption)
                     .strikethrough(task.done)
@@ -67,5 +69,13 @@ struct KanbanSubtaskList: View {
             .accessibilityValue(task.done ? "Done" : "")
         }
         .padding(.leading, CGFloat(row.depth) * 16)
+    }
+
+    @ViewBuilder private func openLink<Content: View>(_ localId: String, @ViewBuilder _ content: () -> Content) -> some View {
+        if let openTask {
+            Button { openTask(localId) } label: { content() }
+        } else {
+            NavigationLink(value: Route.task(localId)) { content() }
+        }
     }
 }
