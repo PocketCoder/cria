@@ -38,6 +38,8 @@ struct MacCommands: Commands {
             Button("New Project") { actions?.creatingProject = true }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(actions == nil)
+            Button("New Saved Filter…") { actions?.sidebar.newFilter() }
+                .disabled(actions == nil)
             Divider()
             Button("Ramble to Tasks…") { actions?.showingRamble = true }
                 .disabled(actions == nil || !AIStatus.shared.isOfferable)
@@ -62,7 +64,11 @@ struct MacCommands: Commands {
             Button("Today") { actions?.go(.today) }.keyboardShortcut("1").disabled(actions == nil)
             Button("Upcoming") { actions?.go(.upcoming) }.keyboardShortcut("2").disabled(actions == nil)
             Button("Inbox") { actions?.go(.inbox) }.keyboardShortcut("3").disabled(actions == nil)
+            Button("Favourites") { actions?.go(.favorites) }.keyboardShortcut("4").disabled(actions == nil)
             Button("Search") { actions?.go(.search) }.keyboardShortcut("f").disabled(actions == nil)
+            Divider()
+            Button("Labels…") { actions?.sidebar.showingLabels = true }.disabled(actions == nil)
+            Button("Teams…") { actions?.sidebar.showingTeams = true }.disabled(actions == nil)
             Divider()
             Button("Command Palette…") { actions?.showingPalette = true }.keyboardShortcut("k").disabled(actions == nil)
             // Not in the design's menu, kept so a manual sync still has a home and a key.

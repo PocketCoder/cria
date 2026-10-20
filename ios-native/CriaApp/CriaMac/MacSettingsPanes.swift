@@ -42,6 +42,7 @@ struct MacGeneralPane: View {
             Picker("Start on", selection: $prefs.value.custom.homeView) {
                 ForEach(Self.startTabs, id: \.self) { Text($0.title).tag($0) }
             }
+            Toggle("Sync start view across devices", isOn: $prefs.value.custom.syncHomeView)
         }
         Section("Menu bar and Dock") {
             Toggle(isOn: $menuBar) {
@@ -108,12 +109,39 @@ struct MacCustomisePane: View {
         Section("Lists") {
             Toggle("Show completed tasks", isOn: $showDone)
             Toggle("Play a sound on completion", isOn: $prefs.value.playSoundWhenDone)
+            if prefs.value.playSoundWhenDone {
+                Picker("Task complete tone", selection: $prefs.value.custom.completionTone) {
+                    ForEach(CompletionTone.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                // Play the choice, so it can be heard before leaving.
+                .onChange(of: prefs.value.custom.completionTone) { _, tone in CompletionSound.play(tone) }
+            }
             Picker("Appearance", selection: $prefs.value.colorScheme) {
                 Text("Light").tag(ColorSchemePreference.light)
                 Text("Dark").tag(ColorSchemePreference.dark)
                 Text("Auto").tag(ColorSchemePreference.system)
             }
             .pickerStyle(.segmented)
+        }
+        Section("Projects") {
+            Toggle(isOn: $prefs.value.custom.kanbanSortByDue) {
+                MacSettingRow(
+                    title: "Sort board cards by due date",
+                    help: "Soonest first, undated last. Dragging then only moves a card between columns."
+                )
+            }
+            Toggle(isOn: $prefs.value.custom.syncProjectViews) {
+                MacSettingRow(
+                    title: "Sync project views",
+                    help: "Reopens each project on the view you last used on any device that has this on."
+                )
+            }
+        }
+        // The same screens as on iPhone: the shared quick add, task screen and date parser read them.
+        Section("Screens") {
+            NavigationLink("Quick Add") { QuickAddSettingsView(prefs: prefs) }
+            NavigationLink("Task layout") { TaskLayoutSettingsView(prefs: prefs) }
+            NavigationLink("Dates & tasks") { DatesAndTasksSettingsView(prefs: prefs) }
         }
     }
 }
@@ -134,6 +162,11 @@ struct MacNotificationsPane: View {
         Section("Summaries") {
             Toggle("Morning summary", isOn: $prefs.value.morningSummaryEnabled)
                 .disabled(!notificationsOn)
+        }
+        Section("Dock") {
+            Toggle(isOn: $prefs.value.appIconBadge) {
+                MacSettingRow(title: "Dock badge", help: "Counts open tasks that are overdue or due today.")
+            }
         }
         .task { await refreshStatus() }
     }

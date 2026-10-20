@@ -128,6 +128,22 @@ final class PlatformTests: XCTestCase {
         XCTAssertEqual(try outboxRows(store).count, queued)
     }
 
+    func testIntentEntriesFindOpenTasksAndProjects() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let milk = try store.createTask(TaskInput(title: "Buy milk", projectLocalId: project))
+        let bread = try store.createTask(TaskInput(title: "Buy bread", projectLocalId: project))
+        try store.updateTask(localId: bread.localId, patch: TaskPatch(done: true))
+        try store.createTask(TaskInput(title: "100% done_", projectLocalId: project))
+        XCTAssertEqual(try store.openTaskEntries(matching: "buy").map(\.localId), [milk.localId])
+        XCTAssertEqual(try store.openTaskEntries(matching: "").count, 2)
+        XCTAssertEqual(try store.openTaskEntries(matching: "%").map(\.title), ["100% done_"])
+        XCTAssertEqual(try store.taskEntries(localIds: [milk.localId, "missing"]).map(\.title), ["Buy milk"])
+        XCTAssertEqual(try store.projectEntries(matching: "").map(\.localId), [project])
+        XCTAssertEqual(try store.projectEntries(localIds: [project]).count, 1)
+        XCTAssertTrue(try store.projectEntries(matching: "zzz").isEmpty)
+    }
+
     func testAddLinkOpensQuickAdd() throws {
         let url = try XCTUnwrap(DeepLink.addURL)
         XCTAssertEqual(DeepLink(url: url), .add(title: nil))

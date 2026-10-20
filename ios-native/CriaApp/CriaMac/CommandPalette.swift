@@ -272,6 +272,7 @@ extension CommandPalette {
             result.append(PaletteItem(id: "go.teams", title: "Teams", detail: "Go to", symbol: "person.2") {
                 actions.sidebar.showingTeams = true
             })
+            result.append(command("filter", "New saved filter", "line.3.horizontal.decrease") { actions.sidebar.newFilter() })
         }
         result.append(command("task", "New task", "plus", "⌘N") { actions.newTask() })
         if AIStatus.shared.isOfferable {
@@ -279,8 +280,7 @@ extension CommandPalette {
         }
         result += [
             command("photo", "List from photo", "photo") { actions.showingPhoto = true },
-            command("project", "New project", "folder.badge.plus", "⇧⌘N") { actions.creatingProject = true },
-            command("sidebar", "Toggle sidebar", "sidebar.left", "⌘E") { actions.toggleSidebar() },
+            command("project", "New project", "folder.badge.plus", "⇧⌘N") { actions.creatingProject = true },            command("sidebar", "Toggle sidebar", "sidebar.left", "⌘E") { actions.toggleSidebar() },
             command("settings", "Settings", "gearshape", "⌘,") { openSettings() },
             command("shortcuts", "Keyboard shortcuts", "keyboard", "?") { actions.showingShortcuts = true }
         ]

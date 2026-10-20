@@ -156,6 +156,8 @@ struct ShellView: View {
         switch choice {
         case .goTo(let tab): jump(to: tab)
         case .project(let localId): navigation.state.open(.project(localId), on: .browse)
+        case .label(let localId): navigation.state.open(.label(localId), on: .browse)
+        case .savedFilter(let serverId): navigation.state.open(.savedFilter(serverId), on: .browse)
         case .task(let localId): navigation.state.push(.task(localId))
         case .newTask: addRequest = QuickAddRequest(title: "")
         }

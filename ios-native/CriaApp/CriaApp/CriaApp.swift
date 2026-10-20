@@ -107,6 +107,7 @@ struct RootView: View {
                 .task { await ReminderScheduler.run(store: services.store) }
                 .task { await SummaryScheduler.run(store: services.store) }
                 .task { await SyncSideEffects.run(services: services) }
+                .task { await AppIconBadge.run(store: services.store) }
             } else if let error = model.startupError {
                 Text(error).padding()
             } else {

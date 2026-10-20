@@ -179,6 +179,8 @@ struct ProjectListView: View {
                 isCustomised: display.isCustomised, isSelecting: selection.isActive,
                 onDisplay: { display.sheetPresented = true }, onSelect: { selection.start() }, onDone: { selection.stop() }
             )
+            // On the Mac rows drag straight away in a manual order (`.onMove`), with no edit mode to enter.
+            #if os(iOS)
             if isManual && openItems.count > 1 && !selection.isActive {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Options", systemImage: "ellipsis.circle") {
@@ -188,6 +190,7 @@ struct ProjectListView: View {
                     }
                 }
             }
+            #endif
         }
     }
 
