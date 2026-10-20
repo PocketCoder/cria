@@ -23,6 +23,8 @@ struct TaskMacMenuItems: View {
     let onCopyLink: @MainActor () -> Void
     let onDelete: @MainActor () -> Void
     let onFailure: (String) -> Void
+    /// Nil leaves Subscribe out (the row's context menu has no room for a network call's failure).
+    var onToggleSubscription: (@MainActor () -> Void)?
 
     var body: some View {
         Button(task.done ? "Mark as Not Done" : "Mark as Done", systemImage: "checkmark.circle", action: onToggleDone)
@@ -69,6 +71,12 @@ struct TaskMacMenuItems: View {
             .keyboardShortcut(".", modifiers: .command)
             .disabled(services.taskWebURL(task) == nil)
         Button("Duplicate", systemImage: "plus.square.on.square", action: onDuplicate)
+        if let onToggleSubscription {
+            Button(
+                task.isSubscribed ? "Unsubscribe" : "Subscribe", systemImage: task.isSubscribed ? "bell.slash" : "bell",
+                action: onToggleSubscription
+            )
+        }
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
             .keyboardShortcut(.delete, modifiers: [])

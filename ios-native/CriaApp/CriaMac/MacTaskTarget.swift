@@ -35,6 +35,9 @@ extension MacActions {
         case .copyLink:
             guard let url = services.taskWebURL(task) else { return false }
             return copy(url.absoluteString)
+        case .subscribe:
+            Task { try? await services.setTaskSubscribed(localId: id, subscribed: !task.isSubscribed) }
+            return true
         // The Due, Priority, Labels and Move pickers belong to the open task's detail.
         case .due, .priority, .labels, .move: return false
         }

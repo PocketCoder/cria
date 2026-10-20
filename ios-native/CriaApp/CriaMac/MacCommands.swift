@@ -83,6 +83,7 @@ struct MacCommands: Commands {
             Divider()
             Button("Add to Favourites") { actions?.task(.favourite) }
             Button("Copy Link") { actions?.task(.copyLink) }.keyboardShortcut(".")
+            Button("Subscribe or Unsubscribe") { actions?.task(.subscribe) }
             Button("Duplicate") { actions?.duplicateTarget() }
             Divider()
             // No key equivalent: ⌘⌫ there fired while editing the title or description. Plain ⌫ outside a text field

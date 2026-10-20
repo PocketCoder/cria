@@ -18,6 +18,8 @@ public struct TaskRecord: Equatable, Sendable {
     public internal(set) var hexColor: String?
     public internal(set) var position: Double?
     public internal(set) var isFavorite: Bool
+    /// Whether the user gets the server's notifications for this task. Set by the pull and by `setTaskSubscribed`.
+    public internal(set) var isSubscribed: Bool
     public internal(set) var repeatAfter: Int
     public internal(set) var repeatMode: Int
     public internal(set) var updatedAt: String
@@ -43,6 +45,7 @@ public struct TaskRecord: Equatable, Sendable {
         hexColor = row["hex_color"]
         position = row["position"]
         isFavorite = row["is_favorite"]
+        isSubscribed = row["is_subscribed"]
         repeatAfter = row["repeat_after"]
         repeatMode = row["repeat_mode"]
         updatedAt = row["updated_at"]
@@ -122,7 +125,7 @@ public struct TaskPatch: Sendable {
 extension CriaStore {
     static let taskColumns = """
         local_id, server_id, project_local_id, title, description, done, done_at, due_date, \
-        start_date, end_date, priority, percent_done, hex_color, position, is_favorite, \
+        start_date, end_date, priority, percent_done, hex_color, position, is_favorite, is_subscribed, \
         repeat_after, repeat_mode, updated_at, created_at, created_by_id, identifier
         """
 
@@ -323,13 +326,14 @@ extension CriaStore {
                 projectLocalId, payload.title, payload.description, payload.done ?? false, payload.doneAt,
                 payload.dueDate, payload.startDate, payload.endDate, payload.priority ?? 0,
                 payload.percentDone ?? 0, payload.hexColor, payload.position, payload.isFavorite ?? false,
+                payload.isSubscribed ?? false,
                 payload.repeatAfter ?? 0, payload.repeatMode ?? 0, payload.identifier, payload.updated ?? now,
                 payload.created, CriaStore.rememberCreator(payload.createdBy), now, rawJSON, localId
             ]
             try connection.execute(sql: """
                 UPDATE tasks SET project_local_id = ?, title = ?, description = ?, done = ?, done_at = ?,
                        due_date = ?, start_date = ?, end_date = ?, priority = ?, percent_done = ?, hex_color = ?,
-                       position = ?, is_favorite = ?, repeat_after = ?, repeat_mode = ?, identifier = ?,
+                       position = ?, is_favorite = ?, is_subscribed = ?, repeat_after = ?, repeat_mode = ?, identifier = ?,
                        updated_at = ?, created_at = ?, created_by_id = ?, synced_at = ?, last_synced = ?,
                        dirty = 0, deleted = 0
                  WHERE local_id = ?

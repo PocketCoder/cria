@@ -26,6 +26,7 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
     public let created: String?
     public let createdBy: CreatedBy?
     public let isFavorite: Bool?
+    public let isSubscribed: Bool?
     public let repeatAfter: Int?
     public let repeatMode: Int?
     public let identifier: String?
@@ -50,6 +51,7 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
         case position, updated, created
         case createdBy = "created_by"
         case isFavorite = "is_favorite"
+        case isSubscribed = "is_subscribed"
         case repeatAfter = "repeat_after"
         case repeatMode = "repeat_mode"
         case relatedTasks = "related_tasks"
@@ -74,6 +76,7 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
         created = normaliseDate(try container.decodeIfPresent(String.self, forKey: .created))
         createdBy = try container.decodeIfPresent(CreatedBy.self, forKey: .createdBy)
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite)
+        isSubscribed = try container.decodeIfPresent(Bool.self, forKey: .isSubscribed)
         repeatAfter = try container.decodeIfPresent(Int.self, forKey: .repeatAfter)
         repeatMode = try container.decodeIfPresent(Int.self, forKey: .repeatMode)
         identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
