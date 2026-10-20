@@ -135,6 +135,11 @@ struct MacNotificationsPane: View {
             Toggle("Morning summary", isOn: $prefs.value.morningSummaryEnabled)
                 .disabled(!notificationsOn)
         }
+        Section("Dock") {
+            Toggle(isOn: $prefs.value.appIconBadge) {
+                MacSettingRow(title: "Dock badge", help: "Counts open tasks that are overdue or due today.")
+            }
+        }
         .task { await refreshStatus() }
     }
 

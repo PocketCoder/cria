@@ -42,12 +42,21 @@ public struct LocalPreferences: Equatable, Sendable {
     public var photoLabel: String
     /// "Let Ramble choose projects and labels": the on-device model files and tags each task from the existing names.
     public var rambleChoosesTags: Bool
+    /// The app icon (iOS) or Dock icon (Mac) shows the number of open tasks overdue or due today. On by default on the
+    /// Mac, where it has always been; off on iOS, which has to ask for badge permission.
+    public var appIconBadge: Bool
     /// Order of the task screen's sections. Follows the account (frontend_settings.cria).
     public var taskDetailOrder: [TaskDetailSection]
     /// Navigation, quick add, swipes, dates and links (Settings > Customise).
     public var custom: Customisation
 
     public static let `default` = LocalPreferences()
+
+    #if os(macOS)
+    public static let defaultAppIconBadge = true
+    #else
+    public static let defaultAppIconBadge = false
+    #endif
 
     public init(
         colorScheme: ColorSchemePreference = .system,
@@ -62,6 +71,7 @@ public struct LocalPreferences: Equatable, Sendable {
         photoProjectId: String? = nil,
         photoLabel: String = "shopping",
         rambleChoosesTags: Bool = false,
+        appIconBadge: Bool = LocalPreferences.defaultAppIconBadge,
         taskDetailOrder: [TaskDetailSection] = TaskDetailSection.defaultOrder,
         custom: Customisation = .default
     ) {
@@ -77,6 +87,7 @@ public struct LocalPreferences: Equatable, Sendable {
         self.photoProjectId = photoProjectId
         self.photoLabel = photoLabel
         self.rambleChoosesTags = rambleChoosesTags
+        self.appIconBadge = appIconBadge
         self.taskDetailOrder = taskDetailOrder
         self.custom = custom
     }
@@ -107,6 +118,7 @@ public struct LocalPreferences: Equatable, Sendable {
         photoProjectId = text("photoProjectId").flatMap { $0.isEmpty ? nil : $0 }
         photoLabel = text("photoLabel") ?? base.photoLabel
         rambleChoosesTags = flag("rambleChoosesTags", base.rambleChoosesTags)
+        appIconBadge = flag("appIconBadge", base.appIconBadge)
         taskDetailOrder = text("taskDetailOrder").map(TaskDetailSection.order(from:)) ?? base.taskDetailOrder
         custom = Customisation(values: values)
     }
@@ -124,6 +136,7 @@ public struct LocalPreferences: Equatable, Sendable {
             "weeklyRoundupTime": .string(weeklyRoundupTime),
             "photoLabel": .string(photoLabel),
             "rambleChoosesTags": .bool(rambleChoosesTags),
+            "appIconBadge": .bool(appIconBadge),
             "taskDetailOrder": .string(TaskDetailSection.text(of: taskDetailOrder))
         ]
         if let photoProjectId { body["photoProjectId"] = .string(photoProjectId) }
