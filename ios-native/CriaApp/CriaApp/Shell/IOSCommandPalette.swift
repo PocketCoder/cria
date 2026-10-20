@@ -9,6 +9,8 @@ struct IOSCommandPalette: View {
     enum Choice {
         case goTo(AppTab)
         case project(String)
+        case label(String)
+        case savedFilter(Int)
         case task(String)
         case newTask
     }
@@ -20,6 +22,8 @@ struct IOSCommandPalette: View {
     @State private var query = ""
     @State private var chosen = 0
     @State private var projects: [ProjectRecord] = []
+    @State private var labels: [LabelRecord] = []
+    @State private var filters: [SavedFilterRecord] = []
     @State private var found: [TaskListItem] = []
     @FocusState private var focused: Bool
 
@@ -50,6 +54,8 @@ struct IOSCommandPalette: View {
         .task {
             focused = true
             projects = ProjectTree.visible((try? services.store.projects()) ?? [])
+            labels = (try? services.store.labels()) ?? []
+            filters = (try? services.store.savedFilters()) ?? []
         }
         .task(id: query) { await searchTasks() }
     }
@@ -94,6 +100,12 @@ struct IOSCommandPalette: View {
         }
         result.append(PaletteEntry(id: "cmd.task", title: "New task", group: .commands, detail: "⌘N", symbol: "plus"))
         result += projects.map { PaletteEntry(id: "p.\($0.localId)", title: $0.title, group: .projects, symbol: "folder") }
+        // Labels and saved filters only come up when searching, as on the Mac.
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return result }
+        result += labels.map { PaletteEntry(id: "l.\($0.localId)", title: $0.title, group: .labels, symbol: "tag") }
+        result += filters.map {
+            PaletteEntry(id: "f.\($0.serverId)", title: $0.title, group: .savedFilters, symbol: "line.3.horizontal.decrease")
+        }
         return result
     }
 
@@ -138,6 +150,8 @@ struct IOSCommandPalette: View {
         if id == "cmd.task" { return .newTask }
         if id.hasPrefix("go."), let tab = AppTab(rawValue: String(id.dropFirst(3))) { return .goTo(tab) }
         if id.hasPrefix("p.") { return .project(String(id.dropFirst(2))) }
+        if id.hasPrefix("l.") { return .label(String(id.dropFirst(2))) }
+        if id.hasPrefix("f."), let serverId = Int(id.dropFirst(2)) { return .savedFilter(serverId) }
         if id.hasPrefix("t.") { return .task(String(id.dropFirst(2))) }
         return nil
     }
