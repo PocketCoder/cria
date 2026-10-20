@@ -16,8 +16,8 @@ extension QuickAddSheet {
                 Button("List from photo", systemImage: "camera") { closeSheet(); onPhoto() }
             }
             Section("Type to set") {
-                Text("*label  +project  !1–5  tomorrow 5pm")
-                Text("remind day before at 9am")
+                if let hint = syntaxHint { Text(hint) }
+                if preferences.custom.detectDates { Text("remind day before at 9am") }
             }
         } label: {
             CriaChip(text: "•••", tint: Color(.mutedForeground))
@@ -43,5 +43,15 @@ extension QuickAddSheet {
         case .labels:
             Button("Labels", systemImage: "tag") { pickerSheet = .labels }
         }
+    }
+}
+
+extension QuickAddSheet {
+    /// "+project  *label  @person  !1–5  ·  tomorrow 5pm" with the prefixes of the user's Quick Add Magic mode
+    /// (Todoist mode reads "#project  @label  +person"). Nil while the magic is off.
+    var syntaxHint: String? {
+        guard let prefixes = mode.prefixes else { return nil }
+        let symbols = "\(prefixes.project)project  \(prefixes.label)label  \(prefixes.assignee)person  \(prefixes.priority)1–5"
+        return preferences.custom.detectDates ? symbols + "  ·  tomorrow 5pm" : symbols
     }
 }

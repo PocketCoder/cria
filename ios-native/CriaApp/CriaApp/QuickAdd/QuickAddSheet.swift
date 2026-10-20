@@ -56,7 +56,7 @@ struct QuickAddSheet: View {
     /// Every label title, for the Mac panel's Labels menu. Loaded off the body.
     @State var allLabelTitles: [String] = []
 
-    private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
+    var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     var parsed: QuickAddResult {
         parseQuickAddTask(
             line, mode: mode, detectDates: preferences.custom.detectDates, defaultDueTime: defaultDueTime,
@@ -137,6 +137,10 @@ struct QuickAddSheet: View {
                 .submitLabel(multiple ? .next : .done)
                 .onSubmit(returnPressed)
             #endif
+            // A reminder of the typed syntax, in the user's Quick Add Magic mode, until they start typing.
+            if line.isEmpty, let hint = syntaxHint {
+                Text(hint).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+            }
             if multiple && queue.isEmpty {
                 Text("Return adds it to the list; send adds them all.").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
             }
