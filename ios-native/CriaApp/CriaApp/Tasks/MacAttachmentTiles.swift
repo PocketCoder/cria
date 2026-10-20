@@ -10,6 +10,8 @@ struct MacAttachmentTiles: View {
     let taskLocalId: String
     let attachments: [AttachmentRecord]
     let state: TaskDetailPresentation
+    /// The server id of the attachment used as the task's cover image, if any.
+    var coverAttachmentId: Int?
 
     private var actions: AttachmentActions {
         AttachmentActions(services: services, taskLocalId: taskLocalId, state: state)
@@ -60,6 +62,12 @@ struct MacAttachmentTiles: View {
         .help(attachment.fileName)
         .accessibilityHint(attachment.pending ? "" : "Opens a preview")
         .contextMenu {
+            if actions.canBeCover(attachment) {
+                let isCover = actions.isCover(attachment, current: coverAttachmentId)
+                Button(isCover ? "Remove Cover" : "Set as Cover", systemImage: isCover ? "rectangle.slash" : "photo.on.rectangle") {
+                    actions.setCover(attachment, isCover: !isCover)
+                }
+            }
             Button("Delete Attachment", systemImage: "trash", role: .destructive) { state.deletingAttachment = attachment }
         }
     }
@@ -74,6 +82,7 @@ struct MacAttachmentTiles: View {
     private func detail(_ attachment: AttachmentRecord) -> String {
         if attachment.uploadFailed { return "Failed" }
         if attachment.pending { return "Queued" }
+        if actions.isCover(attachment, current: coverAttachmentId) { return "Cover" }
         guard let size = attachment.fileSize else { return "" }
         return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }

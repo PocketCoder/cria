@@ -47,6 +47,9 @@ struct KanbanCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if task.coverAttachmentServerId != nil {
+                openLink { KanbanCoverView(services: services, task: task, radius: Self.radius) }.buttonStyle(.plain)
+            }
             header
             if !subtasks.isEmpty {
                 KanbanSubtaskList(services: services, subtasks: subtasks, isExpanded: isExpanded)

@@ -174,6 +174,18 @@ public final class AppServices: Sendable {
         return response.data
     }
 
+    /// A small preview (the server's 200px `md` PNG) of an image attachment, for a task's cover image. Nil offline, on
+    /// an error, or for an empty answer. Cached for the session with the other server images.
+    public func coverImageData(taskServerId: Int, attachmentServerId: Int) async -> Data? {
+        let path = "/tasks/\(taskServerId)/attachments/\(attachmentServerId)"
+        let key = path + "?preview_size=md"
+        if let cached = await images.data(for: key) { return cached }
+        guard let response = try? await api.send(.get, path, query: ["preview_size": "md"]),
+              response.isSuccess, !response.data.isEmpty else { return nil }
+        await images.store(response.data, for: key)
+        return response.data
+    }
+
     /// The path under `/api/v1` or `/api/v2` when `url` is on the server at `base`, else nil (images elsewhere load on their own).
     static func apiPath(of url: URL, base: String) -> String? {
         guard let server = URL(string: base), url.host()?.lowercased() == server.host()?.lowercased(),

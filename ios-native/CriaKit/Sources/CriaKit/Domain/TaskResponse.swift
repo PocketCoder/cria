@@ -29,6 +29,8 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
     public let repeatAfter: Int?
     public let repeatMode: Int?
     public let identifier: String?
+    /// The attachment shown as the card's cover image; 0 or absent for none.
+    public let coverImageAttachmentId: Int?
     public let labels: [LabelResponse]?
     public let assignees: [AssigneeResponse]?
     public let attachments: [TaskAttachmentResponse]?
@@ -53,6 +55,7 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
         case repeatAfter = "repeat_after"
         case repeatMode = "repeat_mode"
         case relatedTasks = "related_tasks"
+        case coverImageAttachmentId = "cover_image_attachment_id"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -77,6 +80,7 @@ public struct TaskResponse: Decodable, Equatable, Sendable {
         repeatAfter = try container.decodeIfPresent(Int.self, forKey: .repeatAfter)
         repeatMode = try container.decodeIfPresent(Int.self, forKey: .repeatMode)
         identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
+        coverImageAttachmentId = (try? container.decodeIfPresent(Int.self, forKey: .coverImageAttachmentId)) ?? nil
         labels = try container.lossyArray(LabelResponse.self, forKey: .labels)
         assignees = try container.lossyArray(AssigneeResponse.self, forKey: .assignees)
         attachments = try container.lossyArray(TaskAttachmentResponse.self, forKey: .attachments)

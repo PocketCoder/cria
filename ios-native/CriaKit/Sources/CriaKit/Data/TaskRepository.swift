@@ -26,6 +26,14 @@ public struct TaskRecord: Equatable, Sendable {
     public internal(set) var createdById: Int?
     /// The server's readable identifier, such as "PROJ-42" (read-only; nil until the task has been pulled).
     public internal(set) var identifier: String?
+    /// The server id of the attachment used as the task's cover image (`cover_image_attachment_id`). 0 means none was
+    /// set; nil means the row has not been read from the server since covers were stored, so nothing is known.
+    public internal(set) var coverImageAttachmentId: Int?
+
+    /// The cover attachment's server id, or nil when the task has no cover.
+    public var coverAttachmentServerId: Int? {
+        coverImageAttachmentId.flatMap { $0 > 0 ? $0 : nil }
+    }
 
     init(row: Row) {
         localId = row["local_id"]
@@ -49,6 +57,7 @@ public struct TaskRecord: Equatable, Sendable {
         createdAt = row["created_at"]
         createdById = row["created_by_id"]
         identifier = row["identifier"]
+        coverImageAttachmentId = row["cover_image_id"]
     }
 }
 
@@ -108,6 +117,8 @@ public struct TaskPatch: Sendable {
     public var repeatMode: Int?
     /// Task colour as six hex digits (a leading `#` is dropped); an empty string clears it. The push sends it raw.
     public var hexColor: String?
+    /// Server id of the attachment to use as the cover image; 0 removes the cover.
+    public var coverImageAttachmentId: Int?
 
     public init(title: String? = nil, done: Bool? = nil, dueDate: String? = nil,
                 priority: Int? = nil, isFavorite: Bool? = nil) {
@@ -123,7 +134,7 @@ extension CriaStore {
     static let taskColumns = """
         local_id, server_id, project_local_id, title, description, done, done_at, due_date, \
         start_date, end_date, priority, percent_done, hex_color, position, is_favorite, \
-        repeat_after, repeat_mode, updated_at, created_at, created_by_id, identifier
+        repeat_after, repeat_mode, updated_at, created_at, created_by_id, identifier, cover_image_id
         """
 
     /// Same order as `listTasksForProject` in `src/db/tasks.ts`. Positions are local per view, so no server sort.
@@ -324,14 +335,15 @@ extension CriaStore {
                 payload.dueDate, payload.startDate, payload.endDate, payload.priority ?? 0,
                 payload.percentDone ?? 0, payload.hexColor, payload.position, payload.isFavorite ?? false,
                 payload.repeatAfter ?? 0, payload.repeatMode ?? 0, payload.identifier, payload.updated ?? now,
-                payload.created, CriaStore.rememberCreator(payload.createdBy), now, rawJSON, localId
+                payload.created, CriaStore.rememberCreator(payload.createdBy), payload.coverImageAttachmentId ?? 0,
+                now, rawJSON, localId
             ]
             try connection.execute(sql: """
                 UPDATE tasks SET project_local_id = ?, title = ?, description = ?, done = ?, done_at = ?,
                        due_date = ?, start_date = ?, end_date = ?, priority = ?, percent_done = ?, hex_color = ?,
                        position = ?, is_favorite = ?, repeat_after = ?, repeat_mode = ?, identifier = ?,
-                       updated_at = ?, created_at = ?, created_by_id = ?, synced_at = ?, last_synced = ?,
-                       dirty = 0, deleted = 0
+                       updated_at = ?, created_at = ?, created_by_id = ?, cover_image_id = ?, synced_at = ?,
+                       last_synced = ?, dirty = 0, deleted = 0
                  WHERE local_id = ?
                 """, arguments: StatementArguments(arguments))
             return localId

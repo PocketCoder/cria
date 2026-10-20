@@ -34,7 +34,8 @@ extension TaskDetailView {
             AssigneesSection(services: services, taskLocalId: taskLocalId, assignees: feeds.assignees.value, state: sheets)
         case .attachments:
             AttachmentsSection(
-                services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets
+                services: services, taskLocalId: taskLocalId, attachments: feeds.attachments.value, state: sheets,
+                coverAttachmentId: task.coverAttachmentServerId
             )
         case .comments:
             CommentsSection(services: services, task: task, comments: feeds.comments.value, state: sheets)
