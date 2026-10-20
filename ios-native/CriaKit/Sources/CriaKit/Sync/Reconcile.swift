@@ -10,15 +10,18 @@ extension Puller {
         let started = isoNow()
         let tasks = try await serverIds("/tasks")
         if !tasks.truncated { try store.removeTasksMissingOnServer(serverIds: tasks.ids, fetchedSince: started) }
-        let projects = try await serverIds("/projects")
+        // Archived included, or an archived project would look deleted and be removed here.
+        let projects = try await serverIds("/projects", query: ["is_archived": "true"])
         if !projects.truncated { try store.removeProjectsMissingOnServer(serverIds: projects.ids, fetchedSince: started) }
         store.bus.notify(.tasks)
         store.bus.notify(.projects)
     }
 
     /// `truncated` means the page cap was hit: the list is incomplete, so nothing may be deleted on its evidence.
-    private func serverIds(_ path: String) async throws -> (ids: Set<Int>, truncated: Bool) {
-        let raws = try await api.fetchAllPages(path)
+    private func serverIds(
+        _ path: String, query: [String: String] = [:]
+    ) async throws -> (ids: Set<Int>, truncated: Bool) {
+        let raws = try await api.fetchAllPages(path, query: query)
         let truncated = raws.count >= defaultPerPage * maxPages
         var ids = Set<Int>()
         for data in raws {

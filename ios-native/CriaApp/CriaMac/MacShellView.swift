@@ -11,6 +11,10 @@ struct MacShellView: View {
     @State private var actions = MacActions()
     @State private var navigation = NavigationModel()
     @State private var undoCenter = UndoCenter()
+    @State private var inbox = NotificationInbox()
+    @Environment(\.scenePhase) private var scenePhase
+    /// A share link has no account, so no notifications to poll.
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @State private var keys = KeySequencer()
     @State private var conflictPrompt = ConflictPrompt()
     @State private var menuChoices = TaskMenuChoices()
@@ -33,7 +37,7 @@ struct MacShellView: View {
                 }
                 .searchable(text: $actions.query, placement: .toolbar, prompt: "Search")
                 .searchFocused($searchFocused)
-                .toolbar { MacToolbar(actions: actions) }
+                .toolbar { MacToolbar(actions: actions, services: services) }
         }
         .onExitCommand { actions.openTaskId = nil }
         .onChange(of: actions.searchRequest) { searchFocused = true }
@@ -51,7 +55,12 @@ struct MacShellView: View {
         .environment(\.taskCloser, actions.closer)
         .environment(navigation)
         .environment(undoCenter)
+        .environment(inbox)
         .environment(menuChoices)
+        // Every 30 s while the app is active; the task restarts (and reads at once) when it comes back.
+        .task(id: scenePhase) {
+            if scenePhase == .active && !isLinkShare { await inbox.poll(services) }
+        }
         .task { await menuChoices.follow(services.store) }
         // File > Ramble to Tasks… is enabled once on-device AI is known to be available.
         .task { await AIStatus.shared.refresh() }

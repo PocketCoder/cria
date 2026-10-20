@@ -22,6 +22,15 @@ final class PullTests: XCTestCase {
         XCTAssertNotNil(try store.syncStamp(.projects))
     }
 
+    func testPullProjectsAsksForArchivedProjectsToo() async throws {
+        let (puller, store, server) = try makePuller()
+        server.json("GET /projects", #"[{"id": 1, "title": "Old", "is_archived": true}]"#)
+        try await puller.pullProjects()
+        let query = try XCTUnwrap(server.requests.first?.url?.query)
+        XCTAssertTrue(query.contains("is_archived=true"))
+        XCTAssertEqual(try store.projects().map(\.isArchived), [true])
+    }
+
     func testPullProjectsSkipsInvalidAndFavoritesPseudoProject() async throws {
         let (puller, store, server) = try makePuller()
         server.json("GET /projects", """

@@ -28,6 +28,7 @@ struct MacSidebar: View {
     @AppStorage("mac.sidebar.projects") private var showProjects = true
     @AppStorage("mac.sidebar.filters") private var showFilters = true
     @AppStorage("mac.sidebar.labels") private var showLabels = true
+    @State private var showingArchived = false
 
     private var sheets: MacSidebarActions { actions.sidebar }
 
@@ -82,6 +83,11 @@ struct MacSidebar: View {
             Section {
                 if showProjects {
                     MacProjectBranch(parent: nil, children: live.value.children, services: services, sheets: sheets)
+                    Button { showingArchived = true } label: {
+                        Label("Archived projects", systemImage: "archivebox")
+                    }
+                    .buttonStyle(.plain)
+                    .macSidebarRow(selected: false)
                 }
             } header: {
                 MacSidebarHeader(title: "Projects", isExpanded: $showProjects, addHelp: "New project") {
@@ -108,6 +114,18 @@ struct MacSidebar: View {
         .task { await live.run() }
         .task { await counts.run() }
         .safeAreaInset(edge: .bottom, spacing: 0) { MacSidebarFooter(store: services.store) }
+        .sheet(isPresented: $showingArchived) {
+            NavigationStack {
+                ArchivedProjectsView(services: services) { project in
+                    actions.selection = .project(project.localId)
+                    showingArchived = false
+                }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showingArchived = false } }
+                }
+            }
+            .macSheetFrame()
+        }
     }
 
     @ViewBuilder private var filterRows: some View {

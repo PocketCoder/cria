@@ -45,6 +45,53 @@ final class ProjectTreeTests: XCTestCase {
         XCTAssertEqual(ProjectTree.visible(try store.projects(), includeArchived: true).map(\.title), ["Real", "Old"])
     }
 
+    func testArchivedListsOnlyArchivedRealProjectsByTitle() throws {
+        let store = try makeStore()
+        try seed(store, [(1, "Live", nil), (2, "Zed", nil), (3, "Alpha", nil), (-1, "Favorites", nil)])
+        for title in ["Zed", "Alpha"] {
+            let project = try XCTUnwrap(try store.projects().first { $0.title == title })
+            try store.setProjectArchived(localId: project.localId, archived: true)
+        }
+        XCTAssertEqual(ProjectTree.archived(try store.projects()).map(\.title), ["Alpha", "Zed"])
+        let zed = try XCTUnwrap(try store.projects().first { $0.title == "Zed" })
+        try store.setProjectArchived(localId: zed.localId, archived: false)
+        XCTAssertEqual(ProjectTree.archived(try store.projects()).map(\.title), ["Alpha"])
+    }
+
+    func testUnarchivingUnderArchivedParentIsRefused() throws {
+        let store = try makeStore()
+        try seed(store, [(1, "Parent", nil), (2, "Child", 1)])
+        for title in ["Child", "Parent"] {
+            let project = try XCTUnwrap(try store.projects().first { $0.title == title })
+            try store.setProjectArchived(localId: project.localId, archived: true)
+        }
+        let child = try XCTUnwrap(try store.projects().first { $0.title == "Child" })
+        XCTAssertThrowsError(try store.setProjectArchived(localId: child.localId, archived: false)) {
+            XCTAssertEqual($0 as? ProjectValidationError, .parentArchived)
+        }
+    }
+
+    func testDragReordersAmongSiblingsOnly() throws {
+        let store = try makeStore()
+        try seed(store, [(1, "A", nil), (2, "A1", 1), (3, "A2", 1), (4, "B", nil), (5, "C", nil)])
+        let rows = ProjectTree.rows(try store.projects())
+        XCTAssertEqual(rows.map(\.project.title), ["A", "A1", "A2", "B", "C"])
+        let titles: ([String]) -> [String] = { ids in ids.compactMap { id in rows.first { $0.project.localId == id }?.project.title } }
+        // C dropped before A: first among the roots.
+        let toTop = try XCTUnwrap(ProjectTree.reorderedSiblings(in: rows, from: 4, to: 0))
+        XCTAssertEqual(titles(toTop.order), ["C", "A", "B"])
+        XCTAssertEqual(titles([toTop.moved]), ["C"])
+        // A (with its children showing) dropped at the end.
+        let toEnd = try XCTUnwrap(ProjectTree.reorderedSiblings(in: rows, from: 0, to: 5))
+        XCTAssertEqual(titles(toEnd.order), ["B", "C", "A"])
+        // A2 dropped before A1: only its own siblings change.
+        let swap = try XCTUnwrap(ProjectTree.reorderedSiblings(in: rows, from: 2, to: 1))
+        XCTAssertEqual(titles(swap.order), ["A2", "A1"])
+        // Dropping where it already is changes nothing.
+        XCTAssertNil(ProjectTree.reorderedSiblings(in: rows, from: 3, to: 3))
+        XCTAssertNil(ProjectTree.reorderedSiblings(in: rows, from: 3, to: 4))
+    }
+
     func testDescendantIds() throws {
         let store = try makeStore()
         try seed(store, [(1, "A", nil), (2, "B", 1), (3, "C", 2), (4, "D", nil)])

@@ -5,7 +5,9 @@ import SwiftUI
 /// The editor with its formatting bar (the text view's accessory) and the sheets it opens (mention picker, link prompt, photo picker).
 struct EditorHost: View {
     let services: AppServices
-    let taskLocalId: String
+    /// The task whose attachments pasted or picked images join. Nil for text that belongs to no task (a project's
+    /// description): the Image button then does nothing.
+    let taskLocalId: String?
     let initialHTML: String
     let controller: EditorController
     /// Inline editor only: see `RichTextEditor.inlineHeight` and `onHeightChange`.
@@ -94,6 +96,7 @@ struct EditorHost: View {
             showLink = true
         }
         barActions.onPhoto = {
+            guard taskLocalId != nil else { return }
             controller.holdFocus()
             showPhotoPicker = true
         }
@@ -143,7 +146,8 @@ struct EditorHost: View {
 
     /// Queues the bytes as an attachment and puts the image in the text as `cria://pending/{id}` until it uploads.
     private func insertImageData(_ data: Data, name: String, mime: String) async {
-        guard let localId = try? services.attachFile(taskLocalId: taskLocalId, fileName: name, mime: mime, data: data) else { return }
+        guard let taskLocalId,
+              let localId = try? services.attachFile(taskLocalId: taskLocalId, fileName: name, mime: mime, data: data) else { return }
         controller.insertImage(RichImage(src: "cria://pending/\(localId)", alt: name))
     }
 }

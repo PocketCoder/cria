@@ -144,6 +144,13 @@ extension CriaStore {
         }
     }
 
+    /// User mutation: archives or unarchives a project through `updateProject` (outbox, change bus). Unarchiving
+    /// under an archived parent throws `ProjectValidationError.parentArchived`.
+    @discardableResult
+    public func setProjectArchived(localId: String, archived: Bool) throws -> ProjectRecord {
+        try updateProject(localId: localId, patch: ProjectPatch(isArchived: archived))
+    }
+
     /// User mutation: soft-deletes the project and its tasks locally. The server's DELETE takes the subtree with it.
     public func deleteProject(localId: String) throws {
         try userWrite(announcing: [.projects, .tasks, .outbox]) { connection in

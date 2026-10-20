@@ -30,7 +30,10 @@ struct ProjectEditorSheet: View {
     let projects: [ProjectRecord]
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
-    @State private var details = ""
+    /// The description is HTML, so it is edited in the rich text editor (as a task's is), not as a text field.
+    @State private var descriptionController = EditorController()
+    /// What the editor's text needs at the current width.
+    @State private var descriptionHeight: CGFloat = 0
     @State private var colour: String?
     /// Counts swatch taps, for the selection haptic.
     @State private var swatchPicks = 0
@@ -61,6 +64,16 @@ struct ProjectEditorSheet: View {
         return ProjectIdentifier.normalised(identifier) != ProjectIdentifier.normalised(editing.identifier)
     }
 
+    private var initialDescription: String { editing?.description ?? "" }
+
+    /// The edited description: unchanged text stays as stored (no rewrite of the HTML), emptied text clears it. With
+    /// no document (the text view is gone), nothing changes.
+    private func descriptionChange() -> FieldChange<String> {
+        guard let document = descriptionController.currentDocument() else { return .keep }
+        guard document != RichDocument(html: initialDescription) else { return .keep }
+        return .set(document.blocks.isEmpty ? nil : document.html())
+    }
+
     private var navigationTitle: String {
         if editing != nil { return "Edit project" }
         if case .createChild = target { return "New sub-project" }
@@ -74,7 +87,13 @@ struct ProjectEditorSheet: View {
             Form {
                 Section {
                     CriaTextField("Title", text: $title)
-                    CriaTextField("Description", text: $details, axis: .vertical)
+                }
+                Section("Description") {
+                    EditorHost(
+                        services: services, taskLocalId: nil, initialHTML: initialDescription,
+                        controller: descriptionController, inlineHeight: max(descriptionHeight, 120),
+                        onHeightChange: { descriptionHeight = $0 }
+                    )
                 }
                 identifierSection
                 Section("Colour") {
@@ -164,7 +183,6 @@ struct ProjectEditorSheet: View {
         if case .createChild(let preset) = target { parent = preset }
         guard let editing else { return }
         title = editing.title
-        details = editing.description ?? ""
         colour = editing.hexColor
         identifier = editing.identifier ?? ""
         parent = editing.parentLocalId
@@ -173,18 +191,20 @@ struct ProjectEditorSheet: View {
 
     private func save() {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let note = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let note = descriptionChange()
         do {
             if let editing {
                 var patch = ProjectPatch(title: name, isArchived: isArchived)
-                patch.description = .set(note.isEmpty ? nil : note)
+                patch.description = note
                 patch.hexColor = .set(colour)
                 patch.parentLocalId = .set(parent)
                 if identifierChanged { patch.identifier = .set(identifier) }
                 try services.store.updateProject(localId: editing.localId, patch: patch)
             } else {
+                var newDescription: String?
+                if case .set(let html) = note { newDescription = html }
                 try services.store.createProject(ProjectInput(
-                    title: name, description: note.isEmpty ? nil : note, parentLocalId: parent, hexColor: colour,
+                    title: name, description: newDescription, parentLocalId: parent, hexColor: colour,
                     identifier: identifier
                 ))
             }
