@@ -82,6 +82,7 @@ final class SettingsModel {
         UserDefaults.standard.set(general.quickAddMagicMode, forKey: QuickAddStorage.key)
         UserDefaults.standard.set(general.defaultView, forKey: GeneralSettings.defaultViewDefaultsKey)
         UserDefaults.standard.set(general.weekStart, forKey: GeneralSettings.weekStartDefaultsKey)
+        general.quickAddDefaults.store()
         // Only a zone the server really holds; an unset one keeps the device's.
         if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
             UserDefaults.standard.set(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
@@ -139,6 +140,17 @@ final class SettingsModel {
         UserDefaults.standard.set(day, forKey: GeneralSettings.weekStartDefaultsKey)
         // The weekly round-up lands on the week start day.
         NotificationCenter.default.post(name: .criaPreferencesChanged, object: nil)
+    }
+
+    /// The default due time and quick-add reminders are Vikunja-web's own `frontend_settings` keys, so both apps share them.
+    func setDefaultDueTime(_ time: DefaultDueTime?) async {
+        let saved = await save(QuickAddDefaults.changeDueTime(time)) { $0.quickAddDefaults.dueTime = time }
+        if saved { general.quickAddDefaults.store() }
+    }
+
+    func setDefaultReminders(_ periods: [Int]) async {
+        let saved = await save(QuickAddDefaults.changeReminders(periods)) { $0.quickAddDefaults.reminderPeriods = periods }
+        if saved { general.quickAddDefaults.store() }
     }
 
     func setLanguage(_ code: String) async {

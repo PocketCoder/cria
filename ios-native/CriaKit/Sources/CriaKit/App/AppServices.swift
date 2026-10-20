@@ -67,6 +67,9 @@ public final class AppServices: Sendable {
         if !(user["settings"]?["timezone"]?.stringValue ?? "").isEmpty {
             UserDefaults.standard.setIfChanged(general.timezone, forKey: GeneralSettings.timezoneDefaultsKey)
         }
+        // New-task defaults shared with Vikunja-web: read by quick add, and the old Mac-only reminder moves up once.
+        general.quickAddDefaults.store()
+        await migrateLegacyDefaultReminder(frontend: FrontendSettings.frontendSettings(of: user["settings"]?.objectValue))
         // Colour scheme, date and time format and the completion sound follow the account, as on desktop. Applied once
         // per launch, so a later read cannot revert a change made here before it was pushed.
         if case .object(let frontend)? = user["settings"]?["frontend_settings"],
@@ -83,6 +86,20 @@ public final class AppServices: Sendable {
                 try? self.store.applySyncedProjectViews(ProjectViewSync.entries(in: cria))
             }
         }
+    }
+
+    /// The Mac's device-local default reminder becomes the account's `quick_add_default_reminders`, once, when the
+    /// server holds no list. A failed save (offline) keeps the local value for the next launch.
+    func migrateLegacyDefaultReminder(frontend: JSONBody) async {
+        let defaults = UserDefaults.standard
+        guard let legacy = defaults.object(forKey: QuickAddDefaults.legacyMacReminderKey) as? Int else { return }
+        if let periods = QuickAddDefaults.migratedReminders(frontend: frontend, legacySecondsBefore: legacy) {
+            guard let settings, (try? await settings.save(QuickAddDefaults.changeReminders(periods))) != nil else { return }
+            var next = QuickAddDefaults(frontend: frontend)
+            next.reminderPeriods = periods
+            next.store()
+        }
+        defaults.removeObject(forKey: QuickAddDefaults.legacyMacReminderKey)
     }
 
     /// Records the view just chosen in a project for the account's other devices. Only when this device takes part, and
@@ -154,6 +171,18 @@ public final class AppServices: Sendable {
         if let cached = await images.data(for: path) { return cached }
         guard let response = try? await api.send(.get, path), response.isSuccess, !response.data.isEmpty else { return nil }
         await images.store(response.data, for: path)
+        return response.data
+    }
+
+    /// A small preview (the server's 200px `md` PNG) of an image attachment, for a task's cover image. Nil offline, on
+    /// an error, or for an empty answer. Cached for the session with the other server images.
+    public func coverImageData(taskServerId: Int, attachmentServerId: Int) async -> Data? {
+        let path = "/tasks/\(taskServerId)/attachments/\(attachmentServerId)"
+        let key = path + "?preview_size=md"
+        if let cached = await images.data(for: key) { return cached }
+        guard let response = try? await api.send(.get, path, query: ["preview_size": "md"]),
+              response.isSuccess, !response.data.isEmpty else { return nil }
+        await images.store(response.data, for: key)
         return response.data
     }
 

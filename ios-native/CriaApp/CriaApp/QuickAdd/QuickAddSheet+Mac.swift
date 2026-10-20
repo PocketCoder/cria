@@ -38,11 +38,6 @@ extension QuickAddSheet {
         .focusEffectDisabled()
         .onExitCommand { closeSheet() }
         .task { allLabelTitles = ((try? services.store.labels()) ?? []).map(\.title) }
-        // Settings > Notifications > Default reminder: a task that gains a due date gets it, unless one is set.
-        .onChange(of: dueISO) { old, new in
-            guard old.isEmpty, !new.isEmpty, reminders.isEmpty, let reminder = MacDefaultReminder.current else { return }
-            reminders = [reminder]
-        }
     }
 
     /// The single-line field, with each recognised token's span tinted at 14% behind the typed text. The tint is a

@@ -55,13 +55,15 @@ public func quickAddNeedsQuoting(_ name: String) -> Bool {
 /// Ported from `src/lib/quickAddParser.ts`; see that file for the token rules. Input wrapped in a matching pair of
 /// quotes is a literal title in every mode. A title left empty by the magic stays empty here; use
 /// `parseQuickAddTask` for the line a task is created from. With `detectDates` off (Settings > Customise) dates stay
-/// in the title.
+/// in the title. A date typed without a time takes `defaultDueTime` (Vikunja-web's `default_due_time`, see
+/// `QuickAddDefaults`); a phrase that names a time keeps it.
 public func parseQuickAdd(
     _ input: String,
     now: Date = Date(),
     mode: QuickAddMagicMode = .default,
     calendar: Calendar = .cria,
-    detectDates: Bool = true
+    detectDates: Bool = true,
+    defaultDueTime: DefaultDueTime? = nil
 ) -> QuickAddResult {
     if let literal = unquoteLiteral(input) { return plainTitle(input, title: literal) }
     guard let prefixes = mode.prefixes else { return plainTitle(input) }
@@ -73,7 +75,8 @@ public func parseQuickAdd(
     if let pending = openQuoteToken(raw, prefixes: prefixes), !overlaps(pending, claimed) { claimed.append(pending) }
     let claimedRanges = claimed.map { $0.start..<$0.end }
     if detectDates, let date = firstQuickAddDate(in: input, avoiding: claimedRanges, now: now, calendar: calendar) {
-        claimed.append(QuickAddToken(kind: .date(iso: date.iso), start: date.start, end: date.end, text: date.text))
+        let iso = defaultDueTime?.applying(to: date.iso, calendar: calendar) ?? date.iso
+        claimed.append(QuickAddToken(kind: .date(iso: iso), start: date.start, end: date.end, text: date.text))
     }
     claimed.sort { $0.start < $1.start }
     return assemble(raw, claimed: claimed)
@@ -86,9 +89,12 @@ public func parseQuickAddTask(
     now: Date = Date(),
     mode: QuickAddMagicMode = .default,
     calendar: Calendar = .cria,
-    detectDates: Bool = true
+    detectDates: Bool = true,
+    defaultDueTime: DefaultDueTime? = nil
 ) -> QuickAddResult {
-    let parsed = parseQuickAdd(input, now: now, mode: mode, calendar: calendar, detectDates: detectDates)
+    let parsed = parseQuickAdd(
+        input, now: now, mode: mode, calendar: calendar, detectDates: detectDates, defaultDueTime: defaultDueTime
+    )
     let blank = input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     return parsed.title.isEmpty && !blank ? plainTitle(input) : parsed
 }

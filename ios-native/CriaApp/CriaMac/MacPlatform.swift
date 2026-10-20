@@ -11,12 +11,10 @@ enum MacPrefs {
     static let hideDock = "cria.mac.hideDockIcon"
     /// Settings > Customise > Show favourite projects (read by `MacSidebar`).
     static let showFavourites = "cria.mac.showFavouriteProjects"
-    /// Settings > Notifications > Default reminder (`MacDefaultReminder`, read by Mac quick add).
-    static let defaultReminder = "cria.mac.defaultReminder"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
-            menuBar: true, closeToMenuBar: true, hideDock: false, showFavourites: true, defaultReminder: -1
+            menuBar: true, closeToMenuBar: true, hideDock: false, showFavourites: true
         ])
     }
 }
