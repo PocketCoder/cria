@@ -18,6 +18,14 @@ public enum ProjectTree {
         }
     }
 
+    /// Archived projects (children of an archived parent included, as the server flags the whole subtree), by title.
+    /// What "Archived projects" lists; the tree itself never shows them.
+    public static func archived(_ projects: [ProjectRecord]) -> [ProjectRecord] {
+        visible(projects, includeArchived: true)
+            .filter(\.isArchived)
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+
     /// Children grouped by effective parent (nil = roots), built once so the tree walk is linear. A project whose
     /// parent is not in the list counts as a root, so nothing is hidden. Order follows the input.
     public static func childIndex(_ projects: [ProjectRecord]) -> [String?: [ProjectRecord]] {

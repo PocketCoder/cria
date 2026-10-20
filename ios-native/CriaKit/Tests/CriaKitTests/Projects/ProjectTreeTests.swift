@@ -45,6 +45,32 @@ final class ProjectTreeTests: XCTestCase {
         XCTAssertEqual(ProjectTree.visible(try store.projects(), includeArchived: true).map(\.title), ["Real", "Old"])
     }
 
+    func testArchivedListsOnlyArchivedRealProjectsByTitle() throws {
+        let store = try makeStore()
+        try seed(store, [(1, "Live", nil), (2, "Zed", nil), (3, "Alpha", nil), (-1, "Favorites", nil)])
+        for title in ["Zed", "Alpha"] {
+            let project = try XCTUnwrap(try store.projects().first { $0.title == title })
+            try store.setProjectArchived(localId: project.localId, archived: true)
+        }
+        XCTAssertEqual(ProjectTree.archived(try store.projects()).map(\.title), ["Alpha", "Zed"])
+        let zed = try XCTUnwrap(try store.projects().first { $0.title == "Zed" })
+        try store.setProjectArchived(localId: zed.localId, archived: false)
+        XCTAssertEqual(ProjectTree.archived(try store.projects()).map(\.title), ["Alpha"])
+    }
+
+    func testUnarchivingUnderArchivedParentIsRefused() throws {
+        let store = try makeStore()
+        try seed(store, [(1, "Parent", nil), (2, "Child", 1)])
+        for title in ["Child", "Parent"] {
+            let project = try XCTUnwrap(try store.projects().first { $0.title == title })
+            try store.setProjectArchived(localId: project.localId, archived: true)
+        }
+        let child = try XCTUnwrap(try store.projects().first { $0.title == "Child" })
+        XCTAssertThrowsError(try store.setProjectArchived(localId: child.localId, archived: false)) {
+            XCTAssertEqual($0 as? ProjectValidationError, .parentArchived)
+        }
+    }
+
     func testDescendantIds() throws {
         let store = try makeStore()
         try seed(store, [(1, "A", nil), (2, "B", 1), (3, "C", 2), (4, "D", nil)])

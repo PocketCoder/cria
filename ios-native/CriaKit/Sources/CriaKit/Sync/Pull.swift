@@ -20,7 +20,8 @@ public final class Puller: Sendable {
     @discardableResult
     public func pullProjects() async throws -> Int {
         try await flights.run("pullProjects") { [self] in
-            let raws = try await api.fetchAllPages("/projects")
+            // Archived projects are left out by default; they are listed under Archived projects, so ask for them.
+            let raws = try await api.fetchAllPages("/projects", query: ["is_archived": "true"])
             var collected: [(payload: ProjectResponse, raw: String)] = []
             for data in raws {
                 guard let payload = try? JSONDecoder().decode(ProjectResponse.self, from: data) else { continue }

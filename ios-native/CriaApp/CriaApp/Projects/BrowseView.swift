@@ -213,6 +213,11 @@ extension BrowseView {
                     .tint(Color(.marigold500))
                 }
             }
+            NavigationLink {
+                ArchivedProjectsView(services: services)
+            } label: {
+                Label { Text("Archived projects") } icon: { Image(systemName: "archivebox").foregroundStyle(Color(.mutedForeground)) }
+            }
         }
     }
 
