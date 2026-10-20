@@ -37,6 +37,8 @@ struct KanbanBoardView: View {
     @State private var expandedCards: Set<String> = []
     /// The board's filter, kept per view on this device (see `BoardFilter`).
     @AppStorage private var filterText: String
+    /// Columns folded into strips, kept per view on this device (see `KanbanCollapse`).
+    @AppStorage private var collapsedText: String
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.preferences) private var preferences
 
@@ -44,6 +46,7 @@ struct KanbanBoardView: View {
         self.services = services
         self.view = view
         _filterText = AppStorage(wrappedValue: "", BoardFilter.storageKey(viewLocalId: view.localId))
+        _collapsedText = AppStorage(wrappedValue: "", KanbanCollapse.storageKey(viewLocalId: view.localId))
         let store = services.store
         let viewId = view.localId
         let projectId = view.projectLocalId
@@ -66,6 +69,13 @@ struct KanbanBoardView: View {
 
     private var columns: [KanbanColumn] { live.value.columns }
     private var readOnly: Bool { Kanban.isFilterMode(view) }
+    private var collapsedIds: Set<String> { KanbanCollapse.decode(collapsedText) }
+
+    private func toggleCollapsed(_ bucketLocalId: String) {
+        withAnimation(.snappy(duration: 0.25)) {
+            collapsedText = KanbanCollapse.toggled(collapsedText, bucketLocalId: bucketLocalId)
+        }
+    }
     private var filter: BoardFilter { BoardFilter.from(stored: filterText) }
 
     /// Which cards each column draws and which subtasks ride inside them. Drops, limits and "Move to" still work on
@@ -119,6 +129,8 @@ struct KanbanBoardView: View {
                         subtaskInfo: live.value.subtaskInfo,
                         readOnly: readOnly,
                         compact: collapsesColumns && (sortByDue || hoverColumn != column.bucket.localId),
+                        collapsed: collapsedIds.contains(column.bucket.localId),
+                        onToggleCollapse: { toggleCollapsed(column.bucket.localId) },
                         onDragStart: { beginDrag(from: column.bucket.localId) },
                         onOver: { columnOver(column.bucket.localId, $0) },
                         onDragEnd: { endDrag() },
@@ -130,7 +142,9 @@ struct KanbanBoardView: View {
                         onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: columns.count > 1) },
                         onSetRole: { role in setRole(role, of: column.bucket) }
                     )
-                    .containerRelativeFrame(.horizontal) { length, _ in width(length) }
+                    .containerRelativeFrame(.horizontal) { length, _ in
+                        collapsedIds.contains(column.bucket.localId) ? KanbanCollapsedStrip.width : width(length)
+                    }
                 }
                 if !readOnly && !collapsesColumns { addBucketButton }
             }
