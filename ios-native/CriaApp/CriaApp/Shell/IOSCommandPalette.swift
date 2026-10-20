@@ -7,7 +7,7 @@ import SwiftUI
 struct IOSCommandPalette: View {
     /// What choosing a row asks the shell to do.
     enum Choice {
-        case go(AppTab)
+        case goTo(AppTab)
         case project(String)
         case task(String)
         case newTask
@@ -88,7 +88,9 @@ struct IOSCommandPalette: View {
 
     private var places: [PaletteEntry] {
         var result = Self.tabs.map { item in
-            PaletteEntry(id: "go.\(item.tab.rawValue)", title: item.tab.title, group: .goTo, detail: item.key ?? "", symbol: item.tab.symbol)
+            PaletteEntry(
+                id: "go.\(item.tab.rawValue)", title: item.tab.title, group: .goTo, detail: item.key ?? "", symbol: item.tab.symbol
+            )
         }
         result.append(PaletteEntry(id: "cmd.task", title: "New task", group: .commands, detail: "⌘N", symbol: "plus"))
         result += projects.map { PaletteEntry(id: "p.\($0.localId)", title: $0.title, group: .projects, symbol: "folder") }
@@ -134,7 +136,7 @@ struct IOSCommandPalette: View {
     private func choice(for entry: PaletteEntry) -> Choice? {
         let id = entry.id
         if id == "cmd.task" { return .newTask }
-        if id.hasPrefix("go."), let tab = AppTab(rawValue: String(id.dropFirst(3))) { return .go(tab) }
+        if id.hasPrefix("go."), let tab = AppTab(rawValue: String(id.dropFirst(3))) { return .goTo(tab) }
         if id.hasPrefix("p.") { return .project(String(id.dropFirst(2))) }
         if id.hasPrefix("t.") { return .task(String(id.dropFirst(2))) }
         return nil

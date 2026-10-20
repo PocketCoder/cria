@@ -42,8 +42,8 @@ struct QuickAddDefaultsRows: View {
     private var dueTimeOn: Binding<Bool> {
         Binding(
             get: { defaults.dueTime != nil },
-            set: { on in
-                let time = on ? (defaults.dueTime ?? DefaultDueTime(hour: 9, minute: 0)) : nil
+            set: { enabled in
+                let time = enabled ? (defaults.dueTime ?? DefaultDueTime(hour: 9, minute: 0)) : nil
                 Task { await model.setDefaultDueTime(time) }
             }
         )
@@ -81,9 +81,9 @@ struct QuickAddDefaultsRows: View {
     private func reminderBinding(_ period: Int) -> Binding<Bool> {
         Binding(
             get: { defaults.reminderPeriods.contains(period) },
-            set: { on in
+            set: { enabled in
                 var held = Set(defaults.reminderPeriods)
-                if on { held.insert(period) } else { held.remove(period) }
+                if enabled { held.insert(period) } else { held.remove(period) }
                 let next = QuickAddDefaults.options(including: Array(held)).filter { held.contains($0) }
                 Task { await model.setDefaultReminders(next) }
             }

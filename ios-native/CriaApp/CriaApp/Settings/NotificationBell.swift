@@ -37,6 +37,10 @@ struct NotificationBell: View {
 
     private var unread: Int { inbox?.unread ?? 0 }
 
+    private func refreshInbox() {
+        Task { await inbox?.refresh(services) }
+    }
+
     var body: some View {
         if !isLinkShare {
             Button { showing = true } label: {
@@ -45,7 +49,7 @@ struct NotificationBell: View {
             }
             .help("Notifications")
             .accessibilityLabel(unread > 0 ? "Notifications, \(unread) unread" : "Notifications")
-            .sheet(isPresented: $showing, onDismiss: { Task { await inbox?.refresh(services) } }) {
+            .sheet(isPresented: $showing, onDismiss: refreshInbox) {
                 NavigationStack {
                     NotificationsView(services: services, onClose: { showing = false })
                         .toolbar {

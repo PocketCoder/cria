@@ -50,7 +50,9 @@ struct ProjectSharingSheet: View {
             .task { await load() }
             .sheet(isPresented: $creatingLink) {
                 NewLinkShareSheet { permission, name, password in
-                    act { try await services.api.createLinkShare(projectId: projectId, permission: permission, name: name, password: password) }
+                    act {
+                        try await services.api.createLinkShare(projectId: projectId, permission: permission, name: name, password: password)
+                    }
                 }
             }
             .confirmationDialog(

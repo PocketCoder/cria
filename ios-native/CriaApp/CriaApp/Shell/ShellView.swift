@@ -154,7 +154,7 @@ struct ShellView: View {
     /// What a command palette row asked for.
     private func choose(_ choice: IOSCommandPalette.Choice) {
         switch choice {
-        case .go(let tab): jump(to: tab)
+        case .goTo(let tab): jump(to: tab)
         case .project(let localId): navigation.state.open(.project(localId), on: .browse)
         case .task(let localId): navigation.state.push(.task(localId))
         case .newTask: addRequest = QuickAddRequest(title: "")
