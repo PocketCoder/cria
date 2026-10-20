@@ -30,21 +30,51 @@ public struct TaskUndoStep: Equatable, Sendable {
         }
     }
 
+    /// A label added to or removed from a task; toggling it again puts it back.
+    public struct LabelToggle: Equatable, Sendable {
+        public var taskLocalId: String
+        public var labelLocalId: String
+
+        public init(taskLocalId: String, labelLocalId: String) {
+            self.taskLocalId = taskLocalId
+            self.labelLocalId = labelLocalId
+        }
+    }
+
     /// Shown in the toast, such as "Task completed" or "3 tasks moved".
     public var message: String
     public var entries: [Entry]
     public var bucketMoves: [BucketMove]
+    public var labelToggles: [LabelToggle]
     /// Tasks soft-deleted with an undo window, to bring back.
     public var deletedLocalIds: [String]
 
-    public init(message: String, entries: [Entry] = [], bucketMoves: [BucketMove] = [], deletedLocalIds: [String] = []) {
+    public init(
+        message: String, entries: [Entry] = [], bucketMoves: [BucketMove] = [],
+        labelToggles: [LabelToggle] = [], deletedLocalIds: [String] = []
+    ) {
         self.message = message
         self.entries = entries
         self.bucketMoves = bucketMoves
+        self.labelToggles = labelToggles
         self.deletedLocalIds = deletedLocalIds
     }
 
-    public var isEmpty: Bool { entries.isEmpty && bucketMoves.isEmpty && deletedLocalIds.isEmpty }
+    public var isEmpty: Bool {
+        entries.isEmpty && bucketMoves.isEmpty && labelToggles.isEmpty && deletedLocalIds.isEmpty
+    }
+
+    /// Several steps made one, so a batch of edits undoes together. Nil when there are none.
+    public static func combined(_ steps: [TaskUndoStep], message: String) -> TaskUndoStep? {
+        let merged = TaskUndoStep(
+            message: message,
+            entries: steps.flatMap(\.entries),
+            bucketMoves: steps.flatMap(\.bucketMoves),
+            labelToggles: steps.flatMap(\.labelToggles),
+            deletedLocalIds: steps.flatMap(\.deletedLocalIds)
+        )
+        return merged.isEmpty ? nil : merged
+    }
 
     /// The toast text for a patch applied to `count` tasks.
     public static func message(for patch: TaskPatch, count: Int = 1) -> String {
@@ -59,6 +89,12 @@ public struct TaskUndoStep: Equatable, Sendable {
 }
 
 extension TaskPatch {
+    /// Whether the edit is one to offer Undo for: completing, rescheduling, prioritising or moving, not a text edit
+    /// (the editor has its own undo).
+    public var offersUndo: Bool {
+        title == nil && description == nil && (done != nil || dueDate != nil || priority != nil || projectLocalId != nil)
+    }
+
     /// The patch that puts every field this one sets back to its value in `before`. A cleared date or empty text
     /// becomes the empty string, which `updateTask` reads as "clear".
     ///
@@ -98,6 +134,17 @@ extension CriaStore {
         )
     }
 
+    /// `toggleTaskLabel`, plus the step that toggles it back.
+    @discardableResult
+    public func toggleTaskLabelUndoable(taskLocalId: String, labelLocalId: String) throws -> TaskUndoStep {
+        let linked = try labels(forTask: taskLocalId).contains { $0.localId == labelLocalId }
+        try toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: labelLocalId)
+        return TaskUndoStep(
+            message: linked ? "Label removed" : "Label added",
+            labelToggles: [TaskUndoStep.LabelToggle(taskLocalId: taskLocalId, labelLocalId: labelLocalId)]
+        )
+    }
+
     /// Reverses a step: takes back deletes, restores card placements, then writes the inverse patches. A task that
     /// is gone is skipped. False when a delete could not be taken back (it had already been sent); the rest still
     /// goes ahead.
@@ -112,6 +159,9 @@ extension CriaStore {
                 taskLocalId: move.taskLocalId, viewLocalId: move.viewLocalId,
                 bucketLocalId: move.bucketLocalId, position: move.position
             )
+        }
+        for toggle in step.labelToggles.reversed() {
+            try toggleTaskLabel(taskLocalId: toggle.taskLocalId, labelLocalId: toggle.labelLocalId)
         }
         for entry in step.entries.reversed() {
             guard try task(localId: entry.taskLocalId) != nil else { continue }

@@ -10,6 +10,7 @@ struct SmartViewScreen: View {
     @State var live: LiveValue<SmartViewData>
     @State var display: DisplayModel
     @State private var selection = TaskSelection()
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     /// Settings > General > Show completed: what a view does until its Display sheet says otherwise.
     @AppStorage("cria.taskList.showDone") private var showDone = true
     @State var selectedDay = Calendar.cria.startOfDay(for: Date())
@@ -328,16 +329,11 @@ extension SmartViewScreen {
 
     /// Moves each overdue task to today. A timed due date keeps its time of day; only the day changes.
     private func rescheduleOverdue(_ group: DisplaySection) {
-        var failures: [String] = []
-        for item in group.items {
-            guard let iso = item.task.dueDate else { continue }
-            let patch = TaskPatch(dueDate: TodaySuggestions.pulledForward(iso, now: Date()))
-            do {
-                _ = try services.store.updateTask(localId: item.task.localId, patch: patch)
-            } catch {
-                failures.append("\(item.task.title): \(error)")
-            }
+        let changes = group.items.compactMap { item -> (localId: String, title: String, patch: TaskPatch)? in
+            guard let iso = item.task.dueDate else { return nil }
+            return (item.task.localId, item.task.title, TaskPatch(dueDate: TodaySuggestions.pulledForward(iso, now: Date())))
         }
+        let failures = undo.updateTasks(services, changes)
         if !failures.isEmpty { failure = failures.joined(separator: "\n") }
     }
 }

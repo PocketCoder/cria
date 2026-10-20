@@ -13,6 +13,7 @@ struct TableCompactRow: View {
     var onEdit: ((TableCellEdit) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var failure: String?
     /// Counts completions from the swipe; the ring plays its own haptic for a tap.
     @State private var completions = 0
@@ -172,7 +173,7 @@ struct TableCompactRow: View {
 
     private func toggle() {
         do {
-            _ = try services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+            try undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
         } catch {
             failure = String(describing: error)
         }

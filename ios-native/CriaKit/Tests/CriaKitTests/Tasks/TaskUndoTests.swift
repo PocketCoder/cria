@@ -23,6 +23,17 @@ final class TaskUndoTests: XCTestCase {
         XCTAssertEqual(TaskPatch(dueDate: "2026-06-01T00:00:00Z").inverse(restoring: task).dueDate, "")
     }
 
+    func testOnlyNonTextEditsOfferUndo() {
+        XCTAssertTrue(TaskPatch(done: true).offersUndo)
+        XCTAssertTrue(TaskPatch(dueDate: "").offersUndo)
+        XCTAssertTrue(TaskPatch(priority: 2).offersUndo)
+        XCTAssertFalse(TaskPatch(title: "x").offersUndo)
+        XCTAssertFalse(TaskPatch(isFavorite: true).offersUndo)
+        var text = TaskPatch()
+        text.description = "<p>hi</p>"
+        XCTAssertFalse(text.offersUndo)
+    }
+
     func testCompleteThenUndoReopensTheTask() throws {
         let store = try makeStore()
         let project = try seedProject(store)
@@ -109,6 +120,41 @@ final class TaskUndoTests: XCTestCase {
         try store.undo(prioritised)
         XCTAssertEqual(try ids.map { try XCTUnwrap(store.task(localId: $0)).priority }, [0, 0, 0])
         XCTAssertNil(store.bulkComplete([]).undo)
+    }
+
+    func testCombinedStepsUndoTogether() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let ids = try (0..<2).map {
+            try store.createTask(TaskInput(title: "t\($0)", projectLocalId: project, dueDate: "2026-05-30T00:00:00Z")).localId
+        }
+        let steps = try ids.map { try store.updateTaskUndoable(localId: $0, patch: TaskPatch(dueDate: "2026-06-01T00:00:00Z")) }
+        let combined = try XCTUnwrap(TaskUndoStep.combined(steps, message: "2 tasks rescheduled"))
+        XCTAssertEqual(combined.entries.count, 2)
+        try store.undo(combined)
+        XCTAssertEqual(try ids.map { try XCTUnwrap(store.task(localId: $0)).dueDate }, Array(repeating: "2026-05-30T00:00:00Z", count: 2))
+        XCTAssertNil(TaskUndoStep.combined([], message: "none"))
+    }
+
+    func testLabelToggleUndoPutsTheLabelBack() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let task = try store.createTask(TaskInput(title: "a", projectLocalId: project)).localId
+        let json = #"{"id": 7, "title": "Home"}"#
+        let label = try store.upsertLabelFromServer(try decodeFixture(LabelResponse.self, json), rawJSON: json)
+
+        let added = try store.toggleTaskLabelUndoable(taskLocalId: task, labelLocalId: label)
+        XCTAssertEqual(added.message, "Label added")
+        XCTAssertEqual(try store.labels(forTask: task).count, 1)
+        try store.undo(added)
+        XCTAssertEqual(try store.labels(forTask: task).count, 0)
+
+        let again = try store.toggleTaskLabelUndoable(taskLocalId: task, labelLocalId: label)
+        let removed = try store.toggleTaskLabelUndoable(taskLocalId: task, labelLocalId: label)
+        XCTAssertEqual(removed.message, "Label removed")
+        XCTAssertEqual(again.message, "Label added")
+        try store.undo(removed)
+        XCTAssertEqual(try store.labels(forTask: task).count, 1)
     }
 
     func testBulkMoveUndoSendsEachTaskBack() throws {

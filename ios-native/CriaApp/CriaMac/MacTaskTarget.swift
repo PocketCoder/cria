@@ -66,7 +66,7 @@ extension MacActions {
     }
 
     private func update(_ id: String, _ patch: TaskPatch, _ services: AppServices) -> Bool {
-        (try? services.store.updateTask(localId: id, patch: patch)) != nil
+        (try? undo.updateTask(services, localId: id, patch: patch)) != nil
     }
 
     private func copy(_ text: String) -> Bool {

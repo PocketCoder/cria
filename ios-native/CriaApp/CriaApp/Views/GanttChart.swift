@@ -20,6 +20,7 @@ struct GanttChart: View {
     /// Counts bars dropped in from the no-dates tray, for the drop haptic.
     @State private var trayDrops = 0
     @Environment(NavigationModel.self) private var navigation
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     private static let todayId = "gantt-today"
 
@@ -115,7 +116,7 @@ struct GanttChart: View {
                     onReorder: { rows in onReorder(place.taskLocalId, rows) },
                     onOpen: { open(place.taskLocalId) },
                     onCommit: { start, end in
-                        _ = try? services.store.setGanttDates(taskLocalId: place.taskLocalId, start: start, end: end)
+                        _ = try? undo.setGanttDates(services, taskLocalId: place.taskLocalId, start: start, end: end)
                     }
                 )
                 .offset(x: place.left, y: Layout.header + Layout.barTop(index))
@@ -131,8 +132,8 @@ struct GanttChart: View {
         .dropDestination(for: String.self) { items, location in
             guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
             let start = GanttGeometry.day(atX: location.x, range: range, dayWidth: dayWidth)
-            _ = try? services.store.setGanttDates(
-                taskLocalId: taskId, start: start, end: start + GanttMetrics.defaultSpanDays - 1
+            _ = try? undo.setGanttDates(
+                services, taskLocalId: taskId, start: start, end: start + GanttMetrics.defaultSpanDays - 1
             )
             trayDrops += 1
             return true

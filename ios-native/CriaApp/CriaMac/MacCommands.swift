@@ -1,14 +1,35 @@
+import AppKit
 import SwiftUI
 
+/// Edit > Undo (⌘Z): a focused text view keeps its own undo; otherwise the last task action is taken back.
+@MainActor
+enum MacUndoRouting {
+    static func undo(_ actions: MacActions?) {
+        if NSApp.keyWindow?.firstResponder is NSText {
+            NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+        } else {
+            actions?.undo?.undo()
+        }
+    }
+}
+
 /// The menu bar, item for item as the macOS design lists it. Every item reaches the window through `MacActions`;
-/// with no window focused they are disabled. About, Settings, Hide, Quit, Close Window, Edit and Window are the
-/// system's.
+/// with no window focused they are disabled. About, Settings, Hide, Quit, Close Window, Edit (bar Undo and Redo) and
+/// Window are the system's.
 struct MacCommands: Commands {
     @FocusedValue(\.macActions) private var actions
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             CheckForUpdatesCommand(updater: .shared)
+        }
+        // Undo and Redo stay the responder chain's while a text field or the editor has focus; with none, ⌘Z takes
+        // back the last task action (the toast's Undo).
+        CommandGroup(replacing: .undoRedo) {
+            Button("Undo") { MacUndoRouting.undo(actions) }
+                .keyboardShortcut("z")
+            Button("Redo") { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .newItem) {
             Button("New Task") { actions?.newTask() }

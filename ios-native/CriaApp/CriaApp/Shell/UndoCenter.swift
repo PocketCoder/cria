@@ -2,15 +2,19 @@ import CriaKit
 import Observation
 import SwiftUI
 
-/// "Deleted · Undo" after a task delete, as the desktop app does. The delete op waits out `window` in the outbox, so
-/// Undo takes it back before it reaches the server. One offer at a time; a newer delete replaces the toast (the
-/// older delete still goes ahead).
+/// "Task completed · Undo" after a task action, as the desktop app does for deletes. Every undoable action (delete,
+/// complete, reschedule, move, priority, and the same from the multi-select bar) hands the centre a `TaskUndoStep`.
+/// Undo writes the step's inverse through `updateTask`, so it syncs like any edit; a delete additionally waits out
+/// `window` in the outbox, so Undo takes it back before it reaches the server. The toast shows the newest action;
+/// the last few steps stay on a short stack, so Undo (and ⌘Z on the Mac) walks back through them after it fades.
 @MainActor @Observable
 final class UndoCenter {
     struct Offer: Identifiable, Equatable {
         let id = UUID()
-        let taskLocalId: String
-        let title: String
+        let step: TaskUndoStep
+        /// Toast text, and the VoiceOver label.
+        var message: String { step.message }
+        var isDelete: Bool { !step.deletedLocalIds.isEmpty }
     }
 
     /// Seconds the toast stays up (3.2 on the Mac, from its design). The outbox waits longer so Undo never races
@@ -22,6 +26,10 @@ final class UndoCenter {
     #endif
     static let window: TimeInterval = 7
 
+    /// Steps kept for Undo and ⌘Z, newest last.
+    static let depth = 10
+
+    /// The step the toast is offering; nil once it fades.
     private(set) var offer: Offer?
     private(set) var failure: String?
     /// Counts task deletes and successful undos, for the toast's haptics (one change per action, so a bulk delete
@@ -30,6 +38,10 @@ final class UndoCenter {
     private(set) var restores = 0
     private var services: AppServices?
     private var dismissTask: Task<Void, Never>?
+    private var history: [Offer] = []
+
+    /// Whether there is anything for ⌘Z to take back.
+    var canUndo: Bool { !history.isEmpty }
 
     func attach(_ services: AppServices) {
         self.services = services
@@ -40,9 +52,28 @@ final class UndoCenter {
         guard let services else { return }
         try services.store.deleteTask(localId: localId, undoWindow: Self.window)
         deletions += 1
-        let next = Offer(taskLocalId: localId, title: title)
+        #if os(macOS)
+        let message = "Task deleted"
+        #else
+        let message = "Deleted ‘\(title)’"
+        #endif
+        record(TaskUndoStep(message: message, deletedLocalIds: [localId]))
+    }
+
+    /// `updateTask` with an undo step recorded. Throws when the store write fails, like `updateTask`.
+    func update(_ store: CriaStore, localId: String, patch: TaskPatch, message: String? = nil) throws {
+        record(try store.updateTaskUndoable(localId: localId, patch: patch, message: message))
+    }
+
+    /// Offers a step that has already been applied (a bulk action, a card move). Nil and empty steps are ignored.
+    func record(_ step: TaskUndoStep?) {
+        guard let step, !step.isEmpty else { return }
+        if !step.deletedLocalIds.isEmpty { deletions += 1 }
+        let next = Offer(step: step)
         offer = next
         failure = nil
+        history.append(next)
+        if history.count > Self.depth { history.removeFirst(history.count - Self.depth) }
         dismissTask?.cancel()
         dismissTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.visible))
@@ -51,12 +82,13 @@ final class UndoCenter {
         }
     }
 
+    /// Takes back the newest step (the toast's, or the one before when it has already faded).
     func undo() {
-        guard let offer, let services else { return }
-        self.offer = nil
+        guard let services, let last = history.popLast() else { return }
+        offer = nil
         dismissTask?.cancel()
         do {
-            if try services.store.undoDeleteTask(localId: offer.taskLocalId) {
+            if try services.store.undo(last.step) {
                 restores += 1
             } else {
                 failure = "Too late to undo: the delete was already sent."
@@ -73,6 +105,65 @@ final class UndoCenter {
     }
 }
 
+extension Optional where Wrapped == UndoCenter {
+    /// Updates a task with an undo toast when the shell provides one (a row in a sheet may have none).
+    @MainActor
+    func updateTask(_ services: AppServices, localId: String, patch: TaskPatch, message: String? = nil) throws {
+        if let center = self {
+            try center.update(services.store, localId: localId, patch: patch, message: message)
+        } else {
+            _ = try services.store.updateTask(localId: localId, patch: patch)
+        }
+    }
+
+    /// Sets a Gantt bar's dates with an undo toast when there is a centre.
+    @MainActor
+    func setGanttDates(_ services: AppServices, taskLocalId: String, start: Int, end: Int) throws {
+        if let center = self {
+            center.record(try services.store.setGanttDatesUndoable(taskLocalId: taskLocalId, start: start, end: end))
+        } else {
+            try services.store.setGanttDates(taskLocalId: taskLocalId, start: start, end: end)
+        }
+    }
+
+    /// Adds or removes a label from the quick menu, with an undo toast when there is a centre.
+    @MainActor
+    func toggleLabel(_ services: AppServices, taskLocalId: String, labelLocalId: String) throws {
+        if let center = self {
+            center.record(try services.store.toggleTaskLabelUndoable(taskLocalId: taskLocalId, labelLocalId: labelLocalId))
+        } else {
+            try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: labelLocalId)
+        }
+    }
+
+    /// Updates several tasks as one undo step (a reschedule of the overdue group, say). A task that fails is reported
+    /// as "title: error" and the rest still go ahead.
+    @MainActor
+    func updateTasks(
+        _ services: AppServices, _ changes: [(localId: String, title: String, patch: TaskPatch)], message: String? = nil
+    ) -> [String] {
+        var steps: [TaskUndoStep] = []
+        var failures: [String] = []
+        for change in changes {
+            do {
+                steps.append(try services.store.updateTaskUndoable(localId: change.localId, patch: change.patch))
+            } catch {
+                failures.append("\(change.title): \(error)")
+            }
+        }
+        let sample = changes.first?.patch ?? TaskPatch()
+        let text = message ?? TaskUndoStep.message(for: sample, count: steps.count)
+        self?.record(TaskUndoStep.combined(steps, message: text))
+        return failures
+    }
+
+    /// Offers undo for a bulk or other step already applied; nothing when there is no centre.
+    @MainActor
+    func record(_ step: TaskUndoStep?) {
+        self?.record(step)
+    }
+}
+
 /// The toast, shown above the tab bar.
 struct UndoToast: View {
     let center: UndoCenter
@@ -83,11 +174,11 @@ struct UndoToast: View {
                 HStack(spacing: 12) {
                     #if os(macOS)
                     // The Mac pill: the message alone, then Undo.
-                    Text("Task deleted").lineLimit(1).accessibilityLabel("Deleted \(offer.title)")
+                    Text(offer.message).lineLimit(1)
                     Button("Undo") { center.undo() }.buttonStyle(MacUndoButtonStyle())
                     #else
-                    Image(systemName: "trash").foregroundStyle(.secondary)
-                    Text("Deleted ‘\(offer.title)’").lineLimit(1).truncationMode(.middle)
+                    Image(systemName: offer.isDelete ? "trash" : "arrow.uturn.backward").foregroundStyle(.secondary)
+                    Text(offer.message).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
                     Button("Undo") { center.undo() }.fontWeight(.semibold)
                     #endif

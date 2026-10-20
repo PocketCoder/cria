@@ -181,6 +181,29 @@ extension CriaStore {
         return Kanban.filterColumns(view: view, configs: configs, matches: matches)
     }
 
+    /// `moveCard`, plus the step that puts a card moved to another column back where it was. `source` is the column
+    /// the card was shown in. With `alsoComplete` the card is marked done on a cross-column move (a done column).
+    public func moveCardUndoable(
+        taskLocalId: String, viewLocalId: String, source: KanbanColumn?, target: KanbanColumn, orderedIds: [String],
+        alsoComplete: Bool = false
+    ) throws -> (result: KanbanMoveResult, undo: TaskUndoStep?) {
+        let result = try moveCard(taskLocalId: taskLocalId, viewLocalId: viewLocalId, target: target, orderedIds: orderedIds)
+        let crosses = !target.tasks.contains { $0.localId == taskLocalId }
+        guard result == .moved, crosses else { return (result, nil) }
+        var steps: [TaskUndoStep] = []
+        if let source {
+            let back = TaskUndoStep.BucketMove(
+                taskLocalId: taskLocalId, viewLocalId: viewLocalId, bucketLocalId: source.bucket.localId,
+                position: source.positions[taskLocalId]
+            )
+            steps.append(TaskUndoStep(message: "Moved to \(target.bucket.title)", bucketMoves: [back]))
+        }
+        if alsoComplete {
+            steps.append(try updateTaskUndoable(localId: taskLocalId, patch: TaskPatch(done: true)))
+        }
+        return (result, TaskUndoStep.combined(steps, message: "Moved to \(target.bucket.title)"))
+    }
+
     /// Drops a card into a column. `orderedIds` is the target column's final order including the moved card.
     /// A cross-column drop into a full column is refused. Positions come from `Position.planReorder`.
     @discardableResult
