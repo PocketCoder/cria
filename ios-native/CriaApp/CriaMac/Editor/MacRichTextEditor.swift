@@ -41,6 +41,7 @@ struct RichTextEditor: NSViewRepresentable {
         }
         let actions = barActions
         view.onImageData = { actions.onImageData($0, $1, $2) }
+        view.onOpenImage = { actions.onOpenImage($0) }
         let controller = controller
         view.onSlashKey = { [weak controller] key in controller?.handleSlashKey(key) ?? false }
         view.onResign = { [weak controller] in controller?.closeSlash() }

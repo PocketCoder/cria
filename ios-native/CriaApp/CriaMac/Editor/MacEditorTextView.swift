@@ -14,6 +14,8 @@ final class MacEditorTextView: NSTextView, EditorSurface {
     var onImageData: ((Data, String, String) -> Void)?
     /// A key the open slash menu may take (Up, Down, Return, Tab, Escape); true when it did.
     var onSlashKey: ((SlashKey) -> Bool)?
+    /// A click on an inline image: open it full size.
+    var onOpenImage: ((String) -> Void)?
     /// The text view gave up the keyboard.
     var onResign: (() -> Void)?
     /// Set for the inline editor, which reports the height its text needs.
@@ -139,6 +141,10 @@ final class MacEditorTextView: NSTextView, EditorSurface {
         let point = convert(event.locationInWindow, from: nil)
         if let paragraph = taskParagraph(at: point) {
             onToggleTask?(paragraph)
+            return
+        }
+        if event.clickCount == 1, let source = imageSource(at: point), let onOpenImage {
+            onOpenImage(source)
             return
         }
         if event.modifierFlags.contains(.command), let url = link(at: point) {
