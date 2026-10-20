@@ -1,32 +1,6 @@
 import CriaKit
 import SwiftUI
 
-/// Accepts a dragged card, unless the board is read-only. A selection tick as a dragged card moves over a new column
-/// or card (a new place to land), a light impact when it drops.
-private struct KanbanDropTarget: ViewModifier {
-    let enabled: Bool
-    /// Told when a drag enters or leaves, so the column can show it is where the card will land.
-    var onTargetChange: (Bool) -> Void = { _ in }
-    let action: (String) -> Bool
-    @State private var targeted = false
-    @State private var drops = 0
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if enabled {
-            content.dropDestination(for: String.self) { items, _ in
-                guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
-                let accepted = action(taskId)
-                if accepted { drops += 1 }
-                return accepted
-            } isTargeted: { targeted = $0; onTargetChange($0) }
-                .sensoryFeedback(trigger: targeted) { _, now in now ? SensoryFeedback.selection : nil }
-                .sensoryFeedback(.impact(weight: .light), trigger: drops)
-        } else {
-            content
-        }
-    }
-}
-
 /// One column: a quiet header with the count and menu, the cards, then the add row straight after the last card.
 /// The column is as tall as its content and scrolls only when that is taller than the screen. A filter-mode column
 /// is read-only: no dragging, no add row, no menu.
@@ -39,20 +13,20 @@ struct KanbanColumnView: View {
     private static let dropWidth: CGFloat = 1.5
     private var columnFill: Color { isDropTarget ? Color(.foreground).opacity(0.10) : MacTheme.fill }
     /// The 30pt header with the name in SF 13 Semibold and the count in `l3`, and the 30pt Add task row.
-    private static let headerHeight: CGFloat = 30
+    static let headerHeight: CGFloat = 30
     private static let addRowHeight: CGFloat = 30
-    private static let titleFont = Font.system(size: 13, weight: .semibold)
-    private static let countColour = MacTheme.label3
+    static let titleFont = Font.system(size: 13, weight: .semibold)
+    static let countColour = MacTheme.label3
     #else
     private static let radius: CGFloat = 20
     private static let padding: CGFloat = 12
     private static let dropOpacity = 0.6
     private static let dropWidth: CGFloat = 2
     private var columnFill: Color { Color(.foreground).opacity(isDropTarget ? 0.10 : 0.05) }
-    private static let headerHeight: CGFloat = 32
+    static let headerHeight: CGFloat = 32
     private static let addRowHeight: CGFloat = 40
-    private static let titleFont = Theme.rowSubtitle.weight(.semibold)
-    private static let countColour = Color(.mutedForeground)
+    static let titleFont = Theme.rowSubtitle.weight(.semibold)
+    static let countColour = Color(.mutedForeground)
     #endif
 
     let services: AppServices
@@ -256,102 +230,11 @@ struct KanbanColumnView: View {
             .padding(.horizontal, 12)
         }
     }
-
-    private var header: some View {
-        HStack(spacing: 6) {
-            if !compact { collapseButton }
-            // Title, count and role badges read as one heading, e.g. "To do, 3 of 5 tasks, full, Done column".
-            HStack(spacing: 6) {
-                Text(column.bucket.title)
-                    .font(Self.titleFont)
-                    .foregroundStyle(Color(.foreground))
-                    .lineLimit(2)
-                Text(countText)
-                    .font(Theme.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(column.atLimit ? Color(.destructive) : Self.countColour)
-                    .accessibilityLabel(spokenCount)
-                roleBadge
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 4)
-            if !readOnly && !compact { columnMenu }
-        }
-        .padding(.leading, 4)
-        .frame(minHeight: Self.headerHeight)
-    }
-
-    /// Folds the column into a strip (remembered for this view on this device).
-    private var collapseButton: some View {
-        Button(action: onToggleCollapse) {
-            Image(systemName: "chevron.down")
-                .font(Theme.caption.weight(.semibold))
-                .foregroundStyle(Color(.mutedForeground))
-                .frame(width: 24, height: Self.headerHeight)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Collapse \(column.bucket.title)")
-    }
-
-    private var columnMenu: some View {
-        let roles = Kanban.roles(of: column.bucket, in: view)
-        return Menu {
-            #if os(macOS)
-            macColumnMenu(isDone: roles.isDone)
-            #else
-            Button("Edit column", systemImage: "pencil") { onEdit() }
-            // The roles are stored by server id, so a column that has not synced yet cannot take one.
-            if column.bucket.serverId != nil {
-                Button(roles.isDone ? "Stop using as done column" : "Set as done column", systemImage: "checkmark.circle") {
-                    onSetRole(.done)
-                }
-                Button(roles.isDefault ? "Stop using as default column" : "Set as default column", systemImage: "flag") {
-                    onSetRole(.defaultColumn)
-                }
-            }
-            #endif
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(Theme.rowSubtitle.weight(.semibold))
-                .foregroundStyle(Color(.mutedForeground))
-                .frame(width: 36, height: Self.headerHeight)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel("Options for \(column.bucket.title)")
-    }
-
-    @ViewBuilder private var roleBadge: some View {
-        let roles = Kanban.roles(of: column.bucket, in: view)
-        if roles.isDone {
-            Image(systemName: "checkmark.circle.fill")
-                .font(Theme.caption)
-                .foregroundStyle(Color(.success))
-                .accessibilityLabel("Done column")
-        }
-        if roles.isDefault {
-            Image(systemName: "flag.fill")
-                .font(Theme.caption)
-                .foregroundStyle(Color(.primary))
-                .accessibilityLabel("Default column")
-        }
-    }
 }
 
 // MARK: Actions
 
 extension KanbanColumnView {
-    private var spokenCount: String {
-        let count = column.tasks.count
-        guard column.bucket.limit > 0 else { return SpokenText.tasks(count) }
-        return "\(count) of \(column.bucket.limit) tasks" + (column.atLimit ? ", full" : "")
-    }
-
-    private var countText: String {
-        column.bucket.limit > 0 ? "\(column.tasks.count)/\(column.bucket.limit)" : "\(column.tasks.count)"
-    }
-
     /// Deletes straight away; the Undo toast takes it back.
     private func delete(_ task: TaskRecord) {
         do {
@@ -392,7 +275,7 @@ extension KanbanColumnView {
 extension KanbanColumnView {
     /// Rename column…, Set limit…, Mark as done column, Delete column. Rename and the limit are the edit sheet's
     /// fields; the done role is stored by server id, so an unsynced column cannot take it.
-    @ViewBuilder fileprivate func macColumnMenu(isDone: Bool) -> some View {
+    @ViewBuilder func macColumnMenu(isDone: Bool) -> some View {
         Button("Rename column…", systemImage: "pencil") { onEdit() }
         Button("Set limit…", systemImage: "number") { onEdit() }
         Toggle(isOn: Binding(get: { isDone }, set: { _ in onSetRole(.done) })) {
