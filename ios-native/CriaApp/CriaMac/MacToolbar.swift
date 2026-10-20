@@ -6,8 +6,10 @@ import SwiftUI
 /// edge.
 struct MacToolbar: ToolbarContent {
     let actions: MacActions
+    let services: AppServices
 
     var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) { NotificationBell(services: services) }
         ToolbarItem(placement: .primaryAction) {
             Button { actions.newTask() } label: {
                 Image(systemName: "plus")

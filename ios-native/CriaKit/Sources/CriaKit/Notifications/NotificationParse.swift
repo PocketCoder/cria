@@ -77,6 +77,16 @@ public struct AppNotification: Equatable, Sendable, Identifiable {
     }
 }
 
+public extension Collection where Element == AppNotification {
+    /// What the bell's badge shows.
+    var unreadCount: Int { filter { !$0.isRead }.count }
+}
+
+public enum NotificationPolling {
+    /// How often the bell re-reads the inbox while the app is active (`NotificationBell.tsx` polls at 30 s too).
+    public static let interval: Duration = .seconds(30)
+}
+
 public extension ApiClient {
     func notifications() async throws -> [AppNotification] {
         let rows: [JSONValue]? = try await get("/notifications", query: ["page": "1", "per_page": "50"])
