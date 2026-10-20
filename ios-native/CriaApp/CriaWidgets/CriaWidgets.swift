@@ -12,7 +12,8 @@ struct TodayEntry: TimelineEntry {
 /// Reads today's open tasks from the shared database. Reloaded by the app after every sync and local edit; a refresh
 /// every 30 minutes, and at midnight, covers the day rolling over.
 struct TodayProvider: TimelineProvider {
-    private static let limit = 5
+    /// The most any family shows (large); smaller ones take a prefix.
+    static let limit = 10
 
     func placeholder(in context: Context) -> TodayEntry {
         TodayEntry(date: Date(), snapshot: TodaySnapshot(entries: [], total: 0))
@@ -43,44 +44,22 @@ struct TodayProvider: TimelineProvider {
     }
 }
 
-struct TodayWidgetView: View {
-    let entry: TodayEntry
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Today").font(.headline)
-            if !entry.signedIn {
-                Text("Sign in to Cria to see your tasks.").font(.subheadline).foregroundStyle(.secondary)
-            } else if entry.snapshot.entries.isEmpty {
-                Text("Nothing due").font(.subheadline).foregroundStyle(.secondary)
-            }
-            ForEach(entry.snapshot.entries) { item in
-                Link(destination: DeepLink.taskURL(localId: item.id) ?? URL(fileURLWithPath: "/")) {
-                    Text(item.title)
-                        .font(.subheadline)
-                        .lineLimit(1)
-                        .foregroundStyle(item.isOverdue ? Color.red : Color.primary)
-                }
-            }
-            if entry.snapshot.total > entry.snapshot.entries.count {
-                Text("+\(entry.snapshot.total - entry.snapshot.entries.count) more").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .widgetURL(DeepLink.todayURL)
-    }
+enum TodayWidgetKind {
+    static let id = "io.cria.widget.today"
 }
 
 struct TodayWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "io.cria.widget.today", provider: TodayProvider()) { entry in
+        StaticConfiguration(kind: TodayWidgetKind.id, provider: TodayProvider()) { entry in
             TodayWidgetView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Today")
-        .description("Tasks due today and overdue.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description("Tasks due today and overdue. Tick one off, or add a new task.")
+        .supportedFamilies([
+            .systemSmall, .systemMedium, .systemLarge,
+            .accessoryRectangular, .accessoryCircular, .accessoryInline
+        ])
     }
 }
 
@@ -88,5 +67,8 @@ struct TodayWidget: Widget {
 struct CriaWidgetBundle: WidgetBundle {
     var body: some Widget {
         TodayWidget()
+        if #available(iOS 18.0, *) {
+            AddTaskControl()
+        }
     }
 }
