@@ -193,6 +193,8 @@ struct TableGridView: View {
     var progress: [String: SubtaskProgress] = [:]
     /// Set while "Edit cells" is on: label, assignee and date cells then open their picker.
     var onEdit: ((TableCellEdit) -> Void)?
+    /// Called when a row is dragged onto another: the dragged task, then the one it landed on.
+    var onMove: ((String, String) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
@@ -248,6 +250,7 @@ struct TableGridView: View {
                     GridRow {
                         ForEach(columns, id: \.self) { column in
                             cell(item, column)
+                                .modifier(TableReorderHandle(id: item.task.localId, isFirst: column == columns.first, onMove: onMove))
                                 .frame(minWidth: width(column), minHeight: Self.rowHeight, alignment: .leading)
                                 .padding(.vertical, Self.rowPadding)
                                 #if os(macOS)

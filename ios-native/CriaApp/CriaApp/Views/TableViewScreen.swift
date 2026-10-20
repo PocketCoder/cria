@@ -15,14 +15,18 @@ struct TableViewScreen: View {
     /// Comment counts by task server id, read from the server while the Comments column is shown. Memory only.
     @State private var commentCounts: [Int: Int] = [:]
     @AppStorage("cria.tableViewColumns") private var columnsText = ""
-    @AppStorage("cria.tableViewSortBy") private var sortText = ""
+    @AppStorage("cria.tableViewSortBy") var sortText = ""
     @State private var pickingColumns = false
     /// Off by default: label, assignee and date cells then open their picker when tapped. Kept on this device.
     @AppStorage("cria.tableViewInlineEdit") private var inlineEdit = false
     /// Settings > Show completed, as the list views honour it.
     @AppStorage("cria.taskList.showDone") private var showDone = true
     @State private var cellEdit: TableCellEdit?
-    @State private var editFailure: String?
+    @State var editFailure: String?
+    /// A just-dropped row order laid over the stored order until the store catches up (see `TableReorder.swift`).
+    @State var optimistic = OptimisticOrder()
+    /// Counts drops, for the haptic.
+    @State var reorders = 0
     @State private var assigneeFeed: LiveValue<[String: [AssigneeRecord]]>
     /// Each subtask's parent title and each parent's subtask progress, for the title cell.
     @State private var nesting: LiveValue<TaskListSnapshot>
@@ -77,7 +81,7 @@ struct TableViewScreen: View {
 
     /// Sorting uses every sortable column, shown or not, so the Sort menu always does something. Kept in state and
     /// redone only when its inputs change, not on every render.
-    @State private var rows: [TaskListItem] = []
+    @State var rows: [TaskListItem] = []
 
     private struct SortInput: Equatable {
         let items: [TaskListItem]
@@ -85,12 +89,13 @@ struct TableViewScreen: View {
         let showDone: Bool
         let currentUserId: Int?
         let commentCounts: [Int: Int]
+        let optimistic: OptimisticOrder
     }
 
     private var sortInput: SortInput {
         SortInput(
             items: live.value, sortText: sortText, showDone: showDone, currentUserId: currentUserId,
-            commentCounts: commentCounts
+            commentCounts: commentCounts, optimistic: optimistic
         )
     }
 
@@ -101,7 +106,14 @@ struct TableViewScreen: View {
             live.value.map(\.task).filter { showDone || !$0.done }, keys: sortKeys, visible: Set(TableViewColumn.allCases),
             projectTitle: { titles[$0] ?? "" }, extras: extras
         )
-        return sorted.compactMap { byId[$0.localId] }
+        // With no sort the rows are in manual order, which a drop has just changed.
+        let ids = sortKeys.isEmpty ? optimistic.resolve(sorted.map(\.localId)) : sorted.map(\.localId)
+        return ids.compactMap { byId[$0] }
+    }
+
+    /// The rows' stored manual (position) order, which `optimistic` is recorded against.
+    func manualOrder() -> [String] {
+        live.value.map(\.task).filter { showDone || !$0.done }.map(\.localId)
     }
 
     var body: some View {
@@ -116,7 +128,8 @@ struct TableViewScreen: View {
                         assignees: assigneeFeed.value,
                         parentTitles: nesting.value.parentTitles,
                         progress: nesting.value.progress,
-                        onEdit: editAction
+                        onEdit: editAction,
+                        onMove: { moveRow($0, onto: $1) }
                     )
                 }
             } else {
@@ -149,6 +162,7 @@ struct TableViewScreen: View {
             TableCellEditSheet(services: services, edit: edit) { editFailure = $0 }
         }
         .errorHaptic(editFailure)
+        .sensoryFeedback(.impact(weight: .light), trigger: reorders)
         .alert("Could not save", isPresented: Binding(get: { editFailure != nil }, set: { if !$0 { editFailure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -181,6 +195,7 @@ struct TableViewScreen: View {
                             services: services, item: item, columns: shownColumns, extras: extras,
                             assignees: assigneeFeed.value[item.task.localId] ?? [], onEdit: editAction
                         )
+                        .modifier(TableRowReorder(id: item.task.localId, isHandle: true) { moveRow($0, onto: $1) })
                     }
                 } header: {
                     sortHeader
