@@ -133,25 +133,25 @@ private typealias ClockEnd = (hour: Int, minute: Int?, meridiem: String?)
 private func rangeMinutes(start: ClockEnd, end: ClockEnd) -> (start: Int, end: Int)? {
     if start.meridiem == nil, end.meridiem == nil {
         guard start.minute != nil, end.minute != nil else { return nil }
-        return orderedSpan(minutes(start.hour, start.minute, pm: nil), minutes(end.hour, end.minute, pm: nil))
+        return orderedSpan(minutes(start.hour, start.minute, isPM: nil), minutes(end.hour, end.minute, isPM: nil))
     }
     guard (1...12).contains(end.hour), (1...12).contains(start.hour) else { return nil }
     let endIsPM = (end.meridiem ?? start.meridiem) == "pm"
-    let endMinutes = minutes(end.hour, end.minute, pm: endIsPM)
+    let endMinutes = minutes(end.hour, end.minute, isPM: endIsPM)
     if let given = start.meridiem {
-        return orderedSpan(minutes(start.hour, start.minute, pm: given == "pm"), endMinutes)
+        return orderedSpan(minutes(start.hour, start.minute, isPM: given == "pm"), endMinutes)
     }
     // "9-10am", "11-1pm": the start shares the end's am or pm unless that puts it at or after the end.
-    let shared = minutes(start.hour, start.minute, pm: endIsPM)
+    let shared = minutes(start.hour, start.minute, isPM: endIsPM)
     if let span = orderedSpan(shared, endMinutes) { return span }
-    return orderedSpan(minutes(start.hour, start.minute, pm: !endIsPM), endMinutes)
+    return orderedSpan(minutes(start.hour, start.minute, isPM: !endIsPM), endMinutes)
 }
 
 /// Minutes after midnight; `pm` nil means a 24-hour clock, else the hour is on a 12-hour clock.
-private func minutes(_ hour: Int, _ minute: Int?, pm: Bool?) -> Int? {
+private func minutes(_ hour: Int, _ minute: Int?, isPM: Bool?) -> Int? {
     guard (minute ?? 0) < 60 else { return nil }
-    guard let pm else { return hour < 24 ? hour * 60 + (minute ?? 0) : nil }
-    return (hour % 12 + (pm ? 12 : 0)) * 60 + (minute ?? 0)
+    guard let isPM else { return hour < 24 ? hour * 60 + (minute ?? 0) : nil }
+    return (hour % 12 + (isPM ? 12 : 0)) * 60 + (minute ?? 0)
 }
 
 private func orderedSpan(_ start: Int?, _ end: Int?) -> (start: Int, end: Int)? {
