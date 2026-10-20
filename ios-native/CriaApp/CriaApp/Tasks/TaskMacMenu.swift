@@ -23,6 +23,16 @@ struct TaskMacMenuItems: View {
     let onCopyLink: @MainActor () -> Void
     let onDelete: @MainActor () -> Void
     let onFailure: (String) -> Void
+    /// Nil leaves Subscribe out (the row's context menu has no room for a network call's failure).
+    var onToggleSubscription: (@MainActor () -> Void)?
+    /// Nil leaves Defer out (as on iOS, only the lists offer it).
+    var onDefer: (@MainActor (DeferPreset) -> Void)?
+    /// "Show Subtasks" or "Hide Subtasks", for a row that has subtasks; nil leaves it out.
+    var collapseTitle: String?
+    var onToggleCollapsed: (@MainActor () -> Void)?
+    /// Nil leaves Select out (a screen with no multi-select).
+    var onSelect: (@MainActor () -> Void)?
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         Button(task.done ? "Mark as Not Done" : "Mark as Done", systemImage: "checkmark.circle", action: onToggleDone)
@@ -40,6 +50,13 @@ struct TaskMacMenuItems: View {
             Button("Pick a date…", action: onPickDate)
             // An empty value clears the date, as the detail's date rows do.
             Button("No date") { write(TaskPatch(dueDate: "")) }.disabled(task.dueDate == nil)
+        }
+        if let onDefer {
+            Menu("Defer", systemImage: "clock.arrow.circlepath") {
+                ForEach(DeferPreset.allCases, id: \.self) { preset in
+                    Button(preset.title) { onDefer(preset) }
+                }
+            }
         }
         Menu("Priority", systemImage: "flag") {
             // Do now first, None last, each with its colour.
@@ -68,7 +85,22 @@ struct TaskMacMenuItems: View {
         Button("Copy Link", systemImage: "link", action: onCopyLink)
             .keyboardShortcut(".", modifiers: .command)
             .disabled(services.taskWebURL(task) == nil)
+        if let url = services.taskWebURL(task) {
+            ShareLink(item: url) { Label("Share Link\u{2026}", systemImage: "square.and.arrow.up") }
+        }
         Button("Duplicate", systemImage: "plus.square.on.square", action: onDuplicate)
+        if let onToggleSubscription {
+            Button(
+                task.isSubscribed ? "Unsubscribe" : "Subscribe", systemImage: task.isSubscribed ? "bell.slash" : "bell",
+                action: onToggleSubscription
+            )
+        }
+        if let collapseTitle, let onToggleCollapsed {
+            Button(collapseTitle, systemImage: "list.bullet.indent", action: onToggleCollapsed)
+        }
+        if let onSelect {
+            Button("Select", systemImage: "checkmark.circle", action: onSelect)
+        }
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
             .keyboardShortcut(.delete, modifiers: [])
@@ -76,7 +108,7 @@ struct TaskMacMenuItems: View {
 
     private func write(_ patch: TaskPatch) {
         do {
-            _ = try services.store.updateTask(localId: task.localId, patch: patch)
+            try undo.updateTask(services, localId: task.localId, patch: patch)
         } catch {
             onFailure(String(describing: error))
         }

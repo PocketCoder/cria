@@ -180,9 +180,10 @@ struct DateSheet: View {
         return DueDates.timedISO(timed)
     }
 
-    /// 09:00 today: where a newly added time starts.
+    /// Where a newly added time starts: the account's default due time (as Vikunja-web's date picker does), else 09:00.
     private static var nine: Date {
-        Calendar.cria.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+        if let time = QuickAddDefaults.current().dueTime { return time.date() }
+        return Calendar.cria.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     }
 
     /// A typed phrase sets the day, and the time when it names one ("fri 5pm"); a phrase with no time keeps the time

@@ -1,3 +1,4 @@
+import CriaKit
 import SwiftUI
 
 /// The content column's trailing toolbar items after the search field: New Task as a solid purple circle, then the
@@ -6,8 +7,10 @@ import SwiftUI
 /// edge.
 struct MacToolbar: ToolbarContent {
     let actions: MacActions
+    let services: AppServices
 
     var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) { NotificationBell(services: services) }
         ToolbarItem(placement: .primaryAction) {
             Button { actions.newTask() } label: {
                 Image(systemName: "plus")

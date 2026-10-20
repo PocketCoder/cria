@@ -37,13 +37,17 @@ struct KanbanBoardView: View {
     @State private var expandedCards: Set<String> = []
     /// The board's filter, kept per view on this device (see `BoardFilter`).
     @AppStorage private var filterText: String
+    /// Columns folded into strips, kept per view on this device (see `KanbanCollapse`).
+    @AppStorage private var collapsedText: String
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.preferences) private var preferences
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     init(services: AppServices, view: ViewRecord) {
         self.services = services
         self.view = view
         _filterText = AppStorage(wrappedValue: "", BoardFilter.storageKey(viewLocalId: view.localId))
+        _collapsedText = AppStorage(wrappedValue: "", KanbanCollapse.storageKey(viewLocalId: view.localId))
         let store = services.store
         let viewId = view.localId
         let projectId = view.projectLocalId
@@ -66,6 +70,13 @@ struct KanbanBoardView: View {
 
     private var columns: [KanbanColumn] { live.value.columns }
     private var readOnly: Bool { Kanban.isFilterMode(view) }
+    private var collapsedIds: Set<String> { KanbanCollapse.decode(collapsedText) }
+
+    private func toggleCollapsed(_ bucketLocalId: String) {
+        withAnimation(.snappy(duration: 0.25)) {
+            collapsedText = KanbanCollapse.toggled(collapsedText, bucketLocalId: bucketLocalId)
+        }
+    }
     private var filter: BoardFilter { BoardFilter.from(stored: filterText) }
 
     /// Which cards each column draws and which subtasks ride inside them. Drops, limits and "Move to" still work on
@@ -73,21 +84,11 @@ struct KanbanBoardView: View {
     /// full one.
     private var plan: KanbanBoardPlan {
         let filter = self.filter
-        guard filter.isActive else { return KanbanNesting.plan(columns: columns, children: live.value.children, nests: Self.nests) }
+        guard filter.isActive else { return KanbanNesting.plan(columns: columns, children: live.value.children, nests: true) }
         let labelIds = live.value.labelIds
-        return KanbanNesting.plan(columns: columns, children: live.value.children, nests: Self.nests) {
+        return KanbanNesting.plan(columns: columns, children: live.value.children, nests: true) {
             filter.shows($0, labelIds: labelIds[$0.localId] ?? [])
         }
-    }
-
-    /// On the Mac every subtask is its own card, so it can be dragged to another column by itself; iOS lists a
-    /// subtask inside its parent's card when they share a column.
-    private static var nests: Bool {
-        #if os(macOS)
-        false
-        #else
-        true
-        #endif
     }
 
     /// About 85% of the screen, so the next column peeks in, within 280 to 340 points. Larger text widens the cap,
@@ -119,6 +120,8 @@ struct KanbanBoardView: View {
                         subtaskInfo: live.value.subtaskInfo,
                         readOnly: readOnly,
                         compact: collapsesColumns && (sortByDue || hoverColumn != column.bucket.localId),
+                        collapsed: collapsedIds.contains(column.bucket.localId),
+                        onToggleCollapse: { toggleCollapsed(column.bucket.localId) },
                         onDragStart: { beginDrag(from: column.bucket.localId) },
                         onOver: { columnOver(column.bucket.localId, $0) },
                         onDragEnd: { endDrag() },
@@ -130,7 +133,9 @@ struct KanbanBoardView: View {
                         onEdit: { editing = BucketEdit(bucket: column.bucket, canDelete: columns.count > 1) },
                         onSetRole: { role in setRole(role, of: column.bucket) }
                     )
-                    .containerRelativeFrame(.horizontal) { length, _ in width(length) }
+                    .containerRelativeFrame(.horizontal) { length, _ in
+                        collapsedIds.contains(column.bucket.localId) ? KanbanCollapsedStrip.width : width(length)
+                    }
                 }
                 if !readOnly && !collapsesColumns { addBucketButton }
             }
@@ -179,7 +184,11 @@ struct KanbanBoardView: View {
             BucketEditSheet(services: services, edit: edit)
         }
     }
+}
 
+// MARK: Notices and column edits
+
+extension KanbanBoardView {
     @ViewBuilder private func notices(hidden hiddenCount: Int) -> some View {
         VStack(spacing: 0) {
             if filter.isActive {
@@ -267,18 +276,18 @@ struct KanbanBoardView: View {
     private func drop(_ taskId: String, into column: KanbanColumn, before beforeId: String?) {
         guard !readOnly else { return }
         let order = Kanban.orderAfterDrop(order: column.tasks.map(\.localId), moving: taskId, onto: beforeId)
+        #if os(macOS)
+        let completes = Kanban.roles(of: column.bucket, in: view).isDone // a done column marks it done here too
+        #else
+        let completes = false
+        #endif
         do {
-            let result = try services.store.moveCard(
-                taskLocalId: taskId, viewLocalId: view.localId, target: column, orderedIds: order
+            let moved = try services.store.moveCardUndoable(
+                taskLocalId: taskId, viewLocalId: view.localId, source: columns.first { $0.tasks.contains { $0.localId == taskId } },
+                target: column, orderedIds: order, alsoComplete: completes
             )
-            if result == .blockedByLimit { limitNotice = true }
-            #if os(macOS)
-            // Dropping on the done column marks the task done here at once; the server does the same on the move.
-            if result == .moved, Kanban.roles(of: column.bucket, in: view).isDone,
-               column.tasks.first(where: { $0.localId == taskId }) == nil {
-                _ = try services.store.updateTask(localId: taskId, patch: TaskPatch(done: true))
-            }
-            #endif
+            if moved.result == .blockedByLimit { limitNotice = true }
+            undo.record(moved.undo)
         } catch {
             failure = String(describing: error)
         }
@@ -357,31 +366,4 @@ extension KanbanBoardView {
         guard dragging, let started = dragStartedAt, Date.now.timeIntervalSince(started) > 1 else { return }
         endDrag()
     }
-}
-
-/// The board's columns, plus each card's labels for the chips.
-struct KanbanBoardData: Equatable, Sendable {
-    var columns: [KanbanColumn] = []
-    var labels: [String: [LabelRecord]] = [:]
-    /// Every label, for the filter's label choices.
-    var allLabels: [LabelRecord] = []
-    /// Parent local id to its subtasks' local ids, for nesting subtasks inside their parent's card.
-    var children: [String: [String]] = [:]
-    /// Each card's parent title and subtask progress, wherever the parent or subtasks are.
-    var subtaskInfo = KanbanSubtaskInfo()
-
-    /// Label local ids by task, for `BoardFilter`.
-    var labelIds: [String: [String]] { labels.mapValues { $0.map(\.localId) } }
-}
-
-struct BucketEdit: Identifiable {
-    let bucket: BucketRecord
-    /// False for the last column: the server refuses to delete a view's only bucket.
-    let canDelete: Bool
-    var id: String { bucket.localId }
-}
-
-/// The role a column can take for its view.
-enum KanbanBucketRole {
-    case done, defaultColumn
 }

@@ -14,7 +14,7 @@
  * The probe itself lives in `client.ts` (`refreshApiVersion`), because it needs
  * the network layer.
  *
- * Contract: docs/V2-MIGRATION.md.
+ * Contract: the v1/v2 section of AGENTS.md.
  */
 import { useSettings } from '@/stores/settings';
 

@@ -11,12 +11,10 @@ enum MacPrefs {
     static let hideDock = "cria.mac.hideDockIcon"
     /// Settings > Customise > Show favourite projects (read by `MacSidebar`).
     static let showFavourites = "cria.mac.showFavouriteProjects"
-    /// Settings > Notifications > Default reminder (`MacDefaultReminder`, read by Mac quick add).
-    static let defaultReminder = "cria.mac.defaultReminder"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
-            menuBar: true, closeToMenuBar: true, hideDock: false, showFavourites: true, defaultReminder: -1
+            menuBar: true, closeToMenuBar: true, hideDock: false, showFavourites: true
         ])
     }
 }
@@ -48,7 +46,7 @@ final class MacBackground {
             Task { await SyncSideEffects.run(services: services) },
             Task { await ReminderScheduler.run(store: store) },
             Task { await SummaryScheduler.run(store: store) },
-            Task { await DockBadge.run(store: store) }
+            Task { await AppIconBadge.run(store: store) }
         ]
     }
 
@@ -56,43 +54,7 @@ final class MacBackground {
         tasks.forEach { $0.cancel() }
         tasks = []
         running = nil
-        DockBadge.show(0)
-    }
-}
-
-/// The Dock icon's count: open tasks overdue or due today, as the desktop app's badge (`src/queries/badge.ts`). It
-/// follows task and project changes, and re-reads when the day turns over so yesterday's "today" is not left behind.
-enum DockBadge {
-    static func run(store: CriaStore) async {
-        async let changes: Void = follow(store)
-        async let midnight: Void = followDay(store)
-        _ = await (changes, midnight)
-    }
-
-    @MainActor
-    static func show(_ count: Int) {
-        NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
-    }
-
-    private static func follow(_ store: CriaStore) async {
-        for await open in observeStore(store, kinds: [.tasks, .projects], read: { try openToday($0) }) {
-            await show(open)
-        }
-    }
-
-    private static func followDay(_ store: CriaStore) async {
-        var day = Calendar.cria.startOfDay(for: Date())
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(60))
-            let today = Calendar.cria.startOfDay(for: Date())
-            guard today != day else { continue }
-            day = today
-            if let open = try? openToday(store) { await show(open) }
-        }
-    }
-
-    private static func openToday(_ store: CriaStore) throws -> Int {
-        try store.smartGroups(.today).reduce(0) { $0 + $1.items.count }
+        AppIconBadge.show(0)
     }
 }
 

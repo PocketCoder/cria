@@ -127,6 +127,7 @@ private struct TableDateEditor: View {
     let taskLocalId: String
     let field: TableDateField
     let onFailure: (String) -> Void
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     private var task: TaskRecord? { try? services.store.task(localId: taskLocalId) }
 
@@ -153,7 +154,7 @@ private struct TableDateEditor: View {
                     patch.repeatMode = chosenRepeat.mode
                 }
                 do {
-                    _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
+                    try undo.updateTask(services, localId: taskLocalId, patch: patch)
                 } catch {
                     onFailure(String(describing: error))
                 }

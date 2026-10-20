@@ -64,7 +64,8 @@ public extension Ramble {
         let parsed = parseQuickAdd(normaliseLine(raw), now: now, mode: mode, calendar: calendar)
         let title = tidyTitle(parsed.title, capitalise: raw.first?.isUppercase == true)
         guard !title.isEmpty else { return nil }
-        var proposal = RambleProposal(id: draft.id, title: title, dueDate: parsed.dueDate)
+        let due = allDayWhenRelative(parsed.dueDate, line: normaliseLine(raw), calendar: calendar)
+        var proposal = RambleProposal(id: draft.id, title: title, dueDate: due)
         proposal.projectLocalId = parsed.projectTitle.flatMap { findProject(titled: $0, in: projects) }?.localId
         proposal.labelTitles = parsed.labelTitles.filter { knownLabels?.contains($0.lowercased()) ?? true }
         proposal.priority = parsed.priority ?? 0
@@ -74,6 +75,15 @@ public extension Ramble {
         proposal.notes = draft.notes
         proposal.suggestion = draft.suggestion
         return proposal
+    }
+
+    /// "in 2 days" parses to that far from now, at this time of day (as in Vikunja-web). A dictated "the day after
+    /// tomorrow" or "in a week" means the day, so a due date made that way, with no time typed, is all-day.
+    private static func allDayWhenRelative(_ due: String?, line: String, calendar: Calendar) -> String? {
+        guard let due, DueDates.hasTimeOfDay(due), let date = DueDates.parse(due),
+              line.range(of: #"(?i)\bin\s+\d+\s+(?:day|week|month)s?\b"#, options: .regularExpression) != nil,
+              line.range(of: #"(?i)\s(?:at|@)\s+\d"#, options: .regularExpression) == nil else { return due }
+        return DueDates.allDayISO(for: date, calendar: calendar)
     }
 
     /// Applies a suggestion ("+Flat *house") the user accepted: a known project replaces the current one and labels
@@ -116,12 +126,16 @@ public extension Ramble {
     /// - "in two days", "in a week" become "in 2 days", "in 1 week".
     /// - A connective before a date ("by tomorrow", "due friday", "on tomorrow", "before next week") is dropped, so
     ///   the title does not end in "by".
+    /// - "this friday" becomes "friday" ("this" before a weekday is not a date word to Vikunja-web).
+    /// - A date in brackets ("(tomorrow)") loses them: Vikunja-web's date words need a space before them.
     /// Case is ignored throughout ("Tomorrow" already parses; the parser is case-insensitive).
     static func normaliseLine(_ line: String) -> String {
         var text = replacing(line, "(?i)\\b(\\d{1,2}(?::\\d{2})?)\\s*([ap])\\.\\s?m\\b\\.?", with: "$1$2m")
         text = replacing(text, "(?i)\\b(?:the\\s+)?day\\s+after\\s+tomorrow\\b", with: "in 2 days")
         text = spelledOutCounts(text)
         text = replacing(text, "(?i)\\b(?:due\\s+(?:on|by)|due|by|on|before|for)\\s+(?=" + datePhrase + ")", with: "")
+        text = replacing(text, "(?i)\\bthis\\s+(?=(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b)", with: "")
+        text = replacing(text, "(?i)[(\\[]\\s*(" + datePhrase + ")\\s*[)\\]]", with: " $1 ")
         return text
     }
 

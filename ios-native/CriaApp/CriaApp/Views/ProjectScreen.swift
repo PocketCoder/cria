@@ -100,6 +100,11 @@ struct ProjectScreen: View {
         content
             .navigationTitle(live.value.project?.title ?? title)
             .navigationBarTitleDisplayMode(.large)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let project = live.value.project, project.isArchived {
+                    ArchivedProjectBanner(services: services, project: project)
+                }
+            }
             .sheet(isPresented: $managing) {
                 ManageViewsSheet(services: services, projectLocalId: projectLocalId, views: views) { deletedId in
                     select(ViewManagement.viewAfterDelete(views.map(\.slot), deletedId: deletedId))

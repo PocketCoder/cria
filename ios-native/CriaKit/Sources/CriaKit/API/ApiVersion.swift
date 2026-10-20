@@ -10,7 +10,7 @@ public enum ApiVersion: String, Sendable {
     static let allVersions: [ApiVersion] = [.apiV1, .apiV2]
 }
 
-/// Which API generation to talk to. One rule shared with the TypeScript client (docs/V2-MIGRATION.md): v2 from
+/// Which API generation to talk to. One rule shared with the TypeScript client (AGENTS.md, v1/v2 section): v2 from
 /// Vikunja 2.7.0, v1 for anything older or unparseable, and a persisted "Force API v1" switch that overrides it.
 public enum ApiVersionPolicy {
     public static let minimumV2: (major: Int, minor: Int, patch: Int) = (2, 7, 0)

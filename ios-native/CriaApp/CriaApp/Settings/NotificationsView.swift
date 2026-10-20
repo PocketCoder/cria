@@ -9,6 +9,8 @@ struct NotificationsView: View {
     let onClose: () -> Void
     @Environment(\.openURL) private var openURL
     @Environment(\.dateDisplay) private var dateDisplay
+    /// The bell's count, kept in step with what this screen reads and changes. Nil in Settings on the Mac.
+    @Environment(NotificationInbox.self) private var inbox: NotificationInbox?
     @State private var items: [AppNotification] = []
     @State private var errorMessage: String?
     @State private var loading = true
@@ -51,6 +53,7 @@ struct NotificationsView: View {
     private func load() async {
         do {
             items = try await services.api.notifications()
+            inbox?.apply(items)
             errorMessage = nil
         } catch {
             errorMessage = String(describing: error)

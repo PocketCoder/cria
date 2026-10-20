@@ -5,7 +5,9 @@ import SwiftUI
 /// The editor with its formatting bar (the text view's accessory) and the sheets it opens (mention picker, link prompt, photo picker).
 struct EditorHost: View {
     let services: AppServices
-    let taskLocalId: String
+    /// The task whose attachments pasted or picked images join. Nil for text that belongs to no task (a project's
+    /// description): the Image button then does nothing.
+    let taskLocalId: String?
     let initialHTML: String
     let controller: EditorController
     /// Inline editor only: see `RichTextEditor.inlineHeight` and `onHeightChange`.
@@ -23,6 +25,9 @@ struct EditorHost: View {
     @State private var photo: PhotosPickerItem?
     @State private var showPhotoPicker = false
     @State private var viewingImage: ImageViewerItem?
+    #if os(macOS)
+    @State private var mentionPopover = MacMentionPopover()
+    #endif
 
     var body: some View {
         editor
@@ -33,9 +38,16 @@ struct EditorHost: View {
             .onChange(of: showPhotoPicker) { _, showing in
                 if !showing { controller.restoreFocus() }
             }
+            #if os(macOS)
+            // A popover at the caret rather than a sheet.
+            .onChange(of: showMention) { _, showing in
+                if showing { presentMentionPopover() }
+            }
+            #else
             .sheet(isPresented: $showMention, onDismiss: finishMention) {
                 MentionPickerSheet(services: services) { pickedMention = $0 }
             }
+            #endif
             .alert("Add link", isPresented: $showLink) {
                 TextField("https://", text: $linkText).textInputAutocapitalization(.never).keyboardType(.URL)
                 Button("Add") {
@@ -89,11 +101,16 @@ struct EditorHost: View {
             mentionFromTyping = true
             showMention = true
         }
+        controller.onSlashImage = {
+            controller.holdFocus()
+            showPhotoPicker = true
+        }
         barActions.onLink = {
             controller.holdFocus()
             showLink = true
         }
         barActions.onPhoto = {
+            guard taskLocalId != nil else { return }
             controller.holdFocus()
             showPhotoPicker = true
         }
@@ -108,6 +125,20 @@ struct EditorHost: View {
             Task { await insertImageData(data, name: name, mime: mime) }
         }
     }
+
+    #if os(macOS)
+    private func presentMentionPopover() {
+        guard let view = controller.textView as? MacEditorTextView else {
+            showMention = false
+            finishMention()
+            return
+        }
+        mentionPopover.show(from: view, services: services, onPick: { pickedMention = $0 }, onClose: {
+            showMention = false
+            finishMention()
+        })
+    }
+    #endif
 
     private func finishMention() {
         let picked = pickedMention
@@ -143,7 +174,8 @@ struct EditorHost: View {
 
     /// Queues the bytes as an attachment and puts the image in the text as `cria://pending/{id}` until it uploads.
     private func insertImageData(_ data: Data, name: String, mime: String) async {
-        guard let localId = try? services.attachFile(taskLocalId: taskLocalId, fileName: name, mime: mime, data: data) else { return }
+        guard let taskLocalId,
+              let localId = try? services.attachFile(taskLocalId: taskLocalId, fileName: name, mime: mime, data: data) else { return }
         controller.insertImage(RichImage(src: "cria://pending/\(localId)", alt: name))
     }
 }

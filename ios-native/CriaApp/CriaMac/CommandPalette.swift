@@ -26,6 +26,7 @@ struct CommandPalette: View {
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.playsCompletionSound) private var playsSound
     @Environment(\.preferences) private var preferences
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @State private var query = ""
     @State private var chosen = 0
@@ -229,7 +230,7 @@ struct CommandPalette: View {
     private func completeChosen() {
         guard shown.indices.contains(chosen), let id = shown[chosen].taskId else { return }
         do {
-            _ = try services.store.updateTask(localId: id, patch: TaskPatch(done: true))
+            try undo.updateTask(services, localId: id, patch: TaskPatch(done: true))
             failure = nil
             if playsSound { CompletionSound.play(preferences.custom.completionTone) }
         } catch {
@@ -271,6 +272,7 @@ extension CommandPalette {
             result.append(PaletteItem(id: "go.teams", title: "Teams", detail: "Go to", symbol: "person.2") {
                 actions.sidebar.showingTeams = true
             })
+            result.append(command("filter", "New saved filter", "line.3.horizontal.decrease") { actions.sidebar.newFilter() })
         }
         result.append(command("task", "New task", "plus", "⌘N") { actions.newTask() })
         if AIStatus.shared.isOfferable {

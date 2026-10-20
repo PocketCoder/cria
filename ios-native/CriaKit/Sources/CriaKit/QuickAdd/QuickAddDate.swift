@@ -13,7 +13,9 @@ private let monthWord = "(?:january|jan|february|feb|march|mar|april|apr|may|jun
     + "|september|sept|sep|october|oct|november|nov|december|dec)"
 private let ordinal = "(?:st|nd|rd|th)?"
 
-/// The Swift stand-in for chrono-node: a small deterministic set of phrases, resolved against `now`.
+/// The looser date reader behind `parseDatePhrase`, the date sheet's "Type a date" field (and nothing else: quick-add
+/// lines go through `QuickAddMagicDate.swift`, which follows Vikunja-web exactly). It stands in for chrono-node: a small
+/// deterministic set of phrases, resolved against `now`.
 /// Supported: today, tonight, tomorrow, tmrw, yesterday; weekdays with optional this, next or on; (this) weekend;
 /// next week;
 /// in N minutes, hours, days, weeks, months or years; yyyy-mm-dd; "May 30th", "30 May 2026"; and a time of day

@@ -50,7 +50,7 @@ public enum KanbanNesting {
     /// `children` is the parent to subtasks map, read once per board load. `shows` is the board filter: it applies
     /// to cards, and a nested subtask it hides is simply not listed. A hidden parent hands its shown subtasks up
     /// as plain cards, so a task the filter matches never disappears behind one it does not. With `nests` false
-    /// (the Mac) every subtask is a card of its own that drags on its own, naming its parent wherever it is.
+    /// every subtask is a card of its own that drags on its own, naming its parent wherever it is.
     public static func plan(
         columns: [KanbanColumn], children: [String: [String]], nests: Bool = true,
         shows: @escaping (TaskRecord) -> Bool = { _ in true }

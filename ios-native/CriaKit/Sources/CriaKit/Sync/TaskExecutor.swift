@@ -72,13 +72,21 @@ public struct TaskExecutor: OutboxExecutor {
         }
         // A failed GET skips the check: the push itself may fail and retry.
         var body = taskToBody(task.record, projectServerId: projectServerId.flatMap { $0 > 0 ? $0 : nil }, reminders: reminders)
-        // Vikunja's task update resets the cover image when the body leaves it out, and Cria has no UI for it: send
-        // back whatever the server last held, so an edit here keeps a cover set in Vikunja-web.
-        if let cover = Self.coverImageId(lastSynced: task.lastSynced) {
+        // Vikunja's task update resets the cover image when the body leaves it out: send the stored choice (0 clears
+        // it), or for a row with none stored yet whatever the server last held, so an edit keeps a cover set in
+        // Vikunja-web.
+        if let cover = Self.coverToSend(stored: task.record.coverImageAttachmentId, lastSynced: task.lastSynced) {
             body["cover_image_attachment_id"] = .number(Double(cover))
         }
         let (updated, raw) = try Self.decoded(try await api.send(.post, "/tasks/\(serverId)", body: body))
         try store.markTaskSynced(localId: localId, serverId: nil, updatedAt: updated.updated, lastSynced: raw, opId: op.id)
+    }
+
+    /// The cover id for the update body: the local choice when there is one (0 removes the cover), else the last
+    /// synced snapshot's, else nothing.
+    static func coverToSend(stored: Int?, lastSynced: String?) -> Int? {
+        if let stored { return max(stored, 0) }
+        return coverImageId(lastSynced: lastSynced)
     }
 
     static func coverImageId(lastSynced: String?) -> Int? {

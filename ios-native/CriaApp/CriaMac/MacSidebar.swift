@@ -28,6 +28,7 @@ struct MacSidebar: View {
     @AppStorage("mac.sidebar.projects") private var showProjects = true
     @AppStorage("mac.sidebar.filters") private var showFilters = true
     @AppStorage("mac.sidebar.labels") private var showLabels = true
+    @State private var showingArchived = false
 
     private var sheets: MacSidebarActions { actions.sidebar }
 
@@ -82,6 +83,11 @@ struct MacSidebar: View {
             Section {
                 if showProjects {
                     MacProjectBranch(parent: nil, children: live.value.children, services: services, sheets: sheets)
+                    Button { showingArchived = true } label: {
+                        Label("Archived projects", systemImage: "archivebox")
+                    }
+                    .buttonStyle(.plain)
+                    .macSidebarRow(selected: false)
                 }
             } header: {
                 MacSidebarHeader(title: "Projects", isExpanded: $showProjects, addHelp: "New project") {
@@ -108,6 +114,18 @@ struct MacSidebar: View {
         .task { await live.run() }
         .task { await counts.run() }
         .safeAreaInset(edge: .bottom, spacing: 0) { MacSidebarFooter(store: services.store) }
+        .sheet(isPresented: $showingArchived) {
+            NavigationStack {
+                ArchivedProjectsView(services: services) { project in
+                    actions.selection = .project(project.localId)
+                    showingArchived = false
+                }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showingArchived = false } }
+                }
+            }
+            .macSheetFrame()
+        }
     }
 
     @ViewBuilder private var filterRows: some View {
@@ -199,6 +217,7 @@ struct MacProjectLabel: View {
     let sheets: MacSidebarActions
     @State private var isTargeted = false
     @Environment(\.macSidebarSelection) private var selection
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         Label {
@@ -228,14 +247,9 @@ struct MacProjectLabel: View {
 
     /// Moves each dropped task here, as the inspector's Move to project does. Tasks already here are left alone.
     private func moveTasks(_ ids: [String]) -> Bool {
-        var moved = false
-        for id in ids {
-            guard let task = try? services.store.task(localId: id), task.projectLocalId != project.localId else { continue }
-            var patch = TaskPatch()
-            patch.projectLocalId = project.localId
-            if (try? services.store.updateTask(localId: id, patch: patch)) != nil { moved = true }
-        }
-        return moved
+        let result = services.store.bulkMove(ids, toProject: project.localId)
+        undo.record(result.undo)
+        return result.changed > 0
     }
 }
 

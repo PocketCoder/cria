@@ -18,6 +18,8 @@ public struct TaskRecord: Equatable, Sendable {
     public internal(set) var hexColor: String?
     public internal(set) var position: Double?
     public internal(set) var isFavorite: Bool
+    /// Whether the user gets the server's notifications for this task. Set by the pull and by `setTaskSubscribed`.
+    public internal(set) var isSubscribed: Bool
     public internal(set) var repeatAfter: Int
     public internal(set) var repeatMode: Int
     public internal(set) var updatedAt: String
@@ -26,6 +28,14 @@ public struct TaskRecord: Equatable, Sendable {
     public internal(set) var createdById: Int?
     /// The server's readable identifier, such as "PROJ-42" (read-only; nil until the task has been pulled).
     public internal(set) var identifier: String?
+    /// The server id of the attachment used as the task's cover image (`cover_image_attachment_id`). 0 means none was
+    /// set; nil means the row has not been read from the server since covers were stored, so nothing is known.
+    public internal(set) var coverImageAttachmentId: Int?
+
+    /// The cover attachment's server id, or nil when the task has no cover.
+    public var coverAttachmentServerId: Int? {
+        coverImageAttachmentId.flatMap { $0 > 0 ? $0 : nil }
+    }
 
     init(row: Row) {
         localId = row["local_id"]
@@ -43,12 +53,14 @@ public struct TaskRecord: Equatable, Sendable {
         hexColor = row["hex_color"]
         position = row["position"]
         isFavorite = row["is_favorite"]
+        isSubscribed = row["is_subscribed"]
         repeatAfter = row["repeat_after"]
         repeatMode = row["repeat_mode"]
         updatedAt = row["updated_at"]
         createdAt = row["created_at"]
         createdById = row["created_by_id"]
         identifier = row["identifier"]
+        coverImageAttachmentId = row["cover_image_id"]
     }
 }
 
@@ -75,6 +87,9 @@ public struct TaskInput: Sendable {
     public var isFavorite: Bool
     public var repeatAfter = 0
     public var repeatMode = 0
+    /// Set by quick add's expanded syntax (`9-10am`, `for 1h`, `{deadline}`).
+    public var startDate: String?
+    public var endDate: String?
 
     public init(title: String, projectLocalId: String, description: String? = nil, dueDate: String? = nil,
                 priority: Int = 0, isFavorite: Bool = false) {
@@ -88,7 +103,7 @@ public struct TaskInput: Sendable {
 }
 
 /// Partial edit. A nil field is left unchanged.
-public struct TaskPatch: Sendable {
+public struct TaskPatch: Equatable, Sendable {
     public var title: String?
     public var done: Bool?
     /// An empty string clears the date (as for `startDate` and `endDate`); the push then sends null.
@@ -108,6 +123,8 @@ public struct TaskPatch: Sendable {
     public var repeatMode: Int?
     /// Task colour as six hex digits (a leading `#` is dropped); an empty string clears it. The push sends it raw.
     public var hexColor: String?
+    /// Server id of the attachment to use as the cover image; 0 removes the cover.
+    public var coverImageAttachmentId: Int?
 
     public init(title: String? = nil, done: Bool? = nil, dueDate: String? = nil,
                 priority: Int? = nil, isFavorite: Bool? = nil) {
@@ -122,8 +139,8 @@ public struct TaskPatch: Sendable {
 extension CriaStore {
     static let taskColumns = """
         local_id, server_id, project_local_id, title, description, done, done_at, due_date, \
-        start_date, end_date, priority, percent_done, hex_color, position, is_favorite, \
-        repeat_after, repeat_mode, updated_at, created_at, created_by_id, identifier
+        start_date, end_date, priority, percent_done, hex_color, position, is_favorite, is_subscribed, \
+        repeat_after, repeat_mode, updated_at, created_at, created_by_id, identifier, cover_image_id
         """
 
     /// Same order as `listTasksForProject` in `src/db/tasks.ts`. Positions are local per view, so no server sort.
@@ -200,11 +217,11 @@ extension CriaStore {
         let now = isoNow()
         try connection.execute(sql: """
             INSERT INTO tasks (local_id, server_id, project_local_id, title, description, done, due_date,
-                   priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
+                   start_date, end_date, priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
                    updated_at, created_at, dirty, deleted)
-            VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
+            VALUES (?, NULL, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
             """, arguments: [
-                localId, input.projectLocalId, input.title, input.description, input.dueDate,
+                localId, input.projectLocalId, input.title, input.description, input.dueDate, input.startDate, input.endDate,
                 input.priority, input.isFavorite, input.repeatAfter, input.repeatMode, now, now
             ])
         guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
@@ -319,70 +336,10 @@ extension CriaStore {
                     arguments: [localId, payload.id, projectLocalId, payload.title, now]
                 )
             }
-            let arguments: [(any DatabaseValueConvertible)?] = [
-                projectLocalId, payload.title, payload.description, payload.done ?? false, payload.doneAt,
-                payload.dueDate, payload.startDate, payload.endDate, payload.priority ?? 0,
-                payload.percentDone ?? 0, payload.hexColor, payload.position, payload.isFavorite ?? false,
-                payload.repeatAfter ?? 0, payload.repeatMode ?? 0, payload.identifier, payload.updated ?? now,
-                payload.created, CriaStore.rememberCreator(payload.createdBy), now, rawJSON, localId
-            ]
-            try connection.execute(sql: """
-                UPDATE tasks SET project_local_id = ?, title = ?, description = ?, done = ?, done_at = ?,
-                       due_date = ?, start_date = ?, end_date = ?, priority = ?, percent_done = ?, hex_color = ?,
-                       position = ?, is_favorite = ?, repeat_after = ?, repeat_mode = ?, identifier = ?,
-                       updated_at = ?, created_at = ?, created_by_id = ?, synced_at = ?, last_synced = ?,
-                       dirty = 0, deleted = 0
-                 WHERE local_id = ?
-                """, arguments: StatementArguments(arguments))
+            try CriaStore.writeServerFields(
+                connection, payload, rawJSON: rawJSON, projectLocalId: projectLocalId, localId: localId, now: now
+            )
             return localId
         }
-    }
-
-    /// The creator's id for the row, after noting their name and username for the table's Created By column.
-    static func rememberCreator(_ creator: TaskResponse.CreatedBy?) -> Int? {
-        guard let id = creator?.id else { return nil }
-        UserNameDirectory.shared.remember([(id, creator?.name)], usernames: [(id, creator?.username)])
-        return id
-    }
-
-    /// Fields compared for conflicts. Mirrors the TypeScript conflict field list for tasks.
-    static let conflictFields = ["title", "description", "done", "due_date"]
-
-    static func recordConflictIfDiverged(
-        _ connection: Database, localId: String, lastSynced: String?, remoteJSON: String, now: String
-    ) throws {
-        try recordConflictIfDiverged(connection, entityType: "task", localId: localId, lastSynced: lastSynced,
-                                     remoteJSON: remoteJSON, fields: conflictFields, now: now)
-    }
-
-    /// A pull found a row with a pending local edit whose server copy also changed one of `fields` since the last
-    /// sync: record a conflict (once per pair of snapshots). Ported from `mergeFromServer` in `src/db/syncMerge.ts`.
-    static func recordConflictIfDiverged(
-        _ connection: Database, entityType: String, localId: String, lastSynced: String?, remoteJSON: String,
-        fields candidates: [String], now: String
-    ) throws {
-        guard let lastSynced, lastSynced != remoteJSON else { return }
-        let duplicate = try Int.fetchOne(connection, sql: """
-            SELECT id FROM conflicts
-             WHERE entity_type = ? AND entity_local_id = ?
-               AND local_snapshot = ? AND remote_snapshot = ?
-             LIMIT 1
-            """, arguments: [entityType, localId, lastSynced, remoteJSON])
-        guard duplicate == nil else { return }
-        guard let before = try jsonObject(lastSynced), let after = try jsonObject(remoteJSON) else { return }
-        let fields = candidates.filter { field in
-            !conflictValuesEqual(field: field, before[field], after[field])
-        }
-        guard !fields.isEmpty else { return }
-        let fieldsData = try JSONSerialization.data(withJSONObject: fields)
-        let fieldsJSON = String(bytes: fieldsData, encoding: .utf8) ?? "[]"
-        try connection.execute(sql: """
-            INSERT INTO conflicts (entity_type, entity_local_id, fields, local_snapshot, remote_snapshot, detected_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """, arguments: [entityType, localId, fieldsJSON, lastSynced, remoteJSON, now])
-    }
-
-    static func jsonObject(_ text: String) throws -> [String: Any]? {
-        try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
     }
 }

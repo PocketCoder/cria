@@ -83,7 +83,7 @@ extension EnvironmentValues {
 
 /// Menu-bar and keyboard commands for the open task, posted by the Mac shell and carried out by `TaskDetailView`.
 enum TaskCommand: String, Sendable {
-    case done, due, priority, labels, move, favourite, copyLink, delete
+    case done, due, priority, labels, move, favourite, copyLink, subscribe, delete
 }
 
 /// The desktop app's other task keys (`a`, `c`, `.`, `..`, `...`), carried out by `TaskCommandHandler` itself.

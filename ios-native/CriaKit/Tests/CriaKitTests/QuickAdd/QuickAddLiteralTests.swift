@@ -87,14 +87,21 @@ final class QuickAddTaskParseTests: XCTestCase {
 
     func testLineOfOnlyTokensStaysAsTypedInEveryMode() {
         let cases: [(QuickAddMagicMode, String)] = [
-            (.vikunja, "*errands +Home @alice !3 tomorrow every day"),
-            (.todoist, "@errands #Home +alice !3 tomorrow every day"),
+            (.vikunja, "*errands +Home !3 tomorrow every day"),
+            (.todoist, "@errands #Home !3 tomorrow every day"),
             (.disabled, "*errands +Home @alice !3 tomorrow every day")
         ]
         for (mode, line) in cases {
             XCTAssertEqual(parseTask(line, mode: mode).title, line)
             XCTAssertTrue(nothingParsed(parseTask(line, mode: mode)))
         }
+    }
+
+    func testAnAssigneeKeepsTheTitleFromBeingEmpty() {
+        // The @name stays in the title (as in Vikunja-web), so the line has a title and the assignee applies.
+        let result = parseTask("@alice")
+        XCTAssertEqual(result.title, "@alice")
+        XCTAssertEqual(result.assigneeUsernames, ["alice"])
     }
 
     func testEmptyQuotedPairStaysAsTyped() {

@@ -37,6 +37,8 @@ public enum DeepLink: Equatable, Sendable {
     public static func taskURL(localId: String) -> URL? { URL(string: "\(scheme)://task/\(localId)") }
     public static func projectURL(localId: String) -> URL? { URL(string: "\(scheme)://project/\(localId)") }
     public static var todayURL: URL? { URL(string: "\(scheme)://today") }
+    /// Opens quick add, as the widgets' "Add task" button and the Control Centre control do.
+    public static var addURL: URL? { URL(string: "\(scheme)://add") }
 
     /// Where the link goes in the shell.
     public enum Destination: Equatable, Sendable {

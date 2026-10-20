@@ -69,6 +69,16 @@ public extension CriaStore {
         return try createTask(TaskInput(title: title, projectLocalId: project, description: descriptionHtml))
     }
 
+    /// The widget's tick button: marks an open task done through the normal user write (dirty row plus outbox op, so the
+    /// server advances a repeating task as it does for the app's own tick). False when the task is gone or already done,
+    /// so a double tap changes nothing. The caller posts `CrossProcessSignal` and reloads timelines.
+    @discardableResult
+    func completeTaskFromWidget(localId: String) throws -> Bool {
+        guard let existing = try task(localId: localId), !existing.done else { return false }
+        try updateTask(localId: localId, patch: TaskPatch(done: true))
+        return true
+    }
+
     /// A task by local id, or by server id when `identifier` is numeric. Nil when missing or deleted.
     func resolveTaskId(_ identifier: String) throws -> String? {
         try resolveLocalId(table: "tasks", identifier: identifier)

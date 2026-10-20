@@ -9,8 +9,13 @@ struct ShellView: View {
     @Binding var pendingURL: URL?
     @State private var navigation = NavigationModel()
     @State private var addRequest: QuickAddRequest?
+    @State private var showingPalette = false
     @State private var conflictPrompt = ConflictPrompt()
     @State private var undoCenter = UndoCenter()
+    @State private var inbox = NotificationInbox()
+    @Environment(\.scenePhase) private var scenePhase
+    /// A share link has no account, so no notifications to poll.
+    @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @State private var counts: LiveValue<TabCounts>
     @Environment(\.preferences) private var preferences
 
@@ -39,6 +44,7 @@ struct ShellView: View {
             .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
             .environment(navigation)
             .environment(undoCenter)
+            .environment(inbox)
             .tint(Color(.primary))
             .onChange(of: pendingURL) { _, _ in openPendingURL() }
             .task {
@@ -52,6 +58,16 @@ struct ShellView: View {
             }
             .task { await conflictPrompt.run(store: services.store) }
             .task { undoCenter.attach(services) }
+            // Every 30 s while the app is active; the task restarts (and reads at once) when it comes back.
+            .task(id: scenePhase) {
+                if scenePhase == .active && !isLinkShare { await inbox.poll(services) }
+            }
+            .modifier(IPadShortcuts(
+                onPalette: { showingPalette = true }, onNewTask: { addRequest = QuickAddRequest(title: "") }, onGo: jump
+            ))
+            .sheet(isPresented: $showingPalette) {
+                IOSCommandPalette(services: services, onChoose: choose)
+            }
             .sheet(item: $addRequest) { request in
                 QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
             }
@@ -120,6 +136,33 @@ struct ShellView: View {
         }
     }
 
+    /// Opens a tab's first screen (a tab left out of the bar opens through Browse), as a link to it would.
+    private func jump(to tab: AppTab) {
+        let target: AppTab = custom.barTabs.contains(tab) || tab == .search ? tab : .browse
+        if target == tab {
+            navigation.state.selected = tab
+            navigation.state.setPath([], for: tab)
+        } else if tab == .inbox {
+            navigation.state.open(.inbox, on: .browse)
+        } else if tab == .favorites {
+            navigation.state.open(.favorites, on: .browse)
+        } else {
+            navigation.state.selected = .browse
+        }
+    }
+
+    /// What a command palette row asked for.
+    private func choose(_ choice: IOSCommandPalette.Choice) {
+        switch choice {
+        case .goTo(let tab): jump(to: tab)
+        case .project(let localId): navigation.state.open(.project(localId), on: .browse)
+        case .label(let localId): navigation.state.open(.label(localId), on: .browse)
+        case .savedFilter(let serverId): navigation.state.open(.savedFilter(serverId), on: .browse)
+        case .task(let localId): navigation.state.push(.task(localId))
+        case .newTask: addRequest = QuickAddRequest(title: "")
+        }
+    }
+
     private func stack(_ tab: AppTab) -> some View {
         NavigationStack(path: navigation.pathBinding(for: tab)) {
             TabRoot(tab: tab, services: services, onSignOut: onSignOut)
@@ -156,14 +199,17 @@ struct TabRoot: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Settings", systemImage: "gearshape") { showingSettings = true }
                     }
+                    ToolbarItem(placement: .topBarLeading) { NotificationBell(services: services) }
                 }
                 .sheet(isPresented: $showingSettings) {
                     SettingsView(services: services, onSignOut: onSignOut)
                 }
         case .today:
             SmartViewScreen(services: services, view: .today, title: "Today")
+                .toolbar { ToolbarItem(placement: .topBarLeading) { NotificationBell(services: services) } }
         case .upcoming:
             SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
+                .toolbar { ToolbarItem(placement: .topBarLeading) { NotificationBell(services: services) } }
         case .search:
             SearchScreen(services: services)
         case .inbox:

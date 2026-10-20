@@ -35,4 +35,13 @@ extension CriaStore {
         patch.endDate = GanttTree.iso(fromDay: end)
         return try updateTask(localId: taskLocalId, patch: patch)
     }
+
+    /// `setGanttDates`, plus the step that restores the bar's old dates.
+    @discardableResult
+    public func setGanttDatesUndoable(taskLocalId: String, start: Int, end: Int) throws -> TaskUndoStep {
+        var patch = TaskPatch()
+        patch.startDate = GanttTree.iso(fromDay: start)
+        patch.endDate = GanttTree.iso(fromDay: end)
+        return try updateTaskUndoable(localId: taskLocalId, patch: patch, message: "Dates changed")
+    }
 }

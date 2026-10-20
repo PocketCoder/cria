@@ -101,7 +101,6 @@ targets:
           # Replaced by the Mac shell (Phase 2) and the iOS entry points.
           - CriaApp.swift
           - Shell/ShellView.swift
-          - Platform/CriaIntents.swift
           # Phase 6.
           - Tasks/CameraPicker.swift
           - AI/BackgroundRun.swift

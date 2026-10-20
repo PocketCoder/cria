@@ -3,14 +3,14 @@
 - `CriaKit/`: Swift package with all logic (data, API, sync). Unit tests with `swift test`.
 - `CriaApp/`: SwiftUI app target. Generated with XcodeGen from `project.yml`:
   `brew install xcodegen && cd CriaApp && xcodegen generate`.
-- [`FEATURES.md`](FEATURES.md): every user-facing feature, and whether it syncs with Vikunja, follows the account across Cria installs, or stays on this device.
+- [`../REMAINING.md`](../REMAINING.md): what is left to do on the native apps.
 
 Fixed decisions (S-00): iOS 17 minimum, bundle ID `io.cria.app.swift`,
 SQLite database in the App Group container `group.io.cria.app`.
 
 ## macOS app
 
-`CriaMac` is a native SwiftUI Mac app in the same XcodeGen project, sharing `CriaKit` (macOS 15 minimum). It does not ship yet: it is the start of the plan in [`docs/SWIFT-MACOS-PLAN.md`](../docs/SWIFT-MACOS-PLAN.md). To build and run it locally:
+`CriaMac` is a native SwiftUI Mac app in the same XcodeGen project, sharing `CriaKit` (macOS 15 minimum). Nightlies ship from CI; what is left is in [`REMAINING.md`](../REMAINING.md). To build and run it locally:
 
 ```sh
 cd CriaApp && xcodegen generate

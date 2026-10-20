@@ -7,6 +7,18 @@ final class NotificationParseTests: XCTestCase {
         return NotificationParse.parse(name: name, payload: payload)
     }
 
+    func testUnreadCountIgnoresReadNotifications() throws {
+        let rows = [
+            #"{"id": 1, "name": "task.assigned", "read_at": "0001-01-01T00:00:00Z"}"#,
+            #"{"id": 2, "name": "task.assigned"}"#,
+            #"{"id": 3, "name": "task.assigned", "read_at": "2026-06-09T10:00:00Z"}"#
+        ]
+        let items = try rows.compactMap { AppNotification(try decodeFixture(JSONValue.self, $0)) }
+        XCTAssertEqual(items.count, 3)
+        XCTAssertEqual(items.unreadCount, 2)
+        XCTAssertEqual([AppNotification]().unreadCount, 0)
+    }
+
     func testAssigned() throws {
         let result = try parse("task.assigned", #"{"doer": {"name": "Ann", "username": "ann"}, "task": {"id": 4, "title": "Ship"}}"#)
         XCTAssertEqual(result.text, "Ann assigned you to “Ship”")

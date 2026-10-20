@@ -39,9 +39,12 @@ extension QuickAddSheet {
     /// The typed task with everything set for it, or nil (with the reason shown) when it has nowhere to go.
     func buildItem() -> QuickAddBatchItem? {
         let result = parsed
+        // A due date picked by hand wins over the one a typed time range or duration came with.
+        let typedSpan = !(picked.contains(.due) && result.startDate != nil)
         let fields = QuickAddFields(
             dueDate: dueISO.isEmpty ? nil : dueISO, priority: priority,
-            repeatAfter: result.repeatAfter, repeatMode: result.repeatMode
+            repeatAfter: result.repeatAfter, repeatMode: result.repeatMode,
+            startDate: typedSpan ? result.startDate : nil, endDate: typedSpan ? result.endDate : nil
         )
         guard var input = buildQuickAddInput(
             title: result.title, projectTitle: typedProjectTitle, projects: projects,

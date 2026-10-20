@@ -23,6 +23,7 @@ extension TaskPatch {
             let raw = hexColor.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased()
             add("hex_color", raw.isEmpty ? nil : raw)
         }
+        if let coverImageAttachmentId { add("cover_image_id", max(coverImageAttachmentId, 0)) }
         let optionalFields: [(String, (any DatabaseValueConvertible)?)] = [
             ("description", description), ("project_local_id", projectLocalId),
             ("priority", priority), ("is_favorite", isFavorite), ("percent_done", percentDone),

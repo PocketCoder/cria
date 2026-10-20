@@ -42,6 +42,7 @@ struct MacGeneralPane: View {
             Picker("Start on", selection: $prefs.value.custom.homeView) {
                 ForEach(Self.startTabs, id: \.self) { Text($0.title).tag($0) }
             }
+            Toggle("Sync start view across devices", isOn: $prefs.value.custom.syncHomeView)
         }
         Section("Menu bar and Dock") {
             Toggle(isOn: $menuBar) {
@@ -66,6 +67,20 @@ struct MacGeneralPane: View {
                 ForEach(Weekdays.names.indices, id: \.self) { Text(Weekdays.names[$0]).tag($0) }
             }
             .disabled(!canSave)
+            Picker("Quick Add Magic", selection: magicMode) {
+                Text("Vikunja (*label +project !priority)").tag("vikunja")
+                Text("Todoist (@label #project !priority)").tag("todoist")
+                Text("Off").tag("disabled")
+            }
+            .disabled(!canSave)
+            Toggle(isOn: $prefs.value.custom.expandedQuickAdd) {
+                MacSettingRow(
+                    title: "Expanded quick-add syntax",
+                    help: "Also reads p1 to p4, every! day, {deadline}, 9-10am and for 1h."
+                )
+            }
+            .disabled(model.general.quickAddMagicMode == QuickAddMagicMode.disabled.rawValue)
+            QuickAddDefaultsRows(model: model, canSave: canSave, icons: false)
         }
     }
 
@@ -73,6 +88,10 @@ struct MacGeneralPane: View {
     // compiler (IRGen) before.
     private var defaultProject: Binding<Int> {
         Binding(get: { model.general.defaultProjectId }, set: { id in Task { await model.setDefaultProject(id) } })
+    }
+
+    private var magicMode: Binding<String> {
+        Binding(get: { model.general.quickAddMagicMode }, set: { mode in Task { await model.setQuickAddMode(mode) } })
     }
 
     private var weekStart: Binding<Int> {
@@ -107,6 +126,13 @@ struct MacCustomisePane: View {
         Section("Lists") {
             Toggle("Show completed tasks", isOn: $showDone)
             Toggle("Play a sound on completion", isOn: $prefs.value.playSoundWhenDone)
+            if prefs.value.playSoundWhenDone {
+                Picker("Task complete tone", selection: $prefs.value.custom.completionTone) {
+                    ForEach(CompletionTone.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                // Play the choice, so it can be heard before leaving.
+                .onChange(of: prefs.value.custom.completionTone) { _, tone in CompletionSound.play(tone) }
+            }
             Picker("Appearance", selection: $prefs.value.colorScheme) {
                 Text("Light").tag(ColorSchemePreference.light)
                 Text("Dark").tag(ColorSchemePreference.dark)
@@ -114,13 +140,32 @@ struct MacCustomisePane: View {
             }
             .pickerStyle(.segmented)
         }
+        Section("Projects") {
+            Toggle(isOn: $prefs.value.custom.kanbanSortByDue) {
+                MacSettingRow(
+                    title: "Sort board cards by due date",
+                    help: "Soonest first, undated last. Dragging then only moves a card between columns."
+                )
+            }
+            Toggle(isOn: $prefs.value.custom.syncProjectViews) {
+                MacSettingRow(
+                    title: "Sync project views",
+                    help: "Reopens each project on the view you last used on any device that has this on."
+                )
+            }
+        }
+        // The same screens as on iPhone: the shared quick add, task screen and date parser read them.
+        Section("Screens") {
+            NavigationLink("Quick Add") { QuickAddSettingsView(prefs: prefs) }
+            NavigationLink("Task layout") { TaskLayoutSettingsView(prefs: prefs) }
+            NavigationLink("Dates & tasks") { DatesAndTasksSettingsView(prefs: prefs) }
+        }
     }
 }
 
 /// Settings > Notifications: Reminders and Summaries.
 struct MacNotificationsPane: View {
     @ObservedObject var prefs: PreferencesModel
-    @AppStorage(MacPrefs.defaultReminder) private var defaultReminder = MacDefaultReminder.off.rawValue
     @State private var status = UNAuthorizationStatus.notDetermined
 
     private var notificationsOn: Bool { prefs.value.notificationsEnabled && status != .denied }
@@ -130,16 +175,15 @@ struct MacNotificationsPane: View {
             Toggle(isOn: notificationsBinding) {
                 MacSettingRow(title: "Task reminders", help: "Notifications include Complete and Snooze buttons.")
             }
-            Picker(selection: $defaultReminder) {
-                ForEach(MacDefaultReminder.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
-            } label: {
-                MacSettingRow(title: "Default reminder", help: "Added by quick add when a new task has a due date.")
-            }
-            .disabled(!notificationsOn)
         }
         Section("Summaries") {
             Toggle("Morning summary", isOn: $prefs.value.morningSummaryEnabled)
                 .disabled(!notificationsOn)
+        }
+        Section("Dock") {
+            Toggle(isOn: $prefs.value.appIconBadge) {
+                MacSettingRow(title: "Dock badge", help: "Counts open tasks that are overdue or due today.")
+            }
         }
         .task { await refreshStatus() }
     }
@@ -165,26 +209,5 @@ struct MacNotificationsPane: View {
 
     private func refreshStatus() async {
         status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-    }
-}
-
-/// The reminder Mac quick add gives a new task with a due date (Settings > Notifications > Default reminder).
-enum MacDefaultReminder: Int, CaseIterable {
-    case off = -1, atDue = 0, hourBefore = 3_600, dayBefore = 86_400
-
-    var title: String {
-        switch self {
-        case .off: return "None"
-        case .atDue: return "On the due time"
-        case .hourBefore: return "1 hour before"
-        case .dayBefore: return "1 day before"
-        }
-    }
-
-    /// The stored choice as a quick-add reminder; nil for none.
-    static var current: QuickAddReminder? {
-        let raw = UserDefaults.standard.object(forKey: MacPrefs.defaultReminder) as? Int ?? off.rawValue
-        guard let choice = MacDefaultReminder(rawValue: raw), choice != .off else { return nil }
-        return .beforeDue(seconds: choice.rawValue)
     }
 }

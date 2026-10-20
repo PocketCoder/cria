@@ -29,6 +29,7 @@ struct ProjectSharingSheet: View {
     @State private var username = ""
     @State private var errorMessage: String?
     @State private var pendingRemoval: PendingRemoval?
+    @State private var creatingLink = false
 
     private var projectId: Int { project.serverId ?? 0 }
 
@@ -47,6 +48,13 @@ struct ProjectSharingSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { await load() }
+            .sheet(isPresented: $creatingLink) {
+                NewLinkShareSheet { permission, name, password in
+                    act {
+                        try await services.api.createLinkShare(projectId: projectId, permission: permission, name: name, password: password)
+                    }
+                }
+            }
             .confirmationDialog(
                 "Remove this share?",
                 isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
@@ -132,7 +140,7 @@ struct ProjectSharingSheet: View {
                 ShareLink(item: url) {
                     VStack(alignment: .leading) {
                         Text(share.name ?? share.hash).font(Theme.rowTitle)
-                        Text("\(share.permission.label)\(share.hasPassword ? ", password" : "")")
+                        Text("\(share.permission.label)\(share.hasPassword ? ", password protected" : "")")
                             .font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                     }
                 }
@@ -144,10 +152,8 @@ struct ProjectSharingSheet: View {
                     }
                 }
             }
-            Button("New link (read only)") {
-                act { try await services.api.createLinkShare(projectId: projectId, permission: .read, name: nil, password: nil) }
-            }
-            .disabled(projectId == 0)
+            Button("New link…") { creatingLink = true }
+                .disabled(projectId == 0)
         } header: {
             Text("Links")
         } footer: {

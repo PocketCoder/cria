@@ -27,10 +27,10 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(result.labelTitles, ["a", "b"])
     }
 
-    func testPriorityTakesHighest() {
+    func testPriorityTakesTheFirstValid() {
         let result = parse("Hotfix !2 something !4")
-        XCTAssertEqual(result.title, "Hotfix something")
-        XCTAssertEqual(result.priority, 4)
+        XCTAssertEqual(result.title, "Hotfix something !4")
+        XCTAssertEqual(result.priority, 2)
     }
 
     func testOutOfRangePriorityStaysInTitle() {
@@ -41,7 +41,7 @@ final class QuickAddParserTests: XCTestCase {
 
     func testAssigneeToken() {
         let result = parse("Review PR @alice")
-        XCTAssertEqual(result.title, "Review PR")
+        XCTAssertEqual(result.title, "Review PR @alice", "Vikunja-web leaves @name in the title")
         XCTAssertEqual(result.assigneeUsernames, ["alice"])
     }
 
@@ -83,20 +83,19 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(result.title, "todo *\"")
     }
 
-    func testLastProjectWins() {
+    func testFirstProjectWins() {
         let result = parse("+Dev Write tests +Personal")
-        XCTAssertEqual(result.title, "Write tests")
-        XCTAssertEqual(result.projectTitle, "Personal")
+        XCTAssertEqual(result.title, "Write tests +Personal")
+        XCTAssertEqual(result.projectTitle, "Dev")
     }
 
     func testDatePhraseIsRemovedFromTitle() {
         let result = parse("Submit invoice next friday")
         XCTAssertEqual(result.title.lowercased(), "submit invoice")
-        // chrono-node reads "next friday" as the Friday of the following Monday-based week: from Wed 2026-05-27
-        // that is 2026-06-05, not the coming Friday (29 May).
+        // Vikunja-web ignores "next" before a weekday: from Wed 2026-05-27 it is the coming Friday, 29 May.
         XCTAssertEqual(utcParts(result.dueDate)?.weekday, 6)
-        XCTAssertEqual(utcParts(result.dueDate)?.month, 6)
-        XCTAssertEqual(utcParts(result.dueDate)?.day, 5)
+        XCTAssertEqual(utcParts(result.dueDate)?.month, 5)
+        XCTAssertEqual(utcParts(result.dueDate)?.day, 29)
     }
 
     func testTimeBeforeDateSetsTheDay() {
@@ -105,16 +104,17 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(utcParts(result.dueDate)?.day, 28)
         XCTAssertEqual(utcParts(result.dueDate)?.hour, 17)
         let friday = parse("Dentist at 3pm on friday")
-        XCTAssertEqual(friday.title, "Dentist")
+        XCTAssertEqual(friday.title, "Dentist on")
         XCTAssertEqual(utcParts(friday.dueDate)?.day, 29)
         XCTAssertEqual(utcParts(friday.dueDate)?.hour, 15)
     }
 
-    func testTonightHourIsEvening() {
-        let result = parse("Call back tonight at 8")
-        XCTAssertEqual(result.title, "Call back")
+    func testTonightIsNinePMUnlessATimeIsGiven() {
+        let result = parse("Call back tonight")
         XCTAssertEqual(utcParts(result.dueDate)?.day, 27)
-        XCTAssertEqual(utcParts(result.dueDate)?.hour, 20)
+        XCTAssertEqual(utcParts(result.dueDate)?.hour, 21)
+        // An explicit time is taken as typed (upstream has no "evening" guess).
+        XCTAssertEqual(utcParts(parse("Call back tonight at 8").dueDate)?.hour, 8)
     }
 
     func testWeekendIsTheComingSaturday() {
@@ -131,7 +131,7 @@ final class QuickAddParserTests: XCTestCase {
 
     func testEverythingInOneGo() {
         let result = parse("Buy milk tomorrow *shopping !2 @alice +Personal")
-        XCTAssertEqual(result.title, "Buy milk")
+        XCTAssertEqual(result.title, "Buy milk @alice")
         XCTAssertNotNil(result.dueDate)
         XCTAssertEqual(result.priority, 2)
         XCTAssertEqual(result.labelTitles, ["shopping"])
@@ -178,10 +178,17 @@ final class QuickAddDateTests: XCTestCase {
     }
 
     func testTimeFormats() {
-        XCTAssertEqual(utcParts(parse("Gym tomorrow 17:30").dueDate)?.minute, 30)
-        XCTAssertEqual(utcParts(parse("Gym tomorrow 6am").dueDate)?.hour, 6)
-        XCTAssertEqual(utcParts(parse("Gym tomorrow 12am").dueDate)?.hour, 0)
-        XCTAssertEqual(utcParts(parse("Gym tomorrow 12pm").dueDate)?.hour, 12)
+        XCTAssertEqual(utcParts(parse("Gym tomorrow at 17:30").dueDate)?.minute, 30)
+        XCTAssertEqual(utcParts(parse("Gym tomorrow @ 6am").dueDate)?.hour, 6)
+        XCTAssertEqual(utcParts(parse("Gym tomorrow at 12am").dueDate)?.hour, 0)
+        XCTAssertEqual(utcParts(parse("Gym tomorrow at 12pm").dueDate)?.hour, 12)
+    }
+
+    func testATimeNeedsAtOrAtSign() {
+        // As in Vikunja-web: a bare "17:30" or "6am" is not a time.
+        XCTAssertEqual(parse("Gym tomorrow 17:30").title, "Gym 17:30")
+        XCTAssertEqual(parse("Gym 6am").title, "Gym 6am")
+        XCTAssertNil(parse("Gym 6am").dueDate)
     }
 
     func testBareNumberAfterDateStaysInTitle() {
@@ -190,8 +197,8 @@ final class QuickAddDateTests: XCTestCase {
         XCTAssertEqual(result.dueDate, "2026-05-28T00:00:00Z")
     }
 
-    func testStandaloneTimeRollsToTomorrowWhenPast() {
-        XCTAssertEqual(utcParts(parse("Stand up at 9am").dueDate)?.day, 28)
+    func testStandaloneTimeIsTodayEvenWhenPast() {
+        XCTAssertEqual(utcParts(parse("Stand up at 9am").dueDate)?.day, 27)
         XCTAssertEqual(utcParts(parse("Stand up at 5pm").dueDate)?.day, 27)
     }
 
@@ -201,14 +208,16 @@ final class QuickAddDateTests: XCTestCase {
 
     func testMonthDayPhrases() {
         XCTAssertEqual(parse("Party June 3rd").dueDate, "2026-06-03T00:00:00Z")
-        XCTAssertEqual(parse("Party 3 june 2027").dueDate, "2027-06-03T00:00:00Z")
+        // Month-name dates take no year in Vikunja-web: the "2027" stays in the title.
+        XCTAssertEqual(parse("Party 3 june 2027").title, "Party 2027")
         // Already past this year, so it rolls to the next one.
         XCTAssertEqual(parse("Anniversary 2 March").dueDate, "2027-03-02T00:00:00Z")
     }
 
     func testRelativePhrases() {
-        XCTAssertEqual(parse("Follow up in 3 days").dueDate, "2026-05-30T00:00:00Z")
-        XCTAssertEqual(parse("Follow up in 2 weeks").dueDate, "2026-06-10T00:00:00Z")
+        // "in N days" keeps the time of day it is typed at, as Vikunja-web does.
+        XCTAssertEqual(parse("Follow up in 3 days").dueDate, "2026-05-30T10:00:00Z")
+        XCTAssertEqual(parse("Follow up in 2 weeks").dueDate, "2026-06-10T10:00:00Z")
         XCTAssertEqual(parse("Review next week").dueDate, "2026-06-03T00:00:00Z")
         XCTAssertEqual(utcParts(parse("Check in 2 hours").dueDate)?.hour, 12)
     }
@@ -216,7 +225,7 @@ final class QuickAddDateTests: XCTestCase {
     func testWeekdayRules() {
         XCTAssertEqual(utcParts(parse("Sync friday").dueDate)?.day, 29)
         XCTAssertEqual(utcParts(parse("Sync wednesday").dueDate)?.day, 27)
-        XCTAssertEqual(utcParts(parse("Sync next wednesday").dueDate)?.day, 3)
+        XCTAssertEqual(utcParts(parse("Sync next wednesday").dueDate)?.day, 27, "\"next\" changes nothing upstream")
     }
 
     func testInvalidDatesAreIgnored() {
@@ -266,12 +275,6 @@ final class QuickAddRecurrenceTests: XCTestCase {
         XCTAssertEqual(parse("Dentist every 3 months").title, "Dentist")
     }
 
-    func testEveryWeekdayIsWeekly() {
-        XCTAssertEqual(parse("Prep meals every monday").title, "Prep meals")
-        XCTAssertEqual(repeats("Prep meals every monday").after, 604_800)
-        XCTAssertNil(parse("Prep meals every monday").dueDate)
-    }
-
     func testRecurrenceAndDateTogether() {
         let result = parse("Submit report tomorrow monthly")
         XCTAssertEqual(result.title, "Submit report")
@@ -301,7 +304,8 @@ final class QuickAddNeedsQuotingTests: XCTestCase {
     }
 
     func testMatchesTheParser() {
-        XCTAssertNil(parse("Buy bread +Caf\u{E9}").projectTitle)
+        // Vikunja-web reads a bare name to the next space, accents included; quoting stays the safe way to write one.
+        XCTAssertEqual(parse("Buy bread +Caf\u{E9}").projectTitle, "Caf\u{E9}")
         XCTAssertEqual(parse("Buy bread +\"Caf\u{E9}\"").projectTitle, "Caf\u{E9}")
         let result = parse("Call mum +\"Mum's\" *\"Mum's list\"")
         XCTAssertEqual(result.projectTitle, "Mum's")
@@ -330,7 +334,7 @@ final class QuickAddModeTests: XCTestCase {
 
     func testTodoistPrefixes() {
         let result = parse("Buy milk tomorrow @shopping !2 +alice #Personal", mode: .todoist)
-        XCTAssertEqual(result.title, "Buy milk")
+        XCTAssertEqual(result.title, "Buy milk +alice")
         XCTAssertEqual(result.labelTitles, ["shopping"])
         XCTAssertEqual(result.projectTitle, "Personal")
         XCTAssertEqual(result.assigneeUsernames, ["alice"])
@@ -373,19 +377,5 @@ final class QuickAddModeTests: XCTestCase {
         XCTAssertEqual(result.title, "Call  mum")
         XCTAssertEqual(result.tokens, [QuickAddToken(kind: .text, start: 0, end: 12, text: "  Call  mum ")])
         XCTAssertEqual(parse("", mode: .disabled).tokens, [])
-    }
-
-    func testPartOfDaySetsATime() {
-        let morning = parse("Call the bank tomorrow morning")
-        XCTAssertEqual(morning.title, "Call the bank")
-        XCTAssertEqual(utcParts(morning.dueDate)?.day, 28)
-        XCTAssertEqual(utcParts(morning.dueDate)?.hour, 9)
-        let evening = parse("Pack bags this evening")
-        XCTAssertEqual(evening.title, "Pack bags")
-        XCTAssertEqual(utcParts(evening.dueDate)?.day, 27)
-        XCTAssertEqual(utcParts(evening.dueDate)?.hour, 18)
-        let friday = parse("Gym friday in the afternoon")
-        XCTAssertEqual(friday.title, "Gym")
-        XCTAssertEqual(utcParts(friday.dueDate)?.hour, 14)
     }
 }

@@ -35,6 +35,12 @@ struct NotificationSettingsSection: View {
                 SettingsLabel("Notifications", symbol: "bell.badge", token: .coral500)
             }
             summaryRows
+            #if os(iOS)
+            // The Mac's Notifications pane has its own Dock badge switch.
+            Toggle(isOn: Binding(get: { prefs.value.appIconBadge }, set: { enabled in setBadge(enabled) })) {
+                SettingsLabel("App icon badge", symbol: "app.badge", token: .coral500)
+            }
+            #endif
             if !isLinkShare {
                 NavigationLink { NotificationsView(services: services, onClose: onClose) } label: {
                     SettingsLabel("Activity", symbol: "tray.full", token: .sky700)
@@ -73,6 +79,9 @@ struct NotificationSettingsSection: View {
                 Button("Open Settings") { openSystemSettings() }
             } else {
                 Text("The weekly round-up arrives on \(Weekdays.name(model.general.weekStart)), the first day of your week.")
+                #if os(iOS)
+                Text("The badge counts open tasks that are overdue or due today.")
+                #endif
             }
         }
     }
@@ -130,6 +139,16 @@ struct NotificationSettingsSection: View {
             let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
             await refreshStatus()
             prefs.value.notificationsEnabled = granted
+        }
+    }
+
+    /// The badge needs the OS permission (it is part of the notification request), so turning it on asks if nobody has.
+    private func setBadge(_ enabled: Bool) {
+        prefs.value.appIconBadge = enabled
+        guard enabled else { return }
+        Task {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            await refreshStatus()
         }
     }
 

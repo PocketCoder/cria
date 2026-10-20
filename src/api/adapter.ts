@@ -1,6 +1,6 @@
 /**
  * The single owner of every Vikunja v1/v2 difference (contract:
- * docs/V2-MIGRATION.md).
+ * the v1/v2 section of AGENTS.md).
  *
  * Callers keep writing v1-shaped calls through the typed v1 client
  * (`createApiClient`, `createApiFetch`): `PUT` creates, `POST` updates, `s` is

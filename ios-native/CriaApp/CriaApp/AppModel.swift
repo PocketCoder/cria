@@ -127,6 +127,7 @@ final class AppModel {
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
+        AppIconBadge.clear()
         await SpotlightIndexer.clear()
         if wipeLocalData { await wipeLocalFiles() }
         // After any wipe, so the widget does not read the old database one last time.

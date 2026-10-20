@@ -28,6 +28,9 @@ struct MacAccountPane: View {
             NavigationLink("Sessions") { SessionsView(services: services, onSignOut: onSignOut) }
             NavigationLink("API and CalDAV tokens") { MacTokensView(services: services, username: model.username) }
         }
+        Section("Sharing") {
+            NavigationLink("Teams") { TeamsView(services: services) }
+        }
         Section {
             Button("Sign Out…") { confirmingSignOut = true }
                 .confirmationDialog("Sign out of Cria?", isPresented: $confirmingSignOut) {
@@ -124,6 +127,9 @@ struct MacDataPane: View {
                 Button(status.isSyncing ? "Syncing…" : "Sync Now") { Task { await services.coordinator.forceSync() } }
                     .disabled(status.isSyncing)
             }
+        }
+        Section("Waiting changes") {
+            NavigationLink("Sync queue") { OutboxView(services: services) }
         }
         Section("Your data") {
             LabeledContent("Export everything") {

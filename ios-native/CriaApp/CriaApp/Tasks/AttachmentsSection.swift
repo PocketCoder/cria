@@ -10,6 +10,8 @@ struct AttachmentsSection: View {
     let taskLocalId: String
     let attachments: [AttachmentRecord]
     let state: TaskDetailPresentation
+    /// The server id of the attachment used as the task's cover image, if any.
+    var coverAttachmentId: Int?
     @State private var clipboard = ClipboardPeek()
 
     private var actions: AttachmentActions {
@@ -20,7 +22,10 @@ struct AttachmentsSection: View {
         #if os(macOS)
         // The inspector shows attachments only once there are some; files are added by dropping them on the task.
         if !attachments.isEmpty {
-            MacAttachmentTiles(services: services, taskLocalId: taskLocalId, attachments: attachments, state: state)
+            MacAttachmentTiles(
+                services: services, taskLocalId: taskLocalId, attachments: attachments, state: state,
+                coverAttachmentId: coverAttachmentId
+            )
         }
         #else
         list
@@ -70,6 +75,17 @@ struct AttachmentsSection: View {
         }
     }
 
+    /// "Set as cover" or "Remove cover" for an uploaded image; nothing for any other attachment.
+    @ViewBuilder
+    private func coverButton(_ attachment: AttachmentRecord) -> some View {
+        if actions.canBeCover(attachment) {
+            let isCover = actions.isCover(attachment, current: coverAttachmentId)
+            Button(isCover ? "Remove cover" : "Set as cover", systemImage: isCover ? "rectangle.slash" : "photo.on.rectangle") {
+                actions.setCover(attachment, isCover: !isCover)
+            }
+        }
+    }
+
     private func row(_ attachment: AttachmentRecord) -> some View {
         Button {
             actions.open(attachment)
@@ -79,6 +95,9 @@ struct AttachmentsSection: View {
                     .accessibilityHidden(true)
                 Text(attachment.fileName)
                 Spacer()
+                if actions.isCover(attachment, current: coverAttachmentId) {
+                    Text("Cover").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
+                }
                 if attachment.uploadFailed { Text("Failed").font(Theme.caption).foregroundStyle(Color(.destructive)) }
                 if attachment.pending, !attachment.uploadFailed {
                     Text("Queued").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
@@ -86,6 +105,8 @@ struct AttachmentsSection: View {
             }
         }
         .accessibilityHint(attachment.pending ? "" : "Opens a preview")
+        .contextMenu { coverButton(attachment) }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) { coverButton(attachment).tint(Color(.primary)) }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Not `.destructive`: that role animates the row away even when the confirmation is cancelled.
             Button("Delete attachment", systemImage: "trash") { state.deletingAttachment = attachment }
@@ -110,6 +131,31 @@ struct AttachmentActions {
             } catch {
                 state.attachmentError = "Could not open \(attachment.fileName)"
             }
+        }
+    }
+
+    /// Only an uploaded image can be a cover (the server needs its id), as in Vikunja-web.
+    func canBeCover(_ attachment: AttachmentRecord) -> Bool {
+        !attachment.pending && attachment.serverId != nil && attachment.mime?.hasPrefix("image/") == true
+    }
+
+    func isCover(_ attachment: AttachmentRecord, current: Int?) -> Bool {
+        guard let id = attachment.serverId, let current else { return false }
+        return id == current
+    }
+
+    /// Saves the task with this attachment as its cover image, or with none (0), through the normal update path so the
+    /// edit is queued like any other and `cover_image_attachment_id` is pushed. Mirrors `setCoverImage` in
+    /// Vikunja-web's Attachments.vue.
+    func setCover(_ attachment: AttachmentRecord, isCover: Bool) {
+        guard canBeCover(attachment), let serverId = attachment.serverId else { return }
+        var patch = TaskPatch()
+        patch.coverImageAttachmentId = isCover ? serverId : 0
+        do {
+            try services.store.updateTask(localId: taskLocalId, patch: patch)
+            state.attachmentError = nil
+        } catch {
+            state.attachmentError = "Could not change the cover image"
         }
     }
 

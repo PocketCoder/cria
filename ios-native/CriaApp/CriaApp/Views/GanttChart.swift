@@ -12,11 +12,15 @@ struct GanttChart: View {
     let weekZoom: Bool
     /// The project's colour, which the Mac's bars use when a task has none of its own.
     var projectColour: String?
+    /// iOS row reorder mode: bars drag up and down instead of changing dates. `onReorder` gets the row offset.
+    var reordering = false
+    var onReorder: (String, Int) -> Void = { _, _ in }
     @State private var drag: GanttDrag?
     @State private var dropTargeted = false
     /// Counts bars dropped in from the no-dates tray, for the drop haptic.
     @State private var trayDrops = 0
     @Environment(NavigationModel.self) private var navigation
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     private static let todayId = "gantt-today"
 
@@ -77,7 +81,7 @@ struct GanttChart: View {
         // The task column scrolls up and down with the rows but stays put while the days scroll sideways.
         ScrollView(.vertical) {
             HStack(alignment: .top, spacing: 0) {
-                GanttTaskColumn(nodes: nodes, height: height, onOpen: open)
+                GanttTaskColumn(nodes: nodes, height: height, onOpen: open, onReorder: onReorder)
                 Divider()
                 ScrollView(.horizontal) { chart(height: height) }
             }
@@ -108,9 +112,11 @@ struct GanttChart: View {
                 GanttBar(
                     place: place, node: nodes[index], dayWidth: dayWidth, drag: $drag,
                     height: Layout.bar, fallbackColour: projectColour,
+                    reordering: reordering,
+                    onReorder: { rows in onReorder(place.taskLocalId, rows) },
                     onOpen: { open(place.taskLocalId) },
                     onCommit: { start, end in
-                        _ = try? services.store.setGanttDates(taskLocalId: place.taskLocalId, start: start, end: end)
+                        _ = try? undo.setGanttDates(services, taskLocalId: place.taskLocalId, start: start, end: end)
                     }
                 )
                 .offset(x: place.left, y: Layout.header + Layout.barTop(index))
@@ -126,8 +132,8 @@ struct GanttChart: View {
         .dropDestination(for: String.self) { items, location in
             guard let taskId = items.first.flatMap(KanbanPayload.taskId(from:)) else { return false }
             let start = GanttGeometry.day(atX: location.x, range: range, dayWidth: dayWidth)
-            _ = try? services.store.setGanttDates(
-                taskLocalId: taskId, start: start, end: start + GanttMetrics.defaultSpanDays - 1
+            _ = try? undo.setGanttDates(
+                services, taskLocalId: taskId, start: start, end: start + GanttMetrics.defaultSpanDays - 1
             )
             trayDrops += 1
             return true
@@ -263,6 +269,8 @@ private struct GanttTaskColumn: View {
     let nodes: [GanttNode]
     let height: Double
     let onOpen: (String) -> Void
+    /// A row dragged onto another: the moved task and how many rows it travelled.
+    let onReorder: (String, Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -272,7 +280,7 @@ private struct GanttTaskColumn: View {
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: GanttChart.Layout.header, maxHeight: GanttChart.Layout.header, alignment: .leading)
                 .overlay(alignment: .bottom) { Divider() }
-            ForEach(nodes, id: \.taskLocalId) { node in
+            ForEach(Array(nodes.enumerated()), id: \.element.taskLocalId) { index, node in
                 Button { onOpen(node.taskLocalId) } label: {
                     Text(node.title)
                         .font(.system(size: 13))
@@ -286,6 +294,14 @@ private struct GanttTaskColumn: View {
                 }
                 .buttonStyle(.plain)
                 .overlay(alignment: .bottom) { Divider() }
+                // Dragging a top-level row onto another moves it there; subtasks ride along with their parent.
+                .draggable(KanbanPayload.make(node.taskLocalId))
+                .dropDestination(for: String.self) { items, _ in
+                    guard let movedId = items.first.flatMap(KanbanPayload.taskId(from:)),
+                          let from = nodes.firstIndex(where: { $0.taskLocalId == movedId }), from != index else { return false }
+                    onReorder(movedId, index - from)
+                    return true
+                }
             }
             Spacer(minLength: 0)
         }

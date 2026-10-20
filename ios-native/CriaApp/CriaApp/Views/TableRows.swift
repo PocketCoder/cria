@@ -13,6 +13,7 @@ struct TableCompactRow: View {
     var onEdit: ((TableCellEdit) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var failure: String?
     /// Counts completions from the swipe; the ring plays its own haptic for a tap.
     @State private var completions = 0
@@ -172,7 +173,7 @@ struct TableCompactRow: View {
 
     private func toggle() {
         do {
-            _ = try services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+            try undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
         } catch {
             failure = String(describing: error)
         }
@@ -193,6 +194,8 @@ struct TableGridView: View {
     var progress: [String: SubtaskProgress] = [:]
     /// Set while "Edit cells" is on: label, assignee and date cells then open their picker.
     var onEdit: ((TableCellEdit) -> Void)?
+    /// Called when a row is dragged onto another: the dragged task, then the one it landed on.
+    var onMove: ((String, String) -> Void)?
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
@@ -248,6 +251,7 @@ struct TableGridView: View {
                     GridRow {
                         ForEach(columns, id: \.self) { column in
                             cell(item, column)
+                                .modifier(TableReorderHandle(id: item.task.localId, isFirst: column == columns.first, onMove: onMove))
                                 .frame(minWidth: width(column), minHeight: Self.rowHeight, alignment: .leading)
                                 .padding(.vertical, Self.rowPadding)
                                 #if os(macOS)

@@ -104,6 +104,51 @@ final class PlatformTests: XCTestCase {
         XCTAssertEqual(snapshot.entries.first?.isOverdue, true)
     }
 
+    func testWidgetCompletionMarksDoneAndQueuesAnUpdate() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let task = try store.createTask(TaskInput(title: "Tick me", projectLocalId: project, dueDate: "2026-06-09T10:00:00Z"))
+        let queued = try outboxRows(store).count
+        XCTAssertTrue(try store.completeTaskFromWidget(localId: task.localId))
+        let done = try XCTUnwrap(try store.task(localId: task.localId))
+        XCTAssertTrue(done.done)
+        XCTAssertEqual(try outboxRows(store).count, queued + 1)
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-06-09T10:00:00Z"))
+        XCTAssertEqual(try TodaySnapshot.load(store: store, limit: 5, now: now).total, 0)
+    }
+
+    func testWidgetCompletionIgnoresDoneAndMissingTasks() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let task = try store.createTask(TaskInput(title: "Once", projectLocalId: project))
+        XCTAssertTrue(try store.completeTaskFromWidget(localId: task.localId))
+        let queued = try outboxRows(store).count
+        XCTAssertFalse(try store.completeTaskFromWidget(localId: task.localId))
+        XCTAssertFalse(try store.completeTaskFromWidget(localId: "missing"))
+        XCTAssertEqual(try outboxRows(store).count, queued)
+    }
+
+    func testIntentEntriesFindOpenTasksAndProjects() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        let milk = try store.createTask(TaskInput(title: "Buy milk", projectLocalId: project))
+        let bread = try store.createTask(TaskInput(title: "Buy bread", projectLocalId: project))
+        try store.updateTask(localId: bread.localId, patch: TaskPatch(done: true))
+        try store.createTask(TaskInput(title: "100% done_", projectLocalId: project))
+        XCTAssertEqual(try store.openTaskEntries(matching: "buy").map(\.localId), [milk.localId])
+        XCTAssertEqual(try store.openTaskEntries(matching: "").count, 2)
+        XCTAssertEqual(try store.openTaskEntries(matching: "%").map(\.title), ["100% done_"])
+        XCTAssertEqual(try store.taskEntries(localIds: [milk.localId, "missing"]).map(\.title), ["Buy milk"])
+        XCTAssertEqual(try store.projectEntries(matching: "").map(\.localId), [project])
+        XCTAssertEqual(try store.projectEntries(localIds: [project]).count, 1)
+        XCTAssertTrue(try store.projectEntries(matching: "zzz").isEmpty)
+    }
+
+    func testAddLinkOpensQuickAdd() throws {
+        let url = try XCTUnwrap(DeepLink.addURL)
+        XCTAssertEqual(DeepLink(url: url), .add(title: nil))
+    }
+
     func testPathsAreUnderTheRoot() {
         let root = URL(fileURLWithPath: "/tmp/cria-root")
         XCTAssertEqual(CriaPaths.databaseURL(root: root).path, "/tmp/cria-root/cria.sqlite")

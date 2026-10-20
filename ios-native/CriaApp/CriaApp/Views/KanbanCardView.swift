@@ -10,6 +10,7 @@ struct KanbanCardView: View {
     @Environment(NavigationModel.self) private var navigation: NavigationModel?
     /// Set by the Mac shell: a card then selects the task in the detail column instead of pushing it (as task rows do).
     @Environment(\.taskOpener) private var openTask
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     let services: AppServices
     let task: TaskRecord
     var labels: [LabelRecord] = []
@@ -22,7 +23,7 @@ struct KanbanCardView: View {
     var subtasks: [KanbanSubtaskRow] = []
     /// The parent's title when it is on the board in another column: shown as "↳ Parent".
     var parentTitle: String?
-    /// The task's subtask progress, shown as a ring on the Mac (iOS lists same-column subtasks in the card).
+    /// The task's subtask progress, shown as a ring on the Mac when none of the subtasks are listed in the card.
     var progress: SubtaskProgress?
     var isExpanded: Binding<Bool> = .constant(false)
 
@@ -47,6 +48,9 @@ struct KanbanCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if task.coverAttachmentServerId != nil {
+                openLink { KanbanCoverView(services: services, task: task, radius: Self.radius) }.buttonStyle(.plain)
+            }
             header
             if !subtasks.isEmpty {
                 KanbanSubtaskList(services: services, subtasks: subtasks, isExpanded: isExpanded)
@@ -93,7 +97,7 @@ struct KanbanCardView: View {
     private var header: some View {
         HStack(alignment: .top, spacing: Theme.checkGap) {
             PriorityCheck(priority: task.priority, isDone: task.done, size: Self.ringSize) {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             // The 44pt touch target makes the margin on iOS; the Mac's smaller target needs it set.
             .padding(.leading, Theme.cardRingInset)
@@ -114,7 +118,8 @@ struct KanbanCardView: View {
                             .lineLimit(1)
                     }
                     #if os(macOS)
-                    if let progress {
+                    // Same-column subtasks are listed in the card, so the ring only covers those in other columns.
+                    if let progress, subtasks.isEmpty {
                         SubtaskRing(progress: progress).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
                     }
                     #endif
@@ -127,6 +132,12 @@ struct KanbanCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            #if os(macOS)
+            // Command-click toggles done instead of opening the card (a plain click still opens it).
+            .highPriorityGesture(TapGesture().modifiers(.command).onEnded {
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
+            })
+            #endif
         }
         .padding(.trailing, Self.padding)
         .accessibilityElement(children: .ignore)
@@ -137,7 +148,7 @@ struct KanbanCardView: View {
         // Dragging is not available to VoiceOver, so each column is also an action on the card.
         .accessibilityActions {
             Button(task.done ? "Mark not done" : "Mark done") {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             ForEach(moveTargets, id: \.bucket.localId) { target in
                 Button("Move to \(target.bucket.title)") { onMove(target) }

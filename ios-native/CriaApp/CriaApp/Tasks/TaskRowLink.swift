@@ -52,6 +52,12 @@ struct TaskRowLink: View {
         }
         .sensoryFeedback(.success, trigger: completions)
         #if os(macOS)
+        // Undo (the toast or ⌘Z) reopened a task this screen kept struck through: let the row show it open again.
+        .onChange(of: item.task.done) { _, done in
+            if !done { recent?.forget(item.task.localId) }
+        }
+        #endif
+        #if os(macOS)
         // One look in every list (Today, Inbox, projects, labels, search): no separators, which the Mac draws from the
         // title rather than the ring, and the same insets, with room for the open and hover washes.
         .listRowSeparator(.hidden)
@@ -146,6 +152,7 @@ struct TaskRowLink: View {
         .buttonStyle(.plain)
         .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
         #if os(macOS)
+        .modifier(TaskHoverPreview(item: item))
         // Onto a sidebar project to move it there (MacProjectLabel); the same payload as a Kanban card's.
         .draggable(KanbanPayload.make(item.task.localId))
         #endif
@@ -235,7 +242,11 @@ extension TaskRowLink {
         TaskMacMenuItems(
             services: services, task: item.task, labels: item.labels, onOpen: macOpenAction,
             onToggleDone: { toggleWithHaptic() }, onPickDate: { scheduling = true }, onDuplicate: { duplicate() },
-            onCopyLink: { copyLink() }, onDelete: { delete() }, onFailure: { failure = $0 }
+            onCopyLink: { copyLink() }, onDelete: { delete() }, onFailure: { failure = $0 },
+            onDefer: { deferTask($0) },
+            collapseTitle: tree.isCollapsed.map { $0 ? "Show Subtasks" : "Hide Subtasks" },
+            onToggleCollapsed: { tree.onToggleCollapsed() },
+            onSelect: selection == nil ? nil : { selection?.start(with: item.task.localId) }
         )
     }
 }
@@ -250,7 +261,7 @@ extension TaskRowLink {
             patch.repeatAfter = repeatValue.after
             patch.repeatMode = repeatValue.mode
         }
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+        attempt { try undo.updateTask(services, localId: item.task.localId, patch: patch) }
     }
 
     private func attempt(_ work: () throws -> Void) {
@@ -273,13 +284,13 @@ extension TaskRowLink {
 
     private func toggleStar() {
         let patch = TaskPatch(isFavorite: !item.task.isFavorite)
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+        attempt { try undo.updateTask(services, localId: item.task.localId, patch: patch) }
     }
 
     private func dueTomorrow() {
         let day = Calendar.cria.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         let patch = TaskPatch(dueDate: DueDates.allDayISO(for: day))
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+        attempt { try undo.updateTask(services, localId: item.task.localId, patch: patch) }
     }
 
     /// Undoing a done task saves at once. Completing shows the done state first and saves after a beat, so the
@@ -291,13 +302,13 @@ extension TaskRowLink {
         if let recent, recent.contains(localId) {
             recent.forget(localId)
             completing = false
-            attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: false)) }
+            attempt { try undo.updateTask(services, localId: localId, patch: TaskPatch(done: false)) }
             return
         }
         #endif
         guard !item.task.done else {
             completing = false
-            attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: false)) }
+            attempt { try undo.updateTask(services, localId: localId, patch: TaskPatch(done: false)) }
             return
         }
         guard !completing else { return }
@@ -311,7 +322,7 @@ extension TaskRowLink {
         #endif
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(delay))
-            attempt { _ = try services.store.updateTask(localId: localId, patch: TaskPatch(done: true)) }
+            attempt { try undo.updateTask(services, localId: localId, patch: TaskPatch(done: true)) }
             if failure != nil {
                 #if os(macOS)
                 recent?.forget(localId)
@@ -328,9 +339,9 @@ extension TaskRowLink {
     }
 
     /// Moves the due date on by the preset, counting from the later of the current date and today.
-    private func deferTask(_ preset: DeferPreset) {
+    fileprivate func deferTask(_ preset: DeferPreset) {
         let patch = TaskPatch(dueDate: preset.dueDate(from: item.task.dueDate))
-        attempt { _ = try services.store.updateTask(localId: item.task.localId, patch: patch) }
+        attempt { try undo.updateTask(services, localId: item.task.localId, patch: patch) }
     }
 
     private func startRename() {

@@ -82,12 +82,20 @@ struct GeneralSettingsSection: View {
                 set: { mode in Task { await model.setQuickAddMode(mode) } }
             )) {
                 Text("Vikunja (*label +project !priority)").tag("vikunja")
-                Text("Todoist (@label #project p1)").tag("todoist")
+                Text("Todoist (@label #project !priority)").tag("todoist")
                 Text("Off").tag("disabled")
             } label: {
                 SettingsLabel("Quick Add Magic", symbol: "sparkles", token: .llama500)
             }
             .disabled(!canSave)
+            // Read by QuickAddSheet; saved in the account's frontend_settings.cria with the other Customise settings.
+            Toggle(isOn: $prefs.value.custom.expandedQuickAdd) {
+                SettingsLabel("Expanded quick-add syntax", symbol: "text.badge.plus", token: .llama500)
+            }
+            .disabled(model.general.quickAddMagicMode == QuickAddMagicMode.disabled.rawValue)
+            Text("Also reads p1 to p4, every! day, {deadline}, 9-10am and for 1h in quick add.")
+                .font(Theme.caption)
+                .foregroundStyle(Color(.mutedForeground))
             // Vikunja's "Default view": what a project opens on until a view has been chosen in it.
             Picker(selection: Binding(
                 get: { model.general.defaultView },
@@ -102,6 +110,7 @@ struct GeneralSettingsSection: View {
                 SettingsLabel("Default view", symbol: "rectangle.3.group", token: .sky500)
             }
             .disabled(!canSave)
+            QuickAddDefaultsRows(model: model, canSave: canSave)
             // Read by RambleSheet when it builds the prompt. Tags need the magic's syntax, so it is off with it.
             if AIStatus.shared.isOfferable {
                 Toggle(isOn: $prefs.value.rambleChoosesTags) {
