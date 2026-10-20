@@ -122,6 +122,8 @@ public enum SlashMenu {
     /// Commands whose key or title contains `query`, case-insensitively. An empty query lists every command.
     public static func filter(_ query: String) -> [SlashCommand] {
         let needle = query.lowercased()
+        // `contains("")` is false in Swift, so a bare "/" would list nothing.
+        guard !needle.isEmpty else { return SlashCommand.allCases }
         return SlashCommand.allCases.filter { command in
             command.key.contains(needle) || command.title.lowercased().contains(needle)
         }
