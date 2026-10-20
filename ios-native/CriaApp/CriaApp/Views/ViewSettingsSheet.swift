@@ -7,8 +7,10 @@ struct ViewEditTarget: Identifiable {
     var id: String { view.localId }
 }
 
-/// A filter query field: the query coloured as it is typed, with the parser's error under it.
+/// A filter query field: the query coloured as it is typed, with suggestions for the word being typed and the
+/// parser's error under it.
 struct FilterQueryField: View {
+    let services: AppServices
     @Binding var text: String
     var placeholder = "done = false && priority >= 3"
 
@@ -17,6 +19,7 @@ struct FilterQueryField: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
         if !text.isEmpty { Text(FilterHighlightStyle.attributed(text)).font(.callout.monospaced()) }
+        FilterSuggestionRow(services: services, query: $text)
         if let problem = ViewFilterParams.validate(text) {
             Text(problem).font(Theme.caption).foregroundStyle(Color(.destructive))
         }
@@ -56,7 +59,7 @@ struct ViewSettingsSheet: View {
             Form {
                 Section("Title") { CriaTextField("Title", text: $title) }
                 Section {
-                    FilterQueryField(text: $query)
+                    FilterQueryField(services: services, text: $query)
                     Toggle("Include tasks without a value", isOn: $includeNulls)
                 } header: {
                     Text("Filter")
@@ -107,7 +110,7 @@ struct ViewSettingsSheet: View {
             ForEach($rows) { $row in
                 Section {
                     CriaTextField("Title", text: $row.draft.title)
-                    FilterQueryField(text: $row.draft.filter, placeholder: "priority >= 3")
+                    FilterQueryField(services: services, text: $row.draft.filter, placeholder: "priority >= 3")
                     Toggle("Include tasks without a value", isOn: $row.draft.includeNulls)
                     Button("Remove column", role: .destructive) { rows.removeAll { $0.id == row.id } }
                 } header: {
