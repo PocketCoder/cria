@@ -34,8 +34,8 @@ final class GanttReorderNudgeTests: XCTestCase {
         let down = try XCTUnwrap(GanttTree.siblingOrder(afterMoving: "a", rowOffset: 2, in: nested))
         XCTAssertEqual(down.parent, "p")
         XCTAssertEqual(down.order, ["b", "a", "c"])
-        let up = try XCTUnwrap(GanttTree.siblingOrder(afterMoving: "c", rowOffset: -3, in: nested))
-        XCTAssertEqual(up.order, ["c", "a", "b"])
+        let moved = try XCTUnwrap(GanttTree.siblingOrder(afterMoving: "c", rowOffset: -3, in: nested))
+        XCTAssertEqual(moved.order, ["c", "a", "b"])
     }
 
     func testSubtaskNeverLeavesItsParent() throws {
