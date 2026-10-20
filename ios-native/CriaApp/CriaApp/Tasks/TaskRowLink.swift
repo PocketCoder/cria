@@ -242,7 +242,11 @@ extension TaskRowLink {
         TaskMacMenuItems(
             services: services, task: item.task, labels: item.labels, onOpen: macOpenAction,
             onToggleDone: { toggleWithHaptic() }, onPickDate: { scheduling = true }, onDuplicate: { duplicate() },
-            onCopyLink: { copyLink() }, onDelete: { delete() }, onFailure: { failure = $0 }
+            onCopyLink: { copyLink() }, onDelete: { delete() }, onFailure: { failure = $0 },
+            onDefer: { deferTask($0) },
+            collapseTitle: tree.isCollapsed.map { $0 ? "Show Subtasks" : "Hide Subtasks" },
+            onToggleCollapsed: { tree.onToggleCollapsed() },
+            onSelect: selection == nil ? nil : { selection?.start(with: item.task.localId) }
         )
     }
 }
@@ -335,7 +339,7 @@ extension TaskRowLink {
     }
 
     /// Moves the due date on by the preset, counting from the later of the current date and today.
-    private func deferTask(_ preset: DeferPreset) {
+    fileprivate func deferTask(_ preset: DeferPreset) {
         let patch = TaskPatch(dueDate: preset.dueDate(from: item.task.dueDate))
         attempt { try undo.updateTask(services, localId: item.task.localId, patch: patch) }
     }
