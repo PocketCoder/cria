@@ -77,7 +77,7 @@ extension QuickAddSheet {
         case .label: return Color(.meadow700)
         case .project: return Color(.primary)
         case .priority: return Color(.marigold700)
-        case .date: return Color(.sky700)
+        case .date, .deadline, .duration: return Color(.sky700)
         default: return nil
         }
     }

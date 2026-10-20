@@ -9,6 +9,10 @@ public enum QuickAddTokenKind: Equatable, Sendable {
     case project(String)
     case recurrence(repeatAfter: Int?, repeatMode: Int?)
     case reminder(QuickAddReminder)
+    /// `{friday}` in the expanded syntax: the end date.
+    case deadline(iso: String)
+    /// A time range or "for 1h" in the expanded syntax: the start and end dates.
+    case duration(startISO: String, endISO: String)
 }
 
 /// A slice of the input for live preview. `start` and `end` are UTF-16 offsets.
@@ -33,6 +37,9 @@ public struct QuickAddResult: Equatable, Sendable {
     public var tokens: [QuickAddToken]
     /// Typed "remind …" phrases, in order.
     public var reminders: [QuickAddReminder] = []
+    /// Expanded syntax only: `9-10am`, `for 1h` (the due time) and `{deadline}` (the end date).
+    public var startDate: String?
+    public var endDate: String?
 }
 
 private let bareName = "[A-Za-z0-9_-]+"
@@ -51,30 +58,51 @@ public func quickAddNeedsQuoting(_ name: String) -> Bool {
 /// Input wrapped in a matching pair of quotes is a literal title in every mode. A title left empty by the magic stays
 /// empty here; use `parseQuickAddTask` for the line a task is created from. With `detectDates` off (Settings >
 /// Customise) dates stay in the title. A date typed without a time takes `defaultDueTime` (Vikunja-web's
-/// `default_due_time`, see `QuickAddDefaults`); a phrase that names a time keeps it.
+/// `default_due_time`, see `QuickAddDefaults`); a phrase that names a time keeps it. With `expanded` on (Settings >
+/// Quick add) the line may also use `p1` to `p4`, `every!`, `{deadline}`, `9-10am` and `for 1h`; see
+/// `QuickAddExpanded.swift`. It is off for lines Vikunja-web would read, such as Ramble's.
 public func parseQuickAdd(
     _ input: String,
     now: Date = Date(),
     mode: QuickAddMagicMode = .default,
     calendar: Calendar = .cria,
     detectDates: Bool = true,
-    defaultDueTime: DefaultDueTime? = nil
+    defaultDueTime: DefaultDueTime? = nil,
+    expanded: Bool = false
 ) -> QuickAddResult {
     if let literal = unquoteLiteral(input) { return plainTitle(input, title: literal) }
     guard let prefixes = mode.prefixes else { return plainTitle(input) }
     var work = QuickAddWorkingText(input)
     var result = plainTitle("")
-    scanSymbols(&work, prefixes: prefixes, into: &result)
-    if let repeats = quickAddCutRepeat(from: &work) {
-        result.repeatAfter = repeats.after
-        result.repeatMode = repeats.mode
-    }
+    scanSymbols(&work, prefixes: prefixes, expanded: expanded, into: &result)
+    let repeats = (expanded ? quickAddCutCompletionRepeat(from: &work) : nil) ?? quickAddCutRepeat(from: &work)
+    result.repeatAfter = repeats?.after
+    result.repeatMode = repeats?.mode
     if detectDates {
         cutReminders(&work, into: &result)
         let context = QuickAddDateContext(now: now, calendar: calendar, defaultDueTime: defaultDueTime, rules: CriaRules.current)
-        result.dueDate = applyMagicDate(to: &work, context: context)
+        scanDates(&work, expanded: expanded, context: context, into: &result)
     }
     return assemble(work, into: result)
+}
+
+/// The date steps. The expanded syntax cuts its deadline and time range first, so the magic does not read their words,
+/// and reads a duration once the due time is known.
+private func scanDates(
+    _ work: inout QuickAddWorkingText, expanded: Bool, context: QuickAddDateContext, into result: inout QuickAddResult
+) {
+    guard expanded else {
+        result.dueDate = applyMagicDate(to: &work, context: context)
+        return
+    }
+    result.endDate = quickAddCutDeadline(from: &work, context: context)
+    let range = quickAddCutTimeRange(from: &work)
+    result.dueDate = applyMagicDate(to: &work, context: context)
+    if let range {
+        quickAddApplyTimeRange(range, work: &work, result: &result, context: context)
+    } else {
+        quickAddApplyDuration(work: &work, result: &result)
+    }
 }
 
 /// The parse a typed line creates its task from: when the magic leaves no title (the line is only tokens, or an
@@ -85,10 +113,12 @@ public func parseQuickAddTask(
     mode: QuickAddMagicMode = .default,
     calendar: Calendar = .cria,
     detectDates: Bool = true,
-    defaultDueTime: DefaultDueTime? = nil
+    defaultDueTime: DefaultDueTime? = nil,
+    expanded: Bool = false
 ) -> QuickAddResult {
     let parsed = parseQuickAdd(
-        input, now: now, mode: mode, calendar: calendar, detectDates: detectDates, defaultDueTime: defaultDueTime
+        input, now: now, mode: mode, calendar: calendar, detectDates: detectDates, defaultDueTime: defaultDueTime,
+        expanded: expanded
     )
     let blank = input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     return parsed.title.isEmpty && !blank ? plainTitle(input) : parsed
@@ -119,7 +149,9 @@ private func plainTitle(_ raw: String, title: String? = nil) -> QuickAddResult {
 
 // MARK: Scanning
 
-private func scanSymbols(_ work: inout QuickAddWorkingText, prefixes: QuickAddPrefixes, into result: inout QuickAddResult) {
+private func scanSymbols(
+    _ work: inout QuickAddWorkingText, prefixes: QuickAddPrefixes, expanded: Bool, into result: inout QuickAddResult
+) {
     cutOpenQuote(&work, prefixes: prefixes, into: &result)
     for label in quickAddItems(in: work.string, prefix: prefixes.label) {
         result.labelTitles.append(label)
@@ -133,6 +165,8 @@ private func scanSymbols(_ work: inout QuickAddWorkingText, prefixes: QuickAddPr
         result.priority = priority
         quickAddCut(String(priority), prefix: prefixes.priority, as: .priority(priority), exact: false, from: &work)
     }
+    // A "p1" word is the next-best source of a priority, so an "!" priority wins.
+    if expanded, let word = quickAddCutPriorityWords(from: &work), result.priority == nil { result.priority = word }
     // Vikunja-web does not cut assignees out, in case the name is no user: `@name` stays in the title.
     for assignee in quickAddItems(in: work.string, prefix: prefixes.assignee) {
         result.assigneeUsernames.append(assignee)

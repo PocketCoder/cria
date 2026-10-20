@@ -56,8 +56,10 @@ public struct Customisation: Equatable, Sendable {
     public var swipeLeft: SwipeAction = .delete
     public var quickAddShowsLabels = true
     public var quickAddActions: [QuickAddAction] = QuickAddAction.allCases
-    /// Quick add reads dates out of the typed title ("tomorrow 5pm").
+    /// Quick add reads dates out of the typed title ("tomorrow at 5pm").
     public var detectDates = true
+    /// Quick add also reads the expanded syntax (`p1` to `p4`, `every!`, `{deadline}`, `9-10am`, `for 1h`). Off by default.
+    public var expandedQuickAdd = false
     /// 0 is "same day next week"; 1 to 7 is that weekday of next week (Calendar numbering, 2 is Monday).
     public var nextWeekDay = 0
     /// 7 is Saturday, 1 is Sunday.
@@ -95,7 +97,7 @@ public struct Customisation: Equatable, Sendable {
     /// Keys that follow the account. `syncHomeView` itself stays on the device, and `homeView` only travels while it is on.
     static let syncedKeys = [
         "tabs", "showTaskCount", "swipeRight", "swipeLeft", "quickAddShowsLabels", "quickAddActions", "detectDates",
-        "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue",
+        "expandedQuickAdd", "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue",
         "dayReminderMinute"
     ]
     static let homeViewKey = "homeView"
@@ -123,6 +125,7 @@ public struct Customisation: Equatable, Sendable {
         quickAddShowsLabels = flag("quickAddShowsLabels", base.quickAddShowsLabels)
         if let raw = text("quickAddActions") { quickAddActions = Self.list(raw, QuickAddAction.init(rawValue:)) }
         detectDates = flag("detectDates", base.detectDates)
+        expandedQuickAdd = flag("expandedQuickAdd", base.expandedQuickAdd)
         nextWeekDay = number("nextWeekDay", base.nextWeekDay, in: 0...7)
         weekendDay = number("weekendDay", base.weekendDay, in: 1...7) == 1 ? 1 : 7
         resetSubtasksOnRepeat = flag("resetSubtasksOnRepeat", base.resetSubtasksOnRepeat)
@@ -144,6 +147,7 @@ public struct Customisation: Equatable, Sendable {
             "quickAddShowsLabels": .bool(quickAddShowsLabels),
             "quickAddActions": .string(quickAddActions.map(\.rawValue).joined(separator: ",")),
             "detectDates": .bool(detectDates),
+            "expandedQuickAdd": .bool(expandedQuickAdd),
             "nextWeekDay": .number(Double(nextWeekDay)),
             "weekendDay": .number(Double(weekendDay)),
             "resetSubtasksOnRepeat": .bool(resetSubtasksOnRepeat),

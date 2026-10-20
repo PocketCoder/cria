@@ -7,14 +7,19 @@ public struct QuickAddFields: Equatable, Sendable {
     public var priority = 0
     public var repeatAfter: Int?
     public var repeatMode: Int?
+    /// From the expanded syntax: the start and end dates.
+    public var startDate: String?
+    public var endDate: String?
 
     public init(description: String = "", dueDate: String? = nil, priority: Int = 0,
-                repeatAfter: Int? = nil, repeatMode: Int? = nil) {
+                repeatAfter: Int? = nil, repeatMode: Int? = nil, startDate: String? = nil, endDate: String? = nil) {
         self.description = description
         self.dueDate = dueDate
         self.priority = priority
         self.repeatAfter = repeatAfter
         self.repeatMode = repeatMode
+        self.startDate = startDate
+        self.endDate = endDate
     }
 }
 
@@ -103,6 +108,8 @@ public func buildQuickAddInput(
     if fields.priority > 0 { input.priority = fields.priority }
     input.repeatAfter = fields.repeatAfter ?? 0
     input.repeatMode = fields.repeatMode ?? 0
+    input.startDate = fields.startDate
+    input.endDate = fields.endDate
     return input
 }
 

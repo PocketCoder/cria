@@ -123,7 +123,7 @@ struct DatesAndTasksSettingsView: View {
             } header: {
                 Text("Smart date recognition")
             } footer: {
-                Text("Quick add turns words like “tomorrow 5pm” into the due date. Off, they stay in the title.")
+                Text("Quick add turns words like “tomorrow at 5pm” into the due date. Off, they stay in the title.")
             }
             Section("Date phrases") {
                 Picker("Interpret “next week” as", selection: $prefs.value.custom.nextWeekDay) {

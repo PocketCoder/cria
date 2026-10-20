@@ -42,7 +42,11 @@ struct QuickAddWorkingText {
 
     /// Gives the tokens made since `index` their final kind (a date is only known once its time has been read too).
     mutating func retag(from index: Int, as kind: QuickAddTokenKind) {
-        for position in index..<tokens.count {
+        retag(index..<tokens.count, as: kind)
+    }
+
+    mutating func retag(_ indices: Range<Int>, as kind: QuickAddTokenKind) {
+        for position in indices where position < tokens.count {
             tokens[position] = QuickAddToken(
                 kind: kind, start: tokens[position].start, end: tokens[position].end, text: tokens[position].text,
                 inTitle: tokens[position].inTitle

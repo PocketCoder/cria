@@ -84,9 +84,9 @@ func quickAddPriority(in text: String, prefix: String) -> Int? {
 private let repeatPattern = #"(^| )(((every|each) (([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten) )?"#
     + #"(hours?|days?|weeks?|months?|years?))|(annually|biannually|semiannually|biennially|daily|hourly|monthly|weekly|yearly))($| )"#
 
-private let numberWords = ["one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10]
-private let secondsPerUnit: [String: Int] = ["day": 86_400, "week": 604_800, "month": 2_592_000, "year": 31_536_000, "hour": 3_600]
-private let keywordRepeats: [String: (amount: Int, unit: String)] = [
+let numberWords = ["one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10]
+let secondsPerUnit: [String: Int] = ["day": 86_400, "week": 604_800, "month": 2_592_000, "year": 31_536_000, "hour": 3_600]
+let keywordRepeats: [String: (amount: Int, unit: String)] = [
     "annually": (1, "year"), "yearly": (1, "year"), "biennially": (2, "year"), "biannually": (6, "month"),
     "semiannually": (6, "month"), "daily": (1, "day"), "hourly": (1, "hour"), "monthly": (1, "month"), "weekly": (1, "week")
 ]

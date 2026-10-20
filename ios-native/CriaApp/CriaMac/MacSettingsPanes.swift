@@ -66,6 +66,19 @@ struct MacGeneralPane: View {
                 ForEach(Weekdays.names.indices, id: \.self) { Text(Weekdays.names[$0]).tag($0) }
             }
             .disabled(!canSave)
+            Picker("Quick Add Magic", selection: magicMode) {
+                Text("Vikunja (*label +project !priority)").tag("vikunja")
+                Text("Todoist (@label #project !priority)").tag("todoist")
+                Text("Off").tag("disabled")
+            }
+            .disabled(!canSave)
+            Toggle(isOn: $prefs.value.custom.expandedQuickAdd) {
+                MacSettingRow(
+                    title: "Expanded quick-add syntax",
+                    help: "Also reads p1 to p4, every! day, {deadline}, 9-10am and for 1h."
+                )
+            }
+            .disabled(model.general.quickAddMagicMode == QuickAddMagicMode.disabled.rawValue)
             QuickAddDefaultsRows(model: model, canSave: canSave, icons: false)
         }
     }
@@ -74,6 +87,10 @@ struct MacGeneralPane: View {
     // compiler (IRGen) before.
     private var defaultProject: Binding<Int> {
         Binding(get: { model.general.defaultProjectId }, set: { id in Task { await model.setDefaultProject(id) } })
+    }
+
+    private var magicMode: Binding<String> {
+        Binding(get: { model.general.quickAddMagicMode }, set: { mode in Task { await model.setQuickAddMode(mode) } })
     }
 
     private var weekStart: Binding<Int> {
