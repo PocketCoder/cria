@@ -137,7 +137,7 @@ struct TaskInspectorFieldBox: View {
         let overdue = iso.map { DueDates.isOverdue($0, now: Date()) && !task.done } ?? false
         return popUp(text, tint: overdue ? MacTheme.coral : .primary) {
             ForEach(QuickAddDatePreset.allCases, id: \.self) { preset in
-                Button(preset.title) { apply(TaskPatch(dueDate: preset.iso(now: Date()))) }
+                Button(preset.title) { apply(TaskPatch(dueDate: preset.isoWithDefaultTime)) }
             }
             Divider()
             Button("Pick a date…", action: onPickDue)

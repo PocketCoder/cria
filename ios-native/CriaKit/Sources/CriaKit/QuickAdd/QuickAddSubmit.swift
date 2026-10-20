@@ -154,8 +154,11 @@ public enum QuickAddDatePreset: String, CaseIterable, Sendable {
     }
 
     /// All-day value for the preset's day. This weekend and next week read as the typed phrases do: the coming
-    /// weekend day (today when it is that day) and the day `rules` gives "next week".
-    public func iso(now: Date, calendar: Calendar = .cria, rules: CriaRules = .current) -> String {
+    /// weekend day (today when it is that day) and the day `rules` gives "next week". With a `defaultDueTime` the day
+    /// carries that time, as Vikunja-web's date shortcuts do; without one it stays all-day.
+    public func iso(
+        now: Date, calendar: Calendar = .cria, rules: CriaRules = .current, defaultDueTime: DefaultDueTime? = nil
+    ) -> String {
         let today = calendar.startOfDay(for: now)
         let days: Int
         switch self {
@@ -164,7 +167,8 @@ public enum QuickAddDatePreset: String, CaseIterable, Sendable {
         case .thisWeekend: days = rules.weekendOffset(from: today, calendar: calendar)
         case .nextWeek: days = rules.nextWeekOffset(from: today, calendar: calendar)
         }
-        return DueDates.allDayISO(for: calendar.date(byAdding: .day, value: days, to: today) ?? today, calendar: calendar)
+        let day = DueDates.allDayISO(for: calendar.date(byAdding: .day, value: days, to: today) ?? today, calendar: calendar)
+        return defaultDueTime?.applying(to: day, calendar: calendar) ?? day
     }
 }
 

@@ -40,9 +40,9 @@ extension QuickAddSheet {
 
     private var panelDateMenu: some View {
         Menu {
-            Button("Today") { setDue(DueDates.allDayISO(for: Date())) }
-            Button("Tomorrow") { setDue(DueDates.allDayISO(for: dayFromToday(1))) }
-            Button("Next Week") { setDue(DueDates.allDayISO(for: dayFromToday(7))) }
+            Button("Today") { setDue(presetISO(for: Date())) }
+            Button("Tomorrow") { setDue(presetISO(for: dayFromToday(1))) }
+            Button("Next Week") { setDue(presetISO(for: dayFromToday(7))) }
             Divider()
             Button("Choose Date…") { pickerSheet = .date }
             if !dueISO.isEmpty {
@@ -57,6 +57,12 @@ extension QuickAddSheet {
         .macChipMenu()
         .frame(height: 26)
         .accessibilityLabel("Date")
+    }
+
+    /// The day as a due date, with the account's default due time when it has one (as Vikunja-web's shortcuts do).
+    private func presetISO(for day: Date) -> String {
+        let iso = DueDates.allDayISO(for: day)
+        return QuickAddDefaults.current().dueTime?.applying(to: iso) ?? iso
     }
 
     private func dayFromToday(_ days: Int) -> Date {
