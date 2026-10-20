@@ -10,6 +10,7 @@ struct TaskLabelsRows: View {
     #if os(macOS)
     @State private var popular: LiveValue<[LabelRecord]>
     @State private var failure: String?
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     #endif
 
     init(services: AppServices, taskLocalId: String, labels: [LabelRecord]) {
@@ -59,7 +60,7 @@ struct TaskLabelsRows: View {
 
     private func add(_ label: LabelRecord) {
         do {
-            try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
+            try undo.toggleLabel(services, taskLocalId: taskLocalId, labelLocalId: label.localId)
             failure = nil
         } catch {
             failure = "Could not add the label: \(error)"

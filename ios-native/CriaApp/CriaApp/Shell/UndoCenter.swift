@@ -45,6 +45,12 @@ final class UndoCenter {
 
     func attach(_ services: AppServices) {
         self.services = services
+        pickUpPending()
+    }
+
+    /// Offers the steps that actions with no toast of their own saved (the menu bar extra, a notification action).
+    func pickUpPending() {
+        for step in PendingUndo.take() { record(step) }
     }
 
     /// Deletes the task with an undo window and shows the toast. Throws when the store write fails.
@@ -103,6 +109,11 @@ final class UndoCenter {
         failure = nil
         dismissTask?.cancel()
     }
+}
+
+extension Notification.Name {
+    /// Posted after a step is saved with `PendingUndo`, so a window that is already up shows its toast at once.
+    static let criaPendingUndo = Notification.Name("cria.pendingUndo")
 }
 
 extension Optional where Wrapped == UndoCenter {

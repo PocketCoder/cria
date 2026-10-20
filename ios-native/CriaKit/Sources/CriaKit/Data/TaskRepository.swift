@@ -103,7 +103,7 @@ public struct TaskInput: Sendable {
 }
 
 /// Partial edit. A nil field is left unchanged.
-public struct TaskPatch: Equatable, Sendable {
+public struct TaskPatch: Equatable, Sendable, Codable {
     public var title: String?
     public var done: Bool?
     /// An empty string clears the date (as for `startDate` and `endDate`); the push then sends null.

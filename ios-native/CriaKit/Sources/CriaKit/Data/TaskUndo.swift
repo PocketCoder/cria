@@ -4,8 +4,8 @@ import Foundation
 /// `TaskPatch` per task), card placements, and soft deletes to take back. Applying it goes through `updateTask`
 /// like any edit, so the reversal syncs through the outbox as a normal change; nothing in the outbox is cancelled
 /// (except a delete still inside its undo window).
-public struct TaskUndoStep: Equatable, Sendable {
-    public struct Entry: Equatable, Sendable {
+public struct TaskUndoStep: Equatable, Sendable, Codable {
+    public struct Entry: Equatable, Sendable, Codable {
         public var taskLocalId: String
         public var inverse: TaskPatch
 
@@ -16,7 +16,7 @@ public struct TaskUndoStep: Equatable, Sendable {
     }
 
     /// Where a card sat on a kanban board before it was moved.
-    public struct BucketMove: Equatable, Sendable {
+    public struct BucketMove: Equatable, Sendable, Codable {
         public var taskLocalId: String
         public var viewLocalId: String
         public var bucketLocalId: String
@@ -31,7 +31,7 @@ public struct TaskUndoStep: Equatable, Sendable {
     }
 
     /// A label added to or removed from a task; toggling it again puts it back.
-    public struct LabelToggle: Equatable, Sendable {
+    public struct LabelToggle: Equatable, Sendable, Codable {
         public var taskLocalId: String
         public var labelLocalId: String
 

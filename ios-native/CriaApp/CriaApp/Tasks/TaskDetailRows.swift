@@ -108,6 +108,7 @@ struct LabelPickerSheet: View {
     let selected: [LabelRecord]
     let all: [LabelRecord]
     @Environment(\.dismiss) private var dismiss
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var newTitle = ""
     @State private var failure: String?
 
@@ -126,7 +127,7 @@ struct LabelPickerSheet: View {
                     ForEach(all, id: \.localId) { label in
                         Button {
                             do {
-                                try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
+                                try undo.toggleLabel(services, taskLocalId: taskLocalId, labelLocalId: label.localId)
                             } catch {
                                 failure = String(describing: error)
                             }
