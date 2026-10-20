@@ -4,10 +4,17 @@ import Foundation
 public struct BulkResult: Equatable, Sendable {
     public var changed = 0
     public var failures: [String] = []
+    /// Puts every change back as one step; nil when nothing changed. Not part of equality.
+    public var undo: TaskUndoStep?
 
-    public init(changed: Int = 0, failures: [String] = []) {
+    public init(changed: Int = 0, failures: [String] = [], undo: TaskUndoStep? = nil) {
         self.changed = changed
         self.failures = failures
+        self.undo = undo
+    }
+
+    public static func == (lhs: BulkResult, rhs: BulkResult) -> Bool {
+        lhs.changed == rhs.changed && lhs.failures == rhs.failures
     }
 }
 
@@ -18,15 +25,22 @@ extension CriaStore {
     @discardableResult
     public func bulkUpdate(_ localIds: [String], patchFor: (TaskRecord) -> TaskPatch?) -> BulkResult {
         var result = BulkResult()
+        var entries: [TaskUndoStep.Entry] = []
+        var sample: TaskPatch?
         for localId in localIds {
             do {
                 guard let record = try self.task(localId: localId) else { continue }
                 guard let patch = patchFor(record) else { continue }
                 _ = try updateTask(localId: localId, patch: patch)
+                entries.append(TaskUndoStep.Entry(taskLocalId: localId, inverse: patch.inverse(restoring: record)))
+                sample = sample ?? patch
                 result.changed += 1
             } catch {
                 result.failures.append((try? self.task(localId: localId))?.title ?? localId)
             }
+        }
+        if let sample {
+            result.undo = TaskUndoStep(message: TaskUndoStep.message(for: sample, count: entries.count), entries: entries)
         }
         return result
     }
@@ -65,18 +79,24 @@ extension CriaStore {
         }
     }
 
-    /// Deletes the tasks at once. The desktop and the app's single delete hold the push for an Undo; with several
-    /// tasks there is no single Undo to offer, so the caller asks first.
+    /// Deletes the tasks at once. With an `undoWindow` each delete waits that long in the outbox, and `undo` on the
+    /// result takes all of them back as one step.
     @discardableResult
-    public func bulkDelete(_ localIds: [String]) -> BulkResult {
+    public func bulkDelete(_ localIds: [String], undoWindow: TimeInterval = 0) -> BulkResult {
         var result = BulkResult()
+        var deleted: [String] = []
         for localId in localIds {
             do {
-                try deleteTask(localId: localId)
+                try deleteTask(localId: localId, undoWindow: undoWindow)
+                deleted.append(localId)
                 result.changed += 1
             } catch {
                 result.failures.append(localId)
             }
+        }
+        if undoWindow > 0, !deleted.isEmpty {
+            let subject = deleted.count == 1 ? "Task" : "\(deleted.count) tasks"
+            result.undo = TaskUndoStep(message: "\(subject) deleted", deletedLocalIds: deleted)
         }
         return result
     }
