@@ -15,10 +15,12 @@ struct GanttScreen: View {
     /// Date range and the no-dates tray, kept on this device (see `GanttFilters`).
     @AppStorage(GanttFilters.storageKey) private var filtersText = ""
     @State private var filtering = false
-    /// iOS: when on, a long press then vertical drag on a top-level bar reorders its row instead of moving its dates.
+    /// iOS: when on, a long press then vertical drag on a bar reorders its row (among its siblings) instead of moving its dates.
     /// The Mac drags rows in its task column instead.
     @State private var reordering = false
     @State private var optimistic = OptimisticOrder()
+    /// The parent whose children `optimistic` orders; nil for the top-level rows.
+    @State private var optimisticParent: String?
     @State private var reorders = 0
 
     init(services: AppServices, projectLocalId: String, projectColour: String? = nil) {
@@ -56,8 +58,8 @@ struct GanttScreen: View {
     /// The rows in stored order with a just-dropped reorder laid over them until the store catches up.
     private var datedNodes: [GanttNode] {
         let stored = storedDatedNodes
-        let roots = stored.filter { $0.indentLevel == 0 }.map(\.taskLocalId)
-        return GanttTree.reorderRootBlocks(stored, rootOrder: optimistic.resolve(roots))
+        let siblings = GanttTree.siblingIds(of: optimisticParent, in: stored)
+        return GanttTree.reorderSiblingBlocks(stored, parent: optimisticParent, order: optimistic.resolve(siblings))
     }
     private var datelessNodes: [GanttNode] {
         guard filters.showUndated else { return [] }
@@ -106,13 +108,15 @@ struct GanttScreen: View {
         .task { await live.run() }
     }
 
-    /// Drops a top-level row `rows` places up or down and writes the positions the way the list view does.
+    /// Drops a row `rows` places up or down among its siblings (a subtask stays under its parent) and writes the
+    /// positions the way the list view does.
     private func reorder(_ movedId: String, by rows: Int) {
-        guard let order = GanttTree.rootOrder(afterMoving: movedId, rowOffset: rows, in: datedNodes) else { return }
-        optimistic.set(order, over: storedDatedNodes.filter { $0.indentLevel == 0 }.map(\.taskLocalId))
+        guard let change = GanttTree.siblingOrder(afterMoving: movedId, rowOffset: rows, in: datedNodes) else { return }
+        optimisticParent = change.parent
+        optimistic.set(change.order, over: GanttTree.siblingIds(of: change.parent, in: storedDatedNodes))
         do {
             guard let viewId = try services.store.listViewLocalId(projectLocalId: projectLocalId) else { return }
-            try services.store.applyListReorder(orderedIds: order, movedId: movedId, viewLocalId: viewId)
+            try services.store.applyListReorder(orderedIds: change.order, movedId: movedId, viewLocalId: viewId)
             reorders += 1
         } catch {
             optimistic = OptimisticOrder()
@@ -248,10 +252,8 @@ struct GanttBar: View {
         .accessibilityAction { onOpen() }
         // Dragging is not available to VoiceOver, so moving by a day is an action on the bar.
         .accessibilityActions {
-            if node.indentLevel == 0 {
-                Button("Move row up") { onReorder(-1) }
-                Button("Move row down") { onReorder(1) }
-            }
+            Button("Move row up") { onReorder(-1) }
+            Button("Move row down") { onReorder(1) }
             if !place.resolved.dateless {
                 Button("Move a day earlier") { shift(-1) }
                 Button("Move a day later") { shift(1) }
@@ -259,10 +261,10 @@ struct GanttBar: View {
         }
     }
 
-    /// Only top-level rows reorder; subtasks ride along with their parent.
-    private var canReorder: Bool { reordering && node.indentLevel == 0 }
+    /// Any row reorders among its siblings; a parent's subtasks ride along with it.
+    private var canReorder: Bool { reordering }
 
-    /// Long press, then drag up or down: the row lands where it is let go (see `GanttTree.rootOrder`).
+    /// Long press, then drag up or down: the row lands where it is let go (see `GanttTree.siblingOrder`).
     private var reorderGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.25)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))

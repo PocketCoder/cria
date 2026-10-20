@@ -104,6 +104,8 @@ struct DateSheet: View {
         let presetDay = DueDates.calendarDate(preset.iso(now: Date())) ?? Date()
         return Button {
             day = presetDay
+            // As Vikunja-web's shortcuts do: the account's default due time, unless a time is already chosen here.
+            if time == nil, let defaultTime = QuickAddDefaults.current().dueTime { time = defaultTime.date(on: presetDay) }
             finish(composedISO)
         } label: {
             HStack {
@@ -211,6 +213,9 @@ struct DateSheet: View {
 }
 
 extension QuickAddDatePreset {
+    /// Today's value for the preset, with the account's default due time when it has one.
+    var isoWithDefaultTime: String { iso(now: Date(), defaultDueTime: QuickAddDefaults.current().dueTime) }
+
     var symbol: String {
         switch self {
         case .today: return "star"

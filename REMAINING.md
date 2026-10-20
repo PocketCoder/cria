@@ -38,11 +38,9 @@ The native iOS and Mac apps are at parity with the Tauri app except for what is 
 ## Known limitations of what was built
 
 - Archived projects: opening one only labels it read-only; edits are not blocked locally (the server rejects them).
-- Kanban: a collapsed column strip is not a drop target.
-- Gantt row reorder moves top-level rows only.
 - Undo does not cover the relations-section done toggle.
 - Undoing a reopen sets `done_at` to now; undoing a repeating-task completion does not re-mark subtasks that were reset; Kanban undo restores only the moved card's bucket and position.
-- Default due time is not applied to a view's initial due date or to quick-add date presets.
+- Default due time is not applied to a view's initial due date.
 - Mac time stepper for default due time saves on every step (no debounce).
 - A task whose cover attachment is deleted keeps a stale cover id until the next pull.
 - Quick add follows Vikunja's Quick Add Magic exactly, so the old extras are gone (`yesterday`, `tmrw`, part-of-day words, bare `5pm`, "in N minutes/years", "every monday", "every weekday"); they could return under the expanded-syntax setting.

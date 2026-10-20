@@ -44,7 +44,7 @@ struct TaskMacMenuItems: View {
         Divider()
         Menu("Due Date", systemImage: "calendar") {
             ForEach(QuickAddDatePreset.allCases, id: \.self) { preset in
-                Button(preset.title) { write(TaskPatch(dueDate: preset.iso(now: Date()))) }
+                Button(preset.title) { write(TaskPatch(dueDate: preset.isoWithDefaultTime)) }
             }
             Divider()
             Button("Pick a date…", action: onPickDate)

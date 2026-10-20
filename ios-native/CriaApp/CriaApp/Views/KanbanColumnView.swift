@@ -89,7 +89,21 @@ struct KanbanColumnView: View {
 
     var body: some View {
         if collapsed {
+            // A card dropped on the strip goes to the end of this column, as on an open one.
             KanbanCollapsedStrip(title: column.bucket.title, count: column.tasks.count, onExpand: onToggleCollapse)
+                .overlay {
+                    if overColumn {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(dropOutline.opacity(Self.dropOpacity), lineWidth: Self.dropWidth)
+                    }
+                }
+                .animation(.easeOut(duration: 0.12), value: overColumn)
+                .onChange(of: overColumn) { _, over in onOver(over) }
+                .modifier(KanbanDropTarget(enabled: !readOnly, onTargetChange: { overColumn = $0 }, action: { taskId in
+                    overColumn = false
+                    onDrop(taskId, nil)
+                    return true
+                }))
         } else {
             expandedBody
         }

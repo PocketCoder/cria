@@ -23,7 +23,16 @@ extension CriaStore {
     /// The project's task tree and dependency edges. Completed tasks can be left out.
     public func ganttData(projectLocalId: String, includeDone: Bool) throws -> GanttData {
         let tasks = try self.tasks(matching: TaskQuery(projectLocalId: projectLocalId, includeDone: includeDone))
-        let nodes = GanttTree.build(tasks: tasks, childMap: try subtaskMap(projectLocalId: projectLocalId))
+        // Subtasks follow the order of the list (task position), so a row reorder in the chart sticks. A child the
+        // list does not hold (a filtered-out done task) sorts last, and the sort keeps the relation order otherwise.
+        let rank = Dictionary(tasks.enumerated().map { ($1.localId, $0) }, uniquingKeysWith: { first, _ in first })
+        let childMap = try subtaskMap(projectLocalId: projectLocalId).mapValues { kids in
+            kids.enumerated().sorted { lhs, rhs in
+                let (left, right) = (rank[lhs.element] ?? Int.max, rank[rhs.element] ?? Int.max)
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }.map(\.element)
+        }
+        let nodes = GanttTree.build(tasks: tasks, childMap: childMap)
         return GanttData(nodes: nodes, edges: try ganttEdges(projectLocalId: projectLocalId))
     }
 
