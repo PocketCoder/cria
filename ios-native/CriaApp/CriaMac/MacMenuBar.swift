@@ -201,7 +201,9 @@ private struct MacTodayList: View {
 
     private func complete(_ task: TaskRecord) {
         do {
-            _ = try services.store.updateTask(localId: task.localId, patch: TaskPatch(done: true))
+            // The popover has no toast: the step waits for the main window, which shows Undo when it is up.
+            PendingUndo.save(try services.store.updateTaskUndoable(localId: task.localId, patch: TaskPatch(done: true)))
+            NotificationCenter.default.post(name: .criaPendingUndo, object: nil)
             failure = nil
             if playsSound { CompletionSound.play(preferences.custom.completionTone) }
         } catch {

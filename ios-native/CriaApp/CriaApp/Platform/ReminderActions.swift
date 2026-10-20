@@ -43,7 +43,10 @@ enum ReminderActions {
     private static func complete(taskLocalId: String) async {
         guard SignedInFlag.isSignedIn(),
               let store = try? CriaStore(database: CriaPaths.openDatabase()) else { return }
-        guard (try? store.updateTask(localId: taskLocalId, patch: TaskPatch(done: true))) != nil else { return }
+        guard let step = try? store.updateTaskUndoable(localId: taskLocalId, patch: TaskPatch(done: true)) else { return }
+        // No toast here: the app shows Undo when it next opens or comes forward.
+        PendingUndo.save(step)
+        NotificationCenter.default.post(name: .criaPendingUndo, object: nil)
         CrossProcessSignal.post()
         // A snoozed copy of this reminder has nothing left to say.
         let center = UNUserNotificationCenter.current()
