@@ -150,10 +150,8 @@ extension CriaStore {
     /// goes ahead.
     @discardableResult
     public func undo(_ step: TaskUndoStep) throws -> Bool {
-        var allRestored = true
-        for localId in step.deletedLocalIds.reversed() {
-            if try !undoDeleteTask(localId: localId) { allRestored = false }
-        }
+        let notRestored = try step.deletedLocalIds.reversed().filter { try !undoDeleteTask(localId: $0) }
+        let allRestored = notRestored.isEmpty
         for move in step.bucketMoves.reversed() {
             try setTaskBucket(
                 taskLocalId: move.taskLocalId, viewLocalId: move.viewLocalId,
