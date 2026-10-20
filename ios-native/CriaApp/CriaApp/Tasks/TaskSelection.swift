@@ -46,9 +46,9 @@ private struct TaskSelectionHost: ViewModifier {
     @State private var scheduling = false
     @State private var moving = false
     @State private var confirmingDelete = false
-    /// One tick per bulk action that saved every task, for the haptics: one per action, not one per task.
+    /// One tick per bulk action that saved every task, for the haptics: one per action, not one per task. Deletes
+    /// play the toast's own.
     @State private var completions = 0
-    @State private var deletions = 0
 
     private var ids: [String] { selection.ids.sorted() }
     private var store: CriaStore { services.store }
@@ -81,11 +81,10 @@ private struct TaskSelectionHost: ViewModifier {
                 "Delete \(selection.count) tasks?", isPresented: $confirmingDelete, titleVisibility: .visible
             ) {
                 Button("Delete \(selection.count) tasks", role: .destructive) {
-                    if finish(store.bulkDelete(ids)) { deletions += 1 }
+                    finish(store.bulkDelete(ids, undoWindow: UndoCenter.window))
                 }
             }
             .sensoryFeedback(.success, trigger: completions)
-            .sensoryFeedback(.warning, trigger: deletions)
             .errorHaptic(selection.failure)
             .alert("Could not update every task", isPresented: Binding(
                 get: { selection.failure != nil }, set: { if !$0 { selection.failure = nil } }
@@ -96,9 +95,11 @@ private struct TaskSelectionHost: ViewModifier {
             }
     }
 
-    /// Ends the selection and reports any task that did not save. True when every task saved.
+    /// Ends the selection, offers Undo for what changed (one step for the whole action) and reports any task that did
+    /// not save. True when every task saved.
     @discardableResult
     private func finish(_ result: BulkResult) -> Bool {
+        undo.record(result.undo)
         if !result.failures.isEmpty { selection.failure = result.failures.joined(separator: "\n") }
         selection.stop()
         return result.failures.isEmpty

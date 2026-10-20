@@ -63,6 +63,7 @@ struct TaskRowLabelChoices: View {
     let labels: [LabelRecord]
     let onFailure: (String) -> Void
     @Environment(TaskMenuChoices.self) private var choices: TaskMenuChoices?
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         ForEach(choices?.labels ?? [], id: \.localId) { label in
@@ -73,7 +74,7 @@ struct TaskRowLabelChoices: View {
 
     private func toggle(_ label: LabelRecord) {
         do {
-            try services.store.toggleTaskLabel(taskLocalId: taskLocalId, labelLocalId: label.localId)
+            try undo.toggleLabel(services, taskLocalId: taskLocalId, labelLocalId: label.localId)
         } catch {
             onFailure(String(describing: error))
         }
@@ -86,6 +87,7 @@ struct TaskRowProjectChoices: View {
     let task: TaskRecord
     let onFailure: (String) -> Void
     @Environment(TaskMenuChoices.self) private var choices: TaskMenuChoices?
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         ForEach(choices?.projects ?? [], id: \.localId) { project in
@@ -100,7 +102,7 @@ struct TaskRowProjectChoices: View {
         var patch = TaskPatch()
         patch.projectLocalId = projectLocalId
         do {
-            _ = try services.store.updateTask(localId: task.localId, patch: patch)
+            try undo.updateTask(services, localId: task.localId, patch: patch)
         } catch {
             onFailure(String(describing: error))
         }

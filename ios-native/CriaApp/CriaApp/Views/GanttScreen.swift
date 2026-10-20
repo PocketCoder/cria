@@ -126,6 +126,7 @@ struct GanttTray: View {
     let services: AppServices
     let nodes: [GanttNode]
     let today: Int
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -169,8 +170,8 @@ struct GanttTray: View {
 
     /// Gives a dateless task a default span starting today.
     private func schedule(_ node: GanttNode) {
-        _ = try? services.store.setGanttDates(
-            taskLocalId: node.taskLocalId, start: today, end: today + GanttMetrics.defaultSpanDays - 1
+        _ = try? undo.setGanttDates(
+            services, taskLocalId: node.taskLocalId, start: today, end: today + GanttMetrics.defaultSpanDays - 1
         )
     }
 }

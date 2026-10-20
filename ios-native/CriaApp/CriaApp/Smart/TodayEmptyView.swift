@@ -9,6 +9,7 @@ struct TodayEmptyView: View {
     @State private var picking = false
     @State private var failure: String?
     @Environment(\.dateDisplay) private var dateDisplay
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     init(services: AppServices) {
         self.services = services
@@ -127,15 +128,11 @@ struct TodayEmptyView: View {
 
     /// Moves each task to today. A timed due date keeps its time of day.
     private func pull(_ ids: [String]) {
-        var failures: [String] = []
-        for item in (data.upcoming + data.suggestions) where ids.contains(item.task.localId) {
-            let patch = TaskPatch(dueDate: TodaySuggestions.pulledForward(item.task.dueDate, now: Date()))
-            do {
-                _ = try services.store.updateTask(localId: item.task.localId, patch: patch)
-            } catch {
-                failures.append("\(item.task.title): \(error)")
-            }
-        }
+        let changes = (data.upcoming + data.suggestions)
+            .filter { ids.contains($0.task.localId) }
+            .map { (localId: $0.task.localId, title: $0.task.title,
+                    patch: TaskPatch(dueDate: TodaySuggestions.pulledForward($0.task.dueDate, now: Date()))) }
+        let failures = undo.updateTasks(services, changes)
         if !failures.isEmpty { failure = failures.joined(separator: "\n") }
     }
 }

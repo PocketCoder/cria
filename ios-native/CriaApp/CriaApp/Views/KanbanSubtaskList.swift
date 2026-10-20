@@ -8,6 +8,7 @@ struct KanbanSubtaskList: View {
     let subtasks: [KanbanSubtaskRow]
     @Binding var isExpanded: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     private var doneCount: Int { subtasks.filter { $0.task.done }.count }
 
@@ -48,7 +49,7 @@ struct KanbanSubtaskList: View {
         let task = row.task
         return HStack(spacing: 0) {
             PriorityCheck(priority: task.priority, isDone: task.done, size: 16) {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             NavigationLink(value: Route.task(task.localId)) {
                 Text(task.title)

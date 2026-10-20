@@ -41,6 +41,7 @@ struct KanbanBoardView: View {
     @AppStorage private var collapsedText: String
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.preferences) private var preferences
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     init(services: AppServices, view: ViewRecord) {
         self.services = services
@@ -281,18 +282,18 @@ struct KanbanBoardView: View {
     private func drop(_ taskId: String, into column: KanbanColumn, before beforeId: String?) {
         guard !readOnly else { return }
         let order = Kanban.orderAfterDrop(order: column.tasks.map(\.localId), moving: taskId, onto: beforeId)
+        #if os(macOS)
+        let completes = Kanban.roles(of: column.bucket, in: view).isDone // a done column marks it done here too
+        #else
+        let completes = false
+        #endif
         do {
-            let result = try services.store.moveCard(
-                taskLocalId: taskId, viewLocalId: view.localId, target: column, orderedIds: order
+            let moved = try services.store.moveCardUndoable(
+                taskLocalId: taskId, viewLocalId: view.localId, source: columns.first { $0.tasks.contains { $0.localId == taskId } },
+                target: column, orderedIds: order, alsoComplete: completes
             )
-            if result == .blockedByLimit { limitNotice = true }
-            #if os(macOS)
-            // Dropping on the done column marks the task done here at once; the server does the same on the move.
-            if result == .moved, Kanban.roles(of: column.bucket, in: view).isDone,
-               column.tasks.first(where: { $0.localId == taskId }) == nil {
-                _ = try services.store.updateTask(localId: taskId, patch: TaskPatch(done: true))
-            }
-            #endif
+            if moved.result == .blockedByLimit { limitNotice = true }
+            undo.record(moved.undo)
         } catch {
             failure = String(describing: error)
         }

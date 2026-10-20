@@ -282,7 +282,9 @@ struct TaskDetailView: View {
     @discardableResult
     func apply(_ patch: TaskPatch) -> Bool {
         do {
-            _ = try services.store.updateTask(localId: taskLocalId, patch: patch)
+            // Completing, rescheduling, prioritising and moving offer Undo; text edits have the editor's own.
+            let center: UndoCenter? = patch.offersUndo ? undo : nil
+            try center.updateTask(services, localId: taskLocalId, patch: patch)
             return true
         } catch {
             sheets.failure = String(describing: error)

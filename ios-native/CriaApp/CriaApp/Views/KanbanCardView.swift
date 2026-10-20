@@ -10,6 +10,7 @@ struct KanbanCardView: View {
     @Environment(NavigationModel.self) private var navigation: NavigationModel?
     /// Set by the Mac shell: a card then selects the task in the detail column instead of pushing it (as task rows do).
     @Environment(\.taskOpener) private var openTask
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     let services: AppServices
     let task: TaskRecord
     var labels: [LabelRecord] = []
@@ -96,7 +97,7 @@ struct KanbanCardView: View {
     private var header: some View {
         HStack(alignment: .top, spacing: Theme.checkGap) {
             PriorityCheck(priority: task.priority, isDone: task.done, size: Self.ringSize) {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             // The 44pt touch target makes the margin on iOS; the Mac's smaller target needs it set.
             .padding(.leading, Theme.cardRingInset)
@@ -133,7 +134,7 @@ struct KanbanCardView: View {
             #if os(macOS)
             // Command-click toggles done instead of opening the card (a plain click still opens it).
             .highPriorityGesture(TapGesture().modifiers(.command).onEnded {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             })
             #endif
         }
@@ -146,7 +147,7 @@ struct KanbanCardView: View {
         // Dragging is not available to VoiceOver, so each column is also an action on the card.
         .accessibilityActions {
             Button(task.done ? "Mark not done" : "Mark done") {
-                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             ForEach(moveTargets, id: \.bucket.localId) { target in
                 Button("Move to \(target.bucket.title)") { onMove(target) }

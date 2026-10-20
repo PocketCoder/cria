@@ -25,6 +25,7 @@ struct TaskMacMenuItems: View {
     let onFailure: (String) -> Void
     /// Nil leaves Subscribe out (the row's context menu has no room for a network call's failure).
     var onToggleSubscription: (@MainActor () -> Void)?
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         Button(task.done ? "Mark as Not Done" : "Mark as Done", systemImage: "checkmark.circle", action: onToggleDone)
@@ -84,7 +85,7 @@ struct TaskMacMenuItems: View {
 
     private func write(_ patch: TaskPatch) {
         do {
-            _ = try services.store.updateTask(localId: task.localId, patch: patch)
+            try undo.updateTask(services, localId: task.localId, patch: patch)
         } catch {
             onFailure(String(describing: error))
         }

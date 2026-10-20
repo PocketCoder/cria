@@ -217,6 +217,7 @@ struct MacProjectLabel: View {
     let sheets: MacSidebarActions
     @State private var isTargeted = false
     @Environment(\.macSidebarSelection) private var selection
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         Label {
@@ -246,14 +247,9 @@ struct MacProjectLabel: View {
 
     /// Moves each dropped task here, as the inspector's Move to project does. Tasks already here are left alone.
     private func moveTasks(_ ids: [String]) -> Bool {
-        var moved = false
-        for id in ids {
-            guard let task = try? services.store.task(localId: id), task.projectLocalId != project.localId else { continue }
-            var patch = TaskPatch()
-            patch.projectLocalId = project.localId
-            if (try? services.store.updateTask(localId: id, patch: patch)) != nil { moved = true }
-        }
-        return moved
+        let result = services.store.bulkMove(ids, toProject: project.localId)
+        undo.record(result.undo)
+        return result.changed > 0
     }
 }
 
