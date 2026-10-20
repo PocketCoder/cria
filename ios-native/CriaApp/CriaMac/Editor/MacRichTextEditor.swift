@@ -41,6 +41,14 @@ struct RichTextEditor: NSViewRepresentable {
         }
         let actions = barActions
         view.onImageData = { actions.onImageData($0, $1, $2) }
+        let controller = controller
+        view.onSlashKey = { [weak controller] key in controller?.handleSlashKey(key) ?? false }
+        view.onResign = { [weak controller] in controller?.closeSlash() }
+        let presenter = context.coordinator.slashPresenter
+        controller.onSlashChange = { [weak controller, weak view] in
+            guard let controller, let view else { return }
+            presenter.sync(controller: controller, view: view)
+        }
         scroll.documentView = view
         controller.attach(view)
         controller.imageProvider = imageProvider
@@ -62,6 +70,8 @@ struct RichTextEditor: NSViewRepresentable {
     static func dismantleNSView(_ view: MacEditorScrollView, coordinator: MacEditorCoordinator) {
         // The text view is about to go; keep what it holds for a save that runs after this.
         coordinator.controller.captureFinalDocument()
+        coordinator.controller.onSlashChange = {}
+        coordinator.slashPresenter.hide()
     }
 
     func makeCoordinator() -> MacEditorCoordinator {
@@ -72,6 +82,7 @@ struct RichTextEditor: NSViewRepresentable {
 @MainActor
 final class MacEditorCoordinator: NSObject, NSTextViewDelegate {
     let controller: EditorController
+    let slashPresenter = MacSlashMenuPresenter()
 
     init(controller: EditorController) {
         self.controller = controller

@@ -12,6 +12,10 @@ final class MacEditorTextView: NSTextView, EditorSurface {
     var onContentSizeChange: (() -> Void)?
     /// An image pasted or dropped: its bytes, a file name and the MIME type.
     var onImageData: ((Data, String, String) -> Void)?
+    /// A key the open slash menu may take (Up, Down, Return, Tab, Escape); true when it did.
+    var onSlashKey: ((SlashKey) -> Bool)?
+    /// The text view gave up the keyboard.
+    var onResign: (() -> Void)?
     /// Set for the inline editor, which reports the height its text needs.
     var onHeightChange: (@MainActor (CGFloat) -> Void)?
     private var reportedHeight: CGFloat = 0
@@ -81,7 +85,10 @@ final class MacEditorTextView: NSTextView, EditorSurface {
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { MacEditorFocus.post(self, focused: false) }
+        if resigned {
+            MacEditorFocus.post(self, focused: false)
+            onResign?()
+        }
         return resigned
     }
 
@@ -117,6 +124,11 @@ final class MacEditorTextView: NSTextView, EditorSurface {
     }
 
     // MARK: Keys and mouse
+
+    override func doCommand(by selector: Selector) {
+        if let key = SlashKey(selector: selector), onSlashKey?(key) == true { return }
+        super.doCommand(by: selector)
+    }
 
     override func deleteBackward(_ sender: Any?) {
         if selection == NSRange(location: 0, length: 0), let onBackspaceAtStart, !onBackspaceAtStart() { return }

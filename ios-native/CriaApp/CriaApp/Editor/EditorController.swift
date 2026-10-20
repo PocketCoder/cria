@@ -26,6 +26,12 @@ final class EditorController {
     let barState = EditorBarState()
     var imageProvider: EditorStyling.ImageProvider = { _ in nil }
     var onMentionTrigger: () -> Void = {}
+    /// The slash menu (typing "/" at the start of a line or after a space). The iOS bar and the Mac panel show it.
+    let slash = SlashMenuState()
+    /// The slash menu opened, changed or closed (the Mac panel follows it).
+    var onSlashChange: () -> Void = {}
+    /// "/image" was chosen: the host opens its photo picker.
+    var onSlashImage: () -> Void = {}
     var onChange: () -> Void = {}
     /// Called when the text view loses focus (keyboard dismissed), so hosts can save before the screen goes away.
     var onEndEditing: () -> Void = {}
@@ -89,11 +95,13 @@ final class EditorController {
     func didChange() {
         textView?.refreshMarkers()
         refreshBarState()
+        refreshSlash()
         onChange()
     }
 
     func selectionChanged() {
         refreshBarState()
+        refreshSlash()
         guard let view = textView, view.selection.length == 0 else { return }
         guard let paragraph = EditorParagraphs.containing(view.selection.location, in: view.storage) else { return }
         if paragraph.isEmpty {

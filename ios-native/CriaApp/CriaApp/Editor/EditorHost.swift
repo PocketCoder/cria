@@ -89,6 +89,10 @@ struct EditorHost: View {
             mentionFromTyping = true
             showMention = true
         }
+        controller.onSlashImage = {
+            controller.holdFocus()
+            showPhotoPicker = true
+        }
         barActions.onLink = {
             controller.holdFocus()
             showLink = true
