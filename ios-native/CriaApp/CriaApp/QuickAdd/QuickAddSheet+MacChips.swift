@@ -16,9 +16,7 @@ extension QuickAddSheet {
                 unsetTint: Self.unsetTint, emptyTitle: "Reminder"
             )
             .frame(height: 26)
-            if parsed.repeatAfter != nil || parsed.repeatMode != nil {
-                CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
-            }
+            parsedChips
         }
     }
 

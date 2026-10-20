@@ -56,7 +56,10 @@ struct QuickAddSheet: View {
 
     private var mode: QuickAddMagicMode { QuickAddMagicMode(rawValue: modeRaw) ?? .default }
     var parsed: QuickAddResult {
-        parseQuickAddTask(line, mode: mode, detectDates: preferences.custom.detectDates, defaultDueTime: defaultDueTime)
+        parseQuickAddTask(
+            line, mode: mode, detectDates: preferences.custom.detectDates, defaultDueTime: defaultDueTime,
+            expanded: preferences.custom.expandedQuickAdd
+        )
     }
     /// The account's default due time (Vikunja-web's `default_due_time`), kept in UserDefaults by Settings.
     private var defaultDueTime: DefaultDueTime? { QuickAddDefaults.current().dueTime }
@@ -224,8 +227,9 @@ struct QuickAddSheet: View {
     /// Keeps the pickers in step with what the typed line parses to, except fields set by hand.
     private func lineChanged(from old: String, to new: String) {
         let detect = preferences.custom.detectDates
-        let before = parseQuickAddTask(old, mode: mode, detectDates: detect, defaultDueTime: defaultDueTime)
-        let after = parseQuickAddTask(new, mode: mode, detectDates: detect, defaultDueTime: defaultDueTime)
+        let expanded = preferences.custom.expandedQuickAdd
+        let before = parseQuickAddTask(old, mode: mode, detectDates: detect, defaultDueTime: defaultDueTime, expanded: expanded)
+        let after = parseQuickAddTask(new, mode: mode, detectDates: detect, defaultDueTime: defaultDueTime, expanded: expanded)
         if !picked.contains(.priority) {
             priority = followParsed(priority, before: before.priority, after: after.priority, empty: 0)
         }
@@ -302,9 +306,7 @@ extension QuickAddSheet {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(preferences.custom.quickAddActions) { chip($0) }
-                if parsed.repeatAfter != nil || parsed.repeatMode != nil {
-                    CriaChip(text: "Repeats", systemImage: "repeat", tint: Color(.mutedForeground))
-                }
+                parsedChips
                 moreMenu
             }
             .padding(.vertical, 2)

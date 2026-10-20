@@ -133,10 +133,10 @@ public enum AIPrompts {
         return """
             \(rambleIntro(context.now))
             Each line is a short imperative task title, optionally followed by these tokens:
-            - A due date in plain words, as the person said it (tomorrow, tomorrow 5pm, next friday, in 3 days, this \
+            - A due date in plain words, as the person said it (tomorrow, tomorrow at 5pm, next friday, in 3 days, this \
             weekend). Keep every date the person mentions. Only for "end of the month/week" style deadlines, write the \
             month and day instead (\(monthEnd)).
-            - A repeat in plain words (every week, daily, every monday).
+            - A repeat in plain words (every week, every 2 days, daily).
             \(tagRules(context, prefixes: prefixes))
             - \(priority)3 only if the person says it is important, \(priority)4 only if they say it is urgent. Most \
             tasks have no priority.

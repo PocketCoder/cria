@@ -87,6 +87,9 @@ public struct TaskInput: Sendable {
     public var isFavorite: Bool
     public var repeatAfter = 0
     public var repeatMode = 0
+    /// Set by quick add's expanded syntax (`9-10am`, `for 1h`, `{deadline}`).
+    public var startDate: String?
+    public var endDate: String?
 
     public init(title: String, projectLocalId: String, description: String? = nil, dueDate: String? = nil,
                 priority: Int = 0, isFavorite: Bool = false) {
@@ -214,11 +217,11 @@ extension CriaStore {
         let now = isoNow()
         try connection.execute(sql: """
             INSERT INTO tasks (local_id, server_id, project_local_id, title, description, done, due_date,
-                   priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
+                   start_date, end_date, priority, percent_done, is_favorite, is_subscribed, repeat_after, repeat_mode,
                    updated_at, created_at, dirty, deleted)
-            VALUES (?, NULL, ?, ?, ?, 0, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
+            VALUES (?, NULL, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, 1, 0)
             """, arguments: [
-                localId, input.projectLocalId, input.title, input.description, input.dueDate,
+                localId, input.projectLocalId, input.title, input.description, input.dueDate, input.startDate, input.endDate,
                 input.priority, input.isFavorite, input.repeatAfter, input.repeatMode, now, now
             ])
         guard let record = try CriaStore.fetchTask(connection, localId: localId) else {
