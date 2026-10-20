@@ -74,6 +74,9 @@ struct KanbanColumnView: View {
     /// screen at once to drop on. It opens again (not compact) while the card is over it. The cards stay in the view tree
     /// (zero height), because the drag started on one.
     var compact = false
+    /// Shown as a narrow strip, remembered per view by the board. `onToggleCollapse` flips it.
+    var collapsed = false
+    var onToggleCollapse: () -> Void = {}
     /// Told when a card of this column is picked up.
     var onDragStart: () -> Void = {}
     /// Told when the dragged card enters or leaves this column (or one of its cards).
@@ -111,6 +114,14 @@ struct KanbanColumnView: View {
     }
 
     var body: some View {
+        if collapsed {
+            KanbanCollapsedStrip(title: column.bucket.title, count: column.tasks.count, onExpand: onToggleCollapse)
+        } else {
+            expandedBody
+        }
+    }
+
+    private var expandedBody: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 8) {
                 header
@@ -248,6 +259,7 @@ struct KanbanColumnView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
+            if !compact { collapseButton }
             // Title, count and role badges read as one heading, e.g. "To do, 3 of 5 tasks, full, Done column".
             HStack(spacing: 6) {
                 Text(column.bucket.title)
@@ -268,6 +280,19 @@ struct KanbanColumnView: View {
         }
         .padding(.leading, 4)
         .frame(minHeight: Self.headerHeight)
+    }
+
+    /// Folds the column into a strip (remembered for this view on this device).
+    private var collapseButton: some View {
+        Button(action: onToggleCollapse) {
+            Image(systemName: "chevron.down")
+                .font(Theme.caption.weight(.semibold))
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(width: 24, height: Self.headerHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Collapse \(column.bucket.title)")
     }
 
     private var columnMenu: some View {

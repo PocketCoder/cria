@@ -49,7 +49,7 @@ struct FilterEditorSheet: View {
                         .font(.callout.monospaced())
                         #endif
                     if !query.isEmpty { Text(FilterHighlightStyle.attributed(query)).font(.callout.monospaced()) }
-                    suggestionRow
+                    FilterSuggestionRow(services: services, query: $query)
                     #if os(macOS)
                     Text("Combine with && and ||. Compare with = != > >= < <=, in or like. Dates: now, now+7d, now-1w.")
                         .font(Theme.caption)
@@ -73,46 +73,6 @@ struct FilterEditorSheet: View {
             }
             .onAppear(perform: load)
         }
-    }
-
-    @ViewBuilder private var suggestionRow: some View {
-        let options = suggestions
-        if !options.isEmpty, let context = autocompleteContext(query, cursor: query.utf16.count) {
-            #if os(macOS)
-            // Wrapped rather than a sideways scroller, which clipped the last chip.
-            ChipFlowLayout { suggestionChips(options, context: context) }
-            #else
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack { suggestionChips(options, context: context) }
-            }
-            #endif
-        }
-    }
-
-    private func suggestionChips(_ options: [String], context: AutocompleteContext) -> some View {
-        ForEach(options, id: \.self) { option in
-            Button { apply(option, context: context) } label: { CriaChip(text: option, tint: Color(.primary)) }
-                .buttonStyle(.plain)
-        }
-    }
-
-    private var suggestions: [String] {
-        guard let context = autocompleteContext(query, cursor: query.utf16.count) else { return [] }
-        let pool: [String]
-        switch context.kind {
-        case .field: pool = filterFields
-        case .label: pool = ((try? services.store.labels()) ?? []).map(\.title)
-        case .project: pool = ((try? services.store.projects()) ?? []).map(\.title)
-        case .assignee: pool = []
-        }
-        let wanted = context.prefix.lowercased()
-        return Array(pool.filter { $0.lowercased().hasPrefix(wanted) && $0.lowercased() != wanted }.prefix(8))
-    }
-
-    private func apply(_ option: String, context: AutocompleteContext) {
-        let text = NSString(string: query)
-        let value = option.contains(" ") && context.kind != .field ? "'\(option)'" : option
-        query = text.substring(to: context.replaceStart) + value + " "
     }
 
     private func load() {

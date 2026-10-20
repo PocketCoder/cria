@@ -127,6 +127,12 @@ struct KanbanCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            #if os(macOS)
+            // Command-click toggles done instead of opening the card (a plain click still opens it).
+            .highPriorityGesture(TapGesture().modifiers(.command).onEnded {
+                _ = try? services.store.updateTask(localId: task.localId, patch: TaskPatch(done: !task.done))
+            })
+            #endif
         }
         .padding(.trailing, Self.padding)
         .accessibilityElement(children: .ignore)

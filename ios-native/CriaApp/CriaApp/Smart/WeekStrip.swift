@@ -17,7 +17,36 @@ struct WeekStrip: View {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 
+    /// The month grid in place of the week; picking a day in it selects that day as the strip does.
+    @State private var expanded = false
+
     var body: some View {
+        VStack(spacing: 0) {
+            if expanded {
+                MonthGrid(selected: $selected, busyDays: busyDays)
+            } else {
+                weekBody
+            }
+            expandToggle
+        }
+        .animation(.snappy(duration: 0.25), value: expanded)
+    }
+
+    private var expandToggle: some View {
+        Button {
+            expanded.toggle()
+        } label: {
+            Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                .font(Theme.caption.weight(.semibold))
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(maxWidth: .infinity, minHeight: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(expanded ? "Show week" : "Show month")
+    }
+
+    @ViewBuilder private var weekBody: some View {
         #if os(macOS)
         // The macOS design's strip: seven equal days, no chevrons (the header has ‹, Today and ›).
         HStack(spacing: 4) {
