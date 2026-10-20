@@ -27,6 +27,8 @@ struct BrowseView: View {
     @State private var pendingFilterDelete: SavedFilterRecord?
     @State private var showRamble = false
     @State private var showPhoto = false
+    /// Active while reordering projects: the rows show drag handles and Done leaves it.
+    @State private var editMode: EditMode = .inactive
     private var aiStatus: AIStatus { AIStatus.shared }
     @State var filterEditor: FilterEditorTarget?
     @State private var labelEditor: LabelEditTarget?
@@ -92,22 +94,12 @@ struct BrowseView: View {
         .navigationTitle("Browse")
         .quickAdd(services: services)
         .refreshable { await services.refresh() }
+        .environment(\.editMode, $editMode)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu("Add", systemImage: "plus") {
-                    Button("New project", systemImage: "folder.badge.plus") { editor = .create }
-                    if !isLinkShare {
-                        Button("New filter", systemImage: "line.3.horizontal.decrease.circle") {
-                            filterEditor = FilterEditorTarget(record: nil)
-                        }
-                    }
-                    Divider()
-                    Button("List from photo", systemImage: "camera.viewfinder") { showPhoto = true }
-                    if aiStatus.isOfferable {
-                        Button("Ramble to tasks", systemImage: "mic") { showRamble = true }
-                            .disabled(aiStatus.notReadyMessage != nil)
-                    }
-                }
+            if editMode.isEditing {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { editMode = .inactive } }
+            } else {
+                ToolbarItem(placement: .topBarTrailing) { addMenu }
             }
         }
         .sheet(item: $filterEditor) { target in
@@ -185,9 +177,30 @@ struct BrowseView: View {
 }
 
 extension BrowseView {
+    /// The + menu. Reordering projects is here too: the drag handles only show while editing.
+    var addMenu: some View {
+        Menu("Add", systemImage: "plus") {
+            Button("New project", systemImage: "folder.badge.plus") { editor = .create }
+            if !isLinkShare {
+                Button("New filter", systemImage: "line.3.horizontal.decrease.circle") {
+                    filterEditor = FilterEditorTarget(record: nil)
+                }
+            }
+            Divider()
+            Button("List from photo", systemImage: "camera.viewfinder") { showPhoto = true }
+            if aiStatus.isOfferable {
+                Button("Ramble to tasks", systemImage: "mic") { showRamble = true }
+                    .disabled(aiStatus.notReadyMessage != nil)
+            }
+            Divider()
+            Button("Reorder projects", systemImage: "arrow.up.arrow.down") { editMode = .active }
+        }
+    }
+
     @ViewBuilder var projectsSection: some View {
         Section("Projects") {
-            ForEach(ProjectTree.rows(live.value.projects, collapsed: collapsed), id: \.project.localId) { row in
+            let rows = ProjectTree.rows(live.value.projects, collapsed: collapsed)
+            ForEach(rows, id: \.project.localId) { row in
                 ProjectRowView(
                     row: row,
                     openCount: live.value.openCounts[row.project.localId] ?? 0,
@@ -213,11 +226,23 @@ extension BrowseView {
                     .tint(Color(.marigold500))
                 }
             }
+            .onMove { source, destination in moveProject(in: rows, from: source, to: destination) }
             NavigationLink {
                 ArchivedProjectsView(services: services)
             } label: {
                 Label { Text("Archived projects") } icon: { Image(systemName: "archivebox").foregroundStyle(Color(.mutedForeground)) }
             }
+        }
+    }
+
+    /// Dragging reorders a project among its siblings (the Mac sidebar's rule); the new order is saved like any edit.
+    func moveProject(in rows: [ProjectTreeRow], from source: IndexSet, to destination: Int) {
+        guard let from = source.first,
+              let change = ProjectTree.reorderedSiblings(in: rows, from: from, to: destination) else { return }
+        do {
+            try services.store.reorderProjects(change.order, moved: change.moved)
+        } catch {
+            fail("Could not reorder project", error)
         }
     }
 

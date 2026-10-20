@@ -66,6 +66,25 @@ public enum ProjectTree {
         return result
     }
 
+    /// A drag in the flattened tree as a sibling reorder, for `CriaStore.reorderProjects`. `source` is the dragged row
+    /// and `destination` the offset SwiftUI's `onMove` gives (the row goes before the one currently there). Projects
+    /// only reorder among their siblings, as on the Mac: the new place is after as many of them as sit above the drop
+    /// point, wherever in the tree it lands. Nil when nothing changes.
+    public static func reorderedSiblings(
+        in rows: [ProjectTreeRow], from source: Int, to destination: Int
+    ) -> (order: [String], moved: String)? {
+        guard rows.indices.contains(source) else { return nil }
+        let moved = rows[source]
+        func parent(_ row: ProjectTreeRow) -> String? { row.depth == 0 ? nil : row.project.parentLocalId }
+        let siblings = rows.indices.filter { rows[$0].depth == moved.depth && parent(rows[$0]) == parent(moved) }
+        let others = siblings.filter { $0 != source }
+        let index = others.filter { $0 < destination }.count
+        var order = others.map { rows[$0].project.localId }
+        order.insert(moved.project.localId, at: index)
+        guard order != siblings.map({ rows[$0].project.localId }) else { return nil }
+        return (order, moved.project.localId)
+    }
+
     /// Every id under `localId`, used to stop a project becoming its own ancestor.
     public static func descendantIds(of localId: String, in projects: [ProjectRecord]) -> Set<String> {
         let index = childIndex(projects)
