@@ -15,6 +15,11 @@ struct GanttScreen: View {
     /// Date range and the no-dates tray, kept on this device (see `GanttFilters`).
     @AppStorage(GanttFilters.storageKey) private var filtersText = ""
     @State private var filtering = false
+    /// iOS: when on, a long press then vertical drag on a top-level bar reorders its row instead of moving its dates.
+    /// The Mac drags rows in its task column instead.
+    @State private var reordering = false
+    @State private var optimistic = OptimisticOrder()
+    @State private var reorders = 0
 
     init(services: AppServices, projectLocalId: String, projectColour: String? = nil) {
         self.services = services
@@ -45,8 +50,14 @@ struct GanttScreen: View {
     /// The range the tasks alone would give. A date range chosen in the filters replaces it.
     private var automaticRange: GanttDayRange { shown.dayRange(today: today) }
     private var range: GanttDayRange { filters.range(automatic: automaticRange) }
-    private var datedNodes: [GanttNode] {
+    private var storedDatedNodes: [GanttNode] {
         filters.visible(GanttTree.visible(shown.nodes, collapsed: [], showDateless: false), in: range)
+    }
+    /// The rows in stored order with a just-dropped reorder laid over them until the store catches up.
+    private var datedNodes: [GanttNode] {
+        let stored = storedDatedNodes
+        let roots = stored.filter { $0.indentLevel == 0 }.map(\.taskLocalId)
+        return GanttTree.reorderRootBlocks(stored, rootOrder: optimistic.resolve(roots))
     }
     private var datelessNodes: [GanttNode] {
         guard filters.showUndated else { return [] }
@@ -64,7 +75,8 @@ struct GanttScreen: View {
             } else {
                 GanttChart(
                     services: services, data: shown, nodes: datedNodes, range: range,
-                    dayWidth: dayWidth, weekZoom: weekZoom, projectColour: projectColour
+                    dayWidth: dayWidth, weekZoom: weekZoom, projectColour: projectColour, reordering: reordering,
+                    onReorder: { id, rows in reorder(id, by: rows) }
                 )
                 if !datelessNodes.isEmpty {
                     GanttTray(services: services, nodes: datelessNodes, today: today)
@@ -80,6 +92,9 @@ struct GanttScreen: View {
                         Label("Weeks", systemImage: "calendar").tag(true)
                     }
                     Toggle("Show done", isOn: $showDone)
+                    #if os(iOS)
+                    Toggle("Reorder rows", systemImage: "arrow.up.arrow.down", isOn: $reordering)
+                    #endif
                     Button("Filters", systemImage: "line.3.horizontal.decrease.circle") { filtering = true }
                 }
             }
@@ -87,7 +102,21 @@ struct GanttScreen: View {
         .sheet(isPresented: $filtering) {
             GanttFilterSheet(filters: Binding(get: { filters }, set: { filtersText = $0.stored }), automatic: automaticRange)
         }
+        .sensoryFeedback(.impact(weight: .light), trigger: reorders)
         .task { await live.run() }
+    }
+
+    /// Drops a top-level row `rows` places up or down and writes the positions the way the list view does.
+    private func reorder(_ movedId: String, by rows: Int) {
+        guard let order = GanttTree.rootOrder(afterMoving: movedId, rowOffset: rows, in: datedNodes) else { return }
+        optimistic.set(order, over: storedDatedNodes.filter { $0.indentLevel == 0 }.map(\.taskLocalId))
+        do {
+            guard let viewId = try services.store.listViewLocalId(projectLocalId: projectLocalId) else { return }
+            try services.store.applyListReorder(orderedIds: order, movedId: movedId, viewLocalId: viewId)
+            reorders += 1
+        } catch {
+            optimistic = OptimisticOrder()
+        }
     }
 }
 
@@ -159,6 +188,8 @@ struct GanttBar: View {
     let height: Double
     /// The project's colour, used when the task has none.
     var fallbackColour: String?
+    var reordering = false
+    var onReorder: (Int) -> Void = { _ in }
     let onOpen: () -> Void
     let onCommit: (Int, Int) -> Void
     /// When a gesture last moved the bar. A tap within `tapSuppression` of it is the lift of that drag, not a tap.
@@ -166,6 +197,8 @@ struct GanttBar: View {
     @State private var lastDragAt: Date?
     /// Counts drags that changed the dates, for the drop haptic.
     @State private var commits = 0
+    /// The vertical drag of this bar's row while reordering, in points.
+    @State private var rowDrag: Double = 0
     private static let tapSuppression: TimeInterval = 0.5
 
     var body: some View {
@@ -192,10 +225,14 @@ struct GanttBar: View {
                 .onChanged { value in
                     if case .second(true, let moving?) = value { update(.move, translation: moving.translation.width) }
                 }
-                .onEnded { _ in finish() }
+                .onEnded { _ in finish() },
+            including: canReorder ? .none : .all
         )
-        .overlay(alignment: .leading) { handle(.resizeStart) }
-        .overlay(alignment: .trailing) { handle(.resizeEnd) }
+        .simultaneousGesture(reorderGesture, including: canReorder ? .all : .none)
+        .offset(y: rowDrag)
+        .zIndex(rowDrag == 0 ? 0 : 1)
+        .overlay(alignment: .leading) { if !reordering { handle(.resizeStart) } }
+        .overlay(alignment: .trailing) { if !reordering { handle(.resizeEnd) } }
         // A tick as this bar's dates move by a whole day while it is dragged, a light impact when it is let go.
         .sensoryFeedback(trigger: movingDays) { old, new in old != nil && new != nil ? SensoryFeedback.selection : nil }
         .sensoryFeedback(.impact(weight: .light), trigger: commits)
@@ -205,11 +242,39 @@ struct GanttBar: View {
         .accessibilityAction { onOpen() }
         // Dragging is not available to VoiceOver, so moving by a day is an action on the bar.
         .accessibilityActions {
+            if node.indentLevel == 0 {
+                Button("Move row up") { onReorder(-1) }
+                Button("Move row down") { onReorder(1) }
+            }
             if !place.resolved.dateless {
                 Button("Move a day earlier") { shift(-1) }
                 Button("Move a day later") { shift(1) }
             }
         }
+    }
+
+    /// Only top-level rows reorder; subtasks ride along with their parent.
+    private var canReorder: Bool { reordering && node.indentLevel == 0 }
+
+    /// Long press, then drag up or down: the row lands where it is let go (see `GanttTree.rootOrder`).
+    private var reorderGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .onChanged { value in
+                if case .second(true, let moving?) = value {
+                    lastDragAt = Date()
+                    rowDrag = moving.translation.height
+                }
+            }
+            .onEnded { _ in
+                let rows = Int((rowDrag / GanttChart.Layout.row).rounded())
+                lastDragAt = Date()
+                rowDrag = 0
+                if rows != 0 {
+                    commits += 1
+                    onReorder(rows)
+                }
+            }
     }
 
     /// How many days this bar is dragged by, nil when it is not the one being dragged.
