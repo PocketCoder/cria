@@ -30,7 +30,8 @@ struct QuickAddTitleField: UIViewRepresentable {
         view.delegate = context.coordinator
         view.isScrollEnabled = false
         view.backgroundColor = .clear
-        view.textContainerInset = .zero
+        // Room for the caret before the first letter and for a pill's rounded end at either edge.
+        view.textContainerInset = UIEdgeInsets(top: 2, left: Self.sideInset, bottom: 2, right: Self.sideInset)
         view.font = Self.font
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityLabel = "Task name"
@@ -43,8 +44,8 @@ struct QuickAddTitleField: UIViewRepresentable {
         placeholder.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(placeholder)
         NSLayoutConstraint.activate([
-            placeholder.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            placeholder.topAnchor.constraint(equalTo: view.topAnchor)
+            placeholder.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Self.sideInset),
+            placeholder.topAnchor.constraint(equalTo: view.topAnchor, constant: 2)
         ])
         context.coordinator.placeholder = placeholder
         return view
@@ -65,7 +66,7 @@ struct QuickAddTitleField: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let width = proposal.width ?? uiView.bounds.width
         let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: max(fitted.height, Self.font.lineHeight))
+        return CGSize(width: width, height: max(fitted.height, Self.font.lineHeight + 4))
     }
 
     /// The text with each token's pill or strikethrough, keeping the caret where it was.
@@ -89,6 +90,8 @@ struct QuickAddTitleField: UIViewRepresentable {
         view.typingAttributes = [.font: Self.font, .foregroundColor: UIColor.label]
         view.selectedRange = NSRange(location: min(selection.location, length), length: 0)
     }
+
+    static let sideInset: CGFloat = 4
 
     static var font: UIFont {
         let base = UIFont.preferredFont(forTextStyle: .title3)
