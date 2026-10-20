@@ -294,7 +294,7 @@ private struct GanttTaskColumn: View {
                 }
                 .buttonStyle(.plain)
                 .overlay(alignment: .bottom) { Divider() }
-                // Dragging a top-level row onto another moves it there; subtasks ride along with their parent.
+                // Dragging a row onto another moves it there among its siblings; a parent's subtasks ride along with it.
                 .draggable(KanbanPayload.make(node.taskLocalId))
                 .dropDestination(for: String.self) { items, _ in
                     guard let movedId = items.first.flatMap(KanbanPayload.taskId(from:)),

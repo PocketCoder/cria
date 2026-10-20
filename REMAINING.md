@@ -39,7 +39,6 @@ The native iOS and Mac apps are at parity with the Tauri app except for what is 
 
 - Archived projects: opening one only labels it read-only; edits are not blocked locally (the server rejects them).
 - Kanban: a collapsed column strip is not a drop target.
-- Gantt row reorder moves top-level rows only.
 - Undo does not cover labels toggled in the detail label sheet or inline chips, completing from the menu bar extra, the reminder notification "Complete" action, or the relations-section done toggle.
 - Undoing a reopen sets `done_at` to now; undoing a repeating-task completion does not re-mark subtasks that were reset; Kanban undo restores only the moved card's bucket and position.
 - Default due time is not applied to a view's initial due date or to quick-add date presets.
