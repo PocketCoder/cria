@@ -236,6 +236,11 @@ struct GanttBar: View {
         // A tick as this bar's dates move by a whole day while it is dragged, a light impact when it is let go.
         .sensoryFeedback(trigger: movingDays) { old, new in old != nil && new != nil ? SensoryFeedback.selection : nil }
         .sensoryFeedback(.impact(weight: .light), trigger: commits)
+        .ganttKeyNudge { direction, edge in
+            if let next = GanttGeometry.nudge(place.resolved, direction: direction, edge: edge) {
+                onCommit(next.start, next.end)
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)
         .accessibilityAddTraits(.isButton)
