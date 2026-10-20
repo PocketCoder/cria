@@ -224,4 +224,19 @@ final class QuickAddSubmitTests: XCTestCase {
         XCTAssertEqual(QuickAddReminder.beforeDue(seconds: 86_400).input(dueDate: "2026-05-30T10:00:00Z")?.period, -86_400)
         XCTAssertFalse(QuickAddReminder.atTime("2026-05-30T10:00:00Z").needsDueDate)
     }
+
+    func testDatePresetsTakeTheDefaultDueTime() throws {
+        let time = try XCTUnwrap(DefaultDueTime(text: "09:30"))
+        for preset in QuickAddDatePreset.allCases {
+            let plain = preset.iso(now: quickAddNow, calendar: utcCalendar)
+            let timed = preset.iso(now: quickAddNow, calendar: utcCalendar, defaultDueTime: time)
+            XCTAssertEqual(timed, String(plain.prefix(11)) + "09:30:00Z", preset.title)
+            XCTAssertTrue(DueDates.hasTimeOfDay(timed))
+        }
+        // No default time: the preset stays all-day.
+        XCTAssertEqual(
+            QuickAddDatePreset.tomorrow.iso(now: quickAddNow, calendar: utcCalendar, defaultDueTime: nil),
+            "2026-05-28T00:00:00Z"
+        )
+    }
 }

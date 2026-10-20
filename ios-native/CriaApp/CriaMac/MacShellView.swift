@@ -59,8 +59,10 @@ struct MacShellView: View {
         .environment(menuChoices)
         // Every 30 s while the app is active; the task restarts (and reads at once) when it comes back.
         .task(id: scenePhase) {
+            if scenePhase == .active { undoCenter.pickUpPending() }
             if scenePhase == .active && !isLinkShare { await inbox.poll(services) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .criaPendingUndo)) { _ in undoCenter.pickUpPending() }
         .task { await menuChoices.follow(services.store) }
         // File > Ramble to Tasks… is enabled once on-device AI is known to be available.
         .task { await AIStatus.shared.refresh() }
