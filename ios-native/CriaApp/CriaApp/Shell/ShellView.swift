@@ -9,6 +9,7 @@ struct ShellView: View {
     @Binding var pendingURL: URL?
     @State private var navigation = NavigationModel()
     @State private var addRequest: QuickAddRequest?
+    @State private var showingPalette = false
     @State private var conflictPrompt = ConflictPrompt()
     @State private var undoCenter = UndoCenter()
     @State private var inbox = NotificationInbox()
@@ -60,6 +61,12 @@ struct ShellView: View {
             // Every 30 s while the app is active; the task restarts (and reads at once) when it comes back.
             .task(id: scenePhase) {
                 if scenePhase == .active && !isLinkShare { await inbox.poll(services) }
+            }
+            .modifier(IPadShortcuts(
+                onPalette: { showingPalette = true }, onNewTask: { addRequest = QuickAddRequest(title: "") }, onGo: jump
+            ))
+            .sheet(isPresented: $showingPalette) {
+                IOSCommandPalette(services: services, onChoose: choose)
             }
             .sheet(item: $addRequest) { request in
                 QuickAddSheet(services: services, contextProjectId: nil, initialLine: request.title)
@@ -126,6 +133,31 @@ struct ShellView: View {
             navigation.state.setPath([], for: tab)
         case .quickAdd(let title):
             addRequest = QuickAddRequest(title: title ?? "")
+        }
+    }
+
+    /// Opens a tab's first screen (a tab left out of the bar opens through Browse), as a link to it would.
+    private func jump(to tab: AppTab) {
+        let target: AppTab = custom.barTabs.contains(tab) || tab == .search ? tab : .browse
+        if target == tab {
+            navigation.state.selected = tab
+            navigation.state.setPath([], for: tab)
+        } else if tab == .inbox {
+            navigation.state.open(.inbox, on: .browse)
+        } else if tab == .favorites {
+            navigation.state.open(.favorites, on: .browse)
+        } else {
+            navigation.state.selected = .browse
+        }
+    }
+
+    /// What a command palette row asked for.
+    private func choose(_ choice: IOSCommandPalette.Choice) {
+        switch choice {
+        case .go(let tab): jump(to: tab)
+        case .project(let localId): navigation.state.open(.project(localId), on: .browse)
+        case .task(let localId): navigation.state.push(.task(localId))
+        case .newTask: addRequest = QuickAddRequest(title: "")
         }
     }
 

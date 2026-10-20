@@ -196,6 +196,7 @@ struct TaskDetailView: View {
         case .labels: showLabels = true
         case .favourite: apply(TaskPatch(isFavorite: !task.isFavorite))
         case .copyLink: if let url = services.taskWebURL(task) { sheets.copyLink(url) }
+        case .subscribe: sheets.toggleSubscription(task, services: services)
         case .priority: choosingPriority = true
         case .move: choosingMove = true
         case .delete: deleteTask()

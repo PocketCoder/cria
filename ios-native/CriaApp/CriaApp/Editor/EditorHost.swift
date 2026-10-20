@@ -25,6 +25,9 @@ struct EditorHost: View {
     @State private var photo: PhotosPickerItem?
     @State private var showPhotoPicker = false
     @State private var viewingImage: ImageViewerItem?
+    #if os(macOS)
+    @State private var mentionPopover = MacMentionPopover()
+    #endif
 
     var body: some View {
         editor
@@ -35,9 +38,16 @@ struct EditorHost: View {
             .onChange(of: showPhotoPicker) { _, showing in
                 if !showing { controller.restoreFocus() }
             }
+            #if os(macOS)
+            // A popover at the caret rather than a sheet.
+            .onChange(of: showMention) { _, showing in
+                if showing { presentMentionPopover() }
+            }
+            #else
             .sheet(isPresented: $showMention, onDismiss: finishMention) {
                 MentionPickerSheet(services: services) { pickedMention = $0 }
             }
+            #endif
             .alert("Add link", isPresented: $showLink) {
                 TextField("https://", text: $linkText).textInputAutocapitalization(.never).keyboardType(.URL)
                 Button("Add") {
@@ -91,6 +101,10 @@ struct EditorHost: View {
             mentionFromTyping = true
             showMention = true
         }
+        controller.onSlashImage = {
+            controller.holdFocus()
+            showPhotoPicker = true
+        }
         barActions.onLink = {
             controller.holdFocus()
             showLink = true
@@ -111,6 +125,20 @@ struct EditorHost: View {
             Task { await insertImageData(data, name: name, mime: mime) }
         }
     }
+
+    #if os(macOS)
+    private func presentMentionPopover() {
+        guard let view = controller.textView as? MacEditorTextView else {
+            showMention = false
+            finishMention()
+            return
+        }
+        mentionPopover.show(from: view, services: services, onPick: { pickedMention = $0 }, onClose: {
+            showMention = false
+            finishMention()
+        })
+    }
+    #endif
 
     private func finishMention() {
         let picked = pickedMention

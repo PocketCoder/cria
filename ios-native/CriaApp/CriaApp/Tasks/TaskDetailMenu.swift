@@ -31,7 +31,8 @@ struct TaskDetailMenu: View {
                 services: services, task: task, labels: macMenu.labels, onOpen: nil,
                 onToggleDone: macMenu.onToggleDone, onPickDate: macMenu.onPickDate, onDuplicate: { onDuplicate() },
                 onCopyLink: { if let url = services.taskWebURL(task) { state.copyLink(url) } },
-                onDelete: macMenu.onDelete, onFailure: { state.failure = $0 }
+                onDelete: macMenu.onDelete, onFailure: { state.failure = $0 },
+                onToggleSubscription: { state.toggleSubscription(task, services: services) }
             )
         } else {
             commonItems
@@ -43,6 +44,9 @@ struct TaskDetailMenu: View {
 
     @ViewBuilder private var commonItems: some View {
         Button("Duplicate", systemImage: "plus.square.on.square", action: onDuplicate)
+        Button(
+            task.isSubscribed ? "Unsubscribe" : "Subscribe", systemImage: task.isSubscribed ? "bell.slash" : "bell"
+        ) { state.toggleSubscription(task, services: services) }
         if let url = services.taskWebURL(task) {
             Button("Copy link", systemImage: "link") { state.copyLink(url) }
             ShareLink(item: url) { Label("Share link", systemImage: "square.and.arrow.up") }

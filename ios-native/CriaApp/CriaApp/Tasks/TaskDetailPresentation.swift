@@ -54,6 +54,19 @@ final class TaskDetailPresentation {
         PlatformApp.announce(message)
     }
 
+    /// Subscribes to or unsubscribes from the task. Online only, so a failure is reported and nothing changes.
+    func toggleSubscription(_ task: TaskRecord, services: AppServices) {
+        let subscribe = !task.isSubscribed
+        Task { [weak self] in
+            do {
+                try await services.setTaskSubscribed(localId: task.localId, subscribed: subscribe)
+                self?.notice = subscribe ? "Subscribed" : "Unsubscribed"
+            } catch {
+                self?.failure = "Could not change the subscription. It needs a connection and a synced task."
+            }
+        }
+    }
+
     func attempt(_ work: () throws -> Void) {
         do {
             try work()

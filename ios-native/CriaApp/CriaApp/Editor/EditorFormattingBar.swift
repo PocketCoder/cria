@@ -25,7 +25,12 @@ struct EditorFormattingBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            formatButtons
+            // Typing "/" swaps the formats for the slash menu's commands, which fit the strip as chips.
+            if controller.slash.isVisible {
+                slashButtons
+            } else {
+                formatButtons
+            }
             Divider().frame(height: 24)
             // Pinned outside the scrolling buttons: the way to put the keyboard away while typing.
             barButton("keyboard.chevron.compact.down", "Hide keyboard") {
@@ -45,6 +50,28 @@ struct EditorFormattingBar: View {
         // The accessory view has a fixed height, so the glyphs stop growing before they would clip; a long press
         // shows the Large Content Viewer instead.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    private var slashButtons: some View {
+        HStack(spacing: 0) {
+            barButton("xmark", "Close slash menu") { _ = controller.handleSlashKey(.close) }
+                .padding(.leading, 4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(controller.slash.commands, id: \.self) { command in
+                        Button { controller.runSlash(command) } label: {
+                            Label(command.title, systemImage: command.symbol)
+                                .font(.subheadline)
+                                .padding(.horizontal, 10)
+                                .frame(minHeight: 36)
+                                .background(Color(.primary).opacity(0.12), in: Capsule())
+                        }
+                        .accessibilityHint(command.summary)
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+        }
     }
 
     private var formatButtons: some View {
