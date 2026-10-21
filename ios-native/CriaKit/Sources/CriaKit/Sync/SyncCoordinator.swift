@@ -166,6 +166,18 @@ public actor SyncCoordinator {
         await runCycle(track: true, fullReconcile: true)
     }
 
+    /// Up to `fullListLimit` tasks, every cycle reads the whole task list, so the device matches the server each time:
+    /// new and changed tasks, relations and label links, and deletions (which a delta pull cannot see). Larger
+    /// accounts take the delta each cycle and the full list every few minutes.
+    private func pullTasks(full: Bool) async throws {
+        if full {
+            try await puller.reconcileTaskDeletions()
+        } else {
+            try await puller.pullAllTasks()
+            store.bus.notify(.tasks)
+        }
+    }
+
     static let lastReconcileKey = "cria.lastReconcileAt"
     /// Task counts up to this are matched in full every cycle (one request per 50 tasks).
     static let fullListLimit = 2_500
@@ -208,18 +220,8 @@ public actor SyncCoordinator {
             try await puller.pullLabels()
             store.bus.notify(.labels)
         }
-        // Up to `fullListLimit` tasks, every cycle reads the whole task list, so the device matches the server each
-        // time: new and changed tasks, relations and label links, and deletions (which a delta pull cannot see).
-        // Larger accounts take the delta each cycle and the full list every few minutes.
         let full = ((try? store.liveTaskCount()) ?? 0) <= Self.fullListLimit
-        await step("Fetching tasks…") {
-            if full {
-                try await puller.reconcileTaskDeletions()
-            } else {
-                try await puller.pullAllTasks()
-                store.bus.notify(.tasks)
-            }
-        }
+        await step("Fetching tasks…") { try await pullTasks(full: full) }
         await step("Fetching views…") {
             try await puller.pullAllViews()
             try await puller.pullAllBuckets()
