@@ -118,13 +118,22 @@ public final class Puller: Sendable {
         }
         // One transaction per page of tasks instead of about seven per task: far fewer commits and fsyncs on a large
         // account. A task that fails still stops the step, as before; its page rolls back and is retried next cycle.
+        var skipped = 0
         for start in stride(from: 0, to: decoded.count, by: Self.writeBatchSize) {
             let batch = Array(decoded[start..<min(start + Self.writeBatchSize, decoded.count)])
-            try await store.database.writer.write { connection in
-                for item in batch { try self.upsertTaskWithRelations(item.task, raw: item.raw, in: connection) }
+            skipped += try await store.database.writer.write { connection in
+                var missing = 0
+                for item in batch {
+                    let stored = try self.upsertTaskWithRelations(item.task, raw: item.raw, in: connection)
+                    if !stored { missing += 1 }
+                }
+                return missing
             }
         }
-        if stamp { try store.stampSync(.tasks) }
+        // A task whose project is not stored yet (a projects step that failed this cycle, or a project made
+        // elsewhere moments ago) was skipped. Stamping now would put it behind the delta window for good, so it
+        // never arrived; leaving the watermark makes the next cycle fetch it again once its project is here.
+        if stamp, skipped == 0 { try store.stampSync(.tasks) }
         return decoded.count
     }
 
@@ -151,11 +160,13 @@ public final class Puller: Sendable {
         try? store.replaceTaskCommentsFromServer(taskLocalId: taskLocalId, comments)
     }
 
+    /// False when the task was not stored because its project is not synced yet.
+    @discardableResult
     func upsertTaskWithRelations(
         _ task: TaskResponse, raw: Data, clearMissingRelations: Bool = false, in held: Database? = nil
-    ) throws {
+    ) throws -> Bool {
         let json = String(bytes: raw, encoding: .utf8) ?? ""
-        guard let taskLocalId = try store.upsertTaskFromServer(task, rawJSON: json, in: held) else { return }
+        guard let taskLocalId = try store.upsertTaskFromServer(task, rawJSON: json, in: held) else { return false }
         if task.labels != nil {
             let rawLabels = rawElements(raw, key: "labels")
             let items: [(payload: LabelResponse, rawJSON: String)] = rawLabels.compactMap { data in
@@ -182,6 +193,7 @@ public final class Puller: Sendable {
                 try store.replaceRelationsFromServer(taskLocalId: taskLocalId, nonEmpty, in: held)
             }
         }
+        return true
     }
 
     // MARK: Views and buckets
