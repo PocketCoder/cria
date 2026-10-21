@@ -19,6 +19,7 @@ extension Puller {
         try await storeTaskPages(raws, stamp: !truncated)
         // `/tasks` leaves archived projects out, so their tasks come from each project's own view listing.
         let archivedIds = await pullArchivedProjectTasks()
+        await refreshViewsAndBuckets()
         if !truncated {
             try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws).union(archivedIds), fetchedSince: started)
         }
@@ -27,6 +28,17 @@ extension Puller {
         if !projects.truncated { try store.removeProjectsMissingOnServer(serverIds: projects.ids, fetchedSince: started) }
         store.bus.notify(.tasks)
         store.bus.notify(.projects)
+        store.bus.notify(.views)
+    }
+
+    /// Re-reads every project's views and the columns of its kanban views in full, which also drops the ones the
+    /// server no longer has (rows with an op queued or dead-lettered are spared). A project that fails is skipped.
+    /// Comments are not repaired here: no list endpoint carries them, so it would take a request per task. They are
+    /// refreshed when a task is opened and by the task's own expand on push.
+    private func refreshViewsAndBuckets() async {
+        for project in (try? store.syncedProjects()) ?? [] where project.serverId > 0 {
+            _ = try? await pullViewsAndBuckets(projectLocalId: project.localId)
+        }
     }
 
     /// Stores the tasks of every locally known archived project and returns their server ids. One views request (only

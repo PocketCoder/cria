@@ -91,4 +91,30 @@ final class SyncDivergenceTests: XCTestCase {
         try store.resetSyncStamps()
         XCTAssertNil(try puller.tasksDeltaFilter())
     }
+
+    func testReconcileRefreshesViewsAndBucketsAndSparesQueuedRows() async throws {
+        let (puller, store, server) = try makePuller()
+        let project = try XCTUnwrap(try store.syncedProjects().first?.localId)
+        try syncViews(store, projectLocalId: project, [
+            viewJSON(id: 10, projectId: 1, kind: "kanban", title: "Board"),
+            viewJSON(id: 11, projectId: 1, kind: "list", title: "Old list")
+        ])
+        let view = try XCTUnwrap(try store.syncedKanbanViews().first?.viewLocalId)
+        try syncBuckets(store, viewLocalId: view, [
+            bucketJSON(id: 1, viewId: 10, title: "Kept"), bucketJSON(id: 2, viewId: 10, title: "Gone"),
+            bucketJSON(id: 3, viewId: 10, title: "Failed edit")
+        ])
+        let failed = try XCTUnwrap(try store.buckets(forView: view).first { $0.serverId == 3 }?.localId)
+        try runSQL(store, """
+            INSERT INTO outbox_dead_letter (entity_type, entity_local_id, op, payload, attempts, last_error, failed_at)
+            VALUES ('bucket', ?, 'update', '{}', 5, 'boom', '2026-01-01T00:00:00Z')
+            """, [failed])
+        server.json("GET /projects", #"[{"id": 1, "title": "Inbox"}]"#)
+        server.json("GET /tasks", "[]")
+        server.json("GET /projects/1/views", "[\(viewJSON(id: 10, projectId: 1, kind: "kanban", title: "Board"))]")
+        server.json("GET /projects/1/views/10/buckets", "[\(bucketJSON(id: 1, viewId: 10, title: "Kept renamed"))]")
+        try await puller.reconcileDeletions()
+        XCTAssertEqual(try store.buckets(forView: view).map(\.title).sorted(), ["Failed edit", "Kept renamed"])
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM project_views WHERE server_id = 11 AND deleted = 1"), 1)
+    }
 }

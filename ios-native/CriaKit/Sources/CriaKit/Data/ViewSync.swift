@@ -24,7 +24,7 @@ extension CriaStore {
     }
 
     /// Silent: upserts each view, then soft-deletes clean local views the server did not return.
-    /// Dirty rows are spared, so a locally created view that has not pushed yet survives a pull.
+    /// Dirty rows and rows with a queued or dead-lettered op are spared, so a view not pushed yet survives a pull.
     public func replaceViewsForProjectFromServer(
         projectLocalId: String, _ payloads: [(payload: ViewResponse, rawJSON: String)]
     ) throws {
@@ -41,6 +41,8 @@ extension CriaStore {
                 UPDATE project_views SET deleted = 1, updated_at = ?
                  WHERE project_local_id = ? AND local_id NOT IN (\(sqlPlaceholders(upserted.count)))
                    AND deleted = 0 AND dirty = 0
+                   AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity_local_id = project_views.local_id)
+                   AND NOT EXISTS (SELECT 1 FROM outbox_dead_letter d WHERE d.entity_local_id = project_views.local_id)
                 """, arguments: sqlArguments([isoNow(), projectLocalId] + upserted))
         }
     }

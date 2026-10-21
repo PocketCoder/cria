@@ -129,7 +129,7 @@ extension CriaStore {
     }
 
     /// Silent: upserts each bucket, then soft-deletes clean local buckets of the view the server did not return.
-    /// Dirty rows are spared, so a new bucket that has not pushed yet survives a pull.
+    /// Dirty rows and rows with a queued or dead-lettered op are spared, so a bucket not pushed yet survives a pull.
     public func replaceBucketsForViewFromServer(
         viewLocalId: String, _ payloads: [(payload: BucketResponse, rawJSON: String)]
     ) throws {
@@ -143,6 +143,8 @@ extension CriaStore {
                 UPDATE buckets SET deleted = 1, updated_at = ?
                  WHERE view_local_id = ? AND local_id NOT IN (\(sqlPlaceholders(upserted.count)))
                    AND deleted = 0 AND dirty = 0
+                   AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity_local_id = buckets.local_id)
+                   AND NOT EXISTS (SELECT 1 FROM outbox_dead_letter d WHERE d.entity_local_id = buckets.local_id)
                 """, arguments: sqlArguments([isoNow(), viewLocalId] + upserted))
         }
     }
