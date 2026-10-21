@@ -57,7 +57,7 @@ final class PullTasksTests: XCTestCase {
         let query = try XCTUnwrap(server.requests.last?.url?.query)
         XCTAssertTrue(query.contains("filter=updated"), query)
 
-        try runSQL(store, "UPDATE sync_state SET tasks_synced_at = '2026-06-09T10:05:00Z' WHERE id = 1")
+        try runSQL(store, "UPDATE sync_state SET tasks_synced_at = '2026-06-10T01:00:00Z' WHERE id = 1")
         XCTAssertEqual(try puller.tasksDeltaFilter(), "updated > '2026-06-09T10:00:00Z'")
         try runSQL(store, "UPDATE tasks SET deleted = 1")
         XCTAssertNil(try puller.tasksDeltaFilter())

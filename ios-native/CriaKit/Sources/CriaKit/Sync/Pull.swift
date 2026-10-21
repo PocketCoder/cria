@@ -7,8 +7,12 @@ public final class Puller: Sendable {
     let api: ApiClient
     let store: CriaStore
     let flights = SingleFlight()
-    /// Overlap subtracted from the task watermark so clock skew cannot drop an update (5 minutes).
-    static let deltaOverlap: TimeInterval = 5 * 60
+    /// Overlap subtracted from the task watermark (15 hours). Vikunja before the "resolve absolute date filters in
+    /// UTC" fix (#3181) read `updated > '<UTC time>'` as a wall-clock time in the server's own timezone, while the
+    /// column holds UTC: on a server east of UTC (Europe/London in summer) every task changed within the offset of
+    /// the watermark was left out, and once the watermark moved on it was never fetched. New tasks made on another
+    /// device were the visible symptom. Timezones run to UTC+14, so 15 hours covers any server, plus clock skew.
+    static let deltaOverlap: TimeInterval = 15 * 60 * 60
 
     public init(api: ApiClient, store: CriaStore) {
         self.api = api
@@ -111,6 +115,12 @@ public final class Puller: Sendable {
     private func pullTaskPages(filter: String?, stamp: Bool) async throws -> Int {
         let query = filter.map { ["filter": $0] } ?? [:]
         let raws = try await api.fetchAllPages("/tasks", query: query)
+        return try await storeTaskPages(raws, stamp: stamp)
+    }
+
+    /// Stores listed tasks with their relations; with `stamp`, moves the task watermark when nothing was skipped.
+    @discardableResult
+    func storeTaskPages(_ raws: [Data], stamp: Bool) async throws -> Int {
         var decoded: [(task: TaskResponse, raw: Data)] = []
         for data in raws {
             guard let task = try? JSONDecoder().decode(TaskResponse.self, from: data) else { continue }
@@ -125,7 +135,9 @@ public final class Puller: Sendable {
                 var missing = 0
                 for item in batch {
                     let stored = try self.upsertTaskWithRelations(item.task, raw: item.raw, in: connection)
-                    if !stored { missing += 1 }
+                    // Only a missing project counts: a row kept hidden by a queued project delete is not a task
+                    // the next cycle could fetch, and counting it would hold the watermark back for as long.
+                    if !stored, try !CriaStore.projectIsStored(connection, serverId: item.task.projectId) { missing += 1 }
                 }
                 return missing
             }
@@ -133,8 +145,18 @@ public final class Puller: Sendable {
         // A task whose project is not stored yet (a projects step that failed this cycle, or a project made
         // elsewhere moments ago) was skipped. Stamping now would put it behind the delta window for good, so it
         // never arrived; leaving the watermark makes the next cycle fetch it again once its project is here.
-        if stamp, skipped == 0 { try store.stampSync(.tasks) }
+        if stamp, skipped == 0, let mark = Self.watermark(for: decoded.map(\.task)) {
+            try store.stampSync(.tasks, at: mark)
+        }
         return decoded.count
+    }
+
+    /// The newest server `updated` among the listed tasks, never later than now. The server's clock, not this
+    /// device's: a device clock running ahead by more than the overlap would otherwise skip other devices' edits.
+    /// Nil when no task carries a time (an empty delta), so the watermark stays where it was.
+    static func watermark(for tasks: [TaskResponse], now: Date = Date()) -> Date? {
+        let newest = tasks.compactMap { $0.updated.flatMap(DueDates.parse) }.max()
+        return newest.map { min($0, now) }
     }
 
     /// Tasks written per transaction: the server's page size.
