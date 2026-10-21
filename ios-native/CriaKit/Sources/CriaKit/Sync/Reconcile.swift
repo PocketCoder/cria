@@ -17,12 +17,39 @@ extension Puller {
         // The delta pull only sees tasks whose `updated` moved, and label, assignee, position and unarchive changes
         // do not move it. This list is fetched anyway, so store it: every task is brought up to date here.
         try await storeTaskPages(raws, stamp: !truncated)
-        if !truncated { try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started) }
+        // `/tasks` leaves archived projects out, so their tasks come from each project's own view listing.
+        let archivedIds = await pullArchivedProjectTasks()
+        if !truncated {
+            try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws).union(archivedIds), fetchedSince: started)
+        }
         // Archived included, or an archived project would look deleted and be removed here.
         let projects = try await serverIds("/projects", query: ["is_archived": "true"])
         if !projects.truncated { try store.removeProjectsMissingOnServer(serverIds: projects.ids, fetchedSince: started) }
         store.bus.notify(.tasks)
         store.bus.notify(.projects)
+    }
+
+    /// Stores the tasks of every locally known archived project and returns their server ids. One views request (only
+    /// when no usable view is stored yet) and the task pages per archived project. A project that fails is skipped:
+    /// its tasks are kept anyway, because the removal below never touches archived projects.
+    private func pullArchivedProjectTasks() async -> Set<Int> {
+        var ids = Set<Int>()
+        for project in (try? store.archivedProjects()) ?? [] {
+            do {
+                var view = try store.unfilteredTaskView(projectLocalId: project.localId)
+                if view == nil {
+                    _ = try await pullViews(projectServerId: project.serverId, projectLocalId: project.localId)
+                    view = try store.unfilteredTaskView(projectLocalId: project.localId)
+                }
+                guard let view else { continue }
+                let raws = try await api.fetchAllPages("/projects/\(project.serverId)/views/\(view)/tasks")
+                try await storeTaskPages(raws, stamp: false)
+                ids.formUnion(Self.ids(in: raws))
+            } catch {
+                continue
+            }
+        }
+        return ids
     }
 
     static func ids(in raws: [Data]) -> Set<Int> {
@@ -45,6 +72,28 @@ extension Puller {
 }
 
 extension CriaStore {
+    /// Live archived projects with a server id.
+    func archivedProjects() throws -> [(localId: String, serverId: Int)] {
+        try database.writer.read { connection in
+            try Row.fetchAll(connection, sql: """
+                SELECT local_id, server_id FROM projects WHERE is_archived = 1 AND server_id > 0 AND deleted = 0
+                """).map { (localId: $0["local_id"], serverId: $0["server_id"]) }
+        }
+    }
+
+    /// Server id of a list or table view with no filter of its own, which lists every task of the project. A kanban
+    /// view answers with buckets, and Vikunja's default list view hides done tasks, so neither will do.
+    func unfilteredTaskView(projectLocalId: String) throws -> Int? {
+        try database.writer.read { connection in
+            try Int.fetchOne(connection, sql: """
+                SELECT server_id FROM project_views
+                 WHERE project_local_id = ? AND deleted = 0 AND server_id IS NOT NULL
+                   AND view_kind IN ('list', 'table') AND (filter IS NULL OR filter = '')
+                 ORDER BY CASE view_kind WHEN 'table' THEN 0 ELSE 1 END, position LIMIT 1
+                """, arguments: [projectLocalId])
+        }
+    }
+
     static func deleteTaskCascade(_ connection: Database, localId: String) throws {
         // task_comments references tasks with no ON DELETE clause (migration 013), so its rows must go first or the
         // task delete fails the foreign key check.
