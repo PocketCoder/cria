@@ -134,6 +134,12 @@ public final class AppServices: Sendable {
         announcePull()
     }
 
+    /// "Full sync": every watermark cleared, everything pulled and reconciled. Unsynced local edits are kept.
+    public func fullRefresh() async {
+        await coordinator.fullSync()
+        announcePull()
+    }
+
     /// Re-reads one task and its comments from the server, for a detail screen that just opened. The periodic pull
     /// does not fetch comments, so without this other people's comments never arrive. Offline it does nothing.
     public func refreshTaskDetail(localId: String) async {

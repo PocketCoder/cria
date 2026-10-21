@@ -75,6 +75,9 @@ public actor SyncCoordinator {
     public func start(interval: TimeInterval = PeriodicSync.defaultInterval,
                       reconcileInterval: TimeInterval = PeriodicSync.defaultReconcileInterval) async {
         await stop()
+        // A reconcile (full task refresh, deletions, stuck-row repair) shortly after every launch, not only when the
+        // interval since the last one has run out: it is what heals a device that drifted.
+        UserDefaults.standard.removeObject(forKey: Self.lastReconcileKey)
         let sync = PeriodicSync(
             interval: interval, reconcileInterval: reconcileInterval,
             tick: { [weak self] in await self?.tick() },
@@ -149,6 +152,24 @@ public actor SyncCoordinator {
         }
     }
 
+    /// Settings' "Full sync": forgets every watermark, then pulls everything and reconciles. Local edits still
+    /// waiting in the outbox are kept and pushed first; only flags with nothing queued behind them are reset.
+    public func fullSync() async {
+        while isTicking {
+            await withCheckedContinuation { idleWaiters.append($0) }
+        }
+        isTicking = true
+        defer { endCycle() }
+        status.update { $0.errors = [] }
+        do {
+            try store.resetSyncStamps()
+            try store.healOrphanedSyncFlags()
+        } catch {
+            status.update { $0.errors.append(.init(step: "Full sync", message: String(describing: error))) }
+        }
+        await runCycle(track: true, fullReconcile: true)
+    }
+
     static let lastReconcileKey = "cria.lastReconcileAt"
 
     /// When the last successful reconcile finished, so a launch does not restart the wait from zero.
@@ -157,8 +178,8 @@ public actor SyncCoordinator {
         return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
     }
 
-    private func runCycle(track: Bool) async {
-        status.update { $0.errors = [] }
+    private func runCycle(track: Bool, fullReconcile: Bool = false) async {
+        if !fullReconcile { status.update { $0.errors = [] } }
         func step(_ name: String, _ work: () async throws -> Void) async {
             if track { status.update { $0.step = name } }
             do {
@@ -190,6 +211,12 @@ public actor SyncCoordinator {
             try await puller.pullAllViews()
             try await puller.pullAllBuckets()
             store.bus.notify(.views)
+        }
+        if fullReconcile {
+            await step("Checking everything against the server…") {
+                try await puller.reconcileDeletions()
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastReconcileKey)
+            }
         }
         status.update {
             $0.step = nil
