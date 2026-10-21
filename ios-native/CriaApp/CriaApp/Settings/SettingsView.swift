@@ -198,12 +198,11 @@ extension SettingsView {
                 // Every other synced preference (timezone, date format, Quick Add Magic, photo capture and so on):
                 // not in the design's rows, but they must stay settable on the Mac.
                 Section {
-                    NavigationLink {
+                    MacSettingsSheetLink {
                         Form {
                             GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
                             PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
                         }
-                        .formStyle(.grouped)
                         .navigationTitle("More General Settings")
                     } label: {
                         Text("More General Settings")
@@ -227,9 +226,8 @@ extension SettingsView {
                 MacNotificationsPane(prefs: prefs)
                 // Email reminders, the weekly round-up and the rest of the server's notification settings.
                 Section {
-                    NavigationLink {
+                    MacSettingsSheetLink {
                         Form { NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs) }
-                            .formStyle(.grouped)
                             .navigationTitle("More Notification Settings")
                     } label: {
                         Text("More Notification Settings")
@@ -247,15 +245,13 @@ extension SettingsView {
     }
 
     private func pane<Content: View>(_ title: String, _ symbol: String, @ViewBuilder _ content: () -> Content) -> some View {
-        NavigationStack {
-            // Type-erased: five panes of nested sections made one huge view type, a known trigger for compiler
-            // crashes in IRGen on this target.
-            Form { AnyView(content()) }
-                .formStyle(.grouped)
-                .contentMargins(.horizontal, 28, for: .scrollContent)
-                .navigationTitle(title)
-        }
-        .tabItem { Label(title, systemImage: symbol) }
+        // No navigation stack: the tabs are the navigation, and sub-screens open as sheets (MacSettingsSheetLink).
+        // Type-erased: five panes of nested sections made one huge view type, a known trigger for compiler
+        // crashes in IRGen on this target.
+        Form { AnyView(content()) }
+            .formStyle(.grouped)
+            .contentMargins(.horizontal, 28, for: .scrollContent)
+            .tabItem { Label(title, systemImage: symbol) }
     }
 #endif
 }

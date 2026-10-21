@@ -16,20 +16,20 @@ struct MacAccountPane: View {
         Section { profileCard }
         Section("Security") {
             LabeledContent("Password") {
-                NavigationLink("Change…") { ChangePasswordView(services: services, onSignOut: onSignOut) }
+                MacSettingsSheetLink("Change…") { ChangePasswordView(services: services, onSignOut: onSignOut) }
             }
             LabeledContent("Two-factor authentication") {
-                NavigationLink { SecuritySettingsView(services: services, onSignOut: onSignOut) } label: {
+                MacSettingsSheetLink { SecuritySettingsView(services: services, onSignOut: onSignOut) } label: {
                     CriaChip(text: totpOn == true ? "On" : (totpOn == false ? "Off" : "…"),
                              tint: totpOn == true ? Color(.meadow700) : MacTheme.label2)
                 }
                 .buttonStyle(.plain)
             }
-            NavigationLink("Sessions") { SessionsView(services: services, onSignOut: onSignOut) }
-            NavigationLink("API and CalDAV tokens") { MacTokensView(services: services, username: model.username) }
+            MacSettingsSheetLink("Sessions") { SessionsView(services: services, onSignOut: onSignOut) }
+            MacSettingsSheetLink("API and CalDAV tokens") { MacTokensView(services: services, username: model.username) }
         }
         Section("Sharing") {
-            NavigationLink("Teams") { TeamsView(services: services) }
+            MacSettingsSheetLink("Teams") { TeamsView(services: services) }
         }
         Section {
             Button("Sign Out…") { confirmingSignOut = true }
@@ -51,7 +51,7 @@ struct MacAccountPane: View {
                     .foregroundStyle(MacTheme.label2)
             }
             Spacer()
-            NavigationLink("Edit Profile…") { AccountSettingsView(services: services, model: model) }
+            MacSettingsSheetLink("Edit Profile…") { AccountSettingsView(services: services, model: model) }
         }
         .padding(.vertical, 6)
     }
@@ -129,11 +129,11 @@ struct MacDataPane: View {
             }
         }
         Section("Waiting changes") {
-            NavigationLink("Sync queue") { OutboxView(services: services) }
+            MacSettingsSheetLink("Sync queue") { OutboxView(services: services) }
         }
         Section("Your data") {
             LabeledContent("Export everything") {
-                NavigationLink("Export…") { DataSettingsView(services: services) }
+                MacSettingsSheetLink("Export…") { DataSettingsView(services: services) }
             }
             LabeledContent("Reset this Mac") {
                 Button("Reset…") {

@@ -156,9 +156,9 @@ struct MacCustomisePane: View {
         }
         // The same screens as on iPhone: the shared quick add, task screen and date parser read them.
         Section("Screens") {
-            NavigationLink("Quick Add") { QuickAddSettingsView(prefs: prefs) }
-            NavigationLink("Task layout") { TaskLayoutSettingsView(prefs: prefs) }
-            NavigationLink("Dates & tasks") { DatesAndTasksSettingsView(prefs: prefs) }
+            MacSettingsSheetLink("Quick Add") { QuickAddSettingsView(prefs: prefs) }
+            MacSettingsSheetLink("Task layout") { TaskLayoutSettingsView(prefs: prefs) }
+            MacSettingsSheetLink("Dates & tasks") { DatesAndTasksSettingsView(prefs: prefs) }
         }
     }
 }
