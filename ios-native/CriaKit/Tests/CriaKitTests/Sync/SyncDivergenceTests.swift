@@ -1,0 +1,87 @@
+import XCTest
+@testable import CriaKit
+
+/// Causes of one device missing what another changed, and the repairs.
+final class SyncDivergenceTests: XCTestCase {
+    private func makePuller() throws -> (Puller, CriaStore, StubServer) {
+        let store = try makeStore()
+        try seedProject(store)
+        let server = StubServer()
+        return (Puller(api: server.api(), store: store), store, server)
+    }
+
+    func testWatermarkIsTheNewestServerUpdateNotTheDeviceClock() async throws {
+        let (puller, store, server) = try makePuller()
+        server.json("GET /tasks", "[\(taskJSON(id: 1, title: "A")), \(taskJSON(id: 2, title: "B"))]")
+        try await puller.pullAllTasks()
+        XCTAssertEqual(try store.syncStamp(.tasks), "2026-06-09T10:00:00Z")
+    }
+
+    func testEmptyDeltaKeepsTheWatermark() async throws {
+        let (puller, store, server) = try makePuller()
+        server.json("GET /tasks", "[\(taskJSON(id: 1, title: "A"))]")
+        try await puller.pullAllTasks()
+        server.json("GET /tasks", "[]")
+        try await puller.pullAllTasks()
+        XCTAssertEqual(try store.syncStamp(.tasks), "2026-06-09T10:00:00Z")
+    }
+
+    func testWatermarkNeverPassesNow() {
+        let json = #"{"id": 1, "project_id": 1, "title": "A", "updated": "2999-01-01T00:00:00Z"}"#
+        let future = try? decodeFixture(TaskResponse.self, json)
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertEqual(Puller.watermark(for: [future].compactMap { $0 }, now: now), now)
+        XCTAssertNil(Puller.watermark(for: []))
+    }
+
+    func testDeltaOverlapCoversAnyServerTimezone() throws {
+        XCTAssertGreaterThanOrEqual(Puller.deltaOverlap, 14 * 60 * 60)
+    }
+
+    func testReconcileStoresTasksTheDeltaMissed() async throws {
+        let (puller, store, server) = try makePuller()
+        server.json("GET /projects", #"[{"id": 1, "title": "Inbox"}]"#)
+        server.json("GET /tasks", "[\(taskJSON(id: 7, title: "Made on the Mac"))]")
+        try await puller.reconcileDeletions()
+        XCTAssertEqual(try store.tasks(matching: TaskQuery()).map(\.title), ["Made on the Mac"])
+    }
+
+    func testReconcileKeepsTasksOfArchivedProjects() async throws {
+        let (puller, store, server) = try makePuller()
+        _ = try seedSyncedTask(store, serverId: 5, title: "Archived work")
+        try runSQL(store, "UPDATE projects SET is_archived = 1 WHERE server_id = 1")
+        server.json("GET /projects", #"[{"id": 1, "title": "Inbox", "is_archived": true}]"#)
+        server.json("GET /tasks", "[]")
+        try await puller.reconcileDeletions()
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE server_id = 5"), 1)
+    }
+
+    func testHealFreesFlagsWithNothingQueuedAndKeepsQueuedOnes() throws {
+        let store = try makeStore()
+        try seedProject(store)
+        let stuck = try seedSyncedTask(store, serverId: 1, title: "Stuck")
+        let queued = try seedSyncedTask(store, serverId: 2, title: "Queued")
+        try runSQL(store, "UPDATE tasks SET dirty = 1, deleted = 1")
+        try enqueueRaw(store, .task, localId: queued, op: .delete)
+        XCTAssertEqual(try store.healOrphanedSyncFlags(), 1)
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE local_id = ? AND dirty = 0 AND deleted = 0", [stuck]), 1)
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE local_id = ? AND dirty = 1", [queued]), 1)
+    }
+
+    func testHealKeepsTasksHiddenByAQueuedProjectDelete() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        _ = try seedSyncedTask(store, serverId: 1)
+        try runSQL(store, "UPDATE tasks SET deleted = 1")
+        try enqueueRaw(store, .project, localId: project, op: .delete)
+        XCTAssertEqual(try store.healOrphanedSyncFlags(), 0)
+    }
+
+    func testResetSyncStampsMakesTheNextPullFull() async throws {
+        let (puller, store, server) = try makePuller()
+        server.json("GET /tasks", "[\(taskJSON(id: 1, title: "A"))]")
+        try await puller.pullAllTasks()
+        try store.resetSyncStamps()
+        XCTAssertNil(try puller.tasksDeltaFilter())
+    }
+}

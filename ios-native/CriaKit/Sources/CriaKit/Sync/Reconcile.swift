@@ -1,15 +1,23 @@
 import Foundation
 import GRDB
 
-/// Removes local rows the server no longer has. Ported from `src/sync/reconcile.ts`.
-/// A row with a pending local edit (`dirty = 1`) is never removed.
+/// Removes local rows the server no longer has, and refreshes every task from the same full list. Ported from
+/// `src/sync/reconcile.ts`. A row with a pending local edit (`dirty = 1`) is never removed.
 extension Puller {
     public func reconcileDeletions() async throws {
         // Rows touched after this moment were created or pushed while the lists were being fetched, so the lists
         // cannot vouch for them either way.
         let started = isoNow()
-        let tasks = try await serverIds("/tasks")
-        if !tasks.truncated { try store.removeTasksMissingOnServer(serverIds: tasks.ids, fetchedSince: started) }
+        // Rows stuck dirty or deleted with nothing queued would never take the server's copy again.
+        try store.healOrphanedSyncFlags()
+        // Projects first, so the tasks below find theirs (and a project revived above is filled in again).
+        try await pullProjects()
+        let raws = try await api.fetchAllPages("/tasks")
+        let truncated = raws.count >= defaultPerPage * maxPages
+        // The delta pull only sees tasks whose `updated` moved, and label, assignee, position and unarchive changes
+        // do not move it. This list is fetched anyway, so store it: every task is brought up to date here.
+        try await storeTaskPages(raws, stamp: !truncated)
+        if !truncated { try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started) }
         // Archived included, or an archived project would look deleted and be removed here.
         let projects = try await serverIds("/projects", query: ["is_archived": "true"])
         if !projects.truncated { try store.removeProjectsMissingOnServer(serverIds: projects.ids, fetchedSince: started) }
@@ -17,19 +25,22 @@ extension Puller {
         store.bus.notify(.projects)
     }
 
-    /// `truncated` means the page cap was hit: the list is incomplete, so nothing may be deleted on its evidence.
-    private func serverIds(
-        _ path: String, query: [String: String] = [:]
-    ) async throws -> (ids: Set<Int>, truncated: Bool) {
-        let raws = try await api.fetchAllPages(path, query: query)
-        let truncated = raws.count >= defaultPerPage * maxPages
+    static func ids(in raws: [Data]) -> Set<Int> {
         var ids = Set<Int>()
         for data in raws {
             if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let id = object["id"] as? Int {
                 ids.insert(id)
             }
         }
-        return (ids, truncated)
+        return ids
+    }
+
+    /// `truncated` means the page cap was hit: the list is incomplete, so nothing may be deleted on its evidence.
+    private func serverIds(
+        _ path: String, query: [String: String] = [:]
+    ) async throws -> (ids: Set<Int>, truncated: Bool) {
+        let raws = try await api.fetchAllPages(path, query: query)
+        return (Self.ids(in: raws), raws.count >= defaultPerPage * maxPages)
     }
 }
 
@@ -53,12 +64,15 @@ extension CriaStore {
             """, arguments: [projectLocalId])
     }
 
+    /// Tasks of archived projects are kept: Vikunja's `/tasks` leaves archived projects out, so they are never in
+    /// the list, and removing them would lose them here until they were next edited.
     func removeTasksMissingOnServer(serverIds: Set<Int>, fetchedSince: String? = nil) throws {
         try database.writer.write { connection in
             let rows = try Row.fetchAll(connection, sql: """
                 SELECT local_id, server_id, dirty, synced_at,
                        EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'task' AND entity_local_id = tasks.local_id) AS queued
                   FROM tasks WHERE server_id IS NOT NULL
+                   AND project_local_id NOT IN (SELECT local_id FROM projects WHERE is_archived = 1)
                 """)
             for row in rows {
                 let serverId: Int = row["server_id"]

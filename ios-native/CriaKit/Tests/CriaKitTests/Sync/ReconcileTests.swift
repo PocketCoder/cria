@@ -27,6 +27,13 @@ final class ReconcileTests: XCTestCase {
         let (puller, store, server) = try setUpStore()
         try runSQL(store, "UPDATE tasks SET dirty = 1 WHERE server_id = 11")
         try runSQL(store, "UPDATE projects SET dirty = 1 WHERE server_id = 2")
+        // Dirty only counts while something is queued: a flag with nothing behind it is healed and the row removed.
+        for (table, entity, serverId) in [("tasks", "task", 11), ("projects", "project", 2)] {
+            try runSQL(store, """
+                INSERT INTO outbox (entity_type, entity_local_id, op, payload, created_at)
+                SELECT ?, local_id, 'update', '{}', '2026-01-01T00:00:00Z' FROM \(table) WHERE server_id = ?
+                """, [entity, serverId])
+        }
         server.json("GET /tasks", "[]")
         // Project 1 stays on the server: deleting it would cascade to its tasks, dirty or not.
         server.json("GET /projects", #"[{"id": 1}]"#)
