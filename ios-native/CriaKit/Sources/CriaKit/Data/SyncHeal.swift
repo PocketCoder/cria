@@ -14,10 +14,11 @@ extension CriaStore {
         }
     }
 
-    /// Clears `dirty` and `deleted` on synced rows that have nothing left in the outbox to push: a dead-lettered or
-    /// discarded op, or an edit whose push cleared the flag only conditionally. A pull leaves a dirty row alone and
-    /// never brings back a deleted one, so such a row stopped taking the server's changes for good. Afterwards the
-    /// next pull overwrites it and the reconcile removes it if the server no longer has it. A task hidden by a
+    /// Clears `dirty` and `deleted` on synced rows with nothing in the outbox or the dead-letter table: a discarded
+    /// op, or an edit whose push cleared the flag only conditionally. A dead-lettered row is left alone, so the
+    /// failed local edit stays on screen until the user retries or discards it. A pull leaves a dirty row alone and
+    /// never brings back a deleted one, so an orphaned row stopped taking the server's changes for good. Afterwards
+    /// the next pull overwrites it and the reconcile removes it if the server no longer has it. A task hidden by a
     /// project delete still queued stays hidden. Returns the number of rows freed.
     @discardableResult
     public func healOrphanedSyncFlags() throws -> Int {
@@ -27,6 +28,7 @@ extension CriaStore {
                 UPDATE tasks SET dirty = 0, deleted = 0
                  WHERE (dirty = 1 OR deleted = 1) AND server_id IS NOT NULL
                    AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity_local_id = tasks.local_id)
+                   AND NOT EXISTS (SELECT 1 FROM outbox_dead_letter d WHERE d.entity_local_id = tasks.local_id)
                    AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity_type = 'project' AND o.op = 'delete'
                                       AND o.entity_local_id = tasks.project_local_id)
                 """)
@@ -36,6 +38,7 @@ extension CriaStore {
                     UPDATE \(table) SET dirty = 0, deleted = 0
                      WHERE (dirty = 1 OR deleted = 1) AND server_id IS NOT NULL
                        AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity_local_id = \(table).local_id)
+                       AND NOT EXISTS (SELECT 1 FROM outbox_dead_letter d WHERE d.entity_local_id = \(table).local_id)
                     """)
                 healed += connection.changesCount
             }

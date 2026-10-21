@@ -63,7 +63,14 @@ final class SyncDivergenceTests: XCTestCase {
         let queued = try seedSyncedTask(store, serverId: 2, title: "Queued")
         try runSQL(store, "UPDATE tasks SET dirty = 1, deleted = 1")
         try enqueueRaw(store, .task, localId: queued, op: .delete)
+        let failed = try seedSyncedTask(store, serverId: 3, title: "Failed")
+        try runSQL(store, "UPDATE tasks SET dirty = 1 WHERE local_id = ?", [failed])
+        try runSQL(store, """
+            INSERT INTO outbox_dead_letter (entity_type, entity_local_id, op, payload, attempts, last_error, failed_at)
+            VALUES ('task', ?, 'update', '{}', 5, 'boom', '2026-01-01T00:00:00Z')
+            """, [failed])
         XCTAssertEqual(try store.healOrphanedSyncFlags(), 1)
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE local_id = ? AND dirty = 1", [failed]), 1)
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE local_id = ? AND dirty = 0 AND deleted = 0", [stuck]), 1)
         XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE local_id = ? AND dirty = 1", [queued]), 1)
     }
