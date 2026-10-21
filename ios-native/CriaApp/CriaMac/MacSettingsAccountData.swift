@@ -135,6 +135,10 @@ struct MacDataPane: View {
                 Button(status.isSyncing ? "Syncing…" : "Sync Now") { Task { await services.coordinator.forceSync() } }
                     .disabled(status.isSyncing)
             }
+            LabeledContent("Fetch everything again") {
+                Button("Full Sync") { Task { await services.fullRefresh() } }
+                    .disabled(status.isSyncing)
+            }
         }
         Section("Waiting changes") {
             MacSettingsSheetLink("Sync queue") { OutboxView(services: services) }

@@ -84,6 +84,9 @@ struct MacShellView: View {
         .task(id: actions.syncRequest) {
             if actions.syncRequest > 0 { await services.refresh() }
         }
+        .task(id: actions.fullSyncRequest) {
+            if actions.fullSyncRequest > 0 { await services.fullRefresh() }
+        }
         .onChange(of: pendingURL) { openPendingURL() }
         // Quick add is a floating panel, not a sheet: it floats above other apps for the global hotkey too.
         .onChange(of: actions.addRequest?.id) {

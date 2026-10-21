@@ -74,6 +74,7 @@ struct MacCommands: Commands {
             // Not in the design's menu, kept so a manual sync still has a home and a key.
             Divider()
             Button("Sync Now") { actions?.syncNow() }.keyboardShortcut("r").disabled(actions == nil)
+            Button("Full Sync") { actions?.fullSync() }.keyboardShortcut("r", modifiers: [.command, .shift]).disabled(actions == nil)
         }
         CommandMenu("Task") {
             if actions?.hasCommandTarget != true {

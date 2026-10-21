@@ -157,6 +157,13 @@ final class AppModel {
         await services?.coordinator.setActive(isActive)
     }
 
+    /// The Mac: the periodic sync never pauses (a window in the background, hidden or closed to the menu bar still
+    /// syncs, so another device's changes are there when the user looks), and coming to the front pulls at once.
+    func keepSyncing(pullNow: Bool) async {
+        await setSyncActive(true)
+        if pullNow { await services?.coordinator.tick() }
+    }
+
     func makeLoginModel() -> LoginViewModel {
         LoginViewModel(service: loginService) { [weak self] result in
             try await self?.signedIn(result)

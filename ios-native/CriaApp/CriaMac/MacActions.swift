@@ -47,6 +47,8 @@ final class MacActions {
     var columns = NavigationSplitViewVisibility.all
     /// Bumped by Sync Now; the shell runs a sync for each new value.
     var syncRequest = 0
+    /// Bumped by Full Sync; the shell runs a full sync (every watermark cleared) for each new value.
+    var fullSyncRequest = 0
     /// The toolbar search text. While it has text the content column shows search results.
     var query = ""
     /// Bumped by Go > Search (⌘F); the shell focuses the toolbar field for each new value.
@@ -143,6 +145,10 @@ final class MacActions {
 
     func syncNow() {
         syncRequest += 1
+    }
+
+    func fullSync() {
+        fullSyncRequest += 1
     }
 
     func toggleSidebar() {

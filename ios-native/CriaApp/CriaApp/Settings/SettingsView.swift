@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var model: SettingsModel
     @StateObject private var prefs: PreferencesModel
     @State private var projects: [ProjectRecord] = []
+    @State private var fullSyncing = false
     /// A link-share session has no account: the account screens and server-backed preferences would only fail.
     @AppStorage(LinkShareSessionFlag.key) private var isLinkShare = false
     @Environment(\.dismiss) private var dismiss
@@ -153,10 +154,21 @@ struct SettingsView: View {
             NavigationLink { OutboxView(services: services) } label: {
                 SettingsLabel("Sync queue", symbol: "arrow.triangle.2.circlepath", token: .sky500)
             }
+            Button {
+                fullSyncing = true
+                Task {
+                    await services.fullRefresh()
+                    fullSyncing = false
+                }
+            } label: {
+                SettingsLabel(fullSyncing ? "Syncing\u{2026}" : "Full sync", symbol: "arrow.clockwise", token: .sky500)
+            }
+            .disabled(fullSyncing)
         } header: {
             Text("Sync")
         } footer: {
-            Text("Changes made on this device that are waiting to reach the server.").font(Theme.caption)
+            Text("Changes made on this device that are waiting to reach the server. Full sync fetches everything "
+                + "again and keeps changes that have not synced yet.").font(Theme.caption)
         }
     }
 
