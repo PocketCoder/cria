@@ -61,17 +61,25 @@ struct MacAccountPane: View {
             Image(platformImage: avatar).resizable().scaledToFill().frame(width: 48, height: 48).clipShape(Circle())
         } else {
             let letters = displayName.split(separator: " ").prefix(2).compactMap(\.first)
+            // No image the Mac can draw (none set, or the server's SVG initials, marble or default avatar): a solid
+            // accent circle, so the fallback reads as an avatar rather than a placeholder.
             Text(letters.isEmpty ? "?" : String(letters).uppercased())
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color(.primary))
+                .foregroundStyle(.white)
                 .frame(width: 48, height: 48)
-                .background(Color(.primarySoft), in: Circle())
+                .background(Color(.primary), in: Circle())
         }
     }
 
     private func loadAvatar() async {
-        guard !model.username.isEmpty, let data = try? await services.api.avatarData(username: model.username) else { return }
-        avatar = PlatformImage(data: data)
+        // `avatar(username:)` answers nil for a 404 or a non-image body. Vikunja's initials, marble and default
+        // providers answer SVG, which `NSImage(data:)` cannot be relied on to read, so those keep the fallback.
+        guard !model.username.isEmpty, let data = try? await services.api.avatar(username: model.username),
+              let image = PlatformImage(data: data), image.size.width > 0 else {
+            avatar = nil
+            return
+        }
+        avatar = image
     }
 
     static func host(_ server: String) -> String {

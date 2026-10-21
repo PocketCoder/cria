@@ -195,19 +195,8 @@ extension SettingsView {
                 if isLinkShare { linkShareNotice }
                 loadStatus
                 MacGeneralPane(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
-                // Every other synced preference (timezone, date format, Quick Add Magic, photo capture and so on):
-                // not in the design's rows, but they must stay settable on the Mac.
-                Section {
-                    MacSettingsSheetLink {
-                        Form {
-                            GeneralSettingsSection(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
-                            PhotoCaptureSettingsSection(prefs: prefs, projects: projects)
-                        }
-                        .navigationTitle("More General Settings")
-                    } label: {
-                        Text("More General Settings")
-                    }
-                }
+                // The iPhone's other General and Photo capture rows, as sections of their own.
+                MacGeneralMoreSections(model: model, prefs: prefs, projects: projects, serverEditable: !isLinkShare)
             }
             pane("Customise", "slider.horizontal.3") {
                 MacCustomisePane(prefs: prefs)
@@ -223,16 +212,7 @@ extension SettingsView {
                 }
             }
             pane("Notifications", "bell") {
-                MacNotificationsPane(prefs: prefs)
-                // Email reminders, the weekly round-up and the rest of the server's notification settings.
-                Section {
-                    MacSettingsSheetLink {
-                        Form { NotificationSettingsSection(services: services, model: model, onClose: {}, prefs: prefs) }
-                            .navigationTitle("More Notification Settings")
-                    } label: {
-                        Text("More Notification Settings")
-                    }
-                }
+                MacNotificationsPane(services: services, model: model, prefs: prefs)
             }
             pane("Data", "cylinder") {
                 MacDataPane(services: services, onSignOut: onSignOut)

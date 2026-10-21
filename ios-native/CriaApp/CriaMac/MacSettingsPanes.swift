@@ -81,7 +81,13 @@ struct MacGeneralPane: View {
             }
             .disabled(model.general.quickAddMagicMode == QuickAddMagicMode.disabled.rawValue)
             QuickAddDefaultsRows(model: model, canSave: canSave, icons: false)
+            // Read by RambleSheet when it builds the prompt. Tags need the magic's syntax, so it is off with it.
+            if AIStatus.shared.isOfferable {
+                Toggle("Let Ramble choose projects and labels", isOn: $prefs.value.rambleChoosesTags)
+                    .disabled(model.general.quickAddMagicMode == QuickAddMagicMode.disabled.rawValue)
+            }
         }
+        .task { await AIStatus.shared.refresh() }
     }
 
     // Bindings built outside the view builder: a `Binding(get:set:)` inline in a Mac settings body has crashed the
@@ -163,8 +169,10 @@ struct MacCustomisePane: View {
     }
 }
 
-/// Settings > Notifications: Reminders and Summaries.
+/// Settings > Notifications: Reminders, then summaries, email and activity (`MacNotificationsMoreSections`), then Dock.
 struct MacNotificationsPane: View {
+    let services: AppServices
+    let model: SettingsModel
     @ObservedObject var prefs: PreferencesModel
     @State private var status = UNAuthorizationStatus.notDetermined
 
@@ -176,10 +184,7 @@ struct MacNotificationsPane: View {
                 MacSettingRow(title: "Task reminders", help: "Notifications include Complete and Snooze buttons.")
             }
         }
-        Section("Summaries") {
-            Toggle("Morning summary", isOn: $prefs.value.morningSummaryEnabled)
-                .disabled(!notificationsOn)
-        }
+        MacNotificationsMoreSections(services: services, model: model, prefs: prefs, notificationsOn: notificationsOn)
         Section("Dock") {
             Toggle(isOn: $prefs.value.appIconBadge) {
                 MacSettingRow(title: "Dock badge", help: "Counts open tasks that are overdue or due today.")
