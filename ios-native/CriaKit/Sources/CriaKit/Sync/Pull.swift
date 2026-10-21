@@ -42,7 +42,8 @@ public final class Puller: Sendable {
             }
             // The full list every cycle, so a project deleted elsewhere goes here too (not when the list was cut short).
             if raws.count < defaultPerPage * maxPages {
-                try store.removeProjectsMissingOnServer(serverIds: Set(collected.map(\.payload.id)), fetchedSince: started)
+                // Ids from the raw list: a project this build cannot decode is still on the server and must stay.
+                try store.removeProjectsMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started)
             }
             try store.stampSync(.projects)
             return collected.count
@@ -319,7 +320,7 @@ extension Puller {
                 ids.insert(payload.id)
             }
             if raws.count < defaultPerPage * maxPages {
-                try store.removeLabelsMissingOnServer(serverIds: ids, fetchedSince: started)
+                try store.removeLabelsMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started)
             }
             let count = ids.count
             try store.stampSync(.labels)
