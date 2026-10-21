@@ -49,7 +49,6 @@ public final class Puller: Sendable {
         }
     }
 
-
     // MARK: Saved filters
 
     /// Refreshes saved filters behind pseudo-projects (`server_id < -1`, filter id `-server_id - 1`).
