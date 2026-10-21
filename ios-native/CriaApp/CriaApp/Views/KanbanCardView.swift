@@ -34,7 +34,6 @@ struct KanbanCardView: View {
     private static let padding: CGFloat = 10
     private static let titleFont = Font.system(size: 13, weight: .medium)
     private static let titleLeading: CGFloat = 1
-    private static let ringTop: CGFloat = 10.5
     /// The task open in the inspector, for the selected card's ring.
     @Environment(\.openTaskState) private var openTaskState
     #else
@@ -44,6 +43,12 @@ struct KanbanCardView: View {
     private static let titleFont = Theme.rowSubtitle.weight(.medium)
     private static let titleLeading: CGFloat = 0
     private static let ringTop = Theme.cardRingTop
+    #endif
+
+    #if os(macOS)
+    private static let headerAlignment = VerticalAlignment.rowTitleMid
+    #else
+    private static let headerAlignment = VerticalAlignment.top
     #endif
 
     var body: some View {
@@ -95,13 +100,18 @@ struct KanbanCardView: View {
     /// The ring, title and chips. One VoiceOver element per card: activating opens the task, and the ring, columns
     /// and delete are actions. The subtask disclosure below it stays a separate element.
     private var header: some View {
-        HStack(alignment: .top, spacing: Theme.checkGap) {
+        HStack(alignment: Self.headerAlignment, spacing: Theme.checkGap) {
             PriorityCheck(priority: task.priority, isDone: task.done, size: Self.ringSize) {
                 _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             // The 44pt touch target makes the margin on iOS; the Mac's smaller target needs it set.
             .padding(.leading, Theme.cardRingInset)
+            #if os(macOS)
+            // Centred on the title's first line, whatever the ring's hit area and the card's padding.
+            .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
+            #else
             .padding(.top, Self.ringTop)
+            #endif
             openLink {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(task.title)
@@ -111,6 +121,10 @@ struct KanbanCardView: View {
                         .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
                         .multilineTextAlignment(.leading)
                         .lineLimit(4)
+                        #if os(macOS)
+                        // The middle of the first line: a cap height above its baseline, halved, for SF 13.
+                        .alignmentGuide(.rowTitleMid) { $0[.firstTextBaseline] - 4.5 }
+                        #endif
                     if let parentTitle {
                         Text("Subtask of ‘\(parentTitle)’")
                             .font(Theme.caption)

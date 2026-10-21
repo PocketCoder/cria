@@ -29,8 +29,17 @@ struct MacProjectRailHost: ViewModifier {
                 content
             }
             if showsRail {
-                MacProjectRail(services: services, summary: summary, labelFilter: $labelFilter)
-                    .frame(width: 272)
+                VStack(alignment: .trailing, spacing: 6) {
+                    // Hidden from the panel itself too, not only from the header's ⓘ or View > Show Project Info.
+                    Button("Hide", systemImage: "sidebar.right") { showInfo = false }
+                        .labelStyle(.titleAndIcon)
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 12))
+                        .foregroundStyle(MacTheme.label2)
+                        .help("Hide project info (⌥⌘I)")
+                    MacProjectRail(services: services, summary: summary, labelFilter: $labelFilter)
+                }
+                .frame(width: 272)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
