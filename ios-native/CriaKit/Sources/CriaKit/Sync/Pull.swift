@@ -49,25 +49,6 @@ public final class Puller: Sendable {
         }
     }
 
-    @discardableResult
-    public func pullLabels() async throws -> Int {
-        try await flights.run("pullLabels") { [self] in
-            let started = isoNow()
-            let raws = try await api.fetchAllPages("/labels")
-            var ids = Set<Int>()
-            for data in raws {
-                guard let payload = try? JSONDecoder().decode(LabelResponse.self, from: data) else { continue }
-                try store.upsertLabelFromServer(payload, rawJSON: String(bytes: data, encoding: .utf8) ?? "")
-                ids.insert(payload.id)
-            }
-            if raws.count < defaultPerPage * maxPages {
-                try store.removeLabelsMissingOnServer(serverIds: ids, fetchedSince: started)
-            }
-            let count = ids.count
-            try store.stampSync(.labels)
-            return count
-        }
-    }
 
     // MARK: Saved filters
 
@@ -324,4 +305,26 @@ func rawElements(_ data: Data, key: String) -> [Data] {
     guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let array = object[key] as? [Any] else { return [] }
     return array.compactMap { try? JSONSerialization.data(withJSONObject: $0, options: [.fragmentsAllowed]) }
+}
+
+extension Puller {
+    @discardableResult
+    public func pullLabels() async throws -> Int {
+        try await flights.run("pullLabels") { [self] in
+            let started = isoNow()
+            let raws = try await api.fetchAllPages("/labels")
+            var ids = Set<Int>()
+            for data in raws {
+                guard let payload = try? JSONDecoder().decode(LabelResponse.self, from: data) else { continue }
+                try store.upsertLabelFromServer(payload, rawJSON: String(bytes: data, encoding: .utf8) ?? "")
+                ids.insert(payload.id)
+            }
+            if raws.count < defaultPerPage * maxPages {
+                try store.removeLabelsMissingOnServer(serverIds: ids, fetchedSince: started)
+            }
+            let count = ids.count
+            try store.stampSync(.labels)
+            return count
+        }
+    }
 }
