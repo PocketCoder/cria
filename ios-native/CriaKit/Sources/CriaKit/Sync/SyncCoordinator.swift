@@ -178,24 +178,6 @@ public actor SyncCoordinator {
         }
     }
 
-    static let lastReconcileKey = "cria.lastReconcileAt"
-    /// Task counts up to this are matched in full every cycle (one request per 50 tasks).
-    static let fullListLimit = 2_500
-    static let lastDeletionCheckKey = "cria.lastDeletionCheckAt"
-    /// How often the periodic tick also checks for tasks deleted elsewhere (one full task list).
-    static let deletionCheckInterval: TimeInterval = 5 * 60
-
-    static func lastDeletionCheck() -> Date? {
-        let stamp = UserDefaults.standard.double(forKey: lastDeletionCheckKey)
-        return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
-    }
-
-    /// When the last successful reconcile finished, so a launch does not restart the wait from zero.
-    static func lastReconcile() -> Date? {
-        let stamp = UserDefaults.standard.double(forKey: lastReconcileKey)
-        return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
-    }
-
     private func runCycle(track: Bool, fullReconcile: Bool = false, checkDeletions: Bool = false) async {
         if !fullReconcile { status.update { $0.errors = [] } }
         func step(_ name: String, _ work: () async throws -> Void) async {
@@ -243,5 +225,26 @@ public actor SyncCoordinator {
             $0.step = nil
             $0.lastSyncAt = Date()
         }
+    }
+}
+
+/// Timing state kept across launches.
+extension SyncCoordinator {
+    static let lastReconcileKey = "cria.lastReconcileAt"
+    /// Task counts up to this are matched in full every cycle (one request per 50 tasks).
+    static let fullListLimit = 2_500
+    static let lastDeletionCheckKey = "cria.lastDeletionCheckAt"
+    /// How often the periodic tick also checks for tasks deleted elsewhere (one full task list).
+    static let deletionCheckInterval: TimeInterval = 5 * 60
+
+    static func lastDeletionCheck() -> Date? {
+        let stamp = UserDefaults.standard.double(forKey: lastDeletionCheckKey)
+        return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
+    }
+
+    /// When the last successful reconcile finished, so a launch does not restart the wait from zero.
+    static func lastReconcile() -> Date? {
+        let stamp = UserDefaults.standard.double(forKey: lastReconcileKey)
+        return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
     }
 }
