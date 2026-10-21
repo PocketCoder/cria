@@ -23,6 +23,15 @@ final class ReconcileTests: XCTestCase {
         XCTAssertEqual(try store.projects().map(\.title), ["Inbox"])
     }
 
+    func testTaskDeletionCheckRemovesTasksDeletedElsewhere() async throws {
+        let (puller, store, server) = try setUpStore()
+        server.json("GET /tasks", #"[{"id": 10}]"#)
+        try await puller.reconcileTaskDeletions()
+        XCTAssertEqual(try store.tasks(matching: TaskQuery()).map(\.title), ["Kept"])
+        // Projects are left to the full reconcile.
+        XCTAssertEqual(try store.projects().count, 2)
+    }
+
     func testDirtyRowsSurvive() async throws {
         let (puller, store, server) = try setUpStore()
         try runSQL(store, "UPDATE tasks SET dirty = 1 WHERE server_id = 11")

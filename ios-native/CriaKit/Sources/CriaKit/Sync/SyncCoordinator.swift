@@ -116,7 +116,8 @@ public actor SyncCoordinator {
         guard !isTicking else { return }
         isTicking = true
         defer { endCycle() }
-        await runCycle(track: false)
+        let due = Date().timeIntervalSince(Self.lastDeletionCheck() ?? .distantPast) >= Self.deletionCheckInterval
+        await runCycle(track: false, checkDeletions: due)
     }
 
     /// Manual refresh with per-step progress and collected errors. When a cycle is already running, this waits for it
@@ -128,7 +129,8 @@ public actor SyncCoordinator {
         }
         isTicking = true
         defer { endCycle() }
-        await runCycle(track: true)
+        // A pull to refresh or Sync Now also brings deletions made elsewhere, which a delta pull cannot see.
+        await runCycle(track: true, checkDeletions: true)
     }
 
     private func endCycle() {
@@ -171,6 +173,14 @@ public actor SyncCoordinator {
     }
 
     static let lastReconcileKey = "cria.lastReconcileAt"
+    static let lastDeletionCheckKey = "cria.lastDeletionCheckAt"
+    /// How often the periodic tick also checks for tasks deleted elsewhere (one full task list).
+    static let deletionCheckInterval: TimeInterval = 5 * 60
+
+    static func lastDeletionCheck() -> Date? {
+        let stamp = UserDefaults.standard.double(forKey: lastDeletionCheckKey)
+        return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
+    }
 
     /// When the last successful reconcile finished, so a launch does not restart the wait from zero.
     static func lastReconcile() -> Date? {
@@ -178,7 +188,7 @@ public actor SyncCoordinator {
         return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
     }
 
-    private func runCycle(track: Bool, fullReconcile: Bool = false) async {
+    private func runCycle(track: Bool, fullReconcile: Bool = false, checkDeletions: Bool = false) async {
         if !fullReconcile { status.update { $0.errors = [] } }
         func step(_ name: String, _ work: () async throws -> Void) async {
             if track { status.update { $0.step = name } }
@@ -211,6 +221,12 @@ public actor SyncCoordinator {
             try await puller.pullAllViews()
             try await puller.pullAllBuckets()
             store.bus.notify(.views)
+        }
+        if checkDeletions, !fullReconcile {
+            await step("Checking for deleted tasks…") {
+                try await puller.reconcileTaskDeletions()
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastDeletionCheckKey)
+            }
         }
         if fullReconcile {
             await step("Checking everything against the server…") {

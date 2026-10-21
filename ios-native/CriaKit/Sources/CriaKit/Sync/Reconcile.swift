@@ -31,6 +31,19 @@ extension Puller {
         store.bus.notify(.views)
     }
 
+    /// The task half of the reconcile only: the full task list, stored, then local tasks the server no longer has
+    /// removed. Deletions never show in a delta pull (Vikunja keeps no tombstones), so a manual refresh and every few
+    /// periodic ticks run this to carry a delete from another device across without waiting for the full reconcile.
+    public func reconcileTaskDeletions() async throws {
+        let started = isoNow()
+        let raws = try await api.fetchAllPages("/tasks")
+        guard raws.count < defaultPerPage * maxPages else { return }
+        try await storeTaskPages(raws, stamp: true)
+        // Archived projects' tasks are not in this list; the removal leaves archived projects alone.
+        try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started)
+        store.bus.notify(.tasks)
+    }
+
     /// Re-reads every project's views and the columns of its kanban views in full, which also drops the ones the
     /// server no longer has (rows with an op queued or dead-lettered are spared). A project that fails is skipped.
     /// Comments are not repaired here: no list endpoint carries them, so it would take a request per task. They are
