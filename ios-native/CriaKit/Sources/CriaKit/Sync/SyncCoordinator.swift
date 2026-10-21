@@ -120,17 +120,11 @@ public actor SyncCoordinator {
         await runCycle(track: false, checkDeletions: due)
     }
 
-    /// Manual refresh with per-step progress and collected errors. When a cycle is already running, this waits for it
-    /// to finish instead of returning at once, so a caller that announces "done" afterwards is not early.
+    /// Manual refresh with per-step progress and collected errors: a full sync. When a cycle is already running, this
+    /// waits for it to finish first, so a caller that announces "done" afterwards is not early.
     public func forceSync() async {
-        if isTicking {
-            await withCheckedContinuation { idleWaiters.append($0) }
-            return
-        }
-        isTicking = true
-        defer { endCycle() }
-        // A pull to refresh or Sync Now also brings deletions made elsewhere, which a delta pull cannot see.
-        await runCycle(track: true, checkDeletions: true)
+        // Pull to refresh, Sync Now and ⌘R align this device with the server in full: the same as Full Sync.
+        await fullSync()
     }
 
     private func endCycle() {
