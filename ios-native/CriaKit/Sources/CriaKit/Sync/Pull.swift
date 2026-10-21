@@ -25,6 +25,7 @@ public final class Puller: Sendable {
     public func pullProjects() async throws -> Int {
         try await flights.run("pullProjects") { [self] in
             // Archived projects are left out by default; they are listed under Archived projects, so ask for them.
+            let started = isoNow()
             let raws = try await api.fetchAllPages("/projects", query: ["is_archived": "true"])
             var collected: [(payload: ProjectResponse, raw: String)] = []
             for data in raws {
@@ -39,6 +40,10 @@ public final class Puller: Sendable {
             for item in collected where (item.payload.parentProjectId ?? 0) > 0 {
                 try store.upsertProjectFromServer(item.payload, rawJSON: item.raw)
             }
+            // The full list every cycle, so a project deleted elsewhere goes here too (not when the list was cut short).
+            if raws.count < defaultPerPage * maxPages {
+                try store.removeProjectsMissingOnServer(serverIds: Set(collected.map(\.payload.id)), fetchedSince: started)
+            }
             try store.stampSync(.projects)
             return collected.count
         }
@@ -47,13 +52,18 @@ public final class Puller: Sendable {
     @discardableResult
     public func pullLabels() async throws -> Int {
         try await flights.run("pullLabels") { [self] in
+            let started = isoNow()
             let raws = try await api.fetchAllPages("/labels")
-            var count = 0
+            var ids = Set<Int>()
             for data in raws {
                 guard let payload = try? JSONDecoder().decode(LabelResponse.self, from: data) else { continue }
                 try store.upsertLabelFromServer(payload, rawJSON: String(bytes: data, encoding: .utf8) ?? "")
-                count += 1
+                ids.insert(payload.id)
             }
+            if raws.count < defaultPerPage * maxPages {
+                try store.removeLabelsMissingOnServer(serverIds: ids, fetchedSince: started)
+            }
+            let count = ids.count
             try store.stampSync(.labels)
             return count
         }
@@ -120,7 +130,7 @@ public final class Puller: Sendable {
 
     /// Stores listed tasks with their relations; with `stamp`, moves the task watermark when nothing was skipped.
     @discardableResult
-    func storeTaskPages(_ raws: [Data], stamp: Bool) async throws -> Int {
+    func storeTaskPages(_ raws: [Data], stamp: Bool, clearMissingRelations: Bool = false) async throws -> Int {
         var decoded: [(task: TaskResponse, raw: Data)] = []
         for data in raws {
             guard let task = try? JSONDecoder().decode(TaskResponse.self, from: data) else { continue }
@@ -134,7 +144,9 @@ public final class Puller: Sendable {
             skipped += try await store.database.writer.write { connection in
                 var missing = 0
                 for item in batch {
-                    let stored = try self.upsertTaskWithRelations(item.task, raw: item.raw, in: connection)
+                    let stored = try self.upsertTaskWithRelations(
+                        item.task, raw: item.raw, clearMissingRelations: clearMissingRelations, in: connection
+                    )
                     // Only a missing project counts: a row kept hidden by a queued project delete is not a task
                     // the next cycle could fetch, and counting it would hold the watermark back for as long.
                     if !stored, try !CriaStore.projectIsStored(connection, serverId: item.task.projectId) { missing += 1 }

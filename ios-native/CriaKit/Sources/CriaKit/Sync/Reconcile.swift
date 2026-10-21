@@ -38,7 +38,8 @@ extension Puller {
         let started = isoNow()
         let raws = try await api.fetchAllPages("/tasks")
         guard raws.count < defaultPerPage * maxPages else { return }
-        try await storeTaskPages(raws, stamp: true)
+        // A full list carries every task's relations, so one the server dropped is dropped here too.
+        try await storeTaskPages(raws, stamp: true, clearMissingRelations: true)
         // Archived projects' tasks are not in this list; the removal leaves archived projects alone.
         try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started)
         store.bus.notify(.tasks)
@@ -188,6 +189,29 @@ extension CriaStore {
                 }
                 try CriaStore.deleteCommentsOfProject(connection, projectLocalId: localId)
                 try connection.execute(sql: "DELETE FROM projects WHERE local_id = ?", arguments: [localId])
+            }
+        }
+    }
+}
+
+extension CriaStore {
+    /// Labels the server no longer lists, with their task links. Never a dirty or queued label.
+    func removeLabelsMissingOnServer(serverIds: Set<Int>, fetchedSince: String? = nil) throws {
+        try database.writer.write { connection in
+            let rows = try Row.fetchAll(connection, sql: """
+                SELECT local_id, server_id, dirty, synced_at,
+                       EXISTS(SELECT 1 FROM outbox WHERE entity_type = 'label' AND entity_local_id = labels.local_id) AS queued
+                  FROM labels WHERE server_id IS NOT NULL
+                """)
+            for row in rows {
+                let serverId: Int = row["server_id"]
+                let dirty: Bool = row["dirty"]
+                let queued: Bool = row["queued"]
+                let syncedAt: String? = row["synced_at"]
+                if serverIds.contains(serverId) || dirty || queued || CriaStore.touched(syncedAt, since: fetchedSince) { continue }
+                let localId: String = row["local_id"]
+                try connection.execute(sql: "DELETE FROM task_labels WHERE label_local_id = ?", arguments: [localId])
+                try connection.execute(sql: "DELETE FROM labels WHERE local_id = ?", arguments: [localId])
             }
         }
     }
