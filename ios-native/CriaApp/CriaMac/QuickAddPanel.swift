@@ -14,6 +14,9 @@ final class QuickAddPanel {
     private static let topInset: CGFloat = 190
 
     func show(services: AppServices, contextProjectId: String?, initialLine: String, screen: QuickAddPanelScreen = .add) {
+        // Read before the panel takes key: opened from the app (⌘N), it sits over that window; from another app (the
+        // global shortcut), over the screen.
+        let anchor = NSApp.keyWindow ?? NSApp.mainWindow
         close()
         let sheet = QuickAddPanelRoot(
             services: services, contextProjectId: contextProjectId, initialLine: initialLine,
@@ -22,7 +25,8 @@ final class QuickAddPanel {
         let root = sheet
             .frame(width: Self.width)
             .fixedSize(horizontal: false, vertical: true)
-            .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            // Opaque: a material let the desktop and the window's edge show through as a streak across the panel.
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
@@ -52,7 +56,7 @@ final class QuickAddPanel {
         self.panel = panel
         // Fitted before placing, so the top edge lands 190pt down rather than moving when the content sizes itself.
         panel.setContentSize(host.fittingSize)
-        place(panel)
+        place(panel, over: anchor)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
     }
@@ -62,9 +66,15 @@ final class QuickAddPanel {
         panel = nil
     }
 
-    /// Centred on the screen with the mouse (or the main screen), its top 190pt below the top of the visible area.
-    /// The hosting view grows the panel downwards as chips and the queue come and go.
-    private func place(_ panel: NSPanel) {
+    /// Centred over the app's window when it was opened from there (120pt below its top), else on the screen with the
+    /// mouse, 190pt below the top of the visible area. The hosting view grows the panel downwards as chips come and go.
+    private func place(_ panel: NSPanel, over anchor: NSWindow?) {
+        if let anchor, anchor.isVisible, anchor !== panel {
+            let frame = anchor.frame
+            let left = frame.midX - panel.frame.width / 2
+            panel.setFrameTopLeftPoint(NSPoint(x: left, y: frame.maxY - 120))
+            return
+        }
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         guard let visible = screen?.visibleFrame else {

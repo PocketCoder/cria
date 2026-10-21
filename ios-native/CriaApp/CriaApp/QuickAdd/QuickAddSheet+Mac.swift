@@ -135,14 +135,10 @@ struct QuickAddPriorityRing: View {
 }
 
 extension View {
-    /// A glass button on macOS 26, bordered before.
-    @ViewBuilder
+    /// The footer's secondary buttons: bordered, so the accent tint stays on the text. The macOS 26 glass style
+    /// took the window's purple tint as a solid fill and competed with Add Task.
     func macGlassButton() -> some View {
-        if #available(macOS 26, *) {
-            buttonStyle(.glass)
-        } else {
-            buttonStyle(.bordered)
-        }
+        buttonStyle(.bordered)
     }
 }
 #endif
