@@ -109,9 +109,12 @@ public final class Puller: Sendable {
         return try await storeTaskPages(raws, stamp: stamp)
     }
 
-    /// Stores listed tasks with their relations; with `stamp`, moves the task watermark when nothing was skipped.
+    /// Stores listed tasks with their relations; with `stamp`, moves the task watermark when nothing was skipped
+    /// (or regardless, without `holdForSkipped`: a full list fetches a skipped task again anyway).
     @discardableResult
-    func storeTaskPages(_ raws: [Data], stamp: Bool, clearMissingRelations: Bool = false) async throws -> Int {
+    func storeTaskPages(
+        _ raws: [Data], stamp: Bool, clearMissingRelations: Bool = false, holdForSkipped: Bool = true
+    ) async throws -> Int {
         var decoded: [(task: TaskResponse, raw: Data)] = []
         for data in raws {
             guard let task = try? JSONDecoder().decode(TaskResponse.self, from: data) else { continue }
@@ -138,7 +141,7 @@ public final class Puller: Sendable {
         // A task whose project is not stored yet (a projects step that failed this cycle, or a project made
         // elsewhere moments ago) was skipped. Stamping now would put it behind the delta window for good, so it
         // never arrived; leaving the watermark makes the next cycle fetch it again once its project is here.
-        if stamp, skipped == 0, let mark = Self.watermark(for: decoded.map(\.task)) {
+        if stamp, skipped == 0 || !holdForSkipped, let mark = Self.watermark(for: decoded.map(\.task)) {
             try store.stampSync(.tasks, at: mark)
         }
         return decoded.count

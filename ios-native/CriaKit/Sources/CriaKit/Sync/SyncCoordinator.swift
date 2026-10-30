@@ -110,8 +110,9 @@ public actor SyncCoordinator {
     // MARK: Cycles
 
     /// One periodic cycle: drain the outbox (so the circuit breaker is clean and a failed push gets a retry), then
-    /// pull projects, saved filters, labels, every task (delta-filtered), views and buckets. A step failing never
-    /// stops the next. Overlapping ticks collapse into one.
+    /// pull projects, saved filters, labels, every task (delta-filtered, or the full list every
+    /// `deletionCheckInterval`), views and buckets. A step failing never stops the next. Overlapping ticks collapse
+    /// into one.
     public func tick() async {
         guard !isTicking else { return }
         isTicking = true
@@ -120,11 +121,18 @@ public actor SyncCoordinator {
         await runCycle(track: false, checkDeletions: due)
     }
 
-    /// Manual refresh with per-step progress and collected errors: a full sync. When a cycle is already running, this
-    /// waits for it to finish first, so a caller that announces "done" afterwards is not early.
+    /// Manual refresh (pull to refresh, Sync Now, ⌘R, launch) with per-step progress and collected errors. It reads
+    /// the full task list, so deletions and label changes made elsewhere arrive, but keeps the watermarks: "Full sync"
+    /// is the heavier repair. When a cycle is already running, this waits for it to finish instead of starting
+    /// another, so a caller that announces "done" afterwards is not early.
     public func forceSync() async {
-        // Pull to refresh, Sync Now and ⌘R align this device with the server in full: the same as Full Sync.
-        await fullSync()
+        if isTicking {
+            await withCheckedContinuation { idleWaiters.append($0) }
+            return
+        }
+        isTicking = true
+        defer { endCycle() }
+        await runCycle(track: true, checkDeletions: true)
     }
 
     private func endCycle() {
@@ -166,16 +174,17 @@ public actor SyncCoordinator {
         await runCycle(track: true, fullReconcile: true)
     }
 
-    /// Up to `fullListLimit` tasks, every cycle reads the whole task list, so the device matches the server each time:
-    /// new and changed tasks, relations and label links, and deletions (which a delta pull cannot see). Larger
-    /// accounts take the delta each cycle and the full list every few minutes.
+    /// The delta each cycle; with `full`, the whole task list instead, which also carries across what a delta cannot
+    /// see (deletions, and label, assignee and position changes that leave `updated` alone). A list cut short by the
+    /// page cap is stored but cannot move the watermark, so the delta runs after it.
     private func pullTasks(full: Bool) async throws {
         if full {
-            try await puller.reconcileTaskDeletions()
-        } else {
-            try await puller.pullAllTasks()
-            store.bus.notify(.tasks)
+            let complete = try await puller.reconcileTaskDeletions()
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastDeletionCheckKey)
+            if complete { return }
         }
+        try await puller.pullAllTasks()
+        store.bus.notify(.tasks)
     }
 
     private func runCycle(track: Bool, fullReconcile: Bool = false, checkDeletions: Bool = false) async {
@@ -202,18 +211,15 @@ public actor SyncCoordinator {
             try await puller.pullLabels()
             store.bus.notify(.labels)
         }
-        let full = ((try? store.liveTaskCount()) ?? 0) <= Self.fullListLimit
-        await step("Fetching tasks…") { try await pullTasks(full: full) }
+        // A full sync's reconcile below reads and stores the whole task list itself; reading it here too would
+        // double the largest fetch. Views stay: the reconcile's view refresh leaves saved filters out.
+        if !fullReconcile {
+            await step("Fetching tasks…") { try await pullTasks(full: checkDeletions) }
+        }
         await step("Fetching views…") {
             try await puller.pullAllViews()
             try await puller.pullAllBuckets()
             store.bus.notify(.views)
-        }
-        if checkDeletions, !fullReconcile, !full {
-            await step("Checking for deleted tasks…") {
-                try await puller.reconcileTaskDeletions()
-                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastDeletionCheckKey)
-            }
         }
         if fullReconcile {
             await step("Checking everything against the server…") {
@@ -231,10 +237,8 @@ public actor SyncCoordinator {
 /// Timing state kept across launches.
 extension SyncCoordinator {
     static let lastReconcileKey = "cria.lastReconcileAt"
-    /// Task counts up to this are matched in full every cycle (one request per 50 tasks).
-    static let fullListLimit = 2_500
     static let lastDeletionCheckKey = "cria.lastDeletionCheckAt"
-    /// How often the periodic tick also checks for tasks deleted elsewhere (one full task list).
+    /// How often the periodic tick reads the full task list instead of the delta (one request per 50 tasks).
     static let deletionCheckInterval: TimeInterval = 5 * 60
 
     static func lastDeletionCheck() -> Date? {

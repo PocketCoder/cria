@@ -16,16 +16,14 @@ extension Puller {
         let truncated = raws.count >= defaultPerPage * maxPages
         // The delta pull only sees tasks whose `updated` moved, and label, assignee, position and unarchive changes
         // do not move it. This list is fetched anyway, so store it: every task is brought up to date here.
-        try await storeTaskPages(raws, stamp: !truncated)
+        try await storeTaskPages(raws, stamp: !truncated, clearMissingRelations: true, holdForSkipped: false)
         // `/tasks` leaves archived projects out, so their tasks come from each project's own view listing.
         let archivedIds = await pullArchivedProjectTasks()
         await refreshViewsAndBuckets()
         if !truncated {
             try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws).union(archivedIds), fetchedSince: started)
         }
-        // Archived included, or an archived project would look deleted and be removed here.
-        let projects = try await serverIds("/projects", query: ["is_archived": "true"])
-        if !projects.truncated { try store.removeProjectsMissingOnServer(serverIds: projects.ids, fetchedSince: started) }
+        // Projects the server no longer has were removed by `pullProjects` above.
         store.bus.notify(.tasks)
         store.bus.notify(.projects)
         store.bus.notify(.views)
@@ -34,15 +32,24 @@ extension Puller {
     /// The task half of the reconcile only: the full task list, stored, then local tasks the server no longer has
     /// removed. Deletions never show in a delta pull (Vikunja keeps no tombstones), so a manual refresh and every few
     /// periodic ticks run this to carry a delete from another device across without waiting for the full reconcile.
-    public func reconcileTaskDeletions() async throws {
+    /// Returns false when the page cap cut the list short: its tasks are stored, but nothing is removed and the
+    /// watermark stays, so the caller should follow with a delta pull.
+    @discardableResult
+    public func reconcileTaskDeletions() async throws -> Bool {
         let started = isoNow()
         let raws = try await api.fetchAllPages("/tasks")
-        guard raws.count < defaultPerPage * maxPages else { return }
-        // A full list carries every task's relations, so one the server dropped is dropped here too.
-        try await storeTaskPages(raws, stamp: true, clearMissingRelations: true)
+        guard raws.count < defaultPerPage * maxPages else {
+            try await storeTaskPages(raws, stamp: false)
+            store.bus.notify(.tasks)
+            return false
+        }
+        // A full list carries every task's relations, so one the server dropped is dropped here too. A task skipped
+        // for a missing project does not hold the watermark: this list fetches it again on the next run.
+        try await storeTaskPages(raws, stamp: true, clearMissingRelations: true, holdForSkipped: false)
         // Archived projects' tasks are not in this list; the removal leaves archived projects alone.
         try store.removeTasksMissingOnServer(serverIds: Self.ids(in: raws), fetchedSince: started)
         store.bus.notify(.tasks)
+        return true
     }
 
     /// Re-reads every project's views and the columns of its kanban views in full, which also drops the ones the
@@ -86,14 +93,6 @@ extension Puller {
             }
         }
         return ids
-    }
-
-    /// `truncated` means the page cap was hit: the list is incomplete, so nothing may be deleted on its evidence.
-    private func serverIds(
-        _ path: String, query: [String: String] = [:]
-    ) async throws -> (ids: Set<Int>, truncated: Bool) {
-        let raws = try await api.fetchAllPages(path, query: query)
-        return (Self.ids(in: raws), raws.count >= defaultPerPage * maxPages)
     }
 }
 

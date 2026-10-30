@@ -32,6 +32,25 @@ final class ReconcileTests: XCTestCase {
         XCTAssertEqual(try store.projects().count, 2)
     }
 
+    func testTaskDeletionCheckStoresACappedListButRemovesNothing() async throws {
+        let (puller, store, server) = try setUpStore()
+        let page = (100..<150).map { taskJSON(id: $0, title: "T\($0)") }.joined(separator: ",")
+        // 200 full pages: the page cap, so the list may be incomplete.
+        server.json("GET /tasks", "[\(page)]", pages: maxPages)
+        let complete = try await puller.reconcileTaskDeletions()
+        XCTAssertFalse(complete)
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE server_id >= 100"), 50, "stored anyway")
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE server_id = 11"), 1, "nothing removed")
+        XCTAssertNil(try store.syncStamp(.tasks), "a capped list does not move the watermark")
+    }
+
+    func testTaskDeletionCheckStampsDespiteATaskWithNoProject() async throws {
+        let (puller, store, server) = try setUpStore()
+        server.json("GET /tasks", "[\(taskJSON(id: 10, title: "Kept")), \(taskJSON(id: 60, projectId: 99, title: "Orphan"))]")
+        try await puller.reconcileTaskDeletions()
+        XCTAssertNotNil(try store.syncStamp(.tasks), "the full list fetches the skipped task again, so it need not hold")
+    }
+
     func testDirtyRowsSurvive() async throws {
         let (puller, store, server) = try setUpStore()
         try runSQL(store, "UPDATE tasks SET dirty = 1 WHERE server_id = 11")
