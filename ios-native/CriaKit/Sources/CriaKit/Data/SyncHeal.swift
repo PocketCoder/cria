@@ -19,7 +19,7 @@ extension CriaStore {
     /// failed local edit stays on screen until the user retries or discards it. A pull leaves a dirty row alone and
     /// never brings back a deleted one, so an orphaned row stopped taking the server's changes for good. Afterwards
     /// the next pull overwrites it and the reconcile removes it if the server no longer has it. A task hidden by a
-    /// project delete still queued stays hidden. Returns the number of rows freed.
+    /// project delete still queued or dead-lettered stays hidden. Returns the number of rows freed.
     @discardableResult
     public func healOrphanedSyncFlags() throws -> Int {
         try database.writer.write { connection in
@@ -31,6 +31,8 @@ extension CriaStore {
                    AND NOT EXISTS (SELECT 1 FROM outbox_dead_letter d WHERE d.entity_local_id = tasks.local_id)
                    AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity_type = 'project' AND o.op = 'delete'
                                       AND o.entity_local_id = tasks.project_local_id)
+                   AND NOT EXISTS (SELECT 1 FROM outbox_dead_letter d WHERE d.entity_type = 'project' AND d.op = 'delete'
+                                      AND d.entity_local_id = tasks.project_local_id)
                 """)
             healed += connection.changesCount
             for table in ["projects", "labels"] {

@@ -84,6 +84,20 @@ final class SyncDivergenceTests: XCTestCase {
         XCTAssertEqual(try store.healOrphanedSyncFlags(), 0)
     }
 
+    func testHealKeepsTasksHiddenByADeadLetteredProjectDelete() throws {
+        let store = try makeStore()
+        let project = try seedProject(store)
+        _ = try seedSyncedTask(store, serverId: 1)
+        try runSQL(store, "UPDATE projects SET deleted = 1, dirty = 1")
+        try runSQL(store, "UPDATE tasks SET deleted = 1")
+        try runSQL(store, """
+            INSERT INTO outbox_dead_letter (entity_type, entity_local_id, op, payload, attempts, last_error, failed_at)
+            VALUES ('project', ?, 'delete', '{}', 5, 'boom', '2026-01-01T00:00:00Z')
+            """, [project])
+        XCTAssertEqual(try store.healOrphanedSyncFlags(), 0)
+        XCTAssertEqual(try countRows(store, "SELECT COUNT(*) FROM tasks WHERE deleted = 1"), 1)
+    }
+
     func testResetSyncStampsMakesTheNextPullFull() async throws {
         let (puller, store, server) = try makePuller()
         server.json("GET /tasks", "[\(taskJSON(id: 1, title: "A"))]")
