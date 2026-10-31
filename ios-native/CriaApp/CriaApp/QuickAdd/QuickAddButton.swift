@@ -74,14 +74,11 @@ struct QuickAddButton: ViewModifier {
             }
     }
 
-    /// A floating + on iOS; a New Task button in the window toolbar on the Mac, which has no place for a floating one.
+    /// A floating + on iOS. The Mac has its own New Task button in the window toolbar (`MacToolbar`), which opens
+    /// the quick add panel with the screen's project, so nothing is added here.
     @ViewBuilder private func addControl(_ content: Content) -> some View {
         #if os(macOS)
-        content.toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("New Task", systemImage: "plus") { sheet = .quickAdd }.help("New Task (\u{2318}N)")
-            }
-        }
+        content
         #else
         content.criaFab(menu: fabMenu) { sheet = .quickAdd }
         #endif

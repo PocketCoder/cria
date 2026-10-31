@@ -57,6 +57,27 @@ struct DisplaySelectToolbar: ToolbarContent {
     let onDone: () -> Void
 
     var body: some ToolbarContent {
+        #if os(macOS)
+        // One toolbar item on the Mac, beside New Task and the inspector toggle, rather than two more icons.
+        ToolbarItem(placement: .primaryAction) {
+            if isSelecting {
+                Button("Done", action: onDone)
+            } else {
+                Menu {
+                    Button("Display options…", action: onDisplay)
+                    Button("Select tasks", action: onSelect)
+                } label: {
+                    Label(
+                        "Display", systemImage: isCustomised
+                            ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
+                    )
+                }
+                .menuIndicator(.hidden)
+                .help("Display options")
+                .accessibilityValue(isCustomised ? "Customised" : "")
+            }
+        }
+        #else
         ToolbarItemGroup(placement: .topBarTrailing) {
             if isSelecting {
                 Button("Done", action: onDone)
@@ -71,6 +92,7 @@ struct DisplaySelectToolbar: ToolbarContent {
                 Button("Select", systemImage: "checkmark.circle", action: onSelect)
             }
         }
+        #endif
     }
 }
 
