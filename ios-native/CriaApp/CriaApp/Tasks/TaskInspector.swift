@@ -57,12 +57,12 @@ extension TaskDetailView {
     func moreFields(_ task: TaskRecord) -> some View {
         let store = services.store
         let state = sheets
-        let taskLocalId = taskLocalId
+        let taskId = taskLocalId
         return TaskInspectorMoreFields(
             task: task, hasSubtasks: feeds.relations.value.contains { $0.kind == "subtask" },
             apply: { apply($0) },
             onPickDate: { editingDate = $0 },
-            onFollowSubtasks: { state.attempt { try store.followSubtaskProgress(taskLocalId: taskLocalId) } }
+            onFollowSubtasks: { state.attempt { try store.followSubtaskProgress(taskLocalId: taskId) } }
         )
     }
 }
