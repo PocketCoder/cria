@@ -212,6 +212,10 @@ struct TaskDetailView: View {
                 #endif
             }
             #if os(macOS)
+            // The ring and title sit on the inspector itself, not in a grouped cell.
+            .listRowBackground(Color.clear)
+            #endif
+            #if os(macOS)
             inspectorFields(task)
             #endif
             // The order is the user's (Settings > Task layout); the title stays first and Delete last.
@@ -252,6 +256,9 @@ struct TaskDetailView: View {
                 .padding(.vertical, -6)
             TextField("", text: $title, prompt: Text("Title"), axis: .vertical)
                 .labelsHidden()
+                #if os(macOS)
+                .textFieldStyle(.plain)
+                #endif
                 .accessibilityLabel("Title")
                 .font(TaskInspectorStyle.titleFont)
                 // Unfocused, a vertical field on the Mac drew only its first line; give it room for the rest.
@@ -295,7 +302,7 @@ struct TaskDetailView: View {
 
 // Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
 extension TaskDetailView {
-    private func descriptionField(_ task: TaskRecord) -> some View {
+    func descriptionField(_ task: TaskRecord) -> some View {
         DescriptionField(
             services: services, taskLocalId: taskLocalId, html: task.description ?? "", draft: descriptionDraft
         ) {
@@ -303,28 +310,6 @@ extension TaskDetailView {
             expandingDescription = true
         }
     }
-
-    #if os(macOS)
-    /// The inspector: the field box, then the description under its own title.
-    @ViewBuilder
-    private func inspectorFields(_ task: TaskRecord) -> some View {
-        Section { fieldBox(task) }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-        Section {
-            descriptionField(task)
-        } header: {
-            // SF 12 semibold in `label2`, 20pt below the field box.
-            Text("Description")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(MacTheme.label2)
-                .textCase(nil)
-                .padding(.top, 20)
-        }
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
-    }
-    #endif
 
     private var headerButtons: some View {
         let star = { if let task = live.value.task { _ = apply(TaskPatch(isFavorite: !task.isFavorite)) } }

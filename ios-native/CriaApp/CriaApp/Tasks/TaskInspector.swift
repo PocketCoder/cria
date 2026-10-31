@@ -14,27 +14,60 @@ enum TaskInspectorStyle {
 
 #if os(macOS)
 extension TaskDetailView {
+    /// The inspector: the field box, the second box (dates, progress, colour), then the description under its title.
+    @ViewBuilder
+    func inspectorFields(_ task: TaskRecord) -> some View {
+        Section {
+            // One row, so the form draws no separator between the two boxes.
+            VStack(spacing: 12) {
+                fieldBox(task)
+                moreFields(task)
+            }
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        Section {
+            descriptionField(task)
+        } header: {
+            // SF 12 semibold in `label2`, 20pt below the field box.
+            Text("Description")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MacTheme.label2)
+                .textCase(nil)
+                .padding(.top, 20)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+    }
+
     /// The inspector's field box. Every value writes through the same paths as the iOS rows: `apply`, the date and
     /// repeat sheets, and the label picker.
     func fieldBox(_ task: TaskRecord) -> some View {
-        let store = services.store
-        let state = sheets
-        return TaskInspectorFieldBox(
+        TaskInspectorFieldBox(
             services: services, task: task, labels: live.value.labels, projects: moveChoices,
-            reminders: feeds.reminders.value, assignees: feeds.assignees.value,
+            reminders: feeds.reminders.value, assignees: feeds.assignees.value, state: sheets,
             apply: { _ = apply($0) },
             onPickDue: { editingDate = .due },
             onCustomRepeat: { editingRepeat = true },
-            onEditLabels: { showLabels = true },
-            onAddReminder: { input in state.attempt { try store.addReminder(taskLocalId: task.localId, input) } },
-            onRelativeReminder: { state.addingRelativeReminder = true },
-            onAssign: { state.assigning = true }
+            onEditLabels: { showLabels = true }
+        )
+    }
+
+    /// What the iOS Details and Schedule sections hold beyond the field box: start, end, progress and colour.
+    func moreFields(_ task: TaskRecord) -> some View {
+        let store = services.store
+        let state = sheets
+        let taskLocalId = taskLocalId
+        return TaskInspectorMoreFields(
+            task: task, hasSubtasks: feeds.relations.value.contains { $0.kind == "subtask" },
+            apply: { apply($0) },
+            onPickDate: { editingDate = $0 },
+            onFollowSubtasks: { state.attempt { try store.followSubtaskProgress(taskLocalId: taskLocalId) } }
         )
     }
 }
 
 /// Project, Due, Repeat, Priority, Reminders, Labels and Assignees in one `cell` box with hairlines between rows.
-/// Reminders and assignees are edited in full in their own sections below.
 struct TaskInspectorFieldBox: View {
     let services: AppServices
     let task: TaskRecord
@@ -42,75 +75,34 @@ struct TaskInspectorFieldBox: View {
     let projects: [ProjectRecord]
     let reminders: [ReminderRecord]
     let assignees: [AssigneeRecord]
+    let state: TaskDetailPresentation
     let apply: (TaskPatch) -> Void
     let onPickDue: () -> Void
     let onCustomRepeat: () -> Void
     let onEditLabels: () -> Void
-    let onAddReminder: (ReminderInput) -> Void
-    let onRelativeReminder: () -> Void
-    let onAssign: () -> Void
     @Environment(\.dateDisplay) private var dateDisplay
 
     var body: some View {
         VStack(spacing: 0) {
-            row("Project", systemImage: "folder") { projectMenu }
+            InspectorFieldRow(title: "Project", systemImage: "folder") { projectMenu }
             Divider()
-            row("Due", systemImage: "calendar") { dueMenu }
+            InspectorFieldRow(title: "Due", systemImage: "calendar") { dueMenu }
             Divider()
-            row("Repeat", systemImage: "repeat") { repeatMenu }
+            InspectorFieldRow(title: "Repeat", systemImage: "repeat") { repeatMenu }
             Divider()
-            row("Priority", systemImage: "flag") { priorityMenu }
+            InspectorFieldRow(title: "Priority", systemImage: "flag") { priorityMenu }
             Divider()
-            row("Reminders", systemImage: "bell") {
-                InspectorRemindersValue(task: task, reminders: reminders, onAdd: onAddReminder, onRelative: onRelativeReminder)
+            InspectorFieldRow(title: "Reminders", systemImage: "bell") {
+                InspectorRemindersValue(services: services, task: task, reminders: reminders, state: state)
             }
             Divider()
-            row("Labels", systemImage: "tag") {
+            InspectorFieldRow(title: "Labels", systemImage: "tag") {
                 InspectorLabelsValue(services: services, taskLocalId: task.localId, labels: labels, onEditLabels: onEditLabels)
             }
             Divider()
-            row("Assignees", systemImage: "person.2") { assigneesValue }
+            InspectorFieldRow(title: "Assignees", systemImage: "person.2") { assigneesValue }
         }
-        .background(MacTheme.cell, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-    }
-
-    private func row<Value: View>(_ title: String, systemImage: String, @ViewBuilder value: () -> Value) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14))
-                .foregroundStyle(MacTheme.label2)
-                .frame(width: 18)
-                .accessibilityHidden(true)
-            Text(title)
-                .font(.system(size: 13))
-                .foregroundStyle(MacTheme.label2)
-                .frame(width: 84, alignment: .leading)
-            value()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 36)
-    }
-
-    /// A pop-up value: 24pt, radius 7, `fill`, with the up-down chevron.
-    private func popUp<Content: View>(_ text: String, tint: Color = .primary, @ViewBuilder content: () -> Content) -> some View {
-        Menu {
-            content()
-        } label: {
-            HStack(spacing: 4) {
-                Text(text).font(.system(size: 13)).foregroundStyle(tint).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11))
-                    .foregroundStyle(MacTheme.label2)
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 24)
-            .background(MacTheme.fill, in: RoundedRectangle(cornerRadius: 7))
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .modifier(InspectorFieldBoxStyle())
     }
 
     private func summary(_ text: String) -> some View {
@@ -119,7 +111,7 @@ struct TaskInspectorFieldBox: View {
 
     private var projectMenu: some View {
         let current = projects.first { $0.localId == task.projectLocalId }
-        return popUp(current?.title ?? "None") {
+        return InspectorPopUp(text: current?.title ?? "None") {
             ForEach(projects, id: \.localId) { project in
                 Toggle(project.title, isOn: Binding(get: { project.localId == task.projectLocalId }, set: { isOn in
                     guard isOn, project.localId != task.projectLocalId else { return }
@@ -135,9 +127,17 @@ struct TaskInspectorFieldBox: View {
         let iso = task.dueDate.flatMap { $0.isEmpty ? nil : $0 }
         let text = iso.map { DueDates.label($0, now: Date(), display: dateDisplay) } ?? "None"
         let overdue = iso.map { DueDates.isOverdue($0, now: Date()) && !task.done } ?? false
-        return popUp(text, tint: overdue ? MacTheme.coral : .primary) {
+        return InspectorPopUp(text: text, tint: overdue ? MacTheme.coral : .primary) {
             ForEach(QuickAddDatePreset.allCases, id: \.self) { preset in
                 Button(preset.title) { apply(TaskPatch(dueDate: preset.isoWithDefaultTime)) }
+            }
+            if iso != nil && !task.done {
+                // Moves the due date on, keeping its time; the reminders stay as they are.
+                Menu("Postpone") {
+                    ForEach(DeferPreset.allCases, id: \.self) { preset in
+                        Button(preset.title) { apply(TaskPatch(dueDate: preset.dueDate(from: task.dueDate))) }
+                    }
+                }
             }
             Divider()
             Button("Pick a date…", action: onPickDue)
@@ -148,7 +148,7 @@ struct TaskInspectorFieldBox: View {
 
     private var repeatMenu: some View {
         let label = RepeatLabel.label(repeatAfter: task.repeatAfter, repeatMode: task.repeatMode)
-        return popUp(label.isEmpty ? "Never" : label) {
+        return InspectorPopUp(text: label.isEmpty ? "Never" : label) {
             ForEach(RepeatChoice.presets) { choice in
                 Button(choice.title) {
                     var patch = TaskPatch()
@@ -165,7 +165,7 @@ struct TaskInspectorFieldBox: View {
     private var priorityMenu: some View {
         let names = TableCells.priorityNames
         let name = names.indices.contains(task.priority) ? names[task.priority] : "\(task.priority)"
-        return popUp(name) {
+        return InspectorPopUp(text: name) {
             ForEach(names.indices.reversed(), id: \.self) { level in
                 Toggle(names[level], isOn: Binding(get: { task.priority == level }, set: { isOn in
                     if isOn { apply(TaskPatch(priority: level)) }
@@ -176,7 +176,7 @@ struct TaskInspectorFieldBox: View {
 
     /// Overlapping 22pt avatars with a 2pt ring, or "None"; either opens the assignee search.
     private var assigneesValue: some View {
-        Button(action: onAssign) {
+        Button { state.assigning = true } label: {
             if assignees.isEmpty {
                 summary("None")
             } else {

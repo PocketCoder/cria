@@ -6,6 +6,11 @@ extension TaskDetailView {
     @ViewBuilder
     func section(_ kind: TaskDetailSection, task: TaskRecord) -> some View {
         switch kind {
+        #if os(macOS)
+        // The inspector's field boxes hold the details, the due date, repeat, reminders and the start and end dates.
+        case .details, .when, .schedule:
+            EmptyView()
+        #else
         case .details:
             TaskPropertiesSection(
                 task: task, projects: moveChoices,
@@ -21,6 +26,7 @@ extension TaskDetailView {
             )
         case .schedule:
             TaskScheduleSection(task: task) { editingDate = $0 }
+        #endif
         case .subtasks:
             RelationsSection(services: services, taskLocalId: taskLocalId, relations: feeds.relations.value, state: sheets)
         case .labels:
