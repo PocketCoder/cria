@@ -247,6 +247,31 @@ struct TaskDetailView: View {
             #endif
     }
 
+    private func saveText() {
+        guard let task = live.value.task, didLoad else { return }
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        var patch = TaskPatch()
+        if !name.isEmpty, name != loadedTitle, name != task.title { patch.title = name }
+        if patch.title != nil { apply(patch) }
+    }
+
+    /// Saves a patch; false (with the error shown) when that failed.
+    @discardableResult
+    func apply(_ patch: TaskPatch) -> Bool {
+        do {
+            // Completing, rescheduling, prioritising and moving offer Undo; text edits have the editor's own.
+            let center: UndoCenter? = patch.offersUndo ? undo : nil
+            try center.updateTask(services, localId: taskLocalId, patch: patch)
+            return true
+        } catch {
+            sheets.failure = String(describing: error)
+            return false
+        }
+    }
+}
+
+// Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
+extension TaskDetailView {
     private func titleRow(_ task: TaskRecord) -> some View {
         // Centred on the check's 44pt tap area, which keeps its size but no longer pads the row below the title.
         HStack(alignment: .center, spacing: 8) {
@@ -277,31 +302,6 @@ struct TaskDetailView: View {
         }
     }
 
-    private func saveText() {
-        guard let task = live.value.task, didLoad else { return }
-        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        var patch = TaskPatch()
-        if !name.isEmpty, name != loadedTitle, name != task.title { patch.title = name }
-        if patch.title != nil { apply(patch) }
-    }
-
-    /// Saves a patch; false (with the error shown) when that failed.
-    @discardableResult
-    func apply(_ patch: TaskPatch) -> Bool {
-        do {
-            // Completing, rescheduling, prioritising and moving offer Undo; text edits have the editor's own.
-            let center: UndoCenter? = patch.offersUndo ? undo : nil
-            try center.updateTask(services, localId: taskLocalId, patch: patch)
-            return true
-        } catch {
-            sheets.failure = String(describing: error)
-            return false
-        }
-    }
-}
-
-// Draft loading and the move choices, kept out of the struct body (SwiftLint's type body length).
-extension TaskDetailView {
     func descriptionField(_ task: TaskRecord) -> some View {
         DescriptionField(
             services: services, taskLocalId: taskLocalId, html: task.description ?? "", draft: descriptionDraft
