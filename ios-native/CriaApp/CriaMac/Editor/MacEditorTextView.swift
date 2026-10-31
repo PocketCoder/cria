@@ -44,6 +44,9 @@ final class MacEditorTextView: NSTextView, EditorSurface {
         isAutomaticQuoteSubstitutionEnabled = false
         isAutomaticDashSubstitutionEnabled = false
         isAutomaticLinkDetectionEnabled = false
+        // The system Writing Tools button floats in the margin beside the selection, which in the inspector is outside
+        // the description box. The formatting bar is the editor's only control strip.
+        writingToolsBehavior = .none
         isVerticallyResizable = true
         isHorizontallyResizable = false
         autoresizingMask = [.width]
