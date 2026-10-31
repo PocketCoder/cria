@@ -85,7 +85,7 @@ extension RambleSheet {
             }
             Divider()
             HStack {
-                Button("Start Over") { proposals = []; errorMessage = nil }
+                Button("Start over") { proposals = []; errorMessage = nil }
                 Spacer()
                 Button(action: save) {
                     Text(MacReviewRow.addLabel(chosen.count)).padding(.horizontal, 4).frame(height: 30)

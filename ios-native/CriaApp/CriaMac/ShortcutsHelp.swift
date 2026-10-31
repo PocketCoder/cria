@@ -21,7 +21,7 @@ struct ShortcutsHelp: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Keyboard Shortcuts")
+            Text("Keyboard shortcuts")
                 .font(.custom(Theme.brandFont, size: 22))
                 .tracking(-0.44)
             ScrollView {

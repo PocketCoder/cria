@@ -1,7 +1,7 @@
 import CriaKit
 import SwiftUI
 
-/// Settings > Account: the profile card, Security, and Sign Out….
+/// Settings > Account: the profile card, Security, and Sign out….
 struct MacAccountPane: View {
     let services: AppServices
     let model: SettingsModel
@@ -32,9 +32,9 @@ struct MacAccountPane: View {
             MacSettingsSheetLink("Teams") { TeamsView(services: services) }
         }
         Section {
-            Button("Sign Out…") { confirmingSignOut = true }
+            Button("Sign out…") { confirmingSignOut = true }
                 .confirmationDialog("Sign out of Cria?", isPresented: $confirmingSignOut) {
-                    Button("Sign Out", role: .destructive) { onSignOut(false) }
+                    Button("Sign out", role: .destructive) { onSignOut(false) }
                 }
         }
         .task(id: model.username) { await loadAvatar() }
@@ -113,7 +113,7 @@ struct MacTokensView: View {
     }
 }
 
-/// Settings > Data: Sync (server status, waiting changes, Sync Now) and Your data (export, reset this Mac).
+/// Settings > Data: Sync (server status, waiting changes, Sync now) and Your data (export, reset this Mac).
 struct MacDataPane: View {
     let services: AppServices
     let onSignOut: (_ wipeLocalData: Bool) -> Void
@@ -132,11 +132,11 @@ struct MacDataPane: View {
                 CriaChip(text: serverState.0, tint: serverState.1)
             }
             LabeledContent("Waiting to sync \(waiting)") {
-                Button(status.isSyncing ? "Syncing…" : "Sync Now") { Task { await services.coordinator.forceSync() } }
+                Button(status.isSyncing ? "Syncing…" : "Sync now") { Task { await services.coordinator.forceSync() } }
                     .disabled(status.isSyncing)
             }
             LabeledContent("Fetch everything again") {
-                Button("Full Sync") { Task { await services.fullRefresh() } }
+                Button("Full sync") { Task { await services.fullRefresh() } }
                     .disabled(status.isSyncing)
             }
         }
@@ -161,7 +161,7 @@ struct MacDataPane: View {
             presenting: resetPrompt
         ) { _ in
             // The sign-out-with-wipe path: signs out and deletes this Mac's copy of the database and queued uploads.
-            Button("Sign Out and Reset", role: .destructive) { onSignOut(true) }
+            Button("Sign out and reset", role: .destructive) { onSignOut(true) }
             Button("Cancel", role: .cancel) {}
         } message: { prompt in
             Text(SignOutSettingsSection.message(for: prompt).replacingOccurrences(of: "iPhone", with: "Mac"))

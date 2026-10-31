@@ -50,7 +50,7 @@ extension ShoppingPhotoSheet {
             }
             Divider()
             HStack(spacing: 8) {
-                Button("Start Over") { items = []; captured = nil; untidied = nil }
+                Button("Start over") { items = []; captured = nil; untidied = nil }
                 Picker("Project", selection: $projectId) {
                     Text("Choose a project").tag("")
                     ForEach(projects, id: \.localId) { Text($0.title).tag($0.localId) }
@@ -84,7 +84,7 @@ struct PhotoDropZone: View {
             Text("Drop a photo of a list").font(.system(size: 15, weight: .semibold))
             HStack(spacing: 4) {
                 Text("or paste with ⌘V ·").foregroundStyle(MacTheme.label2)
-                Button("Choose File…") { choosing = true }
+                Button("Choose file…") { choosing = true }
                     .buttonStyle(.link)
             }
             .font(.system(size: 12))
