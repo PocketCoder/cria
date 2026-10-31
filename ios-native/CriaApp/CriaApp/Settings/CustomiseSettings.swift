@@ -64,10 +64,17 @@ struct TaskLayoutSettingsView: View {
     var body: some View {
         List {
             Section {
+                #if os(macOS)
+                ForEach(macOrder) { section in
+                    Label(section.title, systemImage: section.symbol)
+                }
+                .onMove(perform: moveMac)
+                #else
                 ForEach(prefs.value.taskDetailOrder) { section in
                     Label(section.title, systemImage: section.symbol)
                 }
                 .onMove { from, destination in prefs.value.taskDetailOrder.move(fromOffsets: from, toOffset: destination) }
+                #endif
             } footer: {
                 Text("Drag to reorder. The title and description stay at the top.")
             }
@@ -97,3 +104,25 @@ extension TaskDetailSection {
         }
     }
 }
+
+#if os(macOS)
+extension TaskLayoutSettingsView {
+    /// The sections the Mac inspector lays out in order. The field boxes hold the details, dates, reminders and
+    /// labels, so those are left out here rather than listed with no effect.
+    private static let macSections: Set<TaskDetailSection> = [.subtasks, .assignees, .attachments, .comments]
+
+    private var macOrder: [TaskDetailSection] {
+        prefs.value.taskDetailOrder.filter { Self.macSections.contains($0) }
+    }
+
+    /// Moves within the Mac's sections, keeping the others where they are in the stored order.
+    private func moveMac(from source: IndexSet, to destination: Int) {
+        var moved = macOrder
+        moved.move(fromOffsets: source, toOffset: destination)
+        var next = moved.makeIterator()
+        prefs.value.taskDetailOrder = prefs.value.taskDetailOrder.map { section in
+            Self.macSections.contains(section) ? (next.next() ?? section) : section
+        }
+    }
+}
+#endif
