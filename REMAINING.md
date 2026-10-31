@@ -56,7 +56,7 @@ The native iOS and Mac apps are at parity with the Tauri app except for what is 
 - Notification bell; task subscribe.
 - Kanban column collapse and ⌘-click, kanban cover images, nested kanban subtasks on Mac.
 - Upcoming month grid; filter suggestions in view fields.
-- Editor slash menu; Mac hover preview, mention popover and inline image open.
+- Editor slash menu; Mac mention popover and inline image open (the Mac row hover preview was later dropped: it repeated the row).
 - iPad palette and shortcuts.
 - Server-synced default due time and default reminders.
 - Interactive and lock-screen widgets, plus Control Centre add.

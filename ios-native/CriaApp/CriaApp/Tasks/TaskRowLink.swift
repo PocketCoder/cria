@@ -152,7 +152,6 @@ struct TaskRowLink: View {
         .buttonStyle(.plain)
         .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
         #if os(macOS)
-        .modifier(TaskHoverPreview(item: item))
         // Onto a sidebar project to move it there (MacProjectLabel); the same payload as a Kanban card's.
         .draggable(KanbanPayload.make(item.task.localId))
         #endif
