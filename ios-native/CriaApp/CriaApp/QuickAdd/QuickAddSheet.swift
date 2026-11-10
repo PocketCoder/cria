@@ -123,7 +123,7 @@ struct QuickAddSheet: View {
     }
 
     private var sheetForm: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Self.rowSpacing) {
             if !queue.isEmpty { QuickAddQueueList(queue: $queue) }
             #if canImport(UIKit)
             QuickAddTitleField(
@@ -161,12 +161,12 @@ struct QuickAddSheet: View {
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(Color(.destructive)).font(Theme.caption)
             }
-            Divider().padding(.horizontal, -16)
+            Divider().padding(.horizontal, -Self.sideMargin)
             bottomBar
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 20)
-        .padding(.bottom, 10)
+        .padding(.horizontal, Self.sideMargin)
+        .padding(.top, 22)
+        .padding(.bottom, 12)
         #if os(macOS)
         // Bare fields, as in the desktop app: no grey box per field and no focus ring round the one being typed in.
         .textFieldStyle(.plain)
@@ -189,6 +189,15 @@ struct QuickAddSheet: View {
     var parsedSomething: Bool {
         parsed.title != line.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    #if os(macOS)
+    private static let rowSpacing: CGFloat = 10
+    private static let sideMargin: CGFloat = 16
+    #else
+    /// Room between the name, description, chips and bottom bar, so the touch sheet does not feel crowded.
+    private static let rowSpacing: CGFloat = 14
+    private static let sideMargin: CGFloat = 20
+    #endif
 
     /// The grabber above the content.
     private static let navigationBarAllowance: CGFloat = 16
@@ -316,17 +325,29 @@ extension QuickAddSheet {
         }
     }
 
+    #if os(macOS)
+    private static let chipSpacing: CGFloat = 6
+    #else
+    private static let chipSpacing: CGFloat = 8
+    #endif
+
     /// One row of compact chips, in the order Settings > Customise > Quick Add sets. Ones left out sit in the •••
     /// menu.
     var pickers: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Self.chipSpacing) {
                 ForEach(preferences.custom.quickAddActions) { chip($0) }
                 parsedChips
                 moreMenu
             }
             .padding(.vertical, 2)
         }
+        #if !os(macOS)
+        .environment(\.criaChipSize, .large)
+        // Run to the sheet's edges when scrolled, so the row is not clipped at the margin.
+        .contentMargins(.horizontal, Self.sideMargin, for: .scrollContent)
+        .padding(.horizontal, -Self.sideMargin)
+        #endif
     }
 
     @ViewBuilder

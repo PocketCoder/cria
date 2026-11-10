@@ -10,24 +10,28 @@ struct CriaChip: View {
     var tint: Color = Color(.mutedForeground)
     var filled = false
     @ScaledMetric(relativeTo: .caption) private var minHeight = Theme.chipHeight
+    @ScaledMetric(relativeTo: .subheadline) private var largeMinHeight = Theme.largeChipHeight
+    @Environment(\.criaChipSize) private var size
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: isLarge ? 5 : 4) {
             if let dot { Circle().fill(dot).frame(width: 7, height: 7).accessibilityHidden(true) }
             if let systemImage { Image(systemName: systemImage).imageScale(.small).accessibilityHidden(true) }
             // Empty text is an icon-only chip (quick add with action labels off).
             if !text.isEmpty { Text(text).lineLimit(1).foregroundStyle(textColour) }
         }
-        .font(Theme.chip)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 2)
-        .frame(minHeight: minHeight)
+        .font(isLarge ? Theme.largeChip : Theme.chip)
+        .padding(.horizontal, isLarge ? 12 : 8)
+        .padding(.vertical, isLarge ? 4 : 2)
+        .frame(minHeight: isLarge ? largeMinHeight : minHeight)
         .foregroundStyle(filled ? Color(.primaryForeground) : tint)
         .background(filled ? tint : tint.opacity(0.13), in: Capsule())
         .accessibilityElement(children: .combine)
     }
+
+    private var isLarge: Bool { size == .large }
 
     /// The tint, unless it is too faint to read on its own 13% fill (a pale label colour, or a mid tone in light
     /// mode): then the text falls back to the foreground and only the icon, dot and fill carry the colour.
@@ -370,5 +374,22 @@ struct CriaProminentToolbarButton: ViewModifier {
         } else {
             content.buttonStyle(.borderedProminent)
         }
+    }
+}
+
+/// How big a `CriaChip` draws. Rows keep `.regular`; a chip row that is the main control, such as quick add's on iOS,
+/// sets `.large` so its text is readable and its targets are easier to tap.
+enum CriaChipSize {
+    case regular, large
+}
+
+private struct CriaChipSizeKey: EnvironmentKey {
+    static let defaultValue = CriaChipSize.regular
+}
+
+extension EnvironmentValues {
+    var criaChipSize: CriaChipSize {
+        get { self[CriaChipSizeKey.self] }
+        set { self[CriaChipSizeKey.self] = newValue }
     }
 }

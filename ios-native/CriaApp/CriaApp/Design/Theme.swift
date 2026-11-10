@@ -64,6 +64,8 @@ enum Theme {
     static let headline = Font.headline
     static let title = Font.title2.weight(.semibold)
     static let chip = Font.caption.weight(.medium)
+    /// Chips that are the main control (quick add's row on iOS).
+    static let largeChip = Font.subheadline.weight(.medium)
     static let caption = Font.footnote
     static let footnote = Font.caption2
     static let wordmark = Font.custom(brandFont, size: 34, relativeTo: .largeTitle)
@@ -72,6 +74,7 @@ enum Theme {
     static let radius: CGFloat = 12
     static let cardRadius: CGFloat = 20
     static let chipHeight: CGFloat = 22
+    static let largeChipHeight: CGFloat = 32
     #if os(macOS)
     /// The web's 18px check in a pointer-sized target; touch keeps the larger ring and the 44pt target.
     static let checkSize: CGFloat = 18
