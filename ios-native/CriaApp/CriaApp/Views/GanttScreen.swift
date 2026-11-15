@@ -74,6 +74,9 @@ struct GanttScreen: View {
                 } description: {
                     Text("Tasks with a start and end date or a due date show on the timeline.")
                 }
+                // The Mac sizes ContentUnavailableView to its content, which left the header and this card floating
+                // mid-window. Fill the pane so the header stays pinned at the top.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 GanttChart(
                     services: services, data: shown, nodes: datedNodes, range: range,
