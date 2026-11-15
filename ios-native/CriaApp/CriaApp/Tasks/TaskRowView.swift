@@ -135,9 +135,7 @@ struct TaskRowView: View {
         var parts: [String] = []
         if item.hasAttachments { parts.append("has attachments") }
         if item.checklist.total > 0 { parts.append("checklist \(item.checklist.checked) of \(item.checklist.total) done") }
-        if tree.progress == nil, task.percentDone > 0, task.percentDone < 1 {
-            parts.append("\(Int((task.percentDone * 100).rounded())) percent done")
-        }
+        if let percent = TaskRowSignals.percent(task) { parts.append("\(percent) percent done") }
         if !dueChipRepeats, task.repeatAfter > 0 || task.repeatMode != 0 { parts.append("repeats") }
         return parts
     }
@@ -160,7 +158,7 @@ struct TaskRowView: View {
     @ViewBuilder private var metadata: some View {
         let due = task.done ? nil : task.dueDate
         let others = task.done ? 0 : item.labels.count + (showProject && item.projectTitle != nil ? 1 : 0)
-        let signals = !task.done && TaskRowSignals.hasAny(item, hasSubtaskChip: tree.progress != nil, repeatShownByDue: dueChipRepeats)
+        let signals = !task.done && TaskRowSignals.hasAny(item, repeatShownByDue: dueChipRepeats)
         if others + (due == nil ? 0 : 1) > 0 || tree.progress != nil || signals {
             // Chips stack at accessibility sizes, where a row of them would truncate.
             let layout = typeSize.isAccessibilitySize
@@ -179,7 +177,7 @@ struct TaskRowView: View {
                     CriaChip(text: title, tint: Color(.mutedForeground))
                 }
                 if signals {
-                    TaskRowSignals(item: item, hasSubtaskChip: tree.progress != nil, repeatShownByDue: dueChipRepeats)
+                    TaskRowSignals(item: item, repeatShownByDue: dueChipRepeats)
                 }
                 if !task.done {
                     ForEach(item.labels.prefix(3), id: \.localId) { label in
@@ -269,8 +267,8 @@ extension TaskRowView {
     }
 
     private var macHasMeta: Bool {
-        task.dueDate != nil || tree.progress != nil || task.repeatAfter > 0 || task.repeatMode != 0
-            || macHasDescription || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
+        task.dueDate != nil || tree.progress != nil || TaskRowSignals.percent(task) != nil
+            || task.repeatAfter > 0 || task.repeatMode != 0 || macHasDescription || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
             || (showProject && item.projectTitle != nil)
     }
 
@@ -284,6 +282,12 @@ extension TaskRowView {
     private var macMeta: some View {
         HStack(spacing: 8) {
             if let progress = tree.progress { macSubtasks(progress) }
+            if let percent = TaskRowSignals.percent(task) {
+                HStack(spacing: 3) {
+                    Image(systemName: "chart.pie")
+                    Text("\(percent)%")
+                }
+            }
             if let due = task.dueDate {
                 HStack(spacing: 3) {
                     Image(systemName: "calendar")

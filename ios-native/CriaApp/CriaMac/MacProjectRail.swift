@@ -37,6 +37,8 @@ struct MacProjectRailHost: ViewModifier {
                         .font(.system(size: 12))
                         .foregroundStyle(MacTheme.label2)
                         .help("Hide project info (⌥⌘I)")
+                        // In line with the cards' right edge (MacProjectRail's 16pt trailing inset).
+                        .padding(.trailing, 16)
                     MacProjectRail(services: services, summary: summary, labelFilter: $labelFilter)
                 }
                 .frame(width: 272)

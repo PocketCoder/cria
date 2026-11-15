@@ -2,8 +2,8 @@ import Foundation
 import GRDB
 
 extension CriaStore {
-    /// Sets each parent of `childLocalId` to the share of its subtasks that are done (1 of 2 is 50%), unless the user
-    /// set that parent's progress by hand (`ProgressOverride`). Runs inside the user mutation that changed the child,
+    /// Sets each parent of `childLocalId` to the share of its steps that are done, unless the user set that parent's
+    /// progress by hand (`ProgressOverride`). Runs inside the user mutation that changed the child,
     /// so the parent's update op is queued with it. A parent with no remaining subtasks keeps its value.
     static func refreshParentProgress(_ connection: Database, childLocalId: String, now: String) throws {
         let parents = try String.fetchAll(connection, sql: """
@@ -26,7 +26,9 @@ extension CriaStore {
         let total: Int = row?["total"] ?? 0
         let done: Int = row?["done"] ?? 0
         guard total > 0, let parent = try fetchTask(connection, localId: parentLocalId) else { return }
-        let share = (Double(done) / Double(total) * 100).rounded() / 100
+        // The parent's own sign-off is one more step, so finishing every subtask is not finishing the task: 1 of 2
+        // subtasks done is 33%, 2 of 2 is 67%. Ticking the parent itself is what completes it.
+        let share = (Double(done) / Double(total + 1) * 100).rounded() / 100
         guard abs(parent.percentDone - share) > 0.001 else { return }
         try connection.execute(
             sql: "UPDATE tasks SET percent_done = ?, dirty = 1, updated_at = ? WHERE local_id = ? AND deleted = 0",

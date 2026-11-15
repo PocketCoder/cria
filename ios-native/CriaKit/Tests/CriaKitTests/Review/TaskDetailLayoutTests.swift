@@ -10,9 +10,15 @@ final class TaskDetailLayoutTests: XCTestCase {
         let parent = try seedSyncedTask(store, serverId: 1, title: "Trip")
         ProgressOverride.setManual(parent, false)
         let first = try store.createSubtask(parentLocalId: parent, title: "Book")
-        _ = try store.createSubtask(parentLocalId: parent, title: "Pack")
+        let second = try store.createSubtask(parentLocalId: parent, title: "Pack")
         _ = try store.updateTask(localId: first.localId, patch: TaskPatch(done: true))
-        XCTAssertEqual(try XCTUnwrap(try store.task(localId: parent)).percentDone, 0.5, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(try store.task(localId: parent)).percentDone, 0.33, accuracy: 0.001)
+        _ = try store.updateTask(localId: second.localId, patch: TaskPatch(done: true))
+        XCTAssertEqual(
+            try XCTUnwrap(try store.task(localId: parent)).percentDone, 0.67, accuracy: 0.001,
+            "every subtask done still leaves the parent's own sign-off"
+        )
+        _ = try store.updateTask(localId: second.localId, patch: TaskPatch(done: false))
 
         ProgressOverride.setManual(parent, true)
         var patch = TaskPatch()

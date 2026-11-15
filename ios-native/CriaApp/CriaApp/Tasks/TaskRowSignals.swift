@@ -2,19 +2,21 @@ import CriaKit
 import SwiftUI
 
 /// The small signals on a task row, as on Tauri's `TaskRowCore`: a paperclip when it has attachments, the checklist
-/// count from the description, progress between 0 and 100%, a dot in the task's colour, and the repeat glyph. All of it
+/// count from the description, the task's own progress between 0 and 100%, a dot in the task's colour, and the repeat glyph. All of it
 /// comes from the list snapshot (`TaskListItem`), so a row runs no query of its own.
 struct TaskRowSignals: View {
     let item: TaskListItem
-    /// Subtasks already show their own count, which is also the progress, so the percentage stays out.
-    let hasSubtaskChip: Bool
     /// The due chip carries the repeat glyph already.
     let repeatShownByDue: Bool
 
     private var task: TaskRecord { item.task }
 
-    private var percent: Int? {
-        guard !hasSubtaskChip, task.percentDone > 0, task.percentDone < 1 else { return nil }
+    private var percent: Int? { Self.percent(task) }
+
+    /// The task's own progress as a whole percentage, when it has started and is not finished. Shown beside the subtask
+    /// count too: every subtask done still leaves the task's own sign-off, so the two differ.
+    static func percent(_ task: TaskRecord) -> Int? {
+        guard !task.done, task.percentDone > 0, task.percentDone < 1 else { return nil }
         return Int((task.percentDone * 100).rounded())
     }
 
@@ -23,8 +25,8 @@ struct TaskRowSignals: View {
     private var colour: Color? { Color(hexString: task.hexColor) }
 
     /// True when the row has any signal to show, so the metadata line is only drawn when it has something in it.
-    static func hasAny(_ item: TaskListItem, hasSubtaskChip: Bool, repeatShownByDue: Bool) -> Bool {
-        TaskRowSignals(item: item, hasSubtaskChip: hasSubtaskChip, repeatShownByDue: repeatShownByDue).isVisible
+    static func hasAny(_ item: TaskListItem, repeatShownByDue: Bool) -> Bool {
+        TaskRowSignals(item: item, repeatShownByDue: repeatShownByDue).isVisible
     }
 
     private var isVisible: Bool {
