@@ -202,13 +202,23 @@ struct QuickAddQueueList: View {
                     .font(Theme.caption)
                     .buttonStyle(.borderless)
             }
-            if queue.count > 4 {
-                ScrollView { rows }.frame(height: 150)
+            if queue.count > Self.rowsBeforeScrolling {
+                ScrollView { rows }.frame(height: Self.scrollHeight)
             } else {
                 rows
             }
         }
     }
+
+    #if os(macOS)
+    /// The Mac panel lists every queued task; only a list long enough to push the panel off the screen scrolls.
+    private static let rowsBeforeScrolling = 15
+    private static let scrollHeight: CGFloat = 450
+    #else
+    /// The iPhone sheet keeps the field in view: past four tasks the list scrolls.
+    private static let rowsBeforeScrolling = 4
+    private static let scrollHeight: CGFloat = 150
+    #endif
 
     private var rows: some View {
         VStack(alignment: .leading, spacing: 2) {

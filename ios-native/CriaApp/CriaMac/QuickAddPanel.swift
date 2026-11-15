@@ -55,7 +55,9 @@ final class QuickAddPanel {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.panel = panel
         // Fitted before placing, so the top edge lands 190pt down rather than moving when the content sizes itself.
-        panel.setContentSize(host.fittingSize)
+        // The width is fixed: fittingSize can report a narrower width before SwiftUI's first layout, which put the
+        // panel's left edge, not its centre, on the window's centre line.
+        panel.setContentSize(NSSize(width: Self.width, height: host.fittingSize.height))
         place(panel, over: anchor)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
@@ -71,7 +73,7 @@ final class QuickAddPanel {
     private func place(_ panel: NSPanel, over anchor: NSWindow?) {
         if let anchor, anchor.isVisible, anchor !== panel {
             let frame = anchor.frame
-            let left = frame.midX - panel.frame.width / 2
+            let left = frame.midX - Self.width / 2
             panel.setFrameTopLeftPoint(NSPoint(x: left, y: frame.maxY - 120))
             return
         }
@@ -81,7 +83,7 @@ final class QuickAddPanel {
             panel.center()
             return
         }
-        let left = visible.midX - panel.frame.width / 2
+        let left = visible.midX - Self.width / 2
         panel.setFrameTopLeftPoint(NSPoint(x: left, y: visible.maxY - Self.topInset))
     }
 }
