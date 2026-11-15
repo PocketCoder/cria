@@ -268,7 +268,8 @@ extension TaskRowView {
 
     private var macHasMeta: Bool {
         task.dueDate != nil || tree.progress != nil || TaskRowSignals.percent(task) != nil
-            || task.repeatAfter > 0 || task.repeatMode != 0 || macHasDescription || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
+            || task.repeatAfter > 0 || task.repeatMode != 0 || macHasDescription
+            || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
             || (showProject && item.projectTitle != nil)
     }
 
