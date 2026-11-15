@@ -240,14 +240,20 @@ struct RelationPickerSheet: View {
     @State private var search = ""
     @State private var candidates: [TaskRecord] = []
     @State private var failure: String?
+    @State private var title = ""
 
     var body: some View { sheetContent.macSheetFrame() }
 
     @ViewBuilder private var sheetContent: some View {
         NavigationStack {
             List {
-                Picker("Kind", selection: $kind) {
-                    ForEach(TaskRelationKind.pickable, id: \.self) { Text(kindTitles[$0.rawValue] ?? $0.rawValue).tag($0) }
+                Section {
+                    Picker("Kind", selection: $kind) {
+                        ForEach(TaskRelationKind.pickable, id: \.self) { Text(kindTitles[$0.rawValue] ?? $0.rawValue).tag($0) }
+                    }
+                } footer: {
+                    // "Parent task" alone read either way round; say which task ends up where.
+                    Text(Self.direction(kind, this: title.isEmpty ? "this task" : "‘\(title)’"))
                 }
                 ForEach(filtered, id: \.localId) { task in
                     Button(task.title) { add(task) }
@@ -258,12 +264,37 @@ struct RelationPickerSheet: View {
             .navigationTitle("Add relation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            .task { candidates = (try? services.store.tasks(matching: TaskQuery(includeDone: false))) ?? [] }
+            .task {
+                title = (try? services.store.task(localId: taskLocalId))?.title ?? ""
+                candidates = (try? services.store.tasks(matching: TaskQuery(includeDone: false))) ?? []
+            }
             .alert("Could not add relation", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(failure ?? "")
             }
+        }
+    }
+
+    /// What the picked task becomes, relative to `this`.
+    static func direction(_ kind: TaskRelationKind, this: String) -> String {
+        let sentence = directionSentence(kind, this: this)
+        return sentence.prefix(1).uppercased() + sentence.dropFirst()
+    }
+
+    private static func directionSentence(_ kind: TaskRelationKind, this: String) -> String {
+        switch kind {
+        case .subtask: "The task you pick becomes a subtask of \(this)."
+        case .parenttask: "The task you pick becomes the parent of \(this), and \(this) its subtask."
+        case .related: "The task you pick is linked to \(this)."
+        case .blocking: "\(this) blocks the task you pick."
+        case .blocked: "\(this) is blocked by the task you pick."
+        case .duplicates: "\(this) duplicates the task you pick."
+        case .duplicateof: "\(this) is a duplicate of the task you pick."
+        case .precedes: "\(this) comes before the task you pick."
+        case .follows: "\(this) comes after the task you pick."
+        case .copiedfrom: "\(this) was copied from the task you pick."
+        case .copiedto: "\(this) was copied to the task you pick."
         }
     }
 
