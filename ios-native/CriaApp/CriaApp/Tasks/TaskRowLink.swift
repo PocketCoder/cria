@@ -62,6 +62,8 @@ struct TaskRowLink: View {
         // title rather than the ring, and the same insets, with room for the open and hover washes.
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 10, bottom: 1, trailing: 10))
+        // A run of subtasks sits in one soft rounded box under its parent, in place of guide lines.
+        .listRowBackground(tree.depth > 0 ? MacSubtaskGroupBackground(tree: tree) : nil)
         #endif
         .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -120,6 +122,15 @@ struct TaskRowLink: View {
         }
     }
 
+    /// How far a subtask sits in: its indent on the Mac (outside the highlight), none on iOS (the row pads itself).
+    private var subtaskInset: CGFloat {
+        #if os(macOS)
+        CGFloat(tree.depth) * TaskListNesting.indent
+        #else
+        0
+        #endif
+    }
+
     @ViewBuilder private var rowLink: some View {
         if let openTask {
             #if os(macOS)
@@ -129,7 +140,7 @@ struct TaskRowLink: View {
                     item: item, showProject: showProject, tree: tree, completing: showsCompleting,
                     rename: RowRename(text: $draftTitle, commit: commitRename, cancel: { renaming = false })
                 ) { toggle() }
-                .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
+                .modifier(PanelRowHighlight(taskLocalId: item.task.localId, inset: subtaskInset))
             } else {
                 openButton(openTask)
                     // Alongside the button, so a single click still opens the task at once.
@@ -150,7 +161,7 @@ struct TaskRowLink: View {
             TaskRowView(item: item, showProject: showProject, tree: tree, completing: showsCompleting) { toggle() }
         }
         .buttonStyle(.plain)
-        .modifier(PanelRowHighlight(taskLocalId: item.task.localId))
+        .modifier(PanelRowHighlight(taskLocalId: item.task.localId, inset: subtaskInset))
         #if os(macOS)
         // Onto a sidebar project to move it there (MacProjectLabel); the same payload as a Kanban card's.
         .draggable(KanbanPayload.make(item.task.localId))

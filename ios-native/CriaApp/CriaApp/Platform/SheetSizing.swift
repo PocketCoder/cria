@@ -34,6 +34,7 @@ extension View {
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize()
+            .macHoverable()
         #else
         self
         #endif

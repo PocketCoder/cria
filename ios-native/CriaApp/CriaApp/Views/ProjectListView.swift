@@ -94,8 +94,10 @@ struct ProjectListView: View {
             Section {} header: { header }
             ForEach(openSections) { section in
                 Section {
-                    ForEach(rows(section.items)) { row in
-                        taskRow(row).moveDisabled(row.depth > 0)
+                    let sectionRows = rows(section.items)
+                    let edges = TaskGroupEdges(sectionRows)
+                    ForEach(sectionRows) { row in
+                        taskRow(row, edges: edges).moveDisabled(row.depth > 0)
                     }
                     .onMove(perform: isManual ? { move($0, $1, in: section.items) } : nil)
                     #if os(macOS)
@@ -109,7 +111,11 @@ struct ProjectListView: View {
             }
             if !doneItems.isEmpty {
                 Section {
-                    if completedShown { ForEach(rows(doneItems)) { row in taskRow(row) } }
+                    if completedShown {
+                        let doneRows = rows(doneItems)
+                        let edges = TaskGroupEdges(doneRows)
+                        ForEach(doneRows) { row in taskRow(row, edges: edges) }
+                    }
                 } header: {
                     completedHeader
                 }
@@ -159,12 +165,12 @@ struct ProjectListView: View {
         }
     }
 
-    private func taskRow(_ row: NestedTaskItem) -> some View {
+    private func taskRow(_ row: NestedTaskItem, edges: TaskGroupEdges) -> some View {
         TaskRowLink(
             services: services, item: row.item,
             tree: TaskListNesting.tree(
                 for: row, progress: live.value.snapshot.progress, collapsed: $collapsed,
-                parentTitles: live.value.snapshot.parentTitles
+                parentTitles: live.value.snapshot.parentTitles, edges: edges
             )
         )
     }

@@ -30,6 +30,24 @@ struct TaskRowTree {
     var onToggleCollapsed: () -> Void = {}
     /// "Subtask of ‘Parent’" under the title, for lists that do not nest.
     var parentTitle: String?
+    /// The first and last row of a run of subtasks under one top-level task, where the Mac rounds the group's box.
+    var groupStart = false
+    var groupEnd = false
+}
+
+/// Where each run of nested rows starts and ends, so the Mac can draw the run as one rounded group.
+struct TaskGroupEdges: Equatable {
+    var starts: Set<String> = []
+    var ends: Set<String> = []
+
+    init() {}
+
+    init(_ rows: [NestedTaskItem]) {
+        for (index, row) in rows.enumerated() where row.depth > 0 {
+            if index == 0 || rows[index - 1].depth == 0 { starts.insert(row.id) }
+            if index == rows.count - 1 || rows[index + 1].depth == 0 { ends.insert(row.id) }
+        }
+    }
 }
 
 enum TaskListNesting {
@@ -109,7 +127,7 @@ enum TaskListNesting {
     /// The row's tree context in a nested list.
     @MainActor static func tree(
         for row: NestedTaskItem, progress: [String: SubtaskProgress], collapsed: Binding<Set<String>>,
-        parentTitles: [String: String] = [:]
+        parentTitles: [String: String] = [:], edges: TaskGroupEdges = TaskGroupEdges()
     ) -> TaskRowTree {
         let id = row.id
         return TaskRowTree(
@@ -126,7 +144,9 @@ enum TaskListNesting {
                 }
             },
             // Under its parent the caption would repeat what the indent already says.
-            parentTitle: row.depth == 0 ? parentTitles[id] : nil
+            parentTitle: row.depth == 0 ? parentTitles[id] : nil,
+            groupStart: edges.starts.contains(id),
+            groupEnd: edges.ends.contains(id)
         )
     }
 }

@@ -6,6 +6,8 @@ import SwiftUI
 /// redraws this background, not the row it sits behind.
 struct PanelRowHighlight: ViewModifier {
     let taskLocalId: String
+    /// The Mac's subtask indent, outside the wash so a subtask's highlight starts at its own ring.
+    var inset: CGFloat = 0
     @Environment(\.openTaskState) private var openTask
     @State private var hovering = false
 
@@ -14,7 +16,9 @@ struct PanelRowHighlight: ViewModifier {
         // The macOS design's row: radius 10 (the row pads itself 8 by 12), selection tint and hover fill.
         content
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(fill))
+            .animation(.easeOut(duration: 0.12), value: fill)
             .onHover { hovering = $0 }
+            .padding(.leading, inset)
         #else
         content
             .padding(.horizontal, 6)
@@ -23,14 +27,18 @@ struct PanelRowHighlight: ViewModifier {
         #endif
     }
 
+    private var isKeyboardFocus: Bool {
+        openTask?.showsFocus == true && openTask?.focusedId == taskLocalId
+    }
+
     private var fill: Color {
         #if os(macOS)
         if openTask?.id == taskLocalId { return MacTheme.selection }
-        return hovering || openTask?.focusedId == taskLocalId ? MacTheme.fill : .clear
+        return hovering || isKeyboardFocus ? MacTheme.fill : .clear
         #else
         // The web row's open and hover washes: primary at 10%, foreground at 5%. The j/k focus reads as a hover.
         if openTask?.id == taskLocalId { return Color(.primary).opacity(0.10) }
-        return hovering || openTask?.focusedId == taskLocalId ? Color(.foreground).opacity(0.05) : .clear
+        return hovering || isKeyboardFocus ? Color(.foreground).opacity(0.05) : .clear
         #endif
     }
 }
@@ -106,6 +114,29 @@ struct TaskRowProjectChoices: View {
         } catch {
             onFailure(String(describing: error))
         }
+    }
+}
+#endif
+
+#if os(macOS)
+/// The box behind a run of subtasks: a faint fill from just inside the parent's ring to the row's trailing edge, rounded
+/// at the run's first and last row so the run reads as one group.
+struct MacSubtaskGroupBackground: View {
+    let tree: TaskRowTree
+
+    var body: some View {
+        let top: CGFloat = tree.groupStart ? 10 : 0
+        let bottom: CGFloat = tree.groupEnd ? 10 : 0
+        UnevenRoundedRectangle(
+            topLeadingRadius: top, bottomLeadingRadius: bottom, bottomTrailingRadius: bottom, topTrailingRadius: top,
+            style: .continuous
+        )
+        .fill(Color.primary.opacity(0.035))
+        // The row's 10pt list inset, plus most of one indent, so the box starts under the parent's ring.
+        .padding(.leading, 10 + TaskListNesting.indent - 8)
+        .padding(.trailing, 10)
+        .padding(.top, tree.groupStart ? 1 : 0)
+        .padding(.bottom, tree.groupEnd ? 1 : 0)
     }
 }
 #endif

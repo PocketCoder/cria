@@ -84,8 +84,10 @@ offered a perpetual update. `pnpm bump` touches all four at once.
   (`/api/v1/ws`, checked against upstream `main` 2026-10-12) pushes only
   `notification.created` and pro-licence `timer.*`, with no task, project,
   label or comment events, so true live sync isn't possible upstream.
-  `feature/live-sync` holds a desktop client for the notification event only
-  (unit-tested, never run against a real server).
+  A desktop client for the notification event only (unit-tested, never run
+  against a real server) was on `feature/live-sync`, deleted 2026-11-17; its
+  head was `b74183a7` (restore with `git push origin b74183a7:refs/heads/feature/live-sync`
+  while GitHub still holds the commit).
 - **UI has no unit tests.** Coverage thresholds cover only the logic layers
   (`src/{api,auth,db,domain,lib,sync,stores,hooks,tauri}`).
 

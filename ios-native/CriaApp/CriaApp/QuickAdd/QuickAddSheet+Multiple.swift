@@ -160,10 +160,15 @@ extension QuickAddSheet {
                 addingSubtask = true
                 focused = .subtask
             } label: {
+                #if os(macOS)
+                Label("Add subtask", systemImage: "plus").font(.system(size: 13, weight: .medium))
+                #else
                 Label("Add subtask", systemImage: "plus").font(Theme.caption)
+                #endif
             }
             .buttonStyle(.borderless)
             .foregroundStyle(Color(.primary))
+            .macHoverable()
         }
     }
 

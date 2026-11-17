@@ -30,11 +30,8 @@ struct MacShellView: View {
                 .overlay(alignment: .bottom) { UndoToast(center: undoCenter) }
                 // Sync progress, errors with Retry, conflicts to resolve and changes that could not sync, as on iOS.
                 .safeAreaInset(edge: .top, spacing: 0) { SyncBanner(services: services, conflicts: conflictPrompt) }
-                // The open task in the system inspector column, attached to the window's right edge.
-                .inspector(isPresented: inspectorShown) {
-                    MacTaskInspector(services: services, actions: actions)
-                        .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
-                }
+                // The open task as a raised card over the content, at the window's right edge.
+                .macFloatingInspector(services: services, actions: actions)
                 .searchable(text: $actions.query, placement: .toolbar, prompt: "Search")
                 .searchFocused($searchFocused)
                 .toolbar { MacToolbar(actions: actions, services: services) }
@@ -105,10 +102,6 @@ struct MacShellView: View {
             onDismiss: { conflictPrompt.sheetDismissed() },
             content: { ConflictSheet(services: services, prompt: conflictPrompt).macSheetFrame() }
         )
-    }
-
-    private var inspectorShown: Binding<Bool> {
-        Binding(get: { actions.openTaskId != nil }, set: { if !$0 { actions.openTaskId = nil } })
     }
 
     private func openPendingURL() {
@@ -202,7 +195,7 @@ private extension View {
 
 /// The open task in the inspector column. Its own view, so the detail is built when the open task changes and not on
 /// every shell update.
-private struct MacTaskInspector: View {
+struct MacTaskInspector: View {
     let services: AppServices
     let actions: MacActions
 

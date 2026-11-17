@@ -60,7 +60,9 @@ struct MacSidebar: View {
     }
 
     var body: some View {
-        List(selection: selection) {
+        // No `List(selection:)`: the system's selection highlight is a different shape from the hover one, so each row
+        // draws both itself (`macSidebarRow`) and a click selects through `macSidebarSelect`.
+        List {
             row(.inbox, .inbox, count: counts.value.inbox)
             row(.today, .today, count: counts.value.today)
             row(.upcoming, .upcoming)
@@ -69,7 +71,7 @@ struct MacSidebar: View {
             Section {
                 if showFavourites {
                     Label("Starred", systemImage: "star")
-                        .macSidebarRow(selected: actions.selection == .favorites)
+                        .macSidebarRow(.favorites)
                         .tag(MacSelection.favorites)
                     if showFavouriteProjects {
                         ForEach(live.value.favourites, id: \.localId) { project in
@@ -87,7 +89,7 @@ struct MacSidebar: View {
                         Label("Archived projects", systemImage: "archivebox")
                     }
                     .buttonStyle(.plain)
-                    .macSidebarRow(selected: false)
+                    .macSidebarRow(nil)
                 }
             } header: {
                 MacSidebarHeader(title: "Projects", isExpanded: $showProjects, addHelp: "New project") {
@@ -110,6 +112,7 @@ struct MacSidebar: View {
         }
         .tint(Color(.primary))
         .environment(\.macSidebarSelection, actions.selection)
+        .environment(\.macSidebarSelect, { actions.selection = $0 })
         .navigationSplitViewColumnWidth(min: 200, ideal: 244)
         .task { await live.run() }
         .task { await counts.run() }
@@ -131,7 +134,7 @@ struct MacSidebar: View {
     @ViewBuilder private var filterRows: some View {
         ForEach(live.value.filters, id: \.serverId) { filter in
             Label(filter.title, systemImage: "line.3.horizontal.decrease")
-                .macSidebarRow(selected: actions.selection == .savedFilter(filter.serverId))
+                .macSidebarRow(.savedFilter(filter.serverId))
                 .tag(MacSelection.savedFilter(filter.serverId))
                 .contextMenu {
                     Button("Edit…", systemImage: "pencil") { sheets.filterEditor = FilterEditorTarget(record: filter) }
@@ -149,7 +152,7 @@ struct MacSidebar: View {
                     .font(.system(size: 10))
                     .foregroundStyle(Color(hexString: label.hexColor) ?? MacTheme.label2)
             }
-            .macSidebarRow(selected: actions.selection == .label(label.localId))
+            .macSidebarRow(.label(label.localId))
             .tag(MacSelection.label(label.localId))
             .contextMenu {
                 Button("Edit…", systemImage: "pencil") { sheets.labelEditor = LabelEditTarget(label: label) }
@@ -160,13 +163,6 @@ struct MacSidebar: View {
         }
     }
 
-    /// A click on empty space or a ⌘-click would clear the selection, leaving no row lit while Today shows; ignore it.
-    private var selection: Binding<MacSelection?> {
-        Binding(get: { actions.selection }, set: { newValue in
-            if let newValue { actions.selection = newValue }
-        })
-    }
-
     private func row(_ tab: AppTab, _ destination: MacSelection, count: Int = 0) -> some View {
         HStack {
             Label(tab.title, systemImage: tab.symbol)
@@ -175,7 +171,7 @@ struct MacSidebar: View {
                 Text("\(count)").font(.system(size: 12)).foregroundStyle(MacTheme.label2).monospacedDigit()
             }
         }
-        .macSidebarRow(selected: actions.selection == destination)
+        .macSidebarRow(destination)
         .tag(destination)
     }
 }
@@ -216,7 +212,6 @@ struct MacProjectLabel: View {
     let services: AppServices
     let sheets: MacSidebarActions
     @State private var isTargeted = false
-    @Environment(\.macSidebarSelection) private var selection
     @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
@@ -227,7 +222,7 @@ struct MacProjectLabel: View {
                 .font(.system(size: 10))
                 .foregroundStyle(Color(hexString: project.hexColor) ?? MacTheme.label2)
         }
-        .macSidebarRow(selected: selection == .project(project.localId))
+        .macSidebarRow(.project(project.localId))
         .tag(MacSelection.project(project.localId))
         // On the row itself, not the disclosure group, so a sub-project's menu is its own.
         .contextMenu { MacProjectMenu(project: project, services: services, sheets: sheets) }

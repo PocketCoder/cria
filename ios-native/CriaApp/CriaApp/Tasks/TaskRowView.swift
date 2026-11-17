@@ -219,6 +219,8 @@ extension TaskRowView {
             PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
                 // The ring's 24pt target overhangs the 18pt title line; it must not add to the row's height.
                 .padding(.vertical, -3)
+                // A parent's disclosure chevron hangs in the gutter left of its ring, as in Finder's outline.
+                .overlay(alignment: .leading) { macDisclosure.offset(x: -17) }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let rename {
@@ -232,6 +234,12 @@ extension TaskRowView {
                     }
                     if task.isFavorite {
                         Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(MacTheme.marigold)
+                    }
+                    // Subtask progress on the title line, not a meta line of its own.
+                    if let progress = tree.progress {
+                        SubtaskRing(progress: progress)
+                            .font(.system(size: 11))
+                            .foregroundStyle(MacTheme.label2)
                     }
                 }
                 .frame(minHeight: 18)
@@ -254,9 +262,8 @@ extension TaskRowView {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 8)
-        .padding(.leading, CGFloat(tree.depth) * TaskListNesting.indent)
+        // No indent or guide lines here: TaskRowLink indents a subtask outside its highlight and draws its group.
         .animation(.easeOut(duration: 0.2), value: completing)
-        .background(alignment: .leading) { guides }
         // 8 by 12 around the content; the ring's 24pt target already gives 3 of the leading 12.
         .padding(.leading, 9)
         .padding(.trailing, 12)
@@ -267,7 +274,7 @@ extension TaskRowView {
     }
 
     private var macHasMeta: Bool {
-        task.dueDate != nil || tree.progress != nil || TaskRowSignals.percent(task) != nil
+        task.dueDate != nil || TaskRowSignals.percent(task) != nil
             || task.repeatAfter > 0 || task.repeatMode != 0 || macHasDescription
             || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
             || (showProject && item.projectTitle != nil)
@@ -282,7 +289,6 @@ extension TaskRowView {
 
     private var macMeta: some View {
         HStack(spacing: 8) {
-            if let progress = tree.progress { macSubtasks(progress) }
             if let percent = TaskRowSignals.percent(task) {
                 HStack(spacing: 3) {
                     Image(systemName: "chart.pie")
@@ -339,20 +345,20 @@ extension TaskRowView {
             .background(tint.opacity(0.12), in: Capsule())
     }
 
-    /// A ring and "2/5" subtasks done; where the children are nested here it also collapses them.
-    @ViewBuilder private func macSubtasks(_ progress: SubtaskProgress) -> some View {
+    /// A parent's chevron, rotating as its subtasks show and hide. Nothing for a row with no children here.
+    @ViewBuilder private var macDisclosure: some View {
         if let collapsed = tree.isCollapsed {
             Button(action: tree.onToggleCollapsed) {
-                HStack(spacing: 3) {
-                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                    SubtaskRing(progress: progress)
-                }
-                .contentShape(Rectangle())
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MacTheme.label3)
+                    .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    .frame(width: 14, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macHoverable()
             .accessibilityLabel(collapsed ? "Show subtasks" : "Hide subtasks")
-        } else {
-            SubtaskRing(progress: progress)
         }
     }
 }

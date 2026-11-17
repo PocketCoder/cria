@@ -23,6 +23,9 @@ final class OpenTaskState {
     var id: String?
     /// The row `j`/`k` have moved to; Return opens it. Clicking a row moves it there too.
     var focusedId: String?
+    /// True while `j`/`k` drive the focus, so its wash shows; a click clears it, so a row clicked and then closed
+    /// is not left highlighted.
+    var showsFocus = false
     /// The list on screen, in order, as `publishesTaskOrder` reports it.
     var visibleIds: [String] = []
 }

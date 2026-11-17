@@ -102,6 +102,7 @@ final class MacActions {
     func openTask(_ id: String) {
         TaskOpenSignposts.event("click", id)
         panel.focusedId = id
+        panel.showsFocus = false
         guard openTaskId != id else { return }
         openTaskId = id
     }
@@ -122,6 +123,7 @@ final class MacActions {
         panel.focusedId = ids[next]
         // With the inspector open it follows the selection.
         if openTaskId != nil { openTask(ids[next]) }
+        panel.showsFocus = true
         return true
     }
 

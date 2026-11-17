@@ -14,7 +14,7 @@ enum TaskInspectorStyle {
 
 #if os(macOS)
 extension TaskDetailView {
-    /// The inspector: the field box, the second box (dates, progress, colour), then the description under its title.
+    /// The inspector under the title and description: the field box, then the second box (dates, progress, colour).
     @ViewBuilder
     func inspectorFields(_ task: TaskRecord) -> some View {
         Section {
@@ -23,18 +23,6 @@ extension TaskDetailView {
                 fieldBox(task)
                 moreFields(task)
             }
-        }
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
-        Section {
-            descriptionField(task)
-        } header: {
-            // SF 12 semibold in `label2`, 20pt below the field box.
-            Text("Description")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(MacTheme.label2)
-                .textCase(nil)
-                .padding(.top, 20)
         }
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)

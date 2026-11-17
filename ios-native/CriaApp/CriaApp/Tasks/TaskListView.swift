@@ -63,12 +63,14 @@ struct TaskListView: View {
             #endif
             ForEach(shown) { section in
                 Section {
-                    ForEach(TaskListNesting.rows(section.items, children: live.value.children, collapsed: collapsed)) { row in
+                    let rows = TaskListNesting.rows(section.items, children: live.value.children, collapsed: collapsed)
+                    let edges = TaskGroupEdges(rows)
+                    ForEach(rows) { row in
                         TaskRowLink(
                             services: services, item: row.item, showProject: showsProject,
                             tree: TaskListNesting.tree(
                                 for: row, progress: live.value.progress, collapsed: $collapsed,
-                                parentTitles: live.value.parentTitles
+                                parentTitles: live.value.parentTitles, edges: edges
                             )
                         )
                     }

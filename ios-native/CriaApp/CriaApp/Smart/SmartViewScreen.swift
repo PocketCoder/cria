@@ -211,7 +211,7 @@ struct SmartViewScreen: View {
 }
 
 extension SmartViewScreen {
-    private func tree(for row: NestedTaskItem) -> TaskRowTree {
+    private func tree(for row: NestedTaskItem, edges: TaskGroupEdges) -> TaskRowTree {
         let id = row.id
         return TaskRowTree(
             depth: row.depth,
@@ -223,7 +223,9 @@ extension SmartViewScreen {
                 }
             },
             // Under its parent the caption would repeat what the indent already says.
-            parentTitle: row.depth == 0 ? live.value.parentTitles[id] : nil
+            parentTitle: row.depth == 0 ? live.value.parentTitles[id] : nil,
+            groupStart: edges.starts.contains(id),
+            groupEnd: edges.ends.contains(id)
         )
     }
 
@@ -285,8 +287,13 @@ extension SmartViewScreen {
 
     private func groupSection(_ group: DisplaySection) -> some View {
         Section {
-            ForEach(live.value.nesting.rows(for: group.items, expanded: expanded)) { row in
-                TaskRowLink(services: services, item: row.item, showProject: showsProject && row.depth == 0, tree: tree(for: row))
+            let rows = live.value.nesting.rows(for: group.items, expanded: expanded)
+            let edges = TaskGroupEdges(rows)
+            ForEach(rows) { row in
+                TaskRowLink(
+                    services: services, item: row.item, showProject: showsProject && row.depth == 0,
+                    tree: tree(for: row, edges: edges)
+                )
             }
             #if os(macOS)
             .environment(\.completionGroup, CompletionGroup(key: group.key, label: group.label))

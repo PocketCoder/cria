@@ -2,7 +2,7 @@ import CriaKit
 import SwiftUI
 
 #if os(macOS)
-/// The Mac panel's chips row: Project, Date, Priority, Labels and Reminder, 26pt high. Each opens a menu, and a chip
+/// The Mac panel's chips row: Project, Date, Priority, Labels and Reminder, 30pt high. Each opens a menu, and a chip
 /// is grey until it has a value, then takes its colour.
 extension QuickAddSheet {
     var panelChips: some View {
@@ -15,9 +15,11 @@ extension QuickAddSheet {
                 reminders: $reminders, hasDueDate: !dueISO.isEmpty, onCustom: { pickerSheet = .reminder },
                 unsetTint: Self.unsetTint, emptyTitle: "Reminder"
             )
-            .frame(height: 26)
+            .frame(height: 30)
             parsedChips
         }
+        // The large chip (SF 13, 12pt sides): the regular one read too small in the panel.
+        .environment(\.criaChipSize, .large)
     }
 
     private static var unsetTint: Color { MacTheme.label2 }
@@ -34,7 +36,7 @@ extension QuickAddSheet {
             CriaChip(text: chip.title ?? "Project", systemImage: "tray", tint: set ? Color(.primary) : Self.unsetTint)
         }
         .macChipMenu()
-        .frame(height: 26)
+        .frame(height: 30)
         .accessibilityLabel("Project")
     }
 
@@ -55,7 +57,7 @@ extension QuickAddSheet {
             )
         }
         .macChipMenu()
-        .frame(height: 26)
+        .frame(height: 30)
         .accessibilityLabel("Date")
     }
 
@@ -82,7 +84,7 @@ extension QuickAddSheet {
             )
         }
         .macChipMenu()
-        .frame(height: 26)
+        .frame(height: 30)
         .accessibilityLabel("Priority")
     }
 
@@ -100,7 +102,7 @@ extension QuickAddSheet {
             )
         }
         .macChipMenu()
-        .frame(height: 26)
+        .frame(height: 30)
         .accessibilityLabel("Labels")
     }
 

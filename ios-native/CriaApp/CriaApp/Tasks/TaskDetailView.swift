@@ -207,9 +207,8 @@ struct TaskDetailView: View {
         Form {
             Section {
                 titleRow(task)
-                #if !os(macOS)
+                // The description belongs to the title: right under it on both platforms.
                 descriptionField(task)
-                #endif
             }
             #if os(macOS)
             // The ring and title sit on the inspector itself, not in a grouped cell.
