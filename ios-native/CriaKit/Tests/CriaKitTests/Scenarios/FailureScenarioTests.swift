@@ -212,7 +212,10 @@ final class PermanentFailureScenarioTests: XCTestCase {
         await rig.coordinator.start(interval: 3600, reconcileInterval: 3600)
         try rig.store.updateTask(localId: theirs, patch: TaskPatch(title: "My edit"))
         try rig.create("Mine")
-        let landed = await waitUntil { rig.server.applied == ["create Mine"] }
+        // The create can land a moment before the dead-letter row is readable; wait for both.
+        let landed = await waitUntil {
+            rig.server.applied == ["create Mine"] && ((try? rig.store.deadLetters().count) ?? 0) == 1
+        }
         XCTAssertTrue(landed)
         // Once flaky with two (a pull racing the create, fixed in markTaskSynced); name them so a failure says why.
         let dead = try rig.store.deadLetters()

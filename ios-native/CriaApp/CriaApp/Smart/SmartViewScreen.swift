@@ -27,7 +27,8 @@ struct SmartViewScreen: View {
     #endif
     @State private var failure: String?
     /// Parents whose subtasks are showing, for this screen only.
-    @State private var expanded: Set<String> = []
+    /// Parents whose subtasks show; read by `tree(for:edges:)` in SmartViewScreen+Tree.swift.
+    @State var expanded: Set<String> = []
 
     init(services: AppServices, view: SmartView, title: String) {
         self.services = services
@@ -213,24 +214,6 @@ struct SmartViewScreen: View {
 }
 
 extension SmartViewScreen {
-    private func tree(for row: NestedTaskItem, edges: TaskGroupEdges) -> TaskRowTree {
-        let id = row.id
-        return TaskRowTree(
-            depth: row.depth,
-            progress: live.value.nesting.progress[id],
-            isCollapsed: row.hasChildren ? !expanded.contains(id) : nil,
-            onToggleCollapsed: {
-                withAnimation(.snappy) {
-                    if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
-                }
-            },
-            // Under its parent the caption would repeat what the indent already says.
-            parentTitle: row.depth == 0 ? live.value.parentTitles[id] : nil,
-            groupStart: edges.starts.contains(id),
-            groupEnd: edges.ends.contains(id)
-        )
-    }
-
     @ViewBuilder private func nothingPlanned(_ displayed: [DisplaySection]) -> some View {
         if view == .upcoming && !displayed.contains(where: { $0.key == Self.dayKey(selectedDay) }) {
             Section {
