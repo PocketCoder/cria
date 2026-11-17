@@ -21,7 +21,7 @@ interface ViewProps {
   setText: (v: string) => void;
   parsed: QuickAddResult;
   magicMode: QuickAddMagicMode;
-  titleRef: RefObject<HTMLInputElement>;
+  titleRef: RefObject<HTMLInputElement | null>;
   onTitleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
@@ -34,7 +34,7 @@ interface ViewProps {
 interface MobileProps extends ViewProps {
   description: string;
   setDescription: (v: string) => void;
-  panelRef: RefObject<HTMLDivElement>;
+  panelRef: RefObject<HTMLDivElement | null>;
   drag: MutableRefObject<{ startY: number; active: boolean; allowed: boolean }>;
   dragY: number;
   keyboardInset: number;

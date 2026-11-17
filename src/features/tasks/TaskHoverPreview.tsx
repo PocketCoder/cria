@@ -29,7 +29,7 @@ interface TaskHoverPreviewProps {
 
 export function TaskHoverPreview({ task, children, className }: TaskHoverPreviewProps) {
   const triggerRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [isOpen, setIsOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
