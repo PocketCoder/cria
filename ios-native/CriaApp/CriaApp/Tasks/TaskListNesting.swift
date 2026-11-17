@@ -36,24 +36,19 @@ enum TaskListNesting {
     /// Indent per level of nesting, in points.
     static let indent: CGFloat = 20
 
-    /// Reads the subtask map and each parent's progress for a list's items. Done flags come from the items; a
-    /// subtask outside the list (another project) is looked up on its own, so the count still covers it.
+    /// Reads the subtask map and each parent's progress for a list's items. Done flags come from the items; subtasks
+    /// outside the list (another project) are looked up in one read, so the count still covers them.
     static func snapshot(_ reading: CriaStore, items: [TaskListItem]) throws -> TaskListSnapshot {
         let children = try reading.subtaskMap()
         let doneById = Dictionary(items.map { ($0.task.localId, $0.task.done) }, uniquingKeysWith: { first, _ in first })
+        let parents = items.filter { !(children[$0.task.localId]?.isEmpty ?? true) }
+        let outside = try reading.tasks(localIds: parents.flatMap { children[$0.task.localId] ?? [] }.filter { doneById[$0] == nil })
         var progress: [String: SubtaskProgress] = [:]
-        for item in items {
-            guard let kids = children[item.task.localId], !kids.isEmpty else { continue }
+        for item in parents {
             var done = 0
             var total = 0
-            for kid in Set(kids) {
-                let isDone: Bool?
-                if let known = doneById[kid] {
-                    isDone = known
-                } else {
-                    isDone = try reading.task(localId: kid)?.done
-                }
-                guard let isDone else { continue }
+            for kid in Set(children[item.task.localId] ?? []) {
+                guard let isDone = doneById[kid] ?? outside[kid]?.done else { continue }
                 total += 1
                 if isDone { done += 1 }
             }
@@ -61,7 +56,8 @@ enum TaskListNesting {
         }
         return TaskListSnapshot(
             items: items, children: children, progress: progress,
-            parentTitles: try parentTitles(reading, for: items), assignees: try reading.assigneeMap(), loaded: true
+            parentTitles: try parentTitles(reading, for: items, children: children), assignees: try reading.assigneeMap(),
+            loaded: true
         )
     }
 
@@ -84,23 +80,20 @@ enum TaskListNesting {
     }
 
     /// Each shown subtask's parent title, for the caption in lists that do not nest (Today, Upcoming, Search).
-    /// A parent outside the list is looked up once.
-    static func parentTitles(_ reading: CriaStore, for items: [TaskListItem]) throws -> [String: String] {
+    /// Parents outside the list are looked up in one read. Pass `children` when the caller has already read the map.
+    static func parentTitles(
+        _ reading: CriaStore, for items: [TaskListItem], children: [String: [String]]? = nil
+    ) throws -> [String: String] {
         let titles = Dictionary(items.map { ($0.task.localId, $0.task.title) }, uniquingKeysWith: { first, _ in first })
+        let map = try children ?? reading.subtaskMap()
+        let wanted = map.filter { parent, kids in
+            titles[parent] == nil && kids.contains { titles[$0] != nil && $0 != parent }
+        }
+        let outside = try reading.tasks(localIds: wanted.keys)
         var result: [String: String] = [:]
-        var looked: [String: String?] = [:]
-        for (parent, kids) in try reading.subtaskMap().sorted(by: { $0.key < $1.key }) {
+        for (parent, kids) in map.sorted(by: { $0.key < $1.key }) {
             for kid in kids where titles[kid] != nil && result[kid] == nil && kid != parent {
-                let title: String?
-                if let known = titles[parent] {
-                    title = known
-                } else if let cached = looked[parent] {
-                    title = cached
-                } else {
-                    title = try reading.task(localId: parent)?.title
-                    looked.updateValue(title, forKey: parent)
-                }
-                if let title { result[kid] = title }
+                if let title = titles[parent] ?? outside[parent]?.title { result[kid] = title }
             }
         }
         return result

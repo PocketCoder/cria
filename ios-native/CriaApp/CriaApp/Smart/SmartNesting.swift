@@ -11,14 +11,16 @@ struct SmartNestingData: Equatable, Sendable {
     var childItems: [String: TaskListItem] = [:]
     var progress: [String: SubtaskProgress] = [:]
 
-    static func read(_ reading: CriaStore, items: [TaskListItem]) throws -> SmartNestingData {
-        let children = try reading.subtaskMap()
+    /// Pass `children` when the caller has already read the subtask map.
+    static func read(_ reading: CriaStore, items: [TaskListItem], children: [String: [String]]? = nil) throws -> SmartNestingData {
+        let children = try children ?? reading.subtaskMap()
         let shown = Set(items.map(\.task.localId))
         var wanted = Set<String>()
         for parent in shown { wanted.formUnion(children[parent] ?? []) }
         // Grandchildren too, so an expanded subtask can open in turn (two levels is plenty for a phone).
         for kid in wanted { wanted.formUnion(children[kid] ?? []) }
-        let records = try wanted.sorted().compactMap { try reading.task(localId: $0) }
+        let found = try reading.tasks(localIds: wanted)
+        let records = wanted.sorted().compactMap { found[$0] }
         let childItems = Dictionary(
             try reading.attachRowData(records).map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first }
         )
