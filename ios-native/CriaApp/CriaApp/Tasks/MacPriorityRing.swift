@@ -33,6 +33,7 @@ struct MacPriorityRing: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(MacPressStyle())
+        .macPointer()
         .animation(.easeOut(duration: 0.16), value: isDone)
         .accessibilityLabel(isDone ? "Mark not done" : "Complete")
         .accessibilityValue(priorityName)

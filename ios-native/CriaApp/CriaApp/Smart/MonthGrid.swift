@@ -72,6 +72,7 @@ struct MonthGrid: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(title)
     }
 
@@ -95,6 +96,7 @@ struct MonthGrid: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
         .accessibilityValue([isToday ? "Today" : nil, busy ? "Has tasks" : nil].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? .isSelected : [])

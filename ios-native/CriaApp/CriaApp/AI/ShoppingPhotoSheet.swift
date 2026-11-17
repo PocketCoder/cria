@@ -113,6 +113,7 @@ struct ShoppingPhotoSheet: View {
                 .overlay(Circle().strokeBorder(.white, lineWidth: 4))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(Self.shutterLabel)
         .photosPicker(isPresented: $libraryRequested, selection: $picked, matching: .images)
     }
@@ -146,6 +147,7 @@ struct ShoppingPhotoSheet: View {
                                 .foregroundStyle(item.include ? Color(.primary) : Color(.mutedForeground))
                         }
                         .buttonStyle(.plain)
+                        .macPointer()
                         .accessibilityLabel(item.include ? "Included" : "Excluded")
                         TextField("Item", text: $item.text)
                     }
@@ -208,6 +210,7 @@ struct ShoppingPhotoSheet: View {
         }
         .font(Theme.rowSubtitle)
         .buttonStyle(.borderless)
+        .macPointer()
         .disabled(tidying)
         .padding(.horizontal, 6)
     }

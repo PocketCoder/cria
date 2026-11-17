@@ -45,6 +45,7 @@ struct MacSettingsSheetLink<Label: View, Destination: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
         }
     }
 }

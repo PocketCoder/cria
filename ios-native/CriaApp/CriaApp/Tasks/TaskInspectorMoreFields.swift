@@ -38,6 +38,7 @@ struct TaskInspectorMoreFields: View {
         let text = value.map { DueDates.label($0, now: Date(), display: dateDisplay) } ?? "None"
         return Button { onPickDate(field) } label: { InspectorPopUpLabel(text: text) }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel("\(field.title), \(text)")
     }
 
@@ -102,6 +103,7 @@ struct InspectorColourValue: View {
             InspectorPopUpLabel(text: name, dot: Color(hexString: current))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel("Colour, \(name)")
         .popover(isPresented: $showing, arrowEdge: .bottom) { palette }
         .onChange(of: current, initial: true) { _, hex in
@@ -139,6 +141,7 @@ struct InspectorColourValue: View {
                 .overlay { if hex == nil { Image(systemName: "slash.circle").font(.system(size: 11)) } }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .help(hex.map { taskColours.firstIndex(of: $0).map { taskColourNames[$0] } ?? "Custom colour" } ?? "No colour")
         .accessibilityLabel(hex.map { taskColours.firstIndex(of: $0).map { taskColourNames[$0] } ?? "Custom colour" } ?? "No colour")
         .accessibilityAddTraits(current == hex ? .isSelected : [])

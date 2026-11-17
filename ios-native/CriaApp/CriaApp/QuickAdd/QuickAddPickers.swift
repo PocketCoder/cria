@@ -28,6 +28,7 @@ struct QuickAddDateChip: View {
             )
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel("Date")
     }
 }

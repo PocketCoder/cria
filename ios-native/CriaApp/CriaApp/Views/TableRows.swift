@@ -300,6 +300,7 @@ struct TableGridView: View {
             }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .disabled(!column.sortable)
         .frame(minWidth: width(column), alignment: .leading)
         .accessibilityAddTraits(.isHeader)

@@ -190,6 +190,7 @@ struct RambleSheet: View {
             }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(speech.isListening ? "Pause listening" : "Start listening")
     }
 

@@ -89,6 +89,7 @@ struct MacSidebar: View {
                         Label("Archived projects", systemImage: "archivebox")
                     }
                     .buttonStyle(.plain)
+                    .macPointer()
                     .macSidebarRow(nil)
                 }
             } header: {
@@ -292,6 +293,7 @@ private struct MacSidebarFooter: View {
                 Spacer(minLength: 4)
                 SettingsLink { Image(systemName: "gearshape") }
                     .buttonStyle(.borderless)
+                    .macPointer()
                     .help("Settings")
                     .accessibilityLabel("Settings")
             }

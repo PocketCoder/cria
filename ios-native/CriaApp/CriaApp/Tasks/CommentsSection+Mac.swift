@@ -71,6 +71,7 @@ struct MacCommentComposer: View {
                 Image(systemName: "textformat").font(.system(size: 11)).foregroundStyle(MacTheme.label2)
             })
             .buttonStyle(.plain)
+            .macPointer()
             .help("Write with formatting")
             .accessibilityLabel("Write with formatting")
             Button(action: send) {
@@ -81,6 +82,7 @@ struct MacCommentComposer: View {
                     .background(trimmed.isEmpty ? MacTheme.fill : Color(.primary), in: Circle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .disabled(trimmed.isEmpty)
             .accessibilityLabel("Send comment")
         }

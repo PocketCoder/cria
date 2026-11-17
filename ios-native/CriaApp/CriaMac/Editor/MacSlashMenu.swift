@@ -51,6 +51,7 @@ struct MacSlashMenuList: View {
         .frame(height: Self.rowHeight)
         .background(isSelected ? MacTheme.selection : Color.clear, in: RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
+        .macPointer()
         .onTapGesture { onPick(command) }
         .id(command)
         .accessibilityElement(children: .combine)

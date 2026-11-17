@@ -95,6 +95,7 @@ struct TaskColourRow: View {
                 .overlay { if hex == nil { Image(systemName: "slash.circle").font(Theme.caption) } }
         }
         .buttonStyle(.borderless)
+        .macPointer()
         .accessibilityLabel(hex.map { taskColours.firstIndex(of: $0).map { taskColourNames[$0] } ?? "Custom colour" } ?? "No colour")
         .accessibilityAddTraits(current == hex ? .isSelected : [])
     }

@@ -26,6 +26,7 @@ struct MacSidebarHeader: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel(title)
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
             Spacer(minLength: 4)
@@ -41,6 +42,7 @@ struct MacSidebarHeader: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(MacPressStyle())
+                .macPointer()
                 .foregroundStyle(hoveringAdd ? MacTheme.label2 : MacTheme.label3)
                 .onHover { hoveringAdd = $0 }
                 .opacity(hovering ? 1 : 0)
@@ -80,6 +82,7 @@ struct MacSidebarRowState: ViewModifier {
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
             .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isSelected)
             .onHover { hovering = $0 }
+            .modifier(MacPointer())
             .simultaneousGesture(TapGesture().onEnded {
                 if let destination { select(destination) }
             })

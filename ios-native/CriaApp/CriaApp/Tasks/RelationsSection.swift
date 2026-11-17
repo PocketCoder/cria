@@ -135,6 +135,7 @@ struct RelationsSection: View {
             // Saves what was typed, then closes; it used to throw the title away.
             Button("Done") { finishSubtaskField() }
                 .buttonStyle(.borderless)
+                .macPointer()
         }
         if let subtaskError {
             Text(subtaskError).font(Theme.caption).foregroundStyle(Color(.destructive))
@@ -220,6 +221,7 @@ struct RelationsSection: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .macPointer()
         } else {
             Image(systemName: symbol)
         }

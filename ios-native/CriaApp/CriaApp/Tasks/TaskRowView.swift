@@ -201,6 +201,7 @@ struct TaskRowView: View {
                     .padding(-8)
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel(collapsed ? "Show subtasks" : "Hide subtasks")
         } else {
             CriaChip(text: text, systemImage: "list.bullet.indent", tint: tint)
@@ -216,11 +217,19 @@ struct TaskRowView: View {
 extension TaskRowView {
     var macBody: some View {
         HStack(alignment: .rowTitleMid, spacing: 7) {
-            PriorityCheck(priority: task.priority, isDone: task.done || completing, action: onToggle)
+            // A parent's disclosure arrow in a gutter every row of the list keeps, so the rings line up.
+            if tree.reservesDisclosure {
+                macDisclosure
+                    .frame(width: 14, height: 18)
+                    .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
+            }
+            // A subtask's ring is a little smaller than its parent's.
+            PriorityCheck(
+                priority: task.priority, isDone: task.done || completing, size: tree.depth > 0 ? 16 : Theme.checkSize,
+                action: onToggle
+            )
                 // The ring's 24pt target overhangs the 18pt title line; it must not add to the row's height.
                 .padding(.vertical, -3)
-                // A parent's disclosure chevron hangs in the gutter left of its ring, as in Finder's outline.
-                .overlay(alignment: .leading) { macDisclosure.offset(x: -17) }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let rename {
@@ -264,8 +273,9 @@ extension TaskRowView {
         .padding(.vertical, 8)
         // No indent or guide lines here: TaskRowLink indents a subtask outside its highlight and draws its group.
         .animation(.easeOut(duration: 0.2), value: completing)
-        // 8 by 12 around the content; the ring's 24pt target already gives 3 of the leading 12.
-        .padding(.leading, 9)
+        // 8 by 12 around the content; the ring's 24pt target already gives 3 of the leading 12. With the arrow's
+        // gutter, 4 keeps the arrow clear of the row's edge.
+        .padding(.leading, tree.reservesDisclosure ? 4 : 9)
         .padding(.trailing, 12)
         .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
@@ -353,6 +363,7 @@ extension TaskRowView {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(MacTheme.label3)
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    .animation(.snappy(duration: 0.2), value: collapsed)
                     .frame(width: 14, height: 18)
                     .contentShape(Rectangle())
             }

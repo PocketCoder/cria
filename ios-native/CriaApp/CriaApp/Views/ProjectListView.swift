@@ -248,6 +248,7 @@ extension ProjectListView {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .textCase(nil)
         .accessibilityAddTraits(.isHeader)
         .accessibilityValue(completedOpen ? "Expanded" : "Collapsed")

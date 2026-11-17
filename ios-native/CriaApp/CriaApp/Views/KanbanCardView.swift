@@ -146,6 +146,7 @@ struct KanbanCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             #if os(macOS)
             // Command-click toggles done instead of opening the card (a plain click still opens it).
             .highPriorityGesture(TapGesture().modifiers(.command).onEnded {

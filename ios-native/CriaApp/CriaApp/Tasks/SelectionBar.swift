@@ -46,6 +46,7 @@ struct SelectionBar: View {
                 .tint(Color(.destructive))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .foregroundStyle(Color(.foreground))
         .disabled(count == 0)
         .padding(.bottom, 2)

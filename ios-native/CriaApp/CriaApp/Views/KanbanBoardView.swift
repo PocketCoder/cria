@@ -228,6 +228,7 @@ extension KanbanBoardView {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         #else
         Button { addingBucket = true } label: {
             Label("Add column", systemImage: "plus")
@@ -241,6 +242,7 @@ extension KanbanBoardView {
                 )
         }
         .buttonStyle(.plain)
+        .macPointer()
         #endif
     }
 

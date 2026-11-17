@@ -30,6 +30,7 @@ struct DescribeFilterRow: View {
                     }
                 }
                 .buttonStyle(.borderless)
+                .macPointer()
                 .disabled(working || isBlank || AIStatus.shared.notReadyMessage != nil)
                 .accessibilityLabel("Write the filter query")
             }

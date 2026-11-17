@@ -55,6 +55,7 @@ struct RambleProposalRow: View {
                     .frame(minWidth: 28, minHeight: 28)
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel(proposal.include ? "Included" : "Excluded")
             Button(action: onEdit) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -73,6 +74,7 @@ struct RambleProposalRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityHint("Edit before adding")
         }
         .padding(.vertical, 4)

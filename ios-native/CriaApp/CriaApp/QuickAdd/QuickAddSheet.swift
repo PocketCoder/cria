@@ -301,6 +301,7 @@ extension QuickAddSheet {
                         .background(Color(.primarySoft), in: Circle())
                 }
                 .buttonStyle(.plain)
+                .macPointer()
                 .disabled(aiStatus.notReadyMessage != nil)
                 .accessibilityLabel("Ramble")
             }
@@ -312,6 +313,7 @@ extension QuickAddSheet {
                     .background(canSend ? Color(.primary) : Color(.mutedForeground).opacity(0.4), in: Circle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .disabled(!canSend)
             .accessibilityLabel(sendLabel)
         }
@@ -381,6 +383,7 @@ extension QuickAddSheet {
                 )
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel("Labels")
         }
     }

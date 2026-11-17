@@ -70,6 +70,7 @@ struct MacEditorToolbar: View {
                 .background(isOn == true ? Color(.primary).opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .help(label)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isOn == true ? .isSelected : [])

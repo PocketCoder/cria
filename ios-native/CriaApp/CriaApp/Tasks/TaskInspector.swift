@@ -182,6 +182,7 @@ struct TaskInspectorFieldBox: View {
             }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(assignees.isEmpty ? "No assignees, add one" : "Assignees, add one")
     }
 

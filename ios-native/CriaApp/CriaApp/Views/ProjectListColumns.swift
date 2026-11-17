@@ -61,6 +61,7 @@ struct ProjectListAddRow: View {
                     focused = true
                 }
                 .buttonStyle(.plain)
+                .macPointer()
                 .foregroundStyle(MacTheme.label2)
                 .accessibilityLabel("New task in \(column.title)")
             }

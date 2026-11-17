@@ -122,6 +122,7 @@ extension QuickAddSheet {
                 .background(multiple ? Color(.primary) : Color(.primarySoft), in: Circle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .sensoryFeedback(.selection, trigger: multiple)
         .accessibilityLabel("Add several tasks")
         .accessibilityAddTraits(multiple ? .isSelected : [])
@@ -141,6 +142,7 @@ extension QuickAddSheet {
                     Image(systemName: "xmark").frame(width: 28, height: 28)
                 }
                 .buttonStyle(.borderless)
+                .macPointer()
                 .foregroundStyle(Color(.mutedForeground))
                 .accessibilityLabel("Remove subtask \(title)")
             }
@@ -167,6 +169,7 @@ extension QuickAddSheet {
                 #endif
             }
             .buttonStyle(.borderless)
+            .macPointer()
             .foregroundStyle(Color(.primary))
             .macHoverable()
         }
@@ -206,6 +209,7 @@ struct QuickAddQueueList: View {
                 Button("Clear", role: .destructive) { withAnimation(.snappy) { queue = [] } }
                     .font(Theme.caption)
                     .buttonStyle(.borderless)
+                    .macPointer()
             }
             if queue.count > Self.rowsBeforeScrolling {
                 ScrollView { rows }.frame(height: Self.scrollHeight)
@@ -250,6 +254,7 @@ struct QuickAddQueueList: View {
             } label: {
                 Image(systemName: "xmark").frame(width: 28, height: 28)
             }
+            .macPointer()
             .accessibilityLabel("Remove \(entry.item.input.title)")
         }
         .buttonStyle(.borderless)

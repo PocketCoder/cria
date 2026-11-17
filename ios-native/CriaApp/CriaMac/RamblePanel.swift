@@ -109,6 +109,7 @@ struct MacPanelHeader<Accessory: View>: View {
         HStack(spacing: 10) {
             Button(action: onBack) { Image(systemName: "chevron.left") }
                 .buttonStyle(.borderless)
+                .macPointer()
                 .accessibilityLabel("Back")
             Text(title).font(.system(size: 15, weight: .semibold))
             Spacer()
@@ -144,6 +145,7 @@ struct RambleMicButton: View {
             .frame(width: 96, height: 96)
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(isListening ? "Pause listening" : "Start listening")
     }
 }

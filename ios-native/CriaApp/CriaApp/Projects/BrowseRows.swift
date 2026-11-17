@@ -65,6 +65,7 @@ struct ProjectRowView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
+        .macPointer()
         .accessibilityLabel(row.isExpanded ? "Collapse \(row.project.title)" : "Expand \(row.project.title)")
     }
 }

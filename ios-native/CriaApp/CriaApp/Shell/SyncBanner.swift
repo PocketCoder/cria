@@ -73,6 +73,7 @@ struct SyncBanner: View {
                     .foregroundStyle(Color(.mutedForeground))
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityHint("Tries to sync now")
         } else if showStep, let step {
             Label(step, systemImage: "arrow.triangle.2.circlepath")
@@ -84,6 +85,7 @@ struct SyncBanner: View {
                     .lineLimit(2)
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityHint("Tries to sync again")
         }
     }
@@ -95,6 +97,7 @@ struct SyncBanner: View {
                 .lineLimit(1)
         }
         .buttonStyle(.plain)
+        .macPointer()
     }
 
     /// Offline when the device has no network, or every error of the last cycle was a network failure.

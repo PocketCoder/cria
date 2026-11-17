@@ -61,9 +61,11 @@ struct TaskRowLink: View {
         // One look in every list (Today, Inbox, projects, labels, search): no separators, which the Mac draws from the
         // title rather than the ring, and the same insets, with room for the open and hover washes.
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 1, leading: 10, bottom: 1, trailing: 10))
+        .listRowInsets(EdgeInsets(
+            top: 1, leading: 10, bottom: tree.groupRole == .end ? TaskGroupRole.endGap : 1, trailing: 10
+        ))
         // A run of subtasks sits in one soft rounded box under its parent, in place of guide lines.
-        .listRowBackground(tree.depth > 0 ? MacSubtaskGroupBackground(tree: tree) : nil)
+        .listRowBackground(tree.groupRole == .none ? nil : MacSubtaskGroupBackground(role: tree.groupRole))
         #endif
         .errorHaptic(failure)
         .alert("Could not save", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -87,6 +89,7 @@ struct TaskRowLink: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityAddTraits(picked ? .isSelected : [])
     }
 
@@ -125,7 +128,7 @@ struct TaskRowLink: View {
     /// How far a subtask sits in: its indent on the Mac (outside the highlight), none on iOS (the row pads itself).
     private var subtaskInset: CGFloat {
         #if os(macOS)
-        CGFloat(tree.depth) * TaskListNesting.indent
+        CGFloat(tree.depth) * TaskListNesting.macIndent
         #else
         0
         #endif
@@ -161,6 +164,7 @@ struct TaskRowLink: View {
             TaskRowView(item: item, showProject: showProject, tree: tree, completing: showsCompleting) { toggle() }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .modifier(PanelRowHighlight(taskLocalId: item.task.localId, inset: subtaskInset))
         #if os(macOS)
         // Onto a sidebar project to move it there (MacProjectLabel); the same payload as a Kanban card's.

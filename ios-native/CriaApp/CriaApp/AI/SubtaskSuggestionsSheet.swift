@@ -85,6 +85,7 @@ struct SubtaskSuggestionsSheet: View {
                             .frame(minWidth: 28, minHeight: 28)
                     }
                     .buttonStyle(.plain)
+                    .macPointer()
                     .accessibilityLabel(suggestion.include ? "Included" : "Excluded")
                     TextField("Subtask", text: $suggestion.title)
                         .strikethrough(!suggestion.include)

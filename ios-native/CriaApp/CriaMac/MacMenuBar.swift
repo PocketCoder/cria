@@ -166,6 +166,7 @@ private struct MacTodayList: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel("Complete \(task.title)")
             Text(task.title).font(.system(size: 13)).lineLimit(1)
             Spacer(minLength: 6)

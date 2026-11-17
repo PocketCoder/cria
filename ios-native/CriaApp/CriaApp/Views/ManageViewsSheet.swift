@@ -71,6 +71,7 @@ struct ManageViewsSheet: View {
                 Image(systemName: "slider.horizontal.3").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .macPointer()
             .accessibilityLabel("Edit \(ViewManagement.label(view.slot)) settings")
         }
         .accessibilityActions {

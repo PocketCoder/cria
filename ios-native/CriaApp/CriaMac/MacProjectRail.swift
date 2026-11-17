@@ -34,6 +34,7 @@ struct MacProjectRailHost: ViewModifier {
                     Button("Hide", systemImage: "sidebar.right") { showInfo = false }
                         .labelStyle(.titleAndIcon)
                         .buttonStyle(.borderless)
+                        .macPointer()
                         .font(.system(size: 12))
                         .foregroundStyle(MacTheme.label2)
                         .help("Hide project info (⌥⌘I)")
@@ -188,6 +189,7 @@ struct MacProjectRail: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .macPointer()
             }
         }
     }
@@ -220,6 +222,7 @@ struct MacProjectRail: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .macPointer()
                 .accessibilityAddTraits(active ? .isSelected : [])
             }
         }

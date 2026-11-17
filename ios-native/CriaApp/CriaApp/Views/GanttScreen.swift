@@ -167,6 +167,7 @@ struct GanttTray: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .draggable(KanbanPayload.make(node.taskLocalId))
         .contextMenu {
             Button("Schedule from today", systemImage: "calendar") { schedule(node) }
@@ -222,6 +223,7 @@ struct GanttBar: View {
         }
         .frame(width: place.width, height: height)
         .contentShape(Rectangle())
+        .macPointer()
         .onTapGesture {
             if let lastDragAt, Date().timeIntervalSince(lastDragAt) < Self.tapSuppression { return }
             onOpen()

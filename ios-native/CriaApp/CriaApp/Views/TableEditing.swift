@@ -108,6 +108,7 @@ struct TableEditCell: View {
         if let edit = TableEditing.edit(column, task: task.localId) {
             Button { onEdit(edit) } label: { content }
                 .buttonStyle(.plain)
+                .macPointer()
                 .accessibilityLabel("\(column.label): \(value ?? "none")")
                 .accessibilityHint("Edits this cell")
         }

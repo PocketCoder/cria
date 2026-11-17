@@ -34,6 +34,7 @@ struct KanbanSubtaskList: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel("\(doneCount) of \(subtasks.count) subtasks done")
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
             .accessibilityHint(isExpanded ? "Hides the subtasks" : "Shows the subtasks")
@@ -65,6 +66,7 @@ struct KanbanSubtaskList: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel(task.title)
             .accessibilityValue(task.done ? "Done" : "")
         }

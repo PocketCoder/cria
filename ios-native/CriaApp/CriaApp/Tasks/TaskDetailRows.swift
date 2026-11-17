@@ -66,6 +66,7 @@ struct DateFieldRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel("Remove \(title.lowercased()) date")
     }
 

@@ -293,6 +293,7 @@ private struct GanttTaskColumn: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .macPointer()
                 .overlay(alignment: .bottom) { Divider() }
                 // Dragging a row onto another moves it there among its siblings; a parent's subtasks ride along with it.
                 .draggable(KanbanPayload.make(node.taskLocalId))

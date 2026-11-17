@@ -175,6 +175,7 @@ struct ProjectEditorSheet: View {
                 .overlay { if hex == nil { Image(systemName: "slash.circle").font(Theme.caption) } }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(hex.flatMap { projectColours.firstIndex(of: $0) }.map { projectColourNames[$0] } ?? hex ?? "No colour")
         .accessibilityAddTraits(colour == hex ? .isSelected : [])
     }

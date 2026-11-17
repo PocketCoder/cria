@@ -24,6 +24,7 @@ struct MacAccountPane: View {
                              tint: totpOn == true ? Color(.meadow700) : MacTheme.label2)
                 }
                 .buttonStyle(.plain)
+                .macPointer()
             }
             MacSettingsSheetLink("Sessions") { SessionsView(services: services, onSignOut: onSignOut) }
             MacSettingsSheetLink("API and CalDAV tokens") { MacTokensView(services: services, username: model.username) }

@@ -34,6 +34,7 @@ struct KanbanCollapsedStrip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(count) \(count == 1 ? "task" : "tasks"), collapsed")
         .accessibilityHint("Opens the column")

@@ -118,6 +118,7 @@ struct TodayEmptyView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityHint("Adds it to today")
     }
 

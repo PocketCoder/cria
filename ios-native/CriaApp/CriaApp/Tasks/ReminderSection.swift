@@ -97,6 +97,7 @@ struct ReminderSection: View {
                     ExternalLink.openNotificationSettings()
                 }
                 .font(Theme.chip)
+                .macPointer()
             }
         }
         // Borderless, or a tap anywhere in the row would run the button.
@@ -148,7 +149,7 @@ struct ReminderSection: View {
             Label("Remind at", systemImage: "clock")
         }
         HStack {
-            Button("Cancel") { custom = nil }
+            Button("Cancel") { custom = nil }.macPointer()
             Spacer()
             if isPast {
                 Text("Pick a future time").font(Theme.caption).foregroundStyle(Color(.mutedForeground))
@@ -160,6 +161,7 @@ struct ReminderSection: View {
             }
             .fontWeight(.semibold)
             .disabled(isPast)
+            .macPointer()
         }
         // Borderless, or a tap anywhere in the row would run both buttons.
         .buttonStyle(.borderless)

@@ -59,6 +59,7 @@ struct MacAttachmentTiles: View {
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .help(attachment.fileName)
         .accessibilityHint(attachment.pending ? "" : "Opens a preview")
         .contextMenu {

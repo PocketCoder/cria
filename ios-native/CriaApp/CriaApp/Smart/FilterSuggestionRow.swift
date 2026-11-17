@@ -25,6 +25,7 @@ struct FilterSuggestionRow: View {
         ForEach(options, id: \.self) { option in
             Button { apply(option, context: context) } label: { CriaChip(text: option, tint: Color(.primary)) }
                 .buttonStyle(.plain)
+                .macPointer()
         }
     }
 

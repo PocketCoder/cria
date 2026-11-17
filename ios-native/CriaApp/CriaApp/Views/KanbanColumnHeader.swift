@@ -39,6 +39,7 @@ extension KanbanColumnView {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel("Collapse \(column.bucket.title)")
     }
 

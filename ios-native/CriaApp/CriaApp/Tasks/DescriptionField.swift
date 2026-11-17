@@ -119,6 +119,7 @@ struct DescriptionField: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .macPointer()
             .accessibilityLabel("Expand description")
         }
         #endif

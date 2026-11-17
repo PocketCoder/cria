@@ -50,6 +50,7 @@ struct ArchivedProjectsView: View {
         if let onOpen {
             Button { onOpen(project) } label: { label(project) }
                 .buttonStyle(.plain)
+                .macPointer()
         } else {
             NavigationLink(value: Route.project(project.localId)) { label(project) }
         }

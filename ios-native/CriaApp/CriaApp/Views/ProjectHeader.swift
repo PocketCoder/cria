@@ -113,6 +113,7 @@ struct ProjectHeader: View {
                 .modifier(PillStyle(selected: selected))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -122,6 +123,7 @@ struct ProjectHeader: View {
                 .modifier(PillStyle(selected: false))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel("Manage views")
     }
 
@@ -131,6 +133,7 @@ struct ProjectHeader: View {
                 .modifier(PillStyle(selected: false))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel("Project info")
     }
 

@@ -63,6 +63,7 @@ struct CriaCalendar: View {
             chevron("chevron.left", "Previous month") { shiftMonth(-1) }
             Button("Today") { pick(Date()) }
                 .buttonStyle(.plain)
+                .macPointer()
                 .font(Theme.caption.weight(.medium))
                 .foregroundStyle(Color(.primary))
                 .padding(.horizontal, 6)
@@ -79,6 +80,7 @@ struct CriaCalendar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .foregroundStyle(Color(.mutedForeground))
         .help(label)
         .accessibilityLabel(label)
@@ -100,6 +102,7 @@ struct CriaCalendar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

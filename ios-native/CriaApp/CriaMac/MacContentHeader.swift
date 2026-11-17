@@ -73,6 +73,7 @@ struct MacGroupHeader: View {
                 if let actionTitle, let action {
                     Button(actionTitle, action: action)
                         .buttonStyle(.plain)
+                        .macPointer()
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(.primary))
                 }
@@ -114,6 +115,7 @@ struct MacNewTaskRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .onHover { hovering = $0 }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 10, bottom: 1, trailing: 10))

@@ -71,6 +71,7 @@ struct TaskPanelHeader<Buttons: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .disabled(project == nil)
             .help("Show project")
             Spacer(minLength: 8)

@@ -203,6 +203,7 @@ private struct SearchExamples: View {
                     CriaChip(text: example, systemImage: "magnifyingglass", tint: Color(.primary))
                 }
                 .buttonStyle(.plain)
+                .macPointer()
                 .accessibilityLabel("Search for \(example)")
             }
         }

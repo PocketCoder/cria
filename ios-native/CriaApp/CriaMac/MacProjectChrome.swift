@@ -123,6 +123,7 @@ struct MacProjectHeader: View {
                     Image(systemName: "ellipsis")
                 }
                 .menuStyle(.borderlessButton)
+                .macPointer()
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .macHoverable()

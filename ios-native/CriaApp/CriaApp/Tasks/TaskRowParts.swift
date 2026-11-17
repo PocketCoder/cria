@@ -119,24 +119,28 @@ struct TaskRowProjectChoices: View {
 #endif
 
 #if os(macOS)
-/// The box behind a run of subtasks: a faint fill from just inside the parent's ring to the row's trailing edge, rounded
-/// at the run's first and last row so the run reads as one group.
+/// The card behind an expanded parent and its subtasks: a faint fill across the row, rounded on top at the parent
+/// and at the bottom under the last subtask, so the parent and its subtasks read as one group.
 struct MacSubtaskGroupBackground: View {
-    let tree: TaskRowTree
+    let role: TaskGroupRole
 
     var body: some View {
-        let top: CGFloat = tree.groupStart ? 10 : 0
-        let bottom: CGFloat = tree.groupEnd ? 10 : 0
+        let top: CGFloat = role == .head ? 10 : 0
+        let bottom: CGFloat = role == .end ? 10 : 0
         UnevenRoundedRectangle(
             topLeadingRadius: top, bottomLeadingRadius: bottom, bottomTrailingRadius: bottom, topTrailingRadius: top,
             style: .continuous
         )
         .fill(Color.primary.opacity(0.035))
-        // The row's 10pt list inset, plus most of one indent, so the box starts under the parent's ring.
-        .padding(.leading, 10 + TaskListNesting.indent - 8)
-        .padding(.trailing, 10)
-        .padding(.top, tree.groupStart ? 1 : 0)
-        .padding(.bottom, tree.groupEnd ? 1 : 0)
+        // The row's 10pt list insets; the card's own top and bottom gaps match the row insets.
+        .padding(.horizontal, 10)
+        .padding(.top, role == .head ? 1 : 0)
+        .padding(.bottom, role == .end ? TaskGroupRole.endGap : 0)
     }
+}
+
+extension TaskGroupRole {
+    /// The bottom inset under a card's last row: the usual 1pt plus room before the next task.
+    static let endGap: CGFloat = 5
 }
 #endif

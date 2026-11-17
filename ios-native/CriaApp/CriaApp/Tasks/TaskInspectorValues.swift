@@ -31,6 +31,7 @@ struct InspectorRemindersValue: View {
                     CriaChip(text: chipText(reminder), systemImage: "bell", tint: Color(.primary))
                 }
                 .menuStyle(.borderlessButton)
+                .macPointer()
                 .menuIndicator(.hidden)
                 .fixedSize()
             }
@@ -68,6 +69,7 @@ struct InspectorRemindersValue: View {
             Text("+\(reminders.count - 2)").font(.system(size: 12)).foregroundStyle(MacTheme.label2)
         }
         .menuStyle(.borderlessButton)
+        .macPointer()
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel("More reminders")
@@ -95,6 +97,7 @@ struct InspectorRemindersValue: View {
             Text("Add").font(.system(size: 13)).foregroundStyle(Color(.primary))
         }
         .menuStyle(.borderlessButton)
+        .macPointer()
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel("Add reminder")
@@ -128,6 +131,7 @@ struct InspectorRemindersValue: View {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color(.warning))
         }
         .buttonStyle(.plain)
+        .macPointer()
         .help(systemDenied
               ? "Notifications are off for Cria on this Mac, so reminders will not alert you."
               : "Notifications are switched off in Cria, so reminders will not alert you.")
@@ -185,6 +189,7 @@ struct InspectorLabelsValue: View {
                     .background(MacTheme.fill, in: RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
+            .macPointer()
             .accessibilityLabel("Add labels")
             .popover(isPresented: $showing, arrowEdge: .bottom) { popover }
         }

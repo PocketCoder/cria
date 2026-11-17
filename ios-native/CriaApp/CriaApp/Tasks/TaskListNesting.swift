@@ -30,29 +30,45 @@ struct TaskRowTree {
     var onToggleCollapsed: () -> Void = {}
     /// "Subtask of ‘Parent’" under the title, for lists that do not nest.
     var parentTitle: String?
-    /// The first and last row of a run of subtasks under one top-level task, where the Mac rounds the group's box.
-    var groupStart = false
-    var groupEnd = false
+    /// The row's place in the Mac's card around an expanded parent and its subtasks.
+    var groupRole = TaskGroupRole.none
+    /// The list has a parent somewhere, so every row keeps a gutter for the disclosure arrow and the rings line up.
+    var reservesDisclosure = false
 }
 
-/// Where each run of nested rows starts and ends, so the Mac can draw the run as one rounded group.
+/// A row's place in the card the Mac draws around an expanded parent and its subtasks.
+enum TaskGroupRole: Equatable {
+    case none, head, middle, end
+}
+
+/// Each row's place in a parent-and-subtasks card, worked out once per list.
 struct TaskGroupEdges: Equatable {
-    var starts: Set<String> = []
-    var ends: Set<String> = []
+    var roles: [String: TaskGroupRole] = [:]
+    /// Any row with children in the list, collapsed or not.
+    var hasParents = false
 
     init() {}
 
     init(_ rows: [NestedTaskItem]) {
-        for (index, row) in rows.enumerated() where row.depth > 0 {
-            if index == 0 || rows[index - 1].depth == 0 { starts.insert(row.id) }
-            if index == rows.count - 1 || rows[index + 1].depth == 0 { ends.insert(row.id) }
+        for (index, row) in rows.enumerated() {
+            if row.hasChildren { hasParents = true }
+            let nextDepth = index + 1 < rows.count ? rows[index + 1].depth : 0
+            if row.depth == 0 {
+                if nextDepth > 0 { roles[row.id] = .head }
+            } else {
+                roles[row.id] = nextDepth == 0 ? .end : .middle
+            }
         }
     }
+
+    func role(_ id: String) -> TaskGroupRole { roles[id] ?? .none }
 }
 
 enum TaskListNesting {
     /// Indent per level of nesting, in points.
     static let indent: CGFloat = 20
+    /// The Mac's indent: the ring's 24pt target and the 7pt gap, so a subtask's ring sits under its parent's title.
+    static let macIndent: CGFloat = 31
 
     /// Reads the subtask map and each parent's progress for a list's items. Done flags come from the items; subtasks
     /// outside the list (another project) are looked up in one read, so the count still covers them.
@@ -138,8 +154,8 @@ enum TaskListNesting {
             },
             // Under its parent the caption would repeat what the indent already says.
             parentTitle: row.depth == 0 ? parentTitles[id] : nil,
-            groupStart: edges.starts.contains(id),
-            groupEnd: edges.ends.contains(id)
+            groupRole: edges.role(id),
+            reservesDisclosure: edges.hasParents
         )
     }
 }

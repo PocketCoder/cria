@@ -25,5 +25,6 @@ extension TableGridView {
             }
         }
         .buttonStyle(.plain)
+        .macPointer()
     }
 }

@@ -51,6 +51,7 @@ struct TaskLabelsRows: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .macPointer()
                     .help("Add \(label.title)")
                     .accessibilityLabel("Add label \(label.title)")
                 }

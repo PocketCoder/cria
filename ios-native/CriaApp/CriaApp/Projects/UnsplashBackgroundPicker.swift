@@ -62,6 +62,7 @@ struct UnsplashBackgroundPicker: View {
         .padding(.vertical, 4)
         // Several buttons and links share one form row: without this a tap anywhere fires them all.
         .buttonStyle(.borderless)
+        .macPointer()
     }
 
     private func search(reset: Bool) async {

@@ -13,7 +13,21 @@ struct MacHoverable: ViewModifier {
             .brightness(hovering ? (colorScheme == .dark ? 0.08 : -0.05) : 0)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
             .onHover { hovering = $0 }
-            .pointerStyle(.link)
+            .modifier(MacPointer())
+        #else
+        content
+        #endif
+    }
+}
+
+/// The pointing-hand cursor over a clickable control on the Mac, and only while it is enabled. No tone change, so it
+/// suits large targets such as rows. A no-op on iOS.
+struct MacPointer: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content.pointerStyle(isEnabled ? .link : nil)
         #else
         content
         #endif
@@ -21,6 +35,11 @@ struct MacHoverable: ViewModifier {
 }
 
 extension View {
+    /// The pointing-hand cursor over a clickable control on the Mac; nothing on iOS.
+    func macPointer() -> some View {
+        modifier(MacPointer())
+    }
+
     /// The pointing-hand cursor and a hover tone on the Mac; nothing on iOS.
     func macHoverable() -> some View {
         modifier(MacHoverable())

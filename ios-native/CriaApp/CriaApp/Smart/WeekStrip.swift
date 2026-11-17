@@ -43,6 +43,7 @@ struct WeekStrip: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(expanded ? "Show week" : "Show month")
     }
 
@@ -78,6 +79,7 @@ struct WeekStrip: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(title)
         .accessibilityShowsLargeContentViewer { Label(title, systemImage: systemImage) }
     }
@@ -104,6 +106,7 @@ struct WeekStrip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
         .accessibilityValue([isToday ? "Today" : nil, busy ? "Has tasks" : nil].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -147,6 +150,7 @@ private struct MacWeekDay: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .onHover { hovering = $0 }
         .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
         .accessibilityValue([isToday ? "Today" : nil, busy ? "Has tasks" : nil].compactMap { $0 }.joined(separator: ", "))

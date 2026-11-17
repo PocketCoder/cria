@@ -16,8 +16,8 @@ extension SmartViewScreen {
             },
             // Under its parent the caption would repeat what the indent already says.
             parentTitle: row.depth == 0 ? live.value.parentTitles[id] : nil,
-            groupStart: edges.starts.contains(id),
-            groupEnd: edges.ends.contains(id)
+            groupRole: edges.role(id),
+            reservesDisclosure: edges.hasParents
         )
     }
 }

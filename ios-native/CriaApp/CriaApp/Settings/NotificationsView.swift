@@ -23,6 +23,7 @@ struct NotificationsView: View {
             ForEach(items) { item in
                 Button { Task { await open(item) } } label: { row(item) }
                     .buttonStyle(.plain)
+                    .macPointer()
             }
             if items.isEmpty && !loading && errorMessage == nil {
                 Text("No notifications").foregroundStyle(Color(.mutedForeground))

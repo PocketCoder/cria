@@ -63,6 +63,7 @@ struct InspectorPopUp<Content: View>: View {
             InspectorPopUpLabel(text: text, tint: tint)
         }
         .menuStyle(.borderlessButton)
+        .macPointer()
         .menuIndicator(.hidden)
         .fixedSize()
     }

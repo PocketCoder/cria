@@ -241,6 +241,7 @@ struct KanbanColumnView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .macPointer()
             .padding(.horizontal, 12)
         }
     }

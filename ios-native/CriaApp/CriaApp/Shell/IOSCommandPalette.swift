@@ -87,6 +87,7 @@ struct IOSCommandPalette: View {
             }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .listRowBackground(isChosen ? Color(.primary).opacity(0.12) : Color.clear)
     }
 

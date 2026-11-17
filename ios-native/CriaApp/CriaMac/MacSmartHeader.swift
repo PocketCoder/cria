@@ -88,6 +88,7 @@ struct MacGlassCapsuleButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(MacPressStyle())
+        .macPointer()
         .help(help)
         .accessibilityLabel(title ?? help)
     }

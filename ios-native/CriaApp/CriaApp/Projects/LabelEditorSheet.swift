@@ -105,6 +105,7 @@ struct LabelEditorSheet: View {
                 .overlay { if hex == nil { Image(systemName: "slash.circle").font(Theme.caption) } }
         }
         .buttonStyle(.plain)
+        .macPointer()
         .accessibilityLabel(swatchName(hex))
         .accessibilityAddTraits(colour == hex ? .isSelected : [])
     }

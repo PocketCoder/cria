@@ -29,6 +29,7 @@ struct MacMentionPopoverView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .macPointer()
             }
             .listStyle(.plain)
         }

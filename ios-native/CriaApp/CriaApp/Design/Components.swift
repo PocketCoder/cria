@@ -148,6 +148,7 @@ struct PriorityCheck: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .macPointer()
         .sensoryFeedback(.success, trigger: completions)
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.28), value: isDone)
         .accessibilityLabel(isDone ? "Mark not done" : "Complete")
@@ -225,6 +226,7 @@ struct CriaFab: View {
             if menuItems.isEmpty {
                 Button(action: action) { face }
                     .buttonStyle(.plain)
+                    .macPointer()
             } else {
                 Menu {
                     ForEach(menuItems.indices, id: \.self) { index in
@@ -238,7 +240,9 @@ struct CriaFab: View {
                     action()
                 }
                 .menuStyle(.button)
+                .macPointer()
                 .buttonStyle(.plain)
+                .macPointer()
                 .accessibilityHint("Touch and hold for more ways to add")
                 .accessibilityActions {
                     // The press-and-hold shortcuts, reachable from the VoiceOver actions rotor.

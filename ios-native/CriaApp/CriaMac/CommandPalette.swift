@@ -78,6 +78,7 @@ struct CommandPalette: View {
                                 self.row(row.item, selected: row.index == chosen)
                                     .id(row.item.id)
                                     .contentShape(Rectangle())
+                                    .macPointer()
                                     .onTapGesture { run(row.item) }
                             }
                         }
