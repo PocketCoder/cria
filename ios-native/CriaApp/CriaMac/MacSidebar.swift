@@ -245,11 +245,20 @@ struct MacProjectLabel: View {
         } isTargeted: { isTargeted = $0 }
     }
 
-    /// Moves each dropped task here, as the inspector's Move to project does. Tasks already here are left alone.
+    /// Moves each dropped task here, as the inspector's Move to project does. Tasks already here are left alone. The
+    /// writes run off the main thread, so a sync holding the database cannot stall the drop; Undo is offered after.
     private func moveTasks(_ ids: [String]) -> Bool {
-        let result = services.store.bulkMove(ids, toProject: project.localId)
-        undo.record(result.undo)
-        return result.changed > 0
+        let store = services.store
+        let target = project.localId
+        // A read never waits for a write: whether the drop moves anything.
+        let found = (try? store.tasks(localIds: ids)) ?? [:]
+        guard found.values.contains(where: { $0.projectLocalId != target }) else { return false }
+        let center = undo
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { store.bulkMove(ids, toProject: target) }.value
+            center.record(result.undo)
+        }
+        return true
     }
 }
 
