@@ -47,6 +47,19 @@ enum ProjectBackgroundLoader {
     /// Longest side of the decoded image, in pixels: enough for a full-width banner on any iPhone.
     nonisolated private static let maxPixels: CGFloat = 1600
 
+    /// Whether each project had an image when last shown, this launch, so its screen can reserve the banner's height
+    /// before the image decodes instead of pushing the content down when it arrives.
+    private static var known: [Int: Bool] = [:]
+
+    /// True when the project is expected to show a banner: remembered from this launch, else whether a copy is cached.
+    static func expectsImage(services: AppServices, serverId: Int?) -> Bool {
+        guard let serverId else { return false }
+        if let remembered = known[serverId] { return remembered }
+        let cached = services.backgrounds.cached(serverId: serverId) != nil
+        known[serverId] = cached
+        return cached
+    }
+
     /// Makes the next load ask the server, e.g. after the background changed.
     static func forget(_ serverId: Int) {
         checked[serverId] = nil
@@ -56,6 +69,7 @@ enum ProjectBackgroundLoader {
     static func load(services: AppServices, serverId: Int, show: (PlatformImage?) -> Void) async {
         let cache = services.backgrounds
         let cached = cache.cached(serverId: serverId)
+        known[serverId] = cached != nil
         if let cached {
             show(await decode(cached))
         } else {
@@ -67,6 +81,7 @@ enum ProjectBackgroundLoader {
             guard !Task.isCancelled else { return }
             checked[serverId] = Date()
             cache.replace(serverId: serverId, with: fresh)
+            known[serverId] = fresh != nil
             guard fresh != cached else { return }
             if let fresh {
                 show(await decode(fresh))

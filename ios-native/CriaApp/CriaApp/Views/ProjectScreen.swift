@@ -16,6 +16,8 @@ struct ProjectScreen: View {
     @State private var managing = false
     @State private var showingInfo = false
     @State private var background: PlatformImage?
+    /// The project showed a banner before (or has one cached): keep its height while the image decodes.
+    @State private var expectsBackground: Bool
     /// Bumped when the background changes elsewhere, to reload it.
     @State private var backgroundRevision = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -27,13 +29,16 @@ struct ProjectScreen: View {
         // Opens on the view last used in this project, as Vikunja-web does (kept on this device).
         _selectedId = State(initialValue: ProjectViewMemory.remembered(projectLocalId: projectLocalId))
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: ProjectScreenData()) {
+        // Read once here, synchronously (views, the project row and a COUNT: small), so the header, the view picker
+        // and the selected view are right on the first frame. Starting empty made them pop in a frame later, and
+        // switched the list from the no-views branch to the List view's, rebuilding it and restarting its read.
+        let seed = (try? ProjectScreenData.read(store, projectLocalId: projectLocalId)) ?? ProjectScreenData()
+        _expectsBackground = State(
+            initialValue: ProjectBackgroundLoader.expectsImage(services: services, serverId: seed.project?.serverId)
+        )
+        _live = State(initialValue: LiveValue(initial: seed) {
             observeStore(store, kinds: [.views, .projects, .tasks]) { reading in
-                try ProjectScreenData(
-                    views: reading.views(forProject: projectLocalId),
-                    project: reading.project(localId: projectLocalId),
-                    openCount: reading.tasks(matching: TaskQuery(projectLocalId: projectLocalId, includeDone: false)).count
-                )
+                try ProjectScreenData.read(reading, projectLocalId: projectLocalId)
             }
         })
     }
@@ -92,7 +97,8 @@ struct ProjectScreen: View {
             onSelect: { id in withAnimation(reduceMotion ? nil : .snappy) { select(id) } },
             onManage: { managing = true },
             onInfo: infoAction,
-            background: background
+            background: background,
+            reservesBanner: expectsBackground
         )
     }
 
@@ -148,7 +154,10 @@ struct ProjectScreen: View {
             return
         }
         await ProjectBackgroundLoader.load(services: services, serverId: serverId) { image in
-            withAnimation(.easeOut(duration: 0.25)) { background = image }
+            withAnimation(.easeOut(duration: 0.25)) {
+                background = image
+                expectsBackground = image != nil
+            }
         }
     }
 

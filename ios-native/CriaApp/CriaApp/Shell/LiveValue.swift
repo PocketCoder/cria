@@ -8,9 +8,15 @@ import SwiftUI
 final class LiveValue<Value: Sendable> {
     private(set) var value: Value
     @ObservationIgnored private let makeStream: @Sendable () -> AsyncStream<Value>
+    /// Told each new value, e.g. to keep a cache a later screen can start from.
+    @ObservationIgnored private let onValue: @MainActor (Value) -> Void
 
-    init(initial: Value, makeStream: @escaping @Sendable () -> AsyncStream<Value>) {
+    init(
+        initial: Value, onValue: @escaping @MainActor (Value) -> Void = { _ in },
+        makeStream: @escaping @Sendable () -> AsyncStream<Value>
+    ) {
         value = initial
+        self.onValue = onValue
         self.makeStream = makeStream
     }
 
@@ -19,6 +25,7 @@ final class LiveValue<Value: Sendable> {
             // A change notification that read the same data again must not re-render the screen.
             if Self.unchanged(value, next) { continue }
             value = next
+            onValue(next)
         }
     }
 

@@ -57,6 +57,7 @@ struct MacViewPicker: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .macHoverable()
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
@@ -107,6 +108,7 @@ struct MacProjectHeader: View {
                     Label("Share", systemImage: "person.badge.plus")
                 }
                 .buttonStyle(.bordered)
+                .macHoverable()
             }
             if showsInfoToggle {
                 MacProjectInfoToggle(projectLocalId: projectLocalId)
@@ -123,6 +125,7 @@ struct MacProjectHeader: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .macHoverable()
                 .accessibilityLabel("Project options")
             }
         }
@@ -197,6 +200,7 @@ private struct MacProjectInfoToggle: View {
                 .foregroundStyle(showInfo ? Color(.primary) : MacTheme.label2)
         }
         .buttonStyle(.borderless)
+        .macHoverable()
         .help(showInfo ? "Hide Project Info ⌥⌘I" : "Show Project Info ⌥⌘I")
         .accessibilityLabel(showInfo ? "Hide project info" : "Show project info")
     }

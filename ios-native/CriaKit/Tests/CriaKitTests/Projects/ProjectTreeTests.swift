@@ -114,6 +114,8 @@ final class ProjectStatsTests: XCTestCase {
         try store.deleteTask(localId: gone.localId)
 
         XCTAssertEqual(try store.openTaskCounts(), [project: 1])
+        XCTAssertEqual(try store.openTaskCount(projectLocalId: project), 1)
+        XCTAssertEqual(try store.openTaskCount(projectLocalId: "missing"), 0)
         XCTAssertEqual(try store.favouriteTaskCount(), 1)
         XCTAssertNotEqual(open.localId, done.localId)
     }

@@ -35,7 +35,15 @@ struct ProjectListView: View {
         self.header = header
         _display = State(initialValue: DisplayModel(key: .project(projectLocalId)))
         let store = services.store
-        _live = State(initialValue: LiveValue(initial: ProjectListData()) {
+        #if os(macOS)
+        // A project seen recently starts from its last read, so its tasks show on the first frame.
+        let initial = ProjectListCache.value(for: projectLocalId) ?? ProjectListData()
+        let remember: @MainActor (ProjectListData) -> Void = { ProjectListCache.store($0, for: projectLocalId) }
+        #else
+        let initial = ProjectListData()
+        let remember: @MainActor (ProjectListData) -> Void = { _ in }
+        #endif
+        _live = State(initialValue: LiveValue(initial: initial, onValue: remember) {
             // The Mac also reads the board's columns (views) and the rail's figures here, so the rail has no read.
             observeStore(store, kinds: [.tasks, .labels, .projects, .views]) { reading in
                 try ProjectListData.read(reading, projectLocalId: projectLocalId)

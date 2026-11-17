@@ -123,8 +123,17 @@ private struct MacContent: View {
     let services: AppServices
     let actions: MacActions
     let navigation: NavigationModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        // The screen is rebuilt per selection (the `id`) and fades in over 120ms rather than cutting. A fade-in only,
+        // not a crossfade: two screens at once would put two sets of toolbar items up for the length of the fade.
+        stack
+            .modifier(MacFadeIn(enabled: !reduceMotion))
+            .id(actions.selection)
+    }
+
+    private var stack: some View {
         NavigationStack(path: navigation.pathBinding(for: .browse)) {
             root
                 .criaCanvas()
@@ -134,7 +143,6 @@ private struct MacContent: View {
         .environment(\.openTaskState, actions.panel)
         .environment(\.macSidebarActions, actions.sidebar)
         .modifier(MacListColumn(isCapped: !isProject))
-        .id(actions.selection)
     }
 
     private var isProject: Bool {
@@ -145,6 +153,22 @@ private struct MacContent: View {
     /// Its own view, so only it reads the search text: a keystroke re-evaluates this switch, not the stack around it.
     private var root: some View {
         MacContentRoot(services: services, actions: actions)
+    }
+}
+
+/// Brings a view from half to full opacity when it first appears.
+private struct MacFadeIn: ViewModifier {
+    let enabled: Bool
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            // From half, not zero, so the seeded content is readable on the first frame.
+            .opacity(shown || !enabled ? 1 : 0.5)
+            .onAppear {
+                guard enabled else { return }
+                withAnimation(.easeOut(duration: 0.12)) { shown = true }
+            }
     }
 }
 

@@ -18,6 +18,17 @@ extension CriaStore {
         }
     }
 
+    /// One project's open (not done, not deleted) task count: a COUNT, cheap enough to read on the main thread
+    /// when a project screen opens.
+    public func openTaskCount(projectLocalId: String) throws -> Int {
+        try database.writer.read { connection in
+            try Int.fetchOne(
+                connection, sql: "SELECT COUNT(*) FROM tasks WHERE project_local_id = ? AND done = 0 AND deleted = 0",
+                arguments: [projectLocalId]
+            ) ?? 0
+        }
+    }
+
     public func favouriteTaskCount() throws -> Int {
         try database.writer.read { connection in
             try Int.fetchOne(

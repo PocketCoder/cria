@@ -212,6 +212,8 @@ struct MacProjectLabel: View {
     let services: AppServices
     let sheets: MacSidebarActions
     @State private var isTargeted = false
+    /// Reads the project's list while the pointer rests on the row, so the click finds it ready.
+    @State private var warming: Task<Void, Never>?
     @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
@@ -233,6 +235,16 @@ struct MacProjectLabel: View {
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color(.primary), lineWidth: 1.5))
                     .padding(.horizontal, -8)
                     .padding(.vertical, -4)
+            }
+        }
+        .onHover { inside in
+            warming?.cancel()
+            guard inside else { return }
+            let services = services, id = project.localId
+            warming = Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                await ProjectListCache.warm(services: services, projectLocalId: id)
             }
         }
         .dropDestination(for: String.self) { items, _ in

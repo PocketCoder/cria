@@ -9,6 +9,14 @@ struct ProjectScreenData: Equatable, Sendable {
     var views: [ViewRecord] = []
     var project: ProjectRecord?
     var openCount = 0
+
+    static func read(_ reading: CriaStore, projectLocalId: String) throws -> ProjectScreenData {
+        try ProjectScreenData(
+            views: reading.views(forProject: projectLocalId),
+            project: reading.project(localId: projectLocalId),
+            openCount: reading.openTaskCount(projectLocalId: projectLocalId)
+        )
+    }
 }
 
 /// The line under a project's large title (colour dot and open count, like Today's date line) and a scrolling row
@@ -25,6 +33,8 @@ struct ProjectHeader: View {
     var onInfo: (() -> Void)?
     /// The project's background, once loaded. Nil (no background, or not loaded yet) shows no banner.
     var background: PlatformImage?
+    /// Holds the banner's height with a blank while an expected image decodes, so the content does not jump.
+    var reservesBanner = false
     /// Shorter when pinned above a board or timeline, which need the height.
     var bannerHeight: CGFloat = 120
     #if os(macOS)
@@ -46,6 +56,12 @@ struct ProjectHeader: View {
             if let background {
                 ProjectBackgroundBanner(image: background, height: bannerHeight)
                     .transition(.opacity)
+            } else if reservesBanner {
+                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                    .fill(Color.primary.opacity(0.04))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: bannerHeight)
+                    .accessibilityHidden(true)
             }
             #if os(macOS)
             MacProjectHeader(
