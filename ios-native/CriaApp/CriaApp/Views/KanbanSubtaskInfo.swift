@@ -10,28 +10,30 @@ struct KanbanSubtaskInfo: Equatable, Sendable {
     static func read(_ reading: CriaStore, tasks: [TaskRecord]) throws -> KanbanSubtaskInfo {
         let byId = Dictionary(tasks.map { ($0.localId, $0) }, uniquingKeysWith: { first, _ in first })
         var info = KanbanSubtaskInfo()
-        var looked: [String: TaskRecord?] = [:]
-        func record(_ id: String) throws -> TaskRecord? {
-            if let known = byId[id] { return known }
-            if let cached = looked[id] { return cached }
-            let found = try reading.task(localId: id)
-            looked.updateValue(found, forKey: id)
-            return found
+        let children = try reading.subtaskMap()
+        // Parents and subtasks that are not on the board, read in one go.
+        var outsideIds = Set<String>()
+        for (parent, kids) in children {
+            let kids = Set(kids).subtracting([parent])
+            if byId[parent] != nil { outsideIds.formUnion(kids.filter { byId[$0] == nil }) }
+            if byId[parent] == nil, kids.contains(where: { byId[$0] != nil }) { outsideIds.insert(parent) }
         }
-        for (parent, kids) in try reading.subtaskMap().sorted(by: { $0.key < $1.key }) {
+        let outside = try reading.tasks(localIds: outsideIds)
+        func record(_ id: String) -> TaskRecord? { byId[id] ?? outside[id] }
+        for (parent, kids) in children.sorted(by: { $0.key < $1.key }) {
             let kids = Set(kids).subtracting([parent])
             if byId[parent] != nil {
                 var done = 0
                 var total = 0
                 for kid in kids {
-                    guard let task = try record(kid) else { continue }
+                    guard let task = record(kid) else { continue }
                     total += 1
                     if task.done { done += 1 }
                 }
                 if total > 0 { info.progress[parent] = SubtaskProgress(done: done, total: total) }
             }
             for kid in kids where byId[kid] != nil && info.parentTitles[kid] == nil {
-                if let title = try record(parent)?.title { info.parentTitles[kid] = title }
+                if let title = record(parent)?.title { info.parentTitles[kid] = title }
             }
         }
         return info

@@ -29,7 +29,9 @@ final class ConflictPrompt {
         let stream = observeStore(store, kinds: [.conflicts, .tasks, .projects, .labels, .outbox]) { try $0.unresolvedConflicts() }
         var known: Set<Int>?
         for await list in stream {
-            conflicts = list
+            // Set only on a real change: every task, project and label notice re-reads, and an @Observable set
+            // redraws the banner and the sheet even when the list is the same.
+            if list != conflicts { conflicts = list }
             if !list.isEmpty, !dismissedThisSession, !isPresented { isPresented = true }
             // The first read is what was already there; only conflicts that arrive after it are news.
             let ids = Set(list.map(\.id))

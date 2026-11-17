@@ -47,9 +47,11 @@ struct SmartViewScreen: View {
                 }
                 #endif
                 let items = groups.flatMap(\.items)
-                let parents = try TaskListNesting.parentTitles(reading, for: items)
+                let children = try reading.subtaskMap()
+                let parents = try TaskListNesting.parentTitles(reading, for: items, children: children)
                 var data = SmartViewData(
-                    groups: groups, parentTitles: parents, nesting: try SmartNestingData.read(reading, items: items),
+                    groups: groups, parentTitles: parents,
+                    nesting: try SmartNestingData.read(reading, items: items, children: children),
                     assignees: try reading.assigneeMap(), loaded: true
                 )
                 #if os(macOS)

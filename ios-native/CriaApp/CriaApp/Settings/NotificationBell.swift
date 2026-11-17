@@ -10,7 +10,9 @@ final class NotificationInbox {
 
     /// Takes the count from a list the inbox screen has just read or changed.
     func apply(_ items: [AppNotification]) {
-        unread = items.unreadCount
+        // The poll runs every interval; an unchanged count must not redraw the toolbar that holds the bell.
+        let count = items.unreadCount
+        if count != unread { unread = count }
     }
 
     /// A failed read (offline, signed out) keeps the last count.

@@ -63,4 +63,29 @@ extension CriaStore {
             return map
         }
     }
+
+    /// The live tasks among `localIds`, by local id, in one read (chunked under SQLite's variable limit). Lists use it
+    /// for subtasks and parents outside the list instead of one `task(localId:)` read each. Deleted or unknown ids are
+    /// left out.
+    public func tasks(localIds: some Sequence<String>) throws -> [String: TaskRecord] {
+        let ids = Array(Set(localIds))
+        guard !ids.isEmpty else { return [:] }
+        return try database.writer.read { connection in
+            var found: [String: TaskRecord] = [:]
+            for start in stride(from: 0, to: ids.count, by: 500) {
+                let chunk = Array(ids[start..<min(start + 500, ids.count)])
+                let marks = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+                let rows = try Row.fetchAll(
+                    connection,
+                    sql: "SELECT \(CriaStore.taskColumns) FROM tasks WHERE local_id IN (\(marks)) AND deleted = 0",
+                    arguments: StatementArguments(chunk)
+                )
+                for row in rows {
+                    let record = TaskRecord(row: row)
+                    found[record.localId] = record
+                }
+            }
+            return found
+        }
+    }
 }

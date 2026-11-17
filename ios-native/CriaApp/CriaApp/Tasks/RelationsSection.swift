@@ -265,8 +265,15 @@ struct RelationPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .task {
-                title = (try? services.store.task(localId: taskLocalId))?.title ?? ""
-                candidates = (try? services.store.tasks(matching: TaskQuery(includeDone: false))) ?? []
+                // Every open task: read off the main thread, as a large account makes this a big read.
+                let store = services.store
+                let localId = taskLocalId
+                let read = await Task.detached(priority: .userInitiated) { () -> (String, [TaskRecord]) in
+                    let open = (try? store.tasks(matching: TaskQuery(includeDone: false))) ?? []
+                    return ((try? store.task(localId: localId))?.title ?? "", open)
+                }.value
+                title = read.0
+                candidates = read.1
             }
             .alert("Could not add relation", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                 Button("OK", role: .cancel) {}
