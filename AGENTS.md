@@ -592,6 +592,12 @@ repo's history: CI (the `mac`, `ios` and `kit` jobs in `ci.yml`) is the only com
 - **Editor:** `EditorController`, `EditorStyling` and the paragraph rules are shared; they talk to the text view through
   `EditorSurface`. `Editor/EditorTextView.swift` is the UIKit host, `CriaMac/Editor/MacEditorTextView.swift` the AppKit
   one. Never rename `EditorStyling.typingAttributes` when renaming the surface's `typing` property.
+- **Widgets:** `CriaWidgets/` builds twice, as the iOS extension and as `CriaWidgetsMac` (embedded in the Mac app). The
+  Mac one is sandboxed (WidgetKit requires it) with no app group, so `CriaWidgetsMac.entitlements` grants
+  temporary-exception access to `Application Support/<bundle id>/Native/` for each flavour and to the
+  `group.io.cria.app` preferences domain, and `CriaPaths` resolves the host app's folder from inside the extension. A
+  new flavour (bundle id) needs its path added there. The app and its extension share `CRIA_BUNDLE_ID` (CI sets it for
+  the nightly); never override `PRODUCT_BUNDLE_IDENTIFIER` on the command line, it would reach the extension too.
 - **Updates and quick add:** Sparkle is wired with the EdDSA public key set in `project.yml`
   (`CRIA_SPARKLE_PUBLIC_KEY`; the private half is the `SPARKLE_PRIVATE_KEY` Actions secret); `MacUpdater` only starts
   with a key. The global hotkey opens a floating quick-add panel (`QuickAddPanel.swift`), not the main window.

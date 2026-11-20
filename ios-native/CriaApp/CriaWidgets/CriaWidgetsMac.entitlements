@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- WidgetKit only loads sandboxed extensions. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!-- The Mac app is self-signed, so it has no app group: its database stays in Application Support/<bundle id>/Native/
+         (CriaPaths). The widget reads it there, and writes when a task is ticked (SQLite also needs its -wal and -shm
+         files). One path per flavour: stable, nightly and local Debug builds. -->
+    <key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+    <array>
+        <string>/Library/Application Support/io.cria.app/Native/</string>
+        <string>/Library/Application Support/io.cria.app.nightly/Native/</string>
+        <string>/Library/Application Support/io.cria.app.dev/Native/</string>
+    </array>
+    <!-- CriaPaths.sharedDefaults(): the signed-in flag and the inbox project. -->
+    <key>com.apple.security.temporary-exception.shared-preference.read-write</key>
+    <array>
+        <string>group.io.cria.app</string>
+    </array>
+</dict>
+</plist>

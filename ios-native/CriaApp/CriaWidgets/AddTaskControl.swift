@@ -4,7 +4,7 @@ import SwiftUI
 import WidgetKit
 
 /// Opens the app's quick add (`cria://add`), which reaches `onOpenURL` like a widget link.
-@available(iOS 18.0, *)
+@available(iOS 18.0, macOS 26.0, *)
 struct OpenQuickAddIntent: AppIntent {
     static let title: LocalizedStringResource = "Add task"
     static let description = IntentDescription("Opens quick add in Cria.")
@@ -22,7 +22,7 @@ private enum OpenQuickAddError: Error {
 }
 
 /// Control Centre and Lock Screen button for quick add (iOS 18 and later; the app's minimum is 17).
-@available(iOS 18.0, *)
+@available(iOS 18.0, macOS 26.0, *)
 struct AddTaskControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "io.cria.control.add") {

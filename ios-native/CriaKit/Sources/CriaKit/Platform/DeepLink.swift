@@ -4,6 +4,7 @@ import Foundation
 /// every device); anything else is a local id, valid on this device only.
 ///
 /// - `cria://task/{id}`, `cria://project/{id}`
+/// - `cria://label/{local id}`, `cria://filter/{server id}` (a saved filter)
 /// - `cria://today`, `cria://upcoming`, `cria://inbox`, `cria://search`
 /// - `cria://add?title=Buy%20milk` opens quick add with the title filled in
 public enum DeepLink: Equatable, Sendable {
@@ -11,6 +12,8 @@ public enum DeepLink: Equatable, Sendable {
 
     case task(String)
     case project(String)
+    case label(String)
+    case savedFilter(Int)
     case today
     case upcoming
     case inbox
@@ -23,6 +26,8 @@ public enum DeepLink: Equatable, Sendable {
         switch host {
         case "task": self = identifier.map(DeepLink.task) ?? .today
         case "project": self = identifier.map(DeepLink.project) ?? .inbox
+        case "label": self = identifier.map(DeepLink.label) ?? .inbox
+        case "filter": self = identifier.flatMap(Int.init).map(DeepLink.savedFilter) ?? .inbox
         case "today": self = .today
         case "upcoming": self = .upcoming
         case "inbox": self = .inbox
@@ -60,6 +65,12 @@ public enum DeepLink: Equatable, Sendable {
         case .project(let identifier):
             guard let localId = try store.resolveProjectId(identifier) else { return .open(tab: .browse, route: nil) }
             return .open(tab: .browse, route: .project(localId))
+        case .label(let localId):
+            guard try store.labels().contains(where: { $0.localId == localId }) else { return .open(tab: .browse, route: nil) }
+            return .open(tab: .browse, route: .label(localId))
+        case .savedFilter(let serverId):
+            guard try store.savedFilter(serverId: serverId) != nil else { return .open(tab: .browse, route: nil) }
+            return .open(tab: .browse, route: .savedFilter(serverId))
         }
     }
 }

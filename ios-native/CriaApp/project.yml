@@ -110,6 +110,7 @@ targets:
       - package: CriaKit
       - package: KeyboardShortcuts
       - package: Sparkle
+      - target: CriaWidgetsMac
     info:
       path: Config/CriaMac-Info.plist
       properties:
@@ -138,8 +139,38 @@ targets:
         CRIA_FEED_URL: https://pocketcoder.github.io/cria/appcast.xml
         # The EdDSA public key of the update signing pair; the private half is the SPARKLE_PRIVATE_KEY Actions secret.
         CRIA_SPARKLE_PUBLIC_KEY: "W8oC2QATE2W96VY+cvU7g/v+Oftz/iayzhRSmop7V1o="
+        # One setting for the app and its widget extension, whose id must start with the app's. CI sets it for the
+        # nightly (CRIA_BUNDLE_ID=io.cria.app.nightly); overriding PRODUCT_BUNDLE_IDENTIFIER would reach both targets.
+        PRODUCT_BUNDLE_IDENTIFIER: $(CRIA_BUNDLE_ID)
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: io.cria.app.dev
+          CRIA_BUNDLE_ID: io.cria.app.dev
         Release:
-          PRODUCT_BUNDLE_IDENTIFIER: io.cria.app
+          CRIA_BUNDLE_ID: io.cria.app
+  # The same widgets as iOS, on the Mac desktop and in Notification Centre. Sandboxed, as WidgetKit requires; with no
+  # app group it reaches the app's database and shared defaults through the exceptions in CriaWidgetsMac.entitlements.
+  CriaWidgetsMac:
+    type: app-extension
+    platform: macOS
+    sources: [CriaWidgets]
+    dependencies:
+      - package: CriaKit
+    info:
+      path: Config/CriaWidgetsMac-Info.plist
+      properties:
+        CFBundleDisplayName: Cria
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(CRIA_BUNDLE_ID).widgets
+        PRODUCT_NAME: CriaWidgetsMac
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: CriaWidgets/CriaWidgetsMac.entitlements
+      configs:
+        Debug:
+          CRIA_BUNDLE_ID: io.cria.app.dev
+        Release:
+          CRIA_BUNDLE_ID: io.cria.app

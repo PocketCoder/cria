@@ -10,7 +10,7 @@ public enum CriaPaths {
     public static func dataDirectory(fileManager: FileManager = .default) -> URL {
         #if os(macOS)
         // No app group on macOS (self-signed builds cannot get one). The Tauri app's files sit in the parent folder,
-        // so `Native` keeps clear of them.
+        // so `Native` keeps clear of them. The widget extension finds the same folder (`macDataDirectory`).
         if let url = macDataDirectory(fileManager: fileManager) { return url }
         #endif
         if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
@@ -22,12 +22,37 @@ public enum CriaPaths {
 
     #if os(macOS)
     private static func macDataDirectory(fileManager: FileManager) -> URL? {
-        guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let support: URL
+        if isAppExtension {
+            // The widget extension is sandboxed: its Application Support is inside its own container. It reads the
+            // app's folder through a temporary-exception entitlement (CriaWidgetsMac.entitlements), at the real path.
+            guard let home = realHomeDirectory() else { return nil }
+            support = home.appendingPathComponent("Library/Application Support", isDirectory: true)
+        } else {
+            guard let url = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+            support = url
+        }
         let url = support
-            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "io.cria.app.dev", isDirectory: true)
+            .appendingPathComponent(hostBundleIdentifier, isDirectory: true)
             .appendingPathComponent("Native", isDirectory: true)
         try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private static var isAppExtension: Bool { Bundle.main.bundleURL.pathExtension == "appex" }
+
+    /// The app's bundle id, also from inside its extension ("io.cria.app.nightly.widgets" -> "io.cria.app.nightly"),
+    /// so the widget finds the database of the app flavour it shipped in.
+    static var hostBundleIdentifier: String {
+        let identifier = Bundle.main.bundleIdentifier ?? "io.cria.app.dev"
+        guard isAppExtension, let dot = identifier.lastIndex(of: ".") else { return identifier }
+        return String(identifier[..<dot])
+    }
+
+    /// The user's home folder, not the sandbox container `NSHomeDirectory()` gives a sandboxed process.
+    private static func realHomeDirectory() -> URL? {
+        guard let entry = getpwuid(getuid()), let directory = entry.pointee.pw_dir else { return nil }
+        return URL(fileURLWithPath: String(cString: directory), isDirectory: true)
     }
     #endif
 
@@ -39,7 +64,8 @@ public enum CriaPaths {
         root.appendingPathComponent("blobs", isDirectory: true)
     }
 
-    /// Defaults shared between the app and its extensions.
+    /// Defaults shared between the app and its extensions. On macOS there is no group, so this is a plain preferences
+    /// domain, which the sandboxed widget reads through a shared-preference exception.
     public static func sharedDefaults() -> UserDefaults {
         UserDefaults(suiteName: appGroup) ?? .standard
     }

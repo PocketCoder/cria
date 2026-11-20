@@ -25,7 +25,8 @@ The native iOS and Mac apps are at parity with the Tauri app except for what is 
 
 - Calendar layout / time blocking, with device calendar events (EventKit).
 - Completed-tasks history (logbook) and productivity stats/streaks.
-- Configurable project/filter widgets; widgets and share extension on the Mac (no App Group there).
+- Share extension on the Mac (no App Group there). Mac widgets (Today and the configurable List widget) are built but
+  unverified on a real Mac: they reach the database through sandbox exceptions, not an app group.
 - Mac Services menu ("Add to Cria"), Focus filters, Apple Watch app, task templates, tasks from PDFs or pasted text.
 - Live Activities (only the system one for AI background runs exists).
 - Siri acting on on-screen items.

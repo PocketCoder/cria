@@ -25,7 +25,8 @@ struct CompleteTaskIntent: AppIntent {
         if try store.completeTaskFromWidget(localId: taskLocalId) {
             CrossProcessSignal.post()
         }
-        WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetKind.id)
+        // Every widget: the task may be in several lists at once.
+        WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
 }
