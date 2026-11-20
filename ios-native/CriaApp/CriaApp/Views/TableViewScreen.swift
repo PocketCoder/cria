@@ -85,15 +85,6 @@ struct TableViewScreen: View {
         #endif
     }
 
-    /// Each row's indent under its parent: the Mac's manual order only, so iOS keeps its "Subtask of" captions.
-    private var rowDepths: [String: Int] {
-        #if os(macOS)
-        return sortKeys.isEmpty ? TableNesting.depths(rows, children: nesting.value.children) : [:]
-        #else
-        return [:]
-        #endif
-    }
-
     /// Sorting uses every sortable column, shown or not, so the Sort menu always does something. Kept in state and
     /// redone only when its inputs change, not on every render.
     @State var rows: [TaskListItem] = []
@@ -113,23 +104,6 @@ struct TableViewScreen: View {
             items: live.value, sortText: sortText, showDone: showDone, currentUserId: currentUserId,
             commentCounts: commentCounts, optimistic: optimistic, children: nesting.value.children
         )
-    }
-
-    private func sortedRows() -> [TaskListItem] {
-        let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
-        let titles = Dictionary(live.value.map { ($0.task.projectLocalId, $0.projectTitle ?? "") }, uniquingKeysWith: { first, _ in first })
-        let sorted = TableSort.sorted(
-            live.value.map(\.task).filter { showDone || !$0.done }, keys: sortKeys, visible: Set(TableViewColumn.allCases),
-            projectTitle: { titles[$0] ?? "" }, extras: extras
-        )
-        // With no sort the rows are in manual order, which a drop has just changed.
-        let ids = sortKeys.isEmpty ? optimistic.resolve(sorted.map(\.localId)) : sorted.map(\.localId)
-        let ordered = ids.compactMap { byId[$0] }
-        #if os(macOS)
-        // In manual order each subtask sits indented under its parent, rather than apart with "Subtask of".
-        if sortKeys.isEmpty { return TableNesting.nested(ordered, children: nesting.value.children) }
-        #endif
-        return ordered
     }
 
     /// The rows' stored manual (position) order, which `optimistic` is recorded against.
@@ -309,5 +283,34 @@ struct TableViewScreen: View {
         // An empty set would decode back to the defaults, so keep the title at least.
         if next.isEmpty { next.insert(.title) }
         columnsText = TableConfigCodec.encodeColumns(next)
+    }
+}
+
+/// Row order and nesting, outside the struct body to keep it within the lint limit.
+extension TableViewScreen {
+    /// Each row's indent under its parent: the Mac's manual order only, so iOS keeps its "Subtask of" captions.
+    private var rowDepths: [String: Int] {
+        #if os(macOS)
+        return sortKeys.isEmpty ? TableNesting.depths(rows, children: nesting.value.children) : [:]
+        #else
+        return [:]
+        #endif
+    }
+
+    private func sortedRows() -> [TaskListItem] {
+        let byId = Dictionary(live.value.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
+        let titles = Dictionary(live.value.map { ($0.task.projectLocalId, $0.projectTitle ?? "") }, uniquingKeysWith: { first, _ in first })
+        let sorted = TableSort.sorted(
+            live.value.map(\.task).filter { showDone || !$0.done }, keys: sortKeys, visible: Set(TableViewColumn.allCases),
+            projectTitle: { titles[$0] ?? "" }, extras: extras
+        )
+        // With no sort the rows are in manual order, which a drop has just changed.
+        let ids = sortKeys.isEmpty ? optimistic.resolve(sorted.map(\.localId)) : sorted.map(\.localId)
+        let ordered = ids.compactMap { byId[$0] }
+        #if os(macOS)
+        // In manual order each subtask sits indented under its parent, rather than apart with "Subtask of".
+        if sortKeys.isEmpty { return TableNesting.nested(ordered, children: nesting.value.children) }
+        #endif
+        return ordered
     }
 }
