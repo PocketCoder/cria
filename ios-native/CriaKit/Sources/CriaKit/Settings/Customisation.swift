@@ -77,6 +77,10 @@ public struct Customisation: Equatable, Sendable {
     /// Custom project icons: an SF Symbol name per project, keyed by its server id (or `local:<local id>` before its
     /// first sync). A project with no entry shows its ring. Follows the account, so every Cria install shows the same.
     public var projectIcons: [String: String] = [:]
+    /// List sections: the projects whose List view is grouped by a board's columns, Todoist-style. Keyed like
+    /// `projectIcons`; the value is the board view's server id (or `local:<local id>`). Off for a project with no entry,
+    /// as Vikunja's own List view has no sections. Follows the account.
+    public var listSections: [String: String] = [:]
 
     public static let `default` = Customisation()
 
@@ -101,7 +105,7 @@ public struct Customisation: Equatable, Sendable {
     static let syncedKeys = [
         "tabs", "showTaskCount", "swipeRight", "swipeLeft", "quickAddShowsLabels", "quickAddActions", "detectDates",
         "expandedQuickAdd", "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue",
-        "dayReminderMinute", "projectIcons"
+        "dayReminderMinute", "projectIcons", "listSections"
     ]
     static let homeViewKey = "homeView"
 
@@ -138,6 +142,7 @@ public struct Customisation: Equatable, Sendable {
         dayReminderMinute = number("dayReminderMinute", base.dayReminderMinute, in: 0...1439)
         syncProjectViews = flag("syncProjectViews", base.syncProjectViews)
         if let raw = text("projectIcons") { projectIcons = Self.iconMap(raw) }
+        if let raw = text("listSections") { listSections = Self.iconMap(raw) }
     }
 
     /// The key a project's icon is kept under: its server id once synced, so other devices find it.
@@ -149,6 +154,12 @@ public struct Customisation: Equatable, Sendable {
     public func projectIcon(serverId: Int?, localId: String) -> String? {
         if let serverId, let symbol = projectIcons[String(serverId)] { return symbol }
         return projectIcons["local:" + localId]
+    }
+
+    /// The board a project's List view takes its sections from (a view key: `iconKey` of the view), nil for none.
+    public func listSectionsBoard(serverId: Int?, localId: String) -> String? {
+        if let serverId, let board = listSections[String(serverId)] { return board }
+        return listSections["local:" + localId]
     }
 
     /// "12=house,15=heart": entries with an empty key or symbol are dropped. Symbol names have no `,` or `=`.
@@ -186,7 +197,8 @@ public struct Customisation: Equatable, Sendable {
             "kanbanSortByDue": .bool(kanbanSortByDue),
             "dayReminderMinute": .number(Double(dayReminderMinute)),
             "syncProjectViews": .bool(syncProjectViews),
-            "projectIcons": .string(Self.iconText(projectIcons))
+            "projectIcons": .string(Self.iconText(projectIcons)),
+            "listSections": .string(Self.iconText(listSections))
         ]
     }
 

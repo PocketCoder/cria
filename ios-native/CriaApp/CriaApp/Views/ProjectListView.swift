@@ -17,6 +17,7 @@ struct ProjectListView: View {
     @State private var optimistic = OptimisticOrder()
     @State private var editMode: EditMode = .inactive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.preferences) private var preferences
     @State private var failure: String?
     /// Counts finished drags, for the drop haptic.
     @State private var reorders = 0
@@ -27,6 +28,8 @@ struct ProjectListView: View {
     @State private var railLabel: String?
     /// The Completed group starts collapsed at the bottom on the Mac.
     @State private var completedOpen = false
+    /// Board-column sections folded away, by section key, for this screen only.
+    @State private var foldedSections: Set<String> = []
     #endif
 
     init(services: AppServices, projectLocalId: String, header: ProjectHeader) {
@@ -65,13 +68,25 @@ struct ProjectListView: View {
         #endif
     }
 
-    /// Manual order: rows can be dragged, and the stored order is the display order.
+    /// The board whose columns section this list, when the user turned sections on for the project (Mac only).
+    private var sectionsBoard: ProjectListBoard? {
+        #if os(macOS)
+        guard let project = live.value.rail.project else { return nil }
+        return live.value.sectionsBoard(preferences.custom.listSectionsBoard(serverId: project.serverId, localId: project.localId))
+        #else
+        return nil
+        #endif
+    }
+
+    /// Manual order: rows can be dragged, and the stored order is the display order. Board sections keep it: a drag
+    /// reorders within its section.
     private var isManual: Bool {
         #if os(macOS)
         // A rail label filter hides rows, as the Display filters do.
         if railLabel != nil { return false }
         #endif
-        return display.config.sort.isManual && display.config.groupBy == .none && !display.hasFilters
+        let ungrouped = sectionsBoard != nil || display.config.groupBy == .none
+        return display.config.sort.isManual && ungrouped && !display.hasFilters
     }
 
     private var openItems: [TaskListItem] {
@@ -86,8 +101,10 @@ struct ProjectListView: View {
         return DisplayEngine.sorted(filtered.filter(\.task.done), by: display.config.sort)
     }
 
-    /// The open tasks, one section each when grouped (a label's tasks may appear under several).
+    /// The open tasks: one section per board column when sections are on, else one per group when the Display sheet
+    /// groups them (a label's tasks may appear under several).
     private var openSections: [DisplaySection] {
+        if let board = sectionsBoard { return ProjectListGrouping.byColumn(openItems, board: board) }
         return DisplayEngine.grouped(
             openItems, by: display.config.groupBy, context: display.context(assignees: live.value.snapshot.assignees)
         )
@@ -102,19 +119,21 @@ struct ProjectListView: View {
             Section {} header: { header }
             ForEach(openSections) { section in
                 Section {
-                    let sectionRows = rows(section.items)
-                    let edges = TaskGroupEdges(sectionRows)
-                    ForEach(sectionRows) { row in
-                        taskRow(row, edges: edges).moveDisabled(row.depth > 0)
+                    if !isFolded(section) {
+                        let sectionRows = rows(section.items)
+                        let edges = TaskGroupEdges(sectionRows)
+                        ForEach(sectionRows) { row in
+                            taskRow(row, edges: edges).moveDisabled(row.depth > 0)
+                        }
+                        .onMove(perform: isManual ? { move($0, $1, in: section.items) } : nil)
+                        #if os(macOS)
+                        if let column = ProjectListGrouping.column(of: section, in: sectionsBoard), column.acceptsTasks {
+                            ProjectListAddRow(services: services, projectLocalId: projectLocalId, column: column)
+                        }
+                        #endif
                     }
-                    .onMove(perform: isManual ? { move($0, $1, in: section.items) } : nil)
-                    #if os(macOS)
-                    if let column = ProjectListGrouping.column(of: section, in: live.value.columns), column.acceptsTasks {
-                        ProjectListAddRow(services: services, projectLocalId: projectLocalId, column: column)
-                    }
-                    #endif
                 } header: {
-                    groupHeader(section.label)
+                    sectionHeader(section)
                 }
             }
             if !doneItems.isEmpty {
@@ -226,9 +245,38 @@ struct ProjectListView: View {
     }
 }
 
-// MARK: Completed group and reordering
+// MARK: Sections, completed group and reordering
 
 extension ProjectListView {
+    private func isFolded(_ section: DisplaySection) -> Bool {
+        #if os(macOS)
+        return sectionsBoard != nil && foldedSections.contains(section.key)
+        #else
+        return false
+        #endif
+    }
+
+    /// A board column's header folds its section away; a Display group's is plain text.
+    @ViewBuilder private func sectionHeader(_ section: DisplaySection) -> some View {
+        #if os(macOS)
+        if sectionsBoard != nil, !section.label.isEmpty {
+            MacListSectionHeader(
+                title: section.label, count: section.items.count,
+                folded: Binding(
+                    get: { foldedSections.contains(section.key) },
+                    set: { fold in
+                        if fold { foldedSections.insert(section.key) } else { foldedSections.remove(section.key) }
+                    }
+                )
+            )
+        } else {
+            groupHeader(section.label)
+        }
+        #else
+        groupHeader(section.label)
+        #endif
+    }
+
     #if os(macOS)
     private var completedShown: Bool { completedOpen }
 

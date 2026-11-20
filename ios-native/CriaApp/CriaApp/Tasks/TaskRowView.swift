@@ -244,12 +244,6 @@ extension TaskRowView {
                     if task.isFavorite {
                         Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(MacTheme.marigold)
                     }
-                    // Subtask progress on the title line, not a meta line of its own.
-                    if let progress = tree.progress {
-                        SubtaskRing(progress: progress)
-                            .font(.system(size: 11))
-                            .foregroundStyle(MacTheme.label2)
-                    }
                 }
                 .frame(minHeight: 18)
                 .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
@@ -278,7 +272,7 @@ extension TaskRowView {
     }
 
     private var macHasMeta: Bool {
-        task.dueDate != nil || TaskRowSignals.percent(task) != nil
+        tree.progress != nil || task.dueDate != nil || TaskRowSignals.percent(task) != nil
             || task.repeatAfter > 0 || task.repeatMode != 0 || macHasDescription
             || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
             || (showProject && item.projectTitle != nil)
@@ -292,30 +286,23 @@ extension TaskRowView {
     }
 
     private var macMeta: some View {
-        HStack(spacing: 8) {
-            if let percent = TaskRowSignals.percent(task) {
-                HStack(spacing: 3) {
-                    Image(systemName: "chart.pie")
-                    Text("\(percent)%")
-                }
-            }
+        // The order every Mac row and card uses (`MacSignal`): subtasks, due, repeat, checklist, notes, attachments, labels.
+        HStack(spacing: 10) {
+            if let progress = tree.progress { MacSignal.subtasks(done: progress.done, total: progress.total) }
             if let due = task.dueDate {
-                HStack(spacing: 3) {
-                    Image(systemName: "calendar")
-                    Text(DueDates.label(due, now: Date(), display: dateDisplay))
-                }
-                .foregroundStyle(macDueTint(due))
+                MacSignal(systemImage: "calendar", text: DueDates.label(due, now: Date(), display: dateDisplay), tint: macDueTint(due))
             }
-            if task.repeatAfter > 0 || task.repeatMode != 0 { Image(systemName: "repeat") }
-            if macHasDescription { Image(systemName: "text.alignleft") }
-            if item.hasAttachments { Image(systemName: "paperclip") }
+            if let percent = TaskRowSignals.percent(task) { MacSignal(systemImage: "chart.pie", text: "\(percent)%") }
+            if task.repeatAfter > 0 || task.repeatMode != 0 { MacSignal(systemImage: "repeat", spoken: "Repeats") }
             if item.checklist.total > 0 {
-                HStack(spacing: 3) {
-                    Image(systemName: "checklist")
-                    Text("\(item.checklist.checked)/\(item.checklist.total)")
-                }
+                MacSignal(
+                    systemImage: "checklist", text: "\(item.checklist.checked)/\(item.checklist.total)",
+                    spoken: "Checklist \(item.checklist.checked) of \(item.checklist.total) done"
+                )
             }
-            ForEach(item.labels.prefix(3), id: \.localId) { label in macLabelChip(label) }
+            if macHasDescription { MacSignal(systemImage: "text.alignleft", spoken: "Has notes") }
+            if item.hasAttachments { MacSignal(systemImage: "paperclip", spoken: "Has attachments") }
+            ForEach(item.labels.prefix(3), id: \.localId) { label in MacLabelTag(label: label) }
             Spacer(minLength: 0)
             if showProject, let project = item.projectTitle {
                 HStack(spacing: 4) {
@@ -335,18 +322,6 @@ extension TaskRowView {
         if task.done || completing { return MacTheme.label2 }
         if DueDates.isOverdue(due, now: Date()) { return MacTheme.coral }
         return MacTheme.label2
-    }
-
-    private func macLabelChip(_ label: LabelRecord) -> some View {
-        // A grey chip, 18pt high with 7pt sides: a tag glyph in the label's muted colour, then its title in SF 11.
-        HStack(spacing: 3) {
-            Image(systemName: "tag").foregroundStyle(MacTheme.projectColour(hex: label.hexColor))
-            Text(label.title).foregroundStyle(MacTheme.label2)
-        }
-        .font(.system(size: 11, weight: .medium))
-        .padding(.horizontal, 7)
-        .frame(height: 18)
-        .background(MacTheme.fill, in: Capsule())
     }
 
     /// A parent's chevron, rotating as its subtasks show and hide. Nothing for a row with no children here.

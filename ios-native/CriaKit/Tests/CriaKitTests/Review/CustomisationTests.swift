@@ -118,4 +118,19 @@ final class CustomisationTests: XCTestCase {
         let applied = SyncedPreferences.applying(["projectIcons": .string("12=server,=bad,15=")], to: .default)
         XCTAssertEqual(applied.custom.projectIcons, ["12": "server"])
     }
+
+    func testListSectionsRoundTripAndFollowTheAccount() {
+        var new = LocalPreferences.default
+        new.custom.listSections = ["12": "40", "local:abc": "local:view"]
+        let codec = PreferencesCodec()
+        XCTAssertEqual(codec.decode(codec.encode(new)), new)
+        XCTAssertEqual(new.custom.listSectionsBoard(serverId: 12, localId: "x"), "40")
+        XCTAssertEqual(new.custom.listSectionsBoard(serverId: nil, localId: "abc"), "local:view")
+        XCTAssertNil(new.custom.listSectionsBoard(serverId: 13, localId: "y"))
+
+        let change = SyncedPreferences.change(from: .default, to: new)
+        XCTAssertEqual(change?.cria["listSections"]?.stringValue, "12=40,local:abc=local:view")
+        let applied = SyncedPreferences.applying(["listSections": .string("12=40,=bad")], to: .default)
+        XCTAssertEqual(applied.custom.listSections, ["12": "40"])
+    }
 }

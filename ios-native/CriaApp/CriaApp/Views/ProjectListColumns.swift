@@ -2,15 +2,17 @@
 import CriaKit
 import SwiftUI
 
-/// The Mac List view's groups: one per Kanban column, in board order, each with its own New Task row.
+/// The Mac List view's sections when they are on for the project: one per column of the chosen board, in board order,
+/// each with its own New Task row.
 enum ProjectListGrouping {
     private static let keyPrefix = "column:"
 
-    /// Every column gets a group, even an empty one, so it still has its New Task row. A task the board does not
-    /// place (none should be: unplaced tasks show in the default column) goes in a last, untitled group.
-    static func byColumn(
-        _ items: [TaskListItem], columns: [ProjectListColumn], columnOf: [String: Int]
-    ) -> [DisplaySection] {
+    /// Every column gets a section, even an empty one, so it still has its New Task row; the Done column only when an
+    /// open task sits in it. A task the board does not place (none should be: unplaced tasks show in the default column)
+    /// goes in a last, untitled section.
+    static func byColumn(_ items: [TaskListItem], board: ProjectListBoard) -> [DisplaySection] {
+        let columns = board.columns
+        let columnOf = board.columnOf
         var grouped = Array(repeating: [TaskListItem](), count: columns.count)
         var unplaced: [TaskListItem] = []
         for item in items {
@@ -20,18 +22,19 @@ enum ProjectListGrouping {
                 unplaced.append(item)
             }
         }
-        var sections = columns.indices.map { index in
-            DisplaySection(key: keyPrefix + columns[index].bucketLocalId, label: columns[index].title, items: grouped[index])
+        var sections = columns.indices.compactMap { index -> DisplaySection? in
+            if columns[index].isDone && grouped[index].isEmpty { return nil }
+            return DisplaySection(key: keyPrefix + columns[index].bucketLocalId, label: columns[index].title, items: grouped[index])
         }
         if !unplaced.isEmpty { sections.append(DisplaySection(key: "unplaced", label: "", items: unplaced)) }
         return sections
     }
 
     /// The column a group stands for; nil for a group that is not a column.
-    static func column(of section: DisplaySection, in columns: [ProjectListColumn]) -> ProjectListColumn? {
-        guard section.key.hasPrefix(keyPrefix) else { return nil }
+    static func column(of section: DisplaySection, in board: ProjectListBoard?) -> ProjectListColumn? {
+        guard let board, section.key.hasPrefix(keyPrefix) else { return nil }
         let bucketId = String(section.key.dropFirst(keyPrefix.count))
-        return columns.first { $0.bucketLocalId == bucketId }
+        return board.columns.first { $0.bucketLocalId == bucketId }
     }
 }
 

@@ -132,14 +132,12 @@ struct KanbanCardView: View {
                             .lineLimit(1)
                     }
                     #if os(macOS)
-                    // Same-column subtasks are listed in the card, so the ring only covers those in other columns.
-                    if let progress, subtasks.isEmpty {
-                        SubtaskRing(progress: progress).font(Theme.caption).foregroundStyle(Color(.mutedForeground))
-                    }
-                    #endif
+                    if macHasSignals { ChipFlowLayout(spacing: 10) { macSignals } }
+                    #else
                     if hasChips {
                         ChipFlowLayout { chips }
                     }
+                    #endif
                 }
                 .padding(.vertical, Self.padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -200,6 +198,37 @@ struct KanbanCardView: View {
     private var showsPriority: Bool { task.priority >= 3 && !task.done }
     private var showsDue: Bool { task.dueDate != nil && !task.done }
     private var hasChips: Bool { showsDue || showsPriority || !labels.isEmpty }
+
+    #if os(macOS)
+    /// Same-column subtasks are listed in the card (and open there), so the count only stands for those elsewhere.
+    private var macProgress: SubtaskProgress? { subtasks.isEmpty ? progress : nil }
+    private var hasNotes: Bool { !(task.description ?? "").isEmpty }
+    private var macHasSignals: Bool { macProgress != nil || hasChips || task.repeatAfter > 0 || hasNotes }
+
+    /// The Mac card's line: the same quiet glyphs as a Mac row (`MacSignal`), in the same order.
+    @ViewBuilder private var macSignals: some View {
+        Group {
+            if let progress = macProgress { MacSignal.subtasks(done: progress.done, total: progress.total) }
+            if showsDue, let due = task.dueDate {
+                MacSignal(
+                    systemImage: "calendar", text: DueDates.label(due, now: Date(), display: dateDisplay),
+                    tint: DueDates.isOverdue(due, now: Date()) ? MacTheme.coral : MacTheme.label2
+                )
+            }
+            if task.repeatAfter > 0 { MacSignal(systemImage: "repeat", spoken: "Repeats") }
+            if showsPriority, let name = TableCells.priorityName(task.priority) {
+                MacSignal(
+                    systemImage: "flag.fill", text: name,
+                    tint: ThemeToken.priority(task.priority).map { Color($0) } ?? MacTheme.label2
+                )
+            }
+            if hasNotes { MacSignal(systemImage: "text.alignleft", spoken: "Has notes") }
+            ForEach(labels.prefix(2), id: \.localId) { label in MacLabelTag(label: label) }
+            if labels.count > 2 { MacSignal(systemImage: "tag", text: "+\(labels.count - 2)") }
+        }
+        .font(.system(size: 11))
+    }
+    #endif
 
     @ViewBuilder private var chips: some View {
         if showsDue, let due = task.dueDate {
