@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The Mac's response to the pointer on a clickable control: the pointing-hand cursor and a slight tone shift while
 /// the pointer is over it. A no-op on iOS.
@@ -24,10 +27,31 @@ struct MacHoverable: ViewModifier {
 /// suits large targets such as rows. A no-op on iOS.
 struct MacPointer: ViewModifier {
     @Environment(\.isEnabled) private var isEnabled
+    /// Whether this view set the hand, so leaving puts the arrow back only for its own hand.
+    @State private var showsHand = false
 
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.pointerStyle(isEnabled ? .link : nil)
+        content
+            .pointerStyle(isEnabled ? .link : nil)
+            // `.pointerStyle` alone lost to AppKit's cursor rects in lists, scroll views and tables, so the arrow came
+            // back over rows and cards. Setting the hand on every pointer move wins, and the arrow returns on leaving.
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    guard isEnabled else { return }
+                    showsHand = true
+                    NSCursor.pointingHand.set()
+                case .ended:
+                    guard showsHand else { return }
+                    showsHand = false
+                    NSCursor.arrow.set()
+                }
+            }
+            .onDisappear {
+                if showsHand { NSCursor.arrow.set() }
+                showsHand = false
+            }
         #else
         content
         #endif
