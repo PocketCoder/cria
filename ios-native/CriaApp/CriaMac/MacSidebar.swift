@@ -40,8 +40,14 @@ struct MacSidebar: View {
         _live = State(initialValue: LiveValue(initial: MacSidebarData()) {
             observeStore(store, kinds: [.projects, .savedFilters, .labels]) { (reading: CriaStore) throws -> MacSidebarData in
                 let visible = ProjectTree.visible(try reading.projects())
+                var children = ProjectTree.childIndex(visible)
+                // The default project is the Inbox row at the top; listing it again under Projects showed it twice.
+                // Kept when it has sub-projects, which have no other place in the tree.
+                if let inbox = services.rememberedDefaultProjectLocalId(), children[inbox]?.isEmpty ?? true {
+                    children[nil] = children[nil]?.filter { $0.localId != inbox }
+                }
                 return MacSidebarData(
-                    children: ProjectTree.childIndex(visible),
+                    children: children,
                     favourites: visible.filter(\.isFavorite),
                     filters: try reading.savedFilters(),
                     labels: try reading.labels()
@@ -222,7 +228,7 @@ struct MacProjectLabel: View {
         Label {
             Text(project.title)
         } icon: {
-            MacProjectGlyph(projectLocalId: project.localId, hexColor: project.hexColor)
+            MacProjectGlyph(project: project)
         }
         .macSidebarRow(.project(project.localId))
         .tag(MacSelection.project(project.localId))

@@ -58,12 +58,13 @@ private struct MutedColour {
     }
 }
 
-/// Custom project icons, kept on this Mac in UserDefaults as a JSON map of project local id to SF Symbol name. A
-/// project with no entry shows the ring.
+/// Custom project icons. The account's choices live in `Customisation.projectIcons` (synced through
+/// `frontend_settings.cria`); the first Mac build kept them in UserDefaults by local id, read here as a fallback until
+/// that project's icon is next changed.
 enum MacProjectIcons {
-    static let key = "mac.projectIcons"
+    static let legacyKey = "mac.projectIcons"
 
-    /// The icons offered under a project's Icon menu, with their menu names.
+    /// The icons offered under a project's Icon menu and in its picker, with their names.
     static let choices: [MacProjectIconChoice] = [
         .init("house", "House"), .init("server.rack", "Server"), .init("heart", "Heart"), .init("bag", "Shopping bag"),
         .init("briefcase", "Briefcase"), .init("book", "Book"), .init("airplane", "Travel"), .init("dumbbell", "Fitness"),
@@ -71,18 +72,37 @@ enum MacProjectIcons {
         .init("wrench.adjustable", "Tools"), .init("leaf", "Garden"), .init("car", "Car"), .init("graduationcap", "Study"),
         .init("figure.and.child.holdhands", "Family"), .init("pawprint", "Pets"), .init("camera", "Photos"),
         .init("cup.and.saucer", "Coffee"), .init("fork.knife", "Food"), .init("creditcard", "Money"),
-        .init("paintpalette", "Art"), .init("gamecontroller", "Games"), .init("sparkles", "Ideas")
+        .init("paintpalette", "Art"), .init("gamecontroller", "Games"), .init("sparkles", "Ideas"),
+        .init("cart", "Shopping"), .init("calendar", "Events"), .init("person.2", "People"), .init("building.2", "Work"),
+        .init("stethoscope", "Health"), .init("tent", "Outdoors"), .init("film", "Films"), .init("globe", "World"),
+        .init("hammer", "DIY"), .init("bolt", "Energy"), .init("flag", "Goals"), .init("star", "Favourites")
     ]
 
-    static func decode(_ raw: String) -> [String: String] {
+    static func legacy(_ raw: String) -> [String: String] {
         guard let data = raw.data(using: .utf8),
               let map = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
         return map
     }
 
-    static func encode(_ map: [String: String]) -> String {
-        guard let data = try? JSONEncoder().encode(map), let raw = String(data: data, encoding: .utf8) else { return "{}" }
-        return raw
+    /// The icon a project shows: the account's, else this Mac's old local choice, else nil (the ring).
+    static func symbol(for project: ProjectRecord, custom: Customisation, legacyRaw: String) -> String? {
+        custom.projectIcon(serverId: project.serverId, localId: project.localId) ?? legacy(legacyRaw)[project.localId]
+    }
+
+    /// Saves a project's icon to the account (nil: back to the ring) and drops any old local choice for it.
+    @MainActor
+    static func set(_ symbol: String?, for project: ProjectRecord, services: AppServices) {
+        let model = PreferencesModel(services: services)
+        var custom = model.value.custom
+        custom.projectIcons["local:" + project.localId] = nil
+        custom.projectIcons[Customisation.iconKey(serverId: project.serverId, localId: project.localId)] = symbol
+        model.value.custom = custom
+        let defaults = UserDefaults.standard
+        var old = legacy(defaults.string(forKey: legacyKey) ?? "{}")
+        if old.removeValue(forKey: project.localId) != nil,
+           let data = try? JSONEncoder().encode(old), let raw = String(data: data, encoding: .utf8) {
+            defaults.set(raw, forKey: legacyKey)
+        }
     }
 }
 
@@ -100,14 +120,14 @@ struct MacProjectIconChoice: Identifiable, Sendable {
 
 /// A project's mark: its custom icon, else a ring, both in the muted project colour.
 struct MacProjectGlyph: View {
-    let projectLocalId: String
-    let hexColor: String?
+    let project: ProjectRecord
     var size: CGFloat = 10
-    @AppStorage(MacProjectIcons.key) private var iconsRaw = "{}"
+    @Environment(\.preferences) private var preferences
+    @AppStorage(MacProjectIcons.legacyKey) private var legacyRaw = "{}"
 
     var body: some View {
-        let colour = MacTheme.projectColour(hex: hexColor)
-        if let symbol = MacProjectIcons.decode(iconsRaw)[projectLocalId] {
+        let colour = MacTheme.projectColour(hex: project.hexColor)
+        if let symbol = MacProjectIcons.symbol(for: project, custom: preferences.custom, legacyRaw: legacyRaw) {
             Image(systemName: symbol)
                 .font(.system(size: size + 2, weight: .medium))
                 .foregroundStyle(colour)
@@ -121,34 +141,33 @@ struct MacProjectGlyph: View {
     }
 }
 
-/// The Icon submenu in a project's menus: Progress ring (the default), then the icon choices. The current choice has
-/// a tick.
+/// The Icon submenu in a project's menus: Choose Icon… (the picker), Progress ring (the default), then the icon
+/// choices. The current choice has a tick.
 struct MacProjectIconMenu: View {
-    let projectLocalId: String
-    @AppStorage(MacProjectIcons.key) private var iconsRaw = "{}"
+    let project: ProjectRecord
+    let services: AppServices
+    let onChoose: () -> Void
+    @Environment(\.preferences) private var preferences
+    @AppStorage(MacProjectIcons.legacyKey) private var legacyRaw = "{}"
 
     var body: some View {
-        let current = MacProjectIcons.decode(iconsRaw)[projectLocalId]
+        let current = MacProjectIcons.symbol(for: project, custom: preferences.custom, legacyRaw: legacyRaw)
         Menu("Icon", systemImage: "face.smiling") {
+            Button("Choose Icon…", systemImage: "square.grid.3x3") { onChoose() }
+            Divider()
             Button {
-                set(nil)
+                MacProjectIcons.set(nil, for: project, services: services)
             } label: {
                 Label("Progress ring", systemImage: current == nil ? "checkmark" : "circle")
             }
             Divider()
-            ForEach(MacProjectIcons.choices) { choice in
+            ForEach(MacProjectIcons.choices.prefix(12)) { choice in
                 Button {
-                    set(choice.symbol)
+                    MacProjectIcons.set(choice.symbol, for: project, services: services)
                 } label: {
                     Label(choice.name, systemImage: current == choice.symbol ? "checkmark" : choice.symbol)
                 }
             }
         }
-    }
-
-    private func set(_ symbol: String?) {
-        var map = MacProjectIcons.decode(iconsRaw)
-        map[projectLocalId] = symbol
-        iconsRaw = MacProjectIcons.encode(map)
     }
 }

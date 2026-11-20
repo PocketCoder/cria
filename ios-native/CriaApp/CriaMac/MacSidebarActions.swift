@@ -8,6 +8,8 @@ import SwiftUI
 final class MacSidebarActions {
     var projectEditor: ProjectEditorTarget?
     var projectInfo: ProjectShareTarget?
+    /// The project whose icon picker is open.
+    var iconPicker: ProjectShareTarget?
     var sharing: ProjectShareTarget?
     var pendingProjectDelete: ProjectRecord?
     var filterEditor: FilterEditorTarget?
@@ -97,6 +99,9 @@ struct MacSidebarSheets: ViewModifier {
             .sheet(item: $sheets.projectInfo) { target in
                 ProjectInfoSheet(services: services, projectLocalId: target.project.localId).macSheetFrame()
             }
+            .sheet(item: $sheets.iconPicker) { target in
+                MacProjectIconPicker(project: target.project, services: services)
+            }
             .sheet(item: $sheets.sharing) { target in
                 ProjectSharingSheet(services: services, project: target.project).macSheetFrame()
             }
@@ -181,7 +186,7 @@ struct MacProjectMenu: View {
         Button(project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
             sheets.toggleFavourite(project, services: services)
         }
-        MacProjectIconMenu(projectLocalId: project.localId)
+        MacProjectIconMenu(project: project, services: services) { sheets.iconPicker = ProjectShareTarget(project: project) }
         if !isLinkShare {
             Divider()
             Button("Share…", systemImage: "person.badge.plus") { sheets.sharing = ProjectShareTarget(project: project) }

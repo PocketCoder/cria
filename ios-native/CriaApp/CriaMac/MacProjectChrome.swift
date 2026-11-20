@@ -89,7 +89,7 @@ struct MacProjectHeader: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 10) {
                     if let project {
-                        MacProjectGlyph(projectLocalId: project.localId, hexColor: project.hexColor, size: 18)
+                        MacProjectGlyph(project: project, size: 18)
                     } else if let colour {
                         Circle().fill(colour).frame(width: 14, height: 14).accessibilityHidden(true)
                     }
@@ -109,7 +109,9 @@ struct MacProjectHeader: View {
                 } label: {
                     Label("Share", systemImage: "person.badge.plus")
                 }
-                .buttonStyle(.bordered)
+                // Grey, as the header's other buttons: the purple bordered button competed with the title.
+                .buttonStyle(.borderless)
+                .foregroundStyle(MacTheme.label2)
                 .macHoverable()
             }
             if showsInfoToggle {
@@ -169,7 +171,7 @@ private struct MacProjectHeaderMenu: View {
         }
         // The background is set on the server at once, so it needs the project synced.
         Button("Background…", systemImage: "photo") { onBackground() }.disabled(project.serverId == nil)
-        MacProjectIconMenu(projectLocalId: project.localId)
+        MacProjectIconMenu(project: project, services: services) { sheets.iconPicker = ProjectShareTarget(project: project) }
         Divider()
         if !isLinkShare {
             Button("Duplicate", systemImage: "plus.square.on.square") { Task { await sheets.duplicate(project, services: services) } }

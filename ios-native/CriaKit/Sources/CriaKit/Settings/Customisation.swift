@@ -74,6 +74,9 @@ public struct Customisation: Equatable, Sendable {
     /// Reopen each project on the view last used in it on any of the account's devices. Stays on the device: each one
     /// chooses whether to take part.
     public var syncProjectViews = false
+    /// Custom project icons: an SF Symbol name per project, keyed by its server id (or `local:<local id>` before its
+    /// first sync). A project with no entry shows its ring. Follows the account, so every Cria install shows the same.
+    public var projectIcons: [String: String] = [:]
 
     public static let `default` = Customisation()
 
@@ -98,7 +101,7 @@ public struct Customisation: Equatable, Sendable {
     static let syncedKeys = [
         "tabs", "showTaskCount", "swipeRight", "swipeLeft", "quickAddShowsLabels", "quickAddActions", "detectDates",
         "expandedQuickAdd", "nextWeekDay", "weekendDay", "resetSubtasksOnRepeat", "openLinksInApp", "completionTone", "kanbanSortByDue",
-        "dayReminderMinute"
+        "dayReminderMinute", "projectIcons"
     ]
     static let homeViewKey = "homeView"
 
@@ -134,6 +137,33 @@ public struct Customisation: Equatable, Sendable {
         kanbanSortByDue = flag("kanbanSortByDue", base.kanbanSortByDue)
         dayReminderMinute = number("dayReminderMinute", base.dayReminderMinute, in: 0...1439)
         syncProjectViews = flag("syncProjectViews", base.syncProjectViews)
+        if let raw = text("projectIcons") { projectIcons = Self.iconMap(raw) }
+    }
+
+    /// The key a project's icon is kept under: its server id once synced, so other devices find it.
+    public static func iconKey(serverId: Int?, localId: String) -> String {
+        serverId.map(String.init) ?? "local:" + localId
+    }
+
+    /// The icon for a project, by its server id first and then its local key.
+    public func projectIcon(serverId: Int?, localId: String) -> String? {
+        if let serverId, let symbol = projectIcons[String(serverId)] { return symbol }
+        return projectIcons["local:" + localId]
+    }
+
+    /// "12=house,15=heart": entries with an empty key or symbol are dropped. Symbol names have no `,` or `=`.
+    static func iconMap(_ raw: String) -> [String: String] {
+        var map: [String: String] = [:]
+        for entry in raw.split(separator: ",") {
+            let parts = entry.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { continue }
+            map[parts[0]] = parts[1]
+        }
+        return map
+    }
+
+    static func iconText(_ map: [String: String]) -> String {
+        map.keys.sorted().compactMap { key in map[key].map { key + "=" + $0 } }.joined(separator: ",")
     }
 
     var values: JSONBody {
@@ -155,7 +185,8 @@ public struct Customisation: Equatable, Sendable {
             "completionTone": .string(completionTone.rawValue),
             "kanbanSortByDue": .bool(kanbanSortByDue),
             "dayReminderMinute": .number(Double(dayReminderMinute)),
-            "syncProjectViews": .bool(syncProjectViews)
+            "syncProjectViews": .bool(syncProjectViews),
+            "projectIcons": .string(Self.iconText(projectIcons))
         ]
     }
 

@@ -21,12 +21,14 @@ struct FilterEditorTarget: Identifiable {
     var id: Int { record?.serverId ?? 0 }
 }
 
-/// A project in the tree. The colour dot sits in the label's icon column, so a root project lines up with Inbox and
-/// Favourites; children indent by depth only. The expand chevron sits at the trailing end.
+/// A project in the tree. The colour dot (or the project's custom icon, chosen on the Mac and synced with the
+/// account) sits in the label's icon column, so a root project lines up with Inbox and Favourites; children indent by
+/// depth only. The expand chevron sits at the trailing end.
 struct ProjectRowView: View {
     let row: ProjectTreeRow
     let openCount: Int
     let onToggle: () -> Void
+    @Environment(\.preferences) private var preferences
 
     var body: some View {
         HStack(spacing: 4) {
@@ -35,9 +37,7 @@ struct ProjectRowView: View {
                     Label {
                         Text(row.project.title).font(Theme.rowTitle)
                     } icon: {
-                        Circle()
-                            .fill(Color(hexString: row.project.hexColor) ?? Color(.mutedForeground))
-                            .frame(width: 12, height: 12)
+                        projectIcon
                     }
                     if row.project.isFavorite {
                         Image(systemName: "star.fill").font(Theme.footnote).foregroundStyle(Color(.warning))
@@ -51,6 +51,15 @@ struct ProjectRowView: View {
             if row.hasChildren { toggle }
         }
         .padding(.leading, CGFloat(row.depth) * 22)
+    }
+
+    @ViewBuilder private var projectIcon: some View {
+        let colour = Color(hexString: row.project.hexColor) ?? Color(.mutedForeground)
+        if let symbol = preferences.custom.projectIcon(serverId: row.project.serverId, localId: row.project.localId) {
+            Image(systemName: symbol).foregroundStyle(colour)
+        } else {
+            Circle().fill(colour).frame(width: 12, height: 12)
+        }
     }
 
     /// Beside the link, not inside it, so a tap here expands or collapses instead of opening the project.

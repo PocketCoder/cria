@@ -103,4 +103,19 @@ final class CustomisationTests: XCTestCase {
         _ = try store.updateTask(localId: parent, patch: TaskPatch(done: true))
         XCTAssertEqual(try store.task(localId: child.localId)?.done, false)
     }
+
+    func testProjectIconsRoundTripAndFollowTheAccount() {
+        var new = LocalPreferences.default
+        new.custom.projectIcons = ["12": "house", "local:abc": "heart"]
+        let codec = PreferencesCodec()
+        XCTAssertEqual(codec.decode(codec.encode(new)), new)
+        XCTAssertEqual(new.custom.projectIcon(serverId: 12, localId: "x"), "house")
+        XCTAssertEqual(new.custom.projectIcon(serverId: nil, localId: "abc"), "heart")
+        XCTAssertNil(new.custom.projectIcon(serverId: 13, localId: "y"))
+
+        let change = SyncedPreferences.change(from: .default, to: new)
+        XCTAssertEqual(change?.cria["projectIcons"]?.stringValue, "12=house,local:abc=heart")
+        let applied = SyncedPreferences.applying(["projectIcons": .string("12=server,=bad,15=")], to: .default)
+        XCTAssertEqual(applied.custom.projectIcons, ["12": "server"])
+    }
 }
