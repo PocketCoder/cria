@@ -1,8 +1,7 @@
-#if os(macOS)
 import CriaKit
 import SwiftUI
 
-/// The Mac List view's sections when they are on for the project: one per column of the chosen board, in board order,
+/// The List view's sections when they are on for the project: one per column of the chosen board, in board order,
 /// each with its own New Task row.
 enum ProjectListGrouping {
     private static let keyPrefix = "column:"
@@ -38,6 +37,7 @@ enum ProjectListGrouping {
     }
 }
 
+#if os(macOS)
 /// "New Task" at the end of a column's group: a button until clicked, then a field that adds the task to that column.
 struct ProjectListAddRow: View {
     let services: AppServices

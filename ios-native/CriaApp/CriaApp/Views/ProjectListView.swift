@@ -18,6 +18,7 @@ struct ProjectListView: View {
     @State private var editMode: EditMode = .inactive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.preferences) private var preferences
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var failure: String?
     /// Counts finished drags, for the drop haptic.
     @State private var reorders = 0
@@ -30,6 +31,8 @@ struct ProjectListView: View {
     @State private var completedOpen = false
     /// Board-column sections folded away, by section key, for this screen only.
     @State private var foldedSections: Set<String> = []
+    /// Comment counts by task server id, read once from the server when the list opens (the rows' comment signal).
+    @State private var commentCounts: [Int: Int] = [:]
     #endif
 
     init(services: AppServices, projectLocalId: String, header: ProjectHeader) {
@@ -68,14 +71,10 @@ struct ProjectListView: View {
         #endif
     }
 
-    /// The board whose columns section this list, when the user turned sections on for the project (Mac only).
+    /// The board whose columns section this list, when the user turned sections on for the project.
     private var sectionsBoard: ProjectListBoard? {
-        #if os(macOS)
-        guard let project = live.value.rail.project else { return nil }
+        guard let project = live.value.project else { return nil }
         return live.value.sectionsBoard(preferences.custom.listSectionsBoard(serverId: project.serverId, localId: project.localId))
-        #else
-        return nil
-        #endif
     }
 
     /// Manual order: rows can be dragged, and the stored order is the display order. Board sections keep it: a drag
@@ -104,9 +103,7 @@ struct ProjectListView: View {
     /// The open tasks: one section per board column when sections are on, else one per group when the Display sheet
     /// groups them (a label's tasks may appear under several).
     private var openSections: [DisplaySection] {
-        #if os(macOS)
         if let board = sectionsBoard { return ProjectListGrouping.byColumn(openItems, board: board) }
-        #endif
         return DisplayEngine.grouped(
             openItems, by: display.config.groupBy, context: display.context(assignees: live.value.snapshot.assignees)
         )
@@ -163,6 +160,15 @@ struct ProjectListView: View {
         // Built once the first read is in, so rows do not draw title-high and then grow (see TaskListView).
         .id(live.value.snapshot.loaded)
         #endif
+        .environment(\.sectionMoves, sectionsBoard.map { SectionMoves(board: $0, move: moveToSection) })
+        #if os(macOS)
+        // Only the Mac's rows show a comment count, so only the Mac asks the server for them.
+        .environment(\.commentCounts, commentCounts)
+        .task(id: projectLocalId) {
+            let counts = await services.tableCommentCounts(projectLocalId: projectLocalId, viewLocalId: nil).counts
+            if !Task.isCancelled { commentCounts = counts }
+        }
+        #endif
         .publishesTaskOrder(openSections.flatMap { rows($0.items).map(\.id) } + rows(doneItems).map(\.id))
         .criaSurface()
         .environment(\.editMode, $editMode)
@@ -216,12 +222,18 @@ struct ProjectListView: View {
             )
             // On the Mac rows drag straight away in a manual order (`.onMove`), with no edit mode to enter.
             #if os(iOS)
-            if isManual && openItems.count > 1 && !selection.isActive {
+            let canReorder = isManual && openItems.count > 1
+            let project = live.value.boards.isEmpty ? nil : live.value.project
+            if (canReorder || project != nil) && !selection.isActive {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Options", systemImage: "ellipsis.circle") {
-                        Button("Reorder tasks", systemImage: "arrow.up.arrow.down") {
-                            withAnimation(reduceMotion ? nil : .default) { editMode = .active }
+                        if canReorder {
+                            Button("Reorder tasks", systemImage: "arrow.up.arrow.down") {
+                                withAnimation(reduceMotion ? nil : .default) { editMode = .active }
+                            }
                         }
+                        // The Mac has this in the project's menu.
+                        if let project { ListSectionsMenu(project: project, services: services) }
                     }
                 }
             }
@@ -250,6 +262,21 @@ struct ProjectListView: View {
 // MARK: Sections, completed group and reordering
 
 extension ProjectListView {
+    /// "Move to Section" from a row's menu: the board's own move, so it syncs, respects a full column and can be undone.
+    private func moveToSection(_ taskLocalId: String, _ column: ProjectListColumn) {
+        let source = sectionsBoard?.columns.first { $0.kanban.tasks.contains { $0.localId == taskLocalId } }
+        do {
+            let moved = try services.store.moveCardUndoable(
+                taskLocalId: taskLocalId, viewLocalId: column.viewLocalId, source: source?.kanban, target: column.kanban,
+                orderedIds: column.kanban.tasks.map(\.localId) + [taskLocalId]
+            )
+            if moved.result == .blockedByLimit { failure = "\(column.title) is full." }
+            undo?.record(moved.undo)
+        } catch {
+            failure = String(describing: error)
+        }
+    }
+
     private func isFolded(_ section: DisplaySection) -> Bool {
         #if os(macOS)
         return sectionsBoard != nil && foldedSections.contains(section.key)

@@ -172,7 +172,7 @@ private struct MacProjectHeaderMenu: View {
         // The background is set on the server at once, so it needs the project synced.
         Button("Background…", systemImage: "photo") { onBackground() }.disabled(project.serverId == nil)
         MacProjectIconMenu(project: project, services: services) { sheets.iconPicker = ProjectShareTarget(project: project) }
-        MacListSectionsMenu(project: project, services: services)
+        ListSectionsMenu(project: project, services: services)
         Divider()
         if !isLinkShare {
             Button("Duplicate", systemImage: "plus.square.on.square") { Task { await sheets.duplicate(project, services: services) } }

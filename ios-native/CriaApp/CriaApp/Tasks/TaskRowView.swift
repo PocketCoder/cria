@@ -6,6 +6,8 @@ import SwiftUI
 struct TaskRowView: View {
     @Environment(\.dateDisplay) private var dateDisplay
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// Comment counts the list read from the server (Mac only); a task with no entry shows none.
+    @Environment(\.commentCounts) private var commentCounts
     let item: TaskListItem
     var showProject = false
     var tree = TaskRowTree()
@@ -272,11 +274,13 @@ extension TaskRowView {
     }
 
     private var macHasMeta: Bool {
-        tree.progress != nil || task.dueDate != nil || TaskRowSignals.percent(task) != nil
+        tree.progress != nil || macCommentCount > 0 || task.dueDate != nil || TaskRowSignals.percent(task) != nil
             || task.repeatAfter > 0 || task.repeatMode != 0 || macHasDescription
             || item.hasAttachments || item.checklist.total > 0 || !item.labels.isEmpty
             || (showProject && item.projectTitle != nil)
     }
+
+    private var macCommentCount: Int { task.serverId.flatMap { commentCounts[$0] } ?? 0 }
 
     /// A description with any text or image in it; an editor's empty paragraph does not count. The text check uses
     /// the summary the store read already made off the main thread, not a regex per row per render.
@@ -286,7 +290,8 @@ extension TaskRowView {
     }
 
     private var macMeta: some View {
-        // The order every Mac row and card uses (`MacSignal`): subtasks, due, repeat, checklist, notes, attachments, labels.
+        // The order every Mac row and card uses (`MacSignal`): subtasks, due, repeat, checklist, comments, notes, attachments,
+        // labels.
         HStack(spacing: 10) {
             if let progress = tree.progress { MacSignal.subtasks(done: progress.done, total: progress.total) }
             if let due = task.dueDate {
@@ -298,6 +303,12 @@ extension TaskRowView {
                 MacSignal(
                     systemImage: "checklist", text: "\(item.checklist.checked)/\(item.checklist.total)",
                     spoken: "Checklist \(item.checklist.checked) of \(item.checklist.total) done"
+                )
+            }
+            if macCommentCount > 0 {
+                MacSignal(
+                    systemImage: "bubble.left", text: "\(macCommentCount)",
+                    spoken: macCommentCount == 1 ? "1 comment" : "\(macCommentCount) comments"
                 )
             }
             if macHasDescription { MacSignal(systemImage: "text.alignleft", spoken: "Has notes") }

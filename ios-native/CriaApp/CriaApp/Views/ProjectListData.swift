@@ -1,22 +1,24 @@
 import CriaKit
 import Foundation
 
-/// What a project's List view reads in one go: the task list, plus on the Mac every board's columns (for list sections)
-/// and the info rail's figures, all worked out in the store read so nothing is computed in a body.
+/// What a project's List view reads in one go: the task list, every board's columns (for list sections), and on the
+/// Mac the info rail's figures, all worked out in the store read so nothing is computed in a body.
 struct ProjectListData: Equatable, Sendable {
     var snapshot = TaskListSnapshot()
+    var project: ProjectRecord?
     /// The project's Kanban views, each with its columns. The List view groups by one of them only when the user has
-    /// turned sections on for the project (`Customisation.listSections`); empty on iOS.
+    /// turned sections on for the project (`Customisation.listSections`).
     var boards: [ProjectListBoard] = []
     var rail = ProjectRailSummary()
 
     static func read(_ reading: CriaStore, projectLocalId: String) throws -> ProjectListData {
         let items = try reading.taskItems(.project(projectLocalId), includeDone: true)
         var data = try ProjectListData(snapshot: TaskListNesting.snapshot(reading, items: items))
-        #if os(macOS)
+        data.project = try reading.project(localId: projectLocalId)
         for view in try reading.views(forProject: projectLocalId) where view.viewKind == .kanban {
             data.boards.append(try ProjectListBoard.read(reading, view: view))
         }
+        #if os(macOS)
         data.rail = try ProjectRailSummary.make(reading, projectLocalId: projectLocalId, items: items)
         #endif
         return data
@@ -51,7 +53,7 @@ struct ProjectListBoard: Equatable, Sendable {
                 viewLocalId: view.localId, bucketLocalId: column.bucket.localId, title: column.bucket.title,
                 // "filter:" is CriaKit's internal `Kanban.filterBucketPrefix`: a filter-managed, read-only column.
                 acceptsTasks: !column.bucket.localId.hasPrefix("filter:") && !column.atLimit && !isDone,
-                isDone: isDone
+                isDone: isDone, kanban: column
             ))
             for task in column.tasks where board.columnOf[task.localId] == nil { board.columnOf[task.localId] = index }
         }
@@ -68,6 +70,8 @@ struct ProjectListColumn: Equatable, Sendable {
     let acceptsTasks: Bool
     /// The board's Done column: shown only when an open task sits in it.
     var isDone = false
+    /// The column as the board reads it, for moving a task into it.
+    let kanban: KanbanColumn
 }
 
 /// The project info rail's figures (Mac only), computed once per store read.

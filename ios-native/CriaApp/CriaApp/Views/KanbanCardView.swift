@@ -36,6 +36,8 @@ struct KanbanCardView: View {
     private static let titleLeading: CGFloat = 1
     /// The task open in the inspector, for the selected card's ring.
     @Environment(\.openTaskState) private var openTaskState
+    /// Comment counts the board read from the server; a task with no entry shows none.
+    @Environment(\.commentCounts) private var commentCounts
     #else
     static let radius: CGFloat = 14
     private static let ringSize: CGFloat = 20
@@ -203,7 +205,8 @@ struct KanbanCardView: View {
     /// Same-column subtasks are listed in the card (and open there), so the count only stands for those elsewhere.
     private var macProgress: SubtaskProgress? { subtasks.isEmpty ? progress : nil }
     private var hasNotes: Bool { !(task.description ?? "").isEmpty }
-    private var macHasSignals: Bool { macProgress != nil || hasChips || task.repeatAfter > 0 || hasNotes }
+    private var commentCount: Int { task.serverId.flatMap { commentCounts[$0] } ?? 0 }
+    private var macHasSignals: Bool { macProgress != nil || hasChips || task.repeatAfter > 0 || hasNotes || commentCount > 0 }
 
     /// The Mac card's line: the same quiet glyphs as a Mac row (`MacSignal`), in the same order.
     @ViewBuilder private var macSignals: some View {
@@ -220,6 +223,12 @@ struct KanbanCardView: View {
                 MacSignal(
                     systemImage: "flag.fill", text: name,
                     tint: ThemeToken.priority(task.priority).map { Color($0) } ?? MacTheme.label2
+                )
+            }
+            if commentCount > 0 {
+                MacSignal(
+                    systemImage: "bubble.left", text: "\(commentCount)",
+                    spoken: commentCount == 1 ? "1 comment" : "\(commentCount) comments"
                 )
             }
             if hasNotes { MacSignal(systemImage: "text.alignleft", spoken: "Has notes") }

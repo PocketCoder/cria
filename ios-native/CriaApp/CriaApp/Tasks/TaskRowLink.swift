@@ -204,6 +204,7 @@ struct TaskRowLink: View {
                 tree.onToggleCollapsed()
             }
         }
+        SectionMoveMenu(taskLocalId: item.task.localId)
         Divider()
         Button("Duplicate", systemImage: "plus.square.on.square") { duplicate() }
         // A task that has not synced has no web address yet.
@@ -262,6 +263,7 @@ extension TaskRowLink {
             onToggleCollapsed: { tree.onToggleCollapsed() },
             onSelect: selection == nil ? nil : { selection?.start(with: item.task.localId) }
         )
+        SectionMoveMenu(taskLocalId: item.task.localId)
     }
 }
 #endif

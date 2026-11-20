@@ -35,6 +35,10 @@ struct KanbanBoardView: View {
     @State private var sourceWasTargeted = false
     @State private var hoverColumn: String?
     @State private var expandedCards: Set<String> = []
+    #if os(macOS)
+    /// Comment counts by task server id, read once from the server when the board opens (the cards' comment signal).
+    @State private var commentCounts: [Int: Int] = [:]
+    #endif
     /// The board's filter, kept per view on this device (see `BoardFilter`).
     @AppStorage private var filterText: String
     /// Columns folded into strips, kept per view on this device (see `KanbanCollapse`).
@@ -164,6 +168,13 @@ struct KanbanBoardView: View {
             )
         }
         .task { await live.run() }
+        #if os(macOS)
+        .environment(\.commentCounts, commentCounts)
+        .task(id: view.localId) {
+            let counts = await services.tableCommentCounts(projectLocalId: view.projectLocalId, viewLocalId: nil).counts
+            if !Task.isCancelled { commentCounts = counts }
+        }
+        #endif
         .errorHaptic(failure)
         .alert("Column full", isPresented: $limitNotice) {
             Button("OK", role: .cancel) {}

@@ -25,9 +25,8 @@ The native iOS and Mac apps are at parity with the Tauri app except for what is 
 
 - Calendar layout / time blocking, with device calendar events (EventKit).
 - Completed-tasks history (logbook) and productivity stats/streaks.
-- List sections from a board's columns (`Customisation.listSections`, synced) are Mac only: iOS ignores the setting
-  and shows its plain list. Dragging a task between sections (a bucket move) is not built; drag reorders within one.
-- Comment counts on rows and cards: comments are only fetched when a task opens, so there is no count to show.
+- List sections: a task changes section through its menu (Move to Section); dragging one row into another section is
+  not built (drag reorders within a section). iOS shows the sections without folding or per-section New Task rows.
 - Share extension on the Mac (no App Group there). Mac widgets (Today and the configurable List widget) are built but
   unverified on a real Mac: they reach the database through sandbox exceptions, not an app group.
 - Mac Services menu ("Add to Cria"), Focus filters, Apple Watch app, task templates, tasks from PDFs or pasted text.
