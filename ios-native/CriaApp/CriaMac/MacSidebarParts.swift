@@ -56,7 +56,7 @@ struct MacSidebarHeader: View {
 }
 
 /// A sidebar row's highlight, drawn here rather than by the system so hover and selection share one shape: the same
-/// 8pt rounded rectangle across the full row width, `fill` under the pointer and `selection` once chosen. A click
+/// 8pt rounded rectangle across the full row width and its full height, so a highlighted row meets the next one, `fill` under the pointer and `selection` once chosen. A click
 /// selects the row's destination through the sidebar's `macSidebarSelect`; rows with no destination (Archived
 /// projects) only take the hover.
 struct MacSidebarRowState: ViewModifier {
@@ -80,7 +80,7 @@ struct MacSidebarRowState: ViewModifier {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isSelected ? MacTheme.selection : hovering ? MacTheme.fill : Color.clear)
                     .padding(.horizontal, -8)
-                    .padding(.vertical, -4)
+                    .padding(.vertical, -7.5)
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
             .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isSelected)

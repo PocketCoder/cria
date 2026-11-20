@@ -240,7 +240,7 @@ struct MacProjectLabel: View {
                     .fill(Color(.primary).opacity(0.22))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color(.primary), lineWidth: 1.5))
                     .padding(.horizontal, -8)
-                    .padding(.vertical, -4)
+                    .padding(.vertical, -7.5)
             }
         }
         .onHover { inside in

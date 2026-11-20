@@ -208,12 +208,14 @@ struct TableGridView: View {
 
     #if os(macOS)
     private static let columnSpacing: CGFloat = 0
-    // The Mac design: a 30pt header in SF 11 Semibold `l2`, 32pt rows, empty cells as "—" in `l3`.
+    // The Mac design: a 36pt header in SF 11 Semibold `l2`, rows at least 40pt with 6pt above and below a two-line cell,
+    // 12pt either side of each cell, empty cells as "—" in `l3`.
     private static let headerFont = Font.system(size: 11, weight: .semibold)
     private static let headerColour = MacTheme.label2
-    private static let headerHeight: CGFloat? = 30
-    private static let rowPadding: CGFloat = 0
-    private static let rowHeight: CGFloat? = 32
+    private static let headerHeight: CGFloat? = 36
+    private static let rowPadding: CGFloat = 6
+    private static let rowHeight: CGFloat? = 40
+    private static let cellSide: CGFloat = 12
     private static let emptyText = "—"
     private static let emptyColour = MacTheme.label3
     private static let unknownColour = MacTheme.label3
@@ -227,6 +229,7 @@ struct TableGridView: View {
     private static let headerHeight: CGFloat? = nil
     private static let rowPadding: CGFloat = 10
     private static let rowHeight: CGFloat? = nil
+    private static let cellSide: CGFloat = 0
     private static let emptyText = ""
     private static let emptyColour = Color(.foreground)
     private static let unknownColour = Color(.mutedForeground)
@@ -244,7 +247,7 @@ struct TableGridView: View {
                         header(column).padding(.vertical, Self.headerHeight == nil ? 10 : 0)
                             .frame(height: Self.headerHeight)
                             #if os(macOS)
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, Self.cellSide)
                             #endif
                     }
                 }
@@ -261,7 +264,7 @@ struct TableGridView: View {
                                 // checkerboard, and stretching every cell to fill its row made each layout pass slow.
                                 // The dividers separate the rows. Only the selected row's cells stretch to fill it, so
                                 // its 13% primary band is one piece and the cost is one row.
-                                .padding(.horizontal, 8)
+                                .padding(.horizontal, Self.cellSide)
                                 .modifier(TableSelectedBand(selected: isSelected(item)))
                                 #endif
                         }
