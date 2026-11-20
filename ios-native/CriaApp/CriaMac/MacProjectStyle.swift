@@ -58,11 +58,10 @@ private struct MutedColour {
     }
 }
 
-/// Custom project icons. The account's choices live in `Customisation.projectIcons` (synced through
-/// `frontend_settings.cria`); the first Mac build kept them in UserDefaults by local id, read here as a fallback until
-/// that project's icon is next changed.
+/// Custom project icons, kept in `Customisation.projectIcons` (synced through `frontend_settings.cria`) by project.
 enum MacProjectIcons {
-    static let legacyKey = "mac.projectIcons"
+    /// Where the first Mac build kept icons, on this Mac only, by local id. Moved into the account once at launch.
+    private static let legacyKey = "mac.projectIcons"
 
     /// The icons offered under a project's Icon menu and in its picker, with their names.
     static let choices: [MacProjectIconChoice] = [
@@ -78,31 +77,51 @@ enum MacProjectIcons {
         .init("hammer", "DIY"), .init("bolt", "Energy"), .init("flag", "Goals"), .init("star", "Favourites")
     ]
 
-    static func legacy(_ raw: String) -> [String: String] {
-        guard let data = raw.data(using: .utf8),
-              let map = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
-        return map
+    /// The icon a project shows, nil for the ring.
+    static func symbol(for project: ProjectRecord, custom: Customisation) -> String? {
+        custom.projectIcon(serverId: project.serverId, localId: project.localId)
     }
 
-    /// The icon a project shows: the account's, else this Mac's old local choice, else nil (the ring).
-    static func symbol(for project: ProjectRecord, custom: Customisation, legacyRaw: String) -> String? {
-        custom.projectIcon(serverId: project.serverId, localId: project.localId) ?? legacy(legacyRaw)[project.localId]
-    }
-
-    /// Saves a project's icon to the account (nil: back to the ring) and drops any old local choice for it.
+    /// Saves a project's icon to the account (nil: back to the ring). Entries for projects that no longer exist are
+    /// dropped on the way, so the synced list does not keep growing.
     @MainActor
     static func set(_ symbol: String?, for project: ProjectRecord, services: AppServices) {
+        save(services: services) { icons in
+            icons["local:" + project.localId] = nil
+            icons[Customisation.iconKey(serverId: project.serverId, localId: project.localId)] = symbol
+        }
+    }
+
+    /// Moves the first build's local icons into the account, once, then forgets them.
+    @MainActor
+    static func migrateLegacy(services: AppServices) {
+        let defaults = UserDefaults.standard
+        guard let raw = defaults.string(forKey: legacyKey) else { return }
+        defaults.removeObject(forKey: legacyKey)
+        guard let data = raw.data(using: .utf8),
+              let old = try? JSONDecoder().decode([String: String].self, from: data), !old.isEmpty else { return }
+        let records = (try? services.store.projects()) ?? []
+        let projects = Dictionary(records.map { ($0.localId, $0) }, uniquingKeysWith: { first, _ in first })
+        save(services: services) { icons in
+            for (localId, symbol) in old {
+                guard let project = projects[localId] else { continue }
+                let key = Customisation.iconKey(serverId: project.serverId, localId: localId)
+                if icons[key] == nil { icons[key] = symbol }
+            }
+        }
+    }
+
+    @MainActor
+    private static func save(services: AppServices, _ change: (inout [String: String]) -> Void) {
         let model = PreferencesModel(services: services)
         var custom = model.value.custom
-        custom.projectIcons["local:" + project.localId] = nil
-        custom.projectIcons[Customisation.iconKey(serverId: project.serverId, localId: project.localId)] = symbol
+        change(&custom.projectIcons)
+        let projects = (try? services.store.projects()) ?? []
+        let live = Set(projects.flatMap { [Customisation.iconKey(serverId: $0.serverId, localId: $0.localId), "local:" + $0.localId] })
+        // Only once the store has projects: an empty read must not wipe the list.
+        if !projects.isEmpty { custom.projectIcons = custom.projectIcons.filter { live.contains($0.key) } }
+        guard custom != model.value.custom else { return }
         model.value.custom = custom
-        let defaults = UserDefaults.standard
-        var old = legacy(defaults.string(forKey: legacyKey) ?? "{}")
-        if old.removeValue(forKey: project.localId) != nil,
-           let data = try? JSONEncoder().encode(old), let raw = String(data: data, encoding: .utf8) {
-            defaults.set(raw, forKey: legacyKey)
-        }
     }
 }
 
@@ -123,11 +142,10 @@ struct MacProjectGlyph: View {
     let project: ProjectRecord
     var size: CGFloat = 10
     @Environment(\.preferences) private var preferences
-    @AppStorage(MacProjectIcons.legacyKey) private var legacyRaw = "{}"
 
     var body: some View {
         let colour = MacTheme.projectColour(hex: project.hexColor)
-        if let symbol = MacProjectIcons.symbol(for: project, custom: preferences.custom, legacyRaw: legacyRaw) {
+        if let symbol = MacProjectIcons.symbol(for: project, custom: preferences.custom) {
             Image(systemName: symbol)
                 .font(.system(size: size + 2, weight: .medium))
                 .foregroundStyle(colour)
@@ -148,10 +166,9 @@ struct MacProjectIconMenu: View {
     let services: AppServices
     let onChoose: () -> Void
     @Environment(\.preferences) private var preferences
-    @AppStorage(MacProjectIcons.legacyKey) private var legacyRaw = "{}"
 
     var body: some View {
-        let current = MacProjectIcons.symbol(for: project, custom: preferences.custom, legacyRaw: legacyRaw)
+        let current = MacProjectIcons.symbol(for: project, custom: preferences.custom)
         Menu("Icon", systemImage: "face.smiling") {
             Button("Choose Icon…", systemImage: "square.grid.3x3") { onChoose() }
             Divider()

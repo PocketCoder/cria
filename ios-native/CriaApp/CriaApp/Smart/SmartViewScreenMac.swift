@@ -45,32 +45,7 @@ extension SmartViewScreen {
     /// Upcoming keeps its first three days whatever they hold; after them, two or more empty days in a row fold into one
     /// quiet line ("Tue 24 – Sat 28"), so the week reads as what is planned, not a run of blank headers.
     static func foldingQuietDays(_ sections: [DisplaySection]) -> [DisplaySection] {
-        var out: [DisplaySection] = []
-        var run: [DisplaySection] = []
-        var daysSeen = 0
-        func flush() {
-            if run.count >= 2, let first = run.first, let last = run.last {
-                out.append(DisplaySection(
-                    key: "quiet_" + first.key.replacingOccurrences(of: "-", with: ""),
-                    label: quietLabel(first.key) + " – " + quietLabel(last.key), items: []
-                ))
-            } else {
-                out += run
-            }
-            run = []
-        }
-        for section in sections {
-            let isDay = MacSmartHeader.newTaskDay(.upcoming, groupKey: section.key) != nil
-            if isDay { daysSeen += 1 }
-            if isDay, daysSeen > 3, section.items.isEmpty {
-                run.append(section)
-            } else {
-                flush()
-                out.append(section)
-            }
-        }
-        flush()
-        return out
+        QuietDays.fold(sections, dayLabel: quietLabel)
     }
 
     /// "Tue 24" for a yyyy-MM-dd key.
@@ -117,7 +92,7 @@ extension SmartViewScreen {
                 actionTitle: view == .today ? "Reschedule to today" : nil,
                 action: view == .today ? { rescheduling = group } : nil
             )
-        } else if group.key.hasPrefix("quiet_") {
+        } else if group.key.hasPrefix(QuietDays.keyPrefix) {
             // Folded empty days: a grey line, no count and no New Task row.
             MacGroupHeader(title: group.label, tint: MacTheme.label3)
         } else if !isInbox {

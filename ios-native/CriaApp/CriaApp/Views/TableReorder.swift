@@ -52,6 +52,14 @@ extension TableViewScreen {
     func moveRow(_ movedId: String, onto overId: String) {
         let ids = rows.map(\.task.localId)
         guard let from = ids.firstIndex(of: movedId), let target = ids.firstIndex(of: overId), from != target else { return }
+        #if os(macOS)
+        // Subtasks sit under their parent here: a drop that would take one out (or put a row among another's
+        // subtasks) would snap back on screen yet still save, so only rows with the same parent swap places.
+        if sortKeys.isEmpty {
+            let parentOf = TableNesting.parents(of: ids, children: nesting.value.children)
+            guard parentOf[movedId] == parentOf[overId] else { return }
+        }
+        #endif
         var order = ids
         order.move(fromOffsets: IndexSet(integer: from), toOffset: target > from ? target + 1 : target)
         do {

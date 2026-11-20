@@ -7,6 +7,8 @@ struct MacSidebarData: Equatable, Sendable {
     var favourites: [ProjectRecord] = []
     var filters: [SavedFilterRecord] = []
     var labels: [LabelRecord] = []
+    /// The default project, which the Inbox row stands for: its menu and drops are on that row.
+    var inbox: ProjectRecord?
 }
 
 /// The sidebar from the macOS design: Inbox, Today and Upcoming, then collapsible Favourites, Projects, Filters and Labels,
@@ -41,16 +43,19 @@ struct MacSidebar: View {
             observeStore(store, kinds: [.projects, .savedFilters, .labels]) { (reading: CriaStore) throws -> MacSidebarData in
                 let visible = ProjectTree.visible(try reading.projects())
                 var children = ProjectTree.childIndex(visible)
-                // The default project is the Inbox row at the top; listing it again under Projects showed it twice.
-                // Kept when it has sub-projects, which have no other place in the tree.
-                if let inbox = services.rememberedDefaultProjectLocalId(), children[inbox]?.isEmpty ?? true {
-                    children[nil] = children[nil]?.filter { $0.localId != inbox }
+                // The default project is the Inbox row at the top (which opens its project page, menu and drops
+                // included); listing it again under Projects showed it twice. Kept when it has sub-projects, which
+                // have no other place in the tree.
+                let inboxId = services.rememberedDefaultProjectLocalId()
+                if let inboxId, children[inboxId]?.isEmpty ?? true {
+                    children[nil] = children[nil]?.filter { $0.localId != inboxId }
                 }
                 return MacSidebarData(
                     children: children,
                     favourites: visible.filter(\.isFavorite),
                     filters: try reading.savedFilters(),
-                    labels: try reading.labels()
+                    labels: try reading.labels(),
+                    inbox: visible.first { $0.localId == inboxId }
                 )
             }
         })
@@ -70,7 +75,7 @@ struct MacSidebar: View {
         // No `List(selection:)`: the system's selection highlight is a different shape from the hover one, so each row
         // draws both itself (`macSidebarRow`) and a click selects through `macSidebarSelect`.
         List {
-            row(.inbox, .inbox, count: counts.value.inbox)
+            inboxRow
             row(.today, .today, count: counts.value.today)
             row(.upcoming, .upcoming)
             // Collapsed by the heading's own chevron rather than `Section(isExpanded:)`, whose system chevron shows
@@ -171,6 +176,17 @@ struct MacSidebar: View {
         }
     }
 
+    /// Inbox opens the default project's page; right-click gives that project's menu, and tasks drop on it.
+    @ViewBuilder private var inboxRow: some View {
+        if let inbox = live.value.inbox {
+            row(.inbox, .inbox, count: counts.value.inbox)
+                .contextMenu { MacProjectMenu(project: inbox, services: services, sheets: sheets) }
+                .modifier(MacProjectDropTarget(project: inbox, services: services))
+        } else {
+            row(.inbox, .inbox, count: counts.value.inbox)
+        }
+    }
+
     private func row(_ tab: AppTab, _ destination: MacSelection, count: Int = 0) -> some View {
         HStack {
             Label(tab.title, systemImage: tab.symbol)
@@ -213,16 +229,14 @@ struct MacProjectBranch: View {
     }
 }
 
-/// A project row: its ring or custom icon in its muted colour, title and the project actions on right-click. A task
-/// dragged from a list drops on it to move there, with a 22% tint and a 1.5pt accent ring while it is over the row.
+/// A project row: its ring or custom icon in its muted colour, title and the project actions on right-click. Tasks
+/// dropped on it move there (`MacProjectDropTarget`).
 struct MacProjectLabel: View {
     let project: ProjectRecord
     let services: AppServices
     let sheets: MacSidebarActions
-    @State private var isTargeted = false
     /// Reads the project's list while the pointer rests on the row, so the click finds it ready.
     @State private var warming: Task<Void, Never>?
-    @Environment(UndoCenter.self) private var undo: UndoCenter?
 
     var body: some View {
         Label {
@@ -234,15 +248,7 @@ struct MacProjectLabel: View {
         .tag(MacSelection.project(project.localId))
         // On the row itself, not the disclosure group, so a sub-project's menu is its own.
         .contextMenu { MacProjectMenu(project: project, services: services, sheets: sheets) }
-        .background {
-            if isTargeted {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(.primary).opacity(0.22))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color(.primary), lineWidth: 1.5))
-                    .padding(.horizontal, -8)
-                    .padding(.vertical, -7.5)
-            }
-        }
+        .modifier(MacProjectDropTarget(project: project, services: services))
         .onHover { inside in
             warming?.cancel()
             guard inside else { return }
@@ -253,9 +259,31 @@ struct MacProjectLabel: View {
                 await ProjectListCache.warm(services: services, projectLocalId: id)
             }
         }
-        .dropDestination(for: String.self) { items, _ in
-            moveTasks(items.compactMap(KanbanPayload.taskId(from:)))
-        } isTargeted: { isTargeted = $0 }
+    }
+}
+
+/// A sidebar row a task dragged from a list drops on to move it to `project`, with a 22% tint and a 1.5pt accent
+/// ring while it is over the row. On project rows and the Inbox row.
+struct MacProjectDropTarget: ViewModifier {
+    let project: ProjectRecord
+    let services: AppServices
+    @State private var isTargeted = false
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if isTargeted {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(.primary).opacity(0.22))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color(.primary), lineWidth: 1.5))
+                        .padding(.horizontal, -8)
+                        .padding(.vertical, -7.5)
+                }
+            }
+            .dropDestination(for: String.self) { items, _ in
+                moveTasks(items.compactMap(KanbanPayload.taskId(from:)))
+            } isTargeted: { isTargeted = $0 }
     }
 
     /// Moves each dropped task here, as the inspector's Move to project does. Tasks already here are left alone. The

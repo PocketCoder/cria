@@ -29,7 +29,7 @@ struct TableViewScreen: View {
     @State var reorders = 0
     @State private var assigneeFeed: LiveValue<[String: [AssigneeRecord]]>
     /// Each subtask's parent title and each parent's subtask progress, for the title cell.
-    @State private var nesting: LiveValue<TaskListSnapshot>
+    @State var nesting: LiveValue<TaskListSnapshot>
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(services: AppServices, projectLocalId: String, viewLocalId: String? = nil, header: ProjectHeader) {
@@ -63,7 +63,7 @@ struct TableViewScreen: View {
     }
 
     private var visible: Set<TableViewColumn> { TableConfigCodec.decodeColumns(columnsText) }
-    private var sortKeys: [TableSortKey] { TableConfigCodec.decodeSort(sortText) }
+    var sortKeys: [TableSortKey] { TableConfigCodec.decodeSort(sortText) }
     private var extras: TableExtras { TableExtras(currentUserId: currentUserId, commentCounts: commentCounts) }
     private var showsComments: Bool { visible.contains(.commentCount) }
 
@@ -291,7 +291,7 @@ extension TableViewScreen {
     /// Each row's indent under its parent: the Mac's manual order only, so iOS keeps its "Subtask of" captions.
     private var rowDepths: [String: Int] {
         #if os(macOS)
-        return sortKeys.isEmpty ? TableNesting.depths(rows, children: nesting.value.children) : [:]
+        return sortKeys.isEmpty ? TableNesting.depths(rows.map(\.task.localId), children: nesting.value.children) : [:]
         #else
         return [:]
         #endif
@@ -309,7 +309,10 @@ extension TableViewScreen {
         let ordered = ids.compactMap { byId[$0] }
         #if os(macOS)
         // In manual order each subtask sits indented under its parent, rather than apart with "Subtask of".
-        if sortKeys.isEmpty { return TableNesting.nested(ordered, children: nesting.value.children) }
+        if sortKeys.isEmpty {
+            let items = Dictionary(ordered.map { ($0.task.localId, $0) }, uniquingKeysWith: { first, _ in first })
+            return TableNesting.nested(ordered.map(\.task.localId), children: nesting.value.children).compactMap { items[$0] }
+        }
         #endif
         return ordered
     }

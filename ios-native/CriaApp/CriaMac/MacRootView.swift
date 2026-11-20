@@ -76,6 +76,7 @@ struct MacRootView: View {
                 )
                 // Not tied to this window: see `MacBackground`.
                 .task { MacBackground.shared.start(services) }
+                .task { MacProjectIcons.migrateLegacy(services: services) }
             } else if let error = model.startupError {
                 StartupProblem(message: error, model: model)
             } else {

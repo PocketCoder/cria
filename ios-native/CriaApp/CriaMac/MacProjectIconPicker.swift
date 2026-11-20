@@ -9,13 +9,12 @@ struct MacProjectIconPicker: View {
     let services: AppServices
     @Environment(\.dismiss) private var dismiss
     @Environment(\.preferences) private var preferences
-    @AppStorage(MacProjectIcons.legacyKey) private var legacyRaw = "{}"
     @State private var search = ""
 
     private let columns = Array(repeating: GridItem(.fixed(40), spacing: 6), count: 8)
 
     private var current: String? {
-        MacProjectIcons.symbol(for: project, custom: preferences.custom, legacyRaw: legacyRaw)
+        MacProjectIcons.symbol(for: project, custom: preferences.custom)
     }
 
     private var matches: [MacProjectIconChoice] {

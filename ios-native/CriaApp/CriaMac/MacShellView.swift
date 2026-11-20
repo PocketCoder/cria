@@ -193,7 +193,14 @@ private struct MacSelectionScreen: View {
 
     var body: some View {
         switch selection {
-        case .inbox: InboxScreen(services: services)
+        case .inbox:
+            // The default project's own page, so Inbox has its views (List, Board, Table, Gantt) and project menu.
+            if let localId = services.rememberedDefaultProjectLocalId() {
+                let title = (try? services.store.project(localId: localId))?.title ?? "Inbox"
+                ProjectScreen(services: services, projectLocalId: localId, title: title)
+            } else {
+                InboxScreen(services: services)
+            }
         case .today: SmartViewScreen(services: services, view: .today, title: "Today")
         case .upcoming: SmartViewScreen(services: services, view: .upcoming, title: "Upcoming")
         case .favorites: TaskListView(services: services, source: .favorites, title: "Favourites")
