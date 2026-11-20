@@ -306,7 +306,9 @@ struct GanttBar: View {
     /// The Mac design: radius 7, the task's (else the project's) colour at 26% with a 1pt ring at 55%. iOS: a solid bar.
     @ViewBuilder private var barShape: some View {
         #if os(macOS)
-        let tint = Color(hexString: place.color ?? fallbackColour) ?? Color(.primary)
+        // The muted project colour, as the sidebar shows it; the accent only for a task and project with none.
+        let hex = place.color ?? fallbackColour
+        let tint = hex == nil ? Color(.primary) : MacTheme.projectColour(hex: hex)
         RoundedRectangle(cornerRadius: 7, style: .continuous)
             .fill(tint.opacity(place.isPlaceholder ? 0.12 : 0.26))
             .overlay {

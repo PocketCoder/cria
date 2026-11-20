@@ -40,15 +40,6 @@ struct MacSmartHeader: View {
         selectedDay = calendar.date(byAdding: .day, value: days, to: selectedDay).map { calendar.startOfDay(for: $0) } ?? selectedDay
     }
 
-    /// An Upcoming day group's title: "Today · Sunday", "Tomorrow · Monday", then "Tuesday 13 Oct".
-    static func dayTitle(_ day: Date) -> String {
-        let calendar = Calendar.cria
-        let weekday = day.formatted(.dateTime.weekday(.wide))
-        if calendar.isDateInToday(day) { return "Today · " + weekday }
-        if calendar.isDateInTomorrow(day) { return "Tomorrow · " + weekday }
-        return day.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
-    }
-
     /// The day a group's New Task row fills in: today in Today's due group, the group's own day (its `yyyy-MM-dd`
     /// key) in Upcoming, none elsewhere.
     static func newTaskDay(_ view: SmartView, groupKey: String) -> Date? {

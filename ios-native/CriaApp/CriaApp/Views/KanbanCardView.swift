@@ -117,7 +117,7 @@ struct KanbanCardView: View {
                     Text(task.title)
                         .font(Self.titleFont)
                         .lineSpacing(Self.titleLeading)
-                        .strikethrough(task.done)
+                        .strikethrough(task.done && Self.strikesDone)
                         .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
                         .multilineTextAlignment(.leading)
                         .lineLimit(4)
@@ -189,6 +189,14 @@ struct KanbanCardView: View {
     }
 
     /// Priority shows as a chip from High up; lower ones are already the ring's colour.
+    /// A done card's title is struck through on iOS; the Mac greys it with the filled ring alone, which reads calmer
+    /// in a column of done cards.
+    #if os(macOS)
+    private static let strikesDone = false
+    #else
+    private static let strikesDone = true
+    #endif
+
     private var showsPriority: Bool { task.priority >= 3 && !task.done }
     private var showsDue: Bool { task.dueDate != nil && !task.done }
     private var hasChips: Bool { showsDue || showsPriority || !labels.isEmpty }

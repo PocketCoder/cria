@@ -92,6 +92,58 @@ struct MacGroupHeader: View {
     }
 }
 
+/// An Upcoming day: the day of the month large (SF 22 semibold, the accent for today), then "Today · Friday",
+/// "Tomorrow · Saturday" or the weekday in SF 13 medium grey, the open count and a hairline under it.
+struct MacDayHeader: View {
+    let day: Date
+    var count: Int?
+
+    var body: some View {
+        let calendar = Calendar.cria
+        let isToday = calendar.isDateInToday(day)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(day.formatted(.dateTime.day()))
+                    .font(.system(size: 22, weight: .semibold))
+                    .tracking(-0.44)
+                    .monospacedDigit()
+                    .foregroundStyle(isToday ? Color(.primary) : Color(.foreground))
+                Text(Self.weekdayTitle(day))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MacTheme.label2)
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(MacTheme.label3)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            Rectangle()
+                .fill(Color.primary.opacity(0.1))
+                .frame(height: 0.5)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
+        }
+        .padding(.top, 16)
+        .textCase(nil)
+    }
+
+    /// "Today · Friday", "Tomorrow · Saturday", else the weekday with the month when the day is not this month.
+    static func weekdayTitle(_ day: Date) -> String {
+        let calendar = Calendar.cria
+        let weekday = day.formatted(.dateTime.weekday(.wide))
+        if calendar.isDateInToday(day) { return "Today · " + weekday }
+        if calendar.isDateInTomorrow(day) { return "Tomorrow · " + weekday }
+        if calendar.isDate(day, equalTo: Date(), toGranularity: .month) { return weekday }
+        return weekday + " · " + day.formatted(.dateTime.month(.abbreviated))
+    }
+}
+
 /// The last row of a group: a plus and "New Task", which opens quick add with that group's date or project filled in.
 struct MacNewTaskRow: View {
     let action: () -> Void

@@ -70,8 +70,8 @@ extension SmartViewScreen {
         }
     }
 
-    /// Overdue in coral (with Today's reschedule action); Upcoming's days as "Today · Sunday" (in the accent),
-    /// "Tomorrow · Monday" and "Tuesday 13 Oct".
+    /// Overdue in coral (with Today's reschedule action); Upcoming's days as a large day number with "Today",
+    /// "Tomorrow" or the weekday beside it (today's number in the accent).
     @ViewBuilder func macGroupHeader(_ group: DisplaySection) -> some View {
         if group.key == "overdue" {
             MacGroupHeader(
@@ -82,11 +82,11 @@ extension SmartViewScreen {
         } else if !isInbox {
             let open = group.items.filter { !$0.task.done }.count
             let day = view == .upcoming ? MacSmartHeader.newTaskDay(view, groupKey: group.key) : nil
-            let isToday = day.map { Calendar.cria.isDateInToday($0) } ?? false
-            MacGroupHeader(
-                title: day.map(MacSmartHeader.dayTitle) ?? group.label,
-                count: open > 0 ? open : nil, tint: isToday ? Color(.primary) : Color(.foreground)
-            )
+            if let day {
+                MacDayHeader(day: day, count: open > 0 ? open : nil)
+            } else {
+                MacGroupHeader(title: group.label, count: open > 0 ? open : nil)
+            }
         }
     }
 }
