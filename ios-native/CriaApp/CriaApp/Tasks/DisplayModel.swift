@@ -58,7 +58,7 @@ struct DisplaySelectToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         #if os(macOS)
-        // One toolbar item on the Mac, beside New Task and the inspector toggle, rather than two more icons.
+        // One toolbar item on the Mac, beside New Task, rather than two more icons.
         ToolbarItem(placement: .primaryAction) {
             if isSelecting {
                 Button("Done", action: onDone)

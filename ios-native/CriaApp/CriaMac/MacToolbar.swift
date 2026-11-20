@@ -1,11 +1,11 @@
 import CriaKit
 import SwiftUI
 
-/// The content column's trailing toolbar items after the search field: notifications, New Task as a plain glyph (no
-/// filled circle: the toolbar stays quiet, and ⌘N and each list's New Task row also add), then the inspector toggle,
-/// accent coloured while the inspector is open. The project view picker (`ProjectScreen`) and the
-/// search field (`.searchable`) are the system's; with the sidebar hidden the system moves its toggle to the leading
-/// edge.
+/// The content column's trailing toolbar items after the search field: notifications and New Task as a plain glyph
+/// (no filled circle: the toolbar stays quiet, and ⌘N and each list's New Task row also add). No inspector toggle: a
+/// task opens by clicking it and closes with its × or a click anywhere else. The project view picker (`ProjectScreen`)
+/// and the search field (`.searchable`) are the system's; with the sidebar hidden the system moves its toggle to the
+/// leading edge.
 struct MacToolbar: ToolbarContent {
     let actions: MacActions
     let services: AppServices
@@ -18,16 +18,6 @@ struct MacToolbar: ToolbarContent {
             }
             .help("New Task ⌘N")
             .accessibilityLabel("New Task")
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Button { actions.toggleInspector() } label: {
-                Image(systemName: "sidebar.right")
-            }
-            .foregroundStyle(actions.hasOpenTask ? Color(.primary) : Color.primary)
-            // Nothing to show until a list on screen has a task.
-            .disabled(!actions.hasOpenTask && actions.panel.focusedId == nil && actions.panel.visibleIds.isEmpty)
-            .help(actions.hasOpenTask ? "Hide Inspector" : "Show Inspector")
-            .accessibilityLabel(actions.hasOpenTask ? "Hide Inspector" : "Show Inspector")
         }
     }
 }

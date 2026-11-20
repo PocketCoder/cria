@@ -186,11 +186,15 @@ struct SmartViewScreen: View {
         .quickAdd(services: services)
         .displayOptions(display, services: services)
         .taskSelection(selection, services: services)
+        #if os(macOS)
+        .onChange(of: addPresented) { _, presented in if presented { openQuickAddPanel() } }
+        #else
         .sheet(isPresented: $addPresented, onDismiss: { addDay = nil; addProject = nil }, content: {
             QuickAddSheet(
                 services: services, contextProjectId: addProject, initialDueDate: addProject == nil ? addDay ?? selectedDay : nil
             )
         })
+        #endif
         // An alert, not a confirmation dialog: on iOS 26 that is a popover, anchored away from the header button.
         .alert(
             rescheduleTitle,

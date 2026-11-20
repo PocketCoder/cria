@@ -157,17 +157,6 @@ final class MacActions {
         columns = columns == .detailOnly ? .all : .detailOnly
     }
 
-    var hasOpenTask: Bool { openTaskId != nil }
-
-    /// The toolbar's inspector button: closes the open task, or opens the focused one (else the first on screen).
-    func toggleInspector() {
-        if openTaskId != nil {
-            openTaskId = nil
-        } else if let id = panel.focusedId ?? panel.visibleIds.first {
-            openTask(id)
-        }
-    }
-
     func projectView(_ kind: String) {
         guard case .project(let id)? = selection else { return }
         projectViews[id] = kind

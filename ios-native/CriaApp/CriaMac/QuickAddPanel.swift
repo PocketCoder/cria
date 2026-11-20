@@ -3,8 +3,9 @@ import CriaKit
 import SwiftUI
 
 /// Quick add as a floating panel, as Spotlight is: 640pt wide, centred 190pt from the top of the screen, above every
-/// app. ⌘N and the global hotkey both open it through `MacActions.addRequest`; it hosts the shared `QuickAddSheet`
-/// in its Mac layout. Esc or adding the task closes it.
+/// app. ⌘N and the global hotkey open it through `MacActions.addRequest`, and each list's New Task row opens it
+/// directly with its day or project: one quick add everywhere. It hosts the shared `QuickAddSheet` in its Mac layout.
+/// Esc or adding the task closes it.
 @MainActor
 final class QuickAddPanel {
     static let shared = QuickAddPanel()
@@ -13,14 +14,17 @@ final class QuickAddPanel {
     private static let width: CGFloat = 640
     private static let topInset: CGFloat = 190
 
-    func show(services: AppServices, contextProjectId: String?, initialLine: String, screen: QuickAddPanelScreen = .add) {
+    func show(
+        services: AppServices, contextProjectId: String?, initialLine: String, initialDueDate: Date? = nil,
+        screen: QuickAddPanelScreen = .add
+    ) {
         // Read before the panel takes key: opened from the app (⌘N), it sits over that window; from another app (the
         // global shortcut), over the screen.
         let anchor = NSApp.keyWindow ?? NSApp.mainWindow
         close()
         let sheet = QuickAddPanelRoot(
             services: services, contextProjectId: contextProjectId, initialLine: initialLine,
-            onClose: { [weak self] in self?.close() }, screen: screen
+            initialDueDate: initialDueDate, onClose: { [weak self] in self?.close() }, screen: screen
         )
         let root = sheet
             .frame(width: Self.width)
@@ -109,6 +113,7 @@ private struct QuickAddPanelRoot: View {
     let services: AppServices
     let contextProjectId: String?
     let initialLine: String
+    let initialDueDate: Date?
     let onClose: () -> Void
     @State var screen: QuickAddPanelScreen
 
@@ -117,7 +122,7 @@ private struct QuickAddPanelRoot: View {
         case .add:
             QuickAddSheet(
                 services: services, contextProjectId: contextProjectId, initialLine: initialLine,
-                onRamble: { screen = .ramble }, onPhoto: { screen = .photo }, onClose: onClose
+                initialDueDate: initialDueDate, onRamble: { screen = .ramble }, onPhoto: { screen = .photo }, onClose: onClose
             )
         case .ramble:
             RambleSheet(services: services, onClose: { screen = .add })

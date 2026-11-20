@@ -69,6 +69,17 @@ extension SmartViewScreen {
         return days
     }
 
+    /// New Task rows open the same floating panel as ⌘N, carrying the row's day or project.
+    func openQuickAddPanel() {
+        QuickAddPanel.shared.show(
+            services: services, contextProjectId: addProject, initialLine: "",
+            initialDueDate: addProject == nil ? addDay ?? selectedDay : nil
+        )
+        addPresented = false
+        addDay = nil
+        addProject = nil
+    }
+
     @ViewBuilder func macNewTaskRow(_ group: DisplaySection) -> some View {
         if let day = MacSmartHeader.newTaskDay(view, groupKey: group.key) {
             MacNewTaskRow {
