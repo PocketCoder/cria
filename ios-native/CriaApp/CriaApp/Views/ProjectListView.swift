@@ -104,7 +104,9 @@ struct ProjectListView: View {
     /// The open tasks: one section per board column when sections are on, else one per group when the Display sheet
     /// groups them (a label's tasks may appear under several).
     private var openSections: [DisplaySection] {
+        #if os(macOS)
         if let board = sectionsBoard { return ProjectListGrouping.byColumn(openItems, board: board) }
+        #endif
         return DisplayEngine.grouped(
             openItems, by: display.config.groupBy, context: display.context(assignees: live.value.snapshot.assignees)
         )
