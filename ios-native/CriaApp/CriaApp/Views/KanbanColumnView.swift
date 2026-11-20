@@ -229,6 +229,8 @@ struct KanbanColumnView: View {
             }
             .padding(.horizontal, 12)
             .frame(minHeight: Self.addRowHeight)
+        } else if Self.marksEmptyColumns && cards.isEmpty {
+            emptyDropArea
         } else {
             Button {
                 adding = true
@@ -244,6 +246,33 @@ struct KanbanColumnView: View {
             .macPointer()
             .padding(.horizontal, 12)
         }
+    }
+
+    /// The Mac marks an empty column as a place to put things: a dashed outline (dashes mean "add something") with
+    /// "Add or drag a task" in grey. iOS keeps its Add task row.
+    #if os(macOS)
+    private static let marksEmptyColumns = true
+    #else
+    private static let marksEmptyColumns = false
+    #endif
+
+    private var emptyDropArea: some View {
+        Button {
+            adding = true
+            addFocused = true
+        } label: {
+            Label("Add or drag a task", systemImage: "plus")
+                .font(Theme.rowSubtitle)
+                .foregroundStyle(Color(.mutedForeground))
+                .frame(maxWidth: .infinity, minHeight: 64)
+                .background {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color(.mutedForeground).opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .macPointer()
     }
 }
 

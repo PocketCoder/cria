@@ -188,8 +188,10 @@ struct TableGridView: View {
     let extras: TableExtras
     let onHeaderTap: (TableViewColumn) -> Void
     var assignees: [String: [AssigneeRecord]] = [:]
-    /// A subtask's parent title, shown under its title.
+    /// A subtask's parent title, shown under its title when it is not indented under its parent.
     var parentTitles: [String: String] = [:]
+    /// How deep each row sits under a parent shown above it (the Mac's manual order); absent is 0.
+    var depths: [String: Int] = [:]
     /// A parent's subtask progress, shown as a ring after its title.
     var progress: [String: SubtaskProgress] = [:]
     /// Set while "Edit cells" is on: label, assignee and date cells then open their picker.

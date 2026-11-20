@@ -32,13 +32,51 @@ extension SmartViewScreen {
                 if byKey[key] == nil { byKey[key] = DisplaySection(key: key, label: key, items: []) }
             }
             // "overdue" first, then the days in date order (their keys are yyyy-MM-dd).
-            return byKey.values.sorted { lhs, rhs in
+            let ordered = byKey.values.sorted { lhs, rhs in
                 if lhs.key == "overdue" || rhs.key == "overdue" { return lhs.key == "overdue" && rhs.key != "overdue" }
                 return lhs.key < rhs.key
             }
+            return Self.foldingQuietDays(ordered)
         default:
             return sections
         }
+    }
+
+    /// Upcoming keeps its first three days whatever they hold; after them, two or more empty days in a row fold into one
+    /// quiet line ("Tue 24 – Sat 28"), so the week reads as what is planned, not a run of blank headers.
+    static func foldingQuietDays(_ sections: [DisplaySection]) -> [DisplaySection] {
+        var out: [DisplaySection] = []
+        var run: [DisplaySection] = []
+        var daysSeen = 0
+        func flush() {
+            if run.count >= 2, let first = run.first, let last = run.last {
+                out.append(DisplaySection(
+                    key: "quiet_" + first.key.replacingOccurrences(of: "-", with: ""),
+                    label: quietLabel(first.key) + " – " + quietLabel(last.key), items: []
+                ))
+            } else {
+                out += run
+            }
+            run = []
+        }
+        for section in sections {
+            let isDay = MacSmartHeader.newTaskDay(.upcoming, groupKey: section.key) != nil
+            if isDay { daysSeen += 1 }
+            if isDay, daysSeen > 3, section.items.isEmpty {
+                run.append(section)
+            } else {
+                flush()
+                out.append(section)
+            }
+        }
+        flush()
+        return out
+    }
+
+    /// "Tue 24" for a yyyy-MM-dd key.
+    private static func quietLabel(_ key: String) -> String {
+        guard let day = MacSmartHeader.newTaskDay(.upcoming, groupKey: key) else { return key }
+        return day.formatted(.dateTime.weekday(.abbreviated).day())
     }
 
     /// The selected day and the rest of its week, as the strip shows it.
@@ -79,6 +117,9 @@ extension SmartViewScreen {
                 actionTitle: view == .today ? "Reschedule to today" : nil,
                 action: view == .today ? { rescheduling = group } : nil
             )
+        } else if group.key.hasPrefix("quiet_") {
+            // Folded empty days: a grey line, no count and no New Task row.
+            MacGroupHeader(title: group.label, tint: MacTheme.label3)
         } else if !isInbox {
             let open = group.items.filter { !$0.task.done }.count
             let day = view == .upcoming ? MacSmartHeader.newTaskDay(view, groupKey: group.key) : nil

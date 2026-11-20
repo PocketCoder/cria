@@ -76,7 +76,22 @@ struct TableViewScreen: View {
     }
 
     private var shownColumns: [TableViewColumn] {
-        availableColumns.filter { visible.contains($0) }
+        let shown = availableColumns.filter { visible.contains($0) }
+        #if os(macOS)
+        // The task number is reference, not something read first: last on the Mac.
+        return shown.filter { $0 != .index } + shown.filter { $0 == .index }
+        #else
+        return shown
+        #endif
+    }
+
+    /// Each row's indent under its parent: the Mac's manual order only, so iOS keeps its "Subtask of" captions.
+    private var rowDepths: [String: Int] {
+        #if os(macOS)
+        return sortKeys.isEmpty ? TableNesting.depths(rows, children: nesting.value.children) : [:]
+        #else
+        return [:]
+        #endif
     }
 
     /// Sorting uses every sortable column, shown or not, so the Sort menu always does something. Kept in state and
@@ -90,12 +105,13 @@ struct TableViewScreen: View {
         let currentUserId: Int?
         let commentCounts: [Int: Int]
         let optimistic: OptimisticOrder
+        let children: [String: [String]]
     }
 
     private var sortInput: SortInput {
         SortInput(
             items: live.value, sortText: sortText, showDone: showDone, currentUserId: currentUserId,
-            commentCounts: commentCounts, optimistic: optimistic
+            commentCounts: commentCounts, optimistic: optimistic, children: nesting.value.children
         )
     }
 
@@ -108,7 +124,12 @@ struct TableViewScreen: View {
         )
         // With no sort the rows are in manual order, which a drop has just changed.
         let ids = sortKeys.isEmpty ? optimistic.resolve(sorted.map(\.localId)) : sorted.map(\.localId)
-        return ids.compactMap { byId[$0] }
+        let ordered = ids.compactMap { byId[$0] }
+        #if os(macOS)
+        // In manual order each subtask sits indented under its parent, rather than apart with "Subtask of".
+        if sortKeys.isEmpty { return TableNesting.nested(ordered, children: nesting.value.children) }
+        #endif
+        return ordered
     }
 
     /// The rows' stored manual (position) order, which `optimistic` is recorded against.
@@ -127,6 +148,7 @@ struct TableViewScreen: View {
                         },
                         assignees: assigneeFeed.value,
                         parentTitles: nesting.value.parentTitles,
+                        depths: rowDepths,
                         progress: nesting.value.progress,
                         onEdit: editAction,
                         onMove: { moveRow($0, onto: $1) }
