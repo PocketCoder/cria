@@ -211,7 +211,7 @@ struct TaskRowView: View {
 }
 
 #if os(macOS)
-/// The Mac row from the macOS design: an 18pt ring, the title in SF 13 and one SF 11 meta line (due date, repeat,
+/// The Mac row from the macOS design: an 18pt ring, the title in SF 13 and one grey SF 11 meta line (due date, repeat,
 /// description, attachments and labels, then the project on the trailing edge). TaskRowLink draws the hover and
 /// selected fills. A completed row stays, struck through, until the screen goes (`RecentlyCompleted`).
 extension TaskRowView {
@@ -253,13 +253,7 @@ extension TaskRowView {
                 }
                 .frame(minHeight: 18)
                 .alignmentGuide(.rowTitleMid) { $0[VerticalAlignment.center] }
-                // The description's first words: not in the handoff, kept from the earlier Mac rows by request.
-                if let summary = item.summary, !task.done {
-                    Text(summary)
-                        .font(.system(size: 11))
-                        .foregroundStyle(MacTheme.label2)
-                        .lineLimit(1)
-                }
+                // No description excerpt: the meta line's notes glyph says there is one, and the inspector shows it.
                 if let parent = tree.parentTitle {
                     Text("Subtask of ‘\(parent)’")
                         .font(.system(size: 11))
@@ -336,23 +330,23 @@ extension TaskRowView {
         .frame(minHeight: 16)
     }
 
-    /// Coral when overdue, the accent when due today, otherwise the secondary shade (always, once done).
+    /// Coral when overdue, otherwise the secondary shade, due today included: the accent is kept for state.
     private func macDueTint(_ due: String) -> Color {
         if task.done || completing { return MacTheme.label2 }
         if DueDates.isOverdue(due, now: Date()) { return MacTheme.coral }
-        if let day = DueDates.calendarDate(due), Calendar.cria.isDateInToday(day) { return Color(.primary) }
         return MacTheme.label2
     }
 
     private func macLabelChip(_ label: LabelRecord) -> some View {
-        let tint = Color(hexString: label.hexColor) ?? Color(.info)
-        // `MChip`: 18pt high, 7pt sides, SF 11 Medium in the label's colour on a 12% wash of it.
-        return Text(label.title)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 7)
-            .frame(height: 18)
-            .background(tint.opacity(0.12), in: Capsule())
+        // A grey chip, 18pt high with 7pt sides: a tag glyph in the label's muted colour, then its title in SF 11.
+        HStack(spacing: 3) {
+            Image(systemName: "tag").foregroundStyle(MacTheme.projectColour(hex: label.hexColor))
+            Text(label.title).foregroundStyle(MacTheme.label2)
+        }
+        .font(.system(size: 11, weight: .medium))
+        .padding(.horizontal, 7)
+        .frame(height: 18)
+        .background(MacTheme.fill, in: Capsule())
     }
 
     /// A parent's chevron, rotating as its subtasks show and hide. Nothing for a row with no children here.

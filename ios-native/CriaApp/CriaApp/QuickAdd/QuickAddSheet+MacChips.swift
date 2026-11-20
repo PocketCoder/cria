@@ -3,7 +3,7 @@ import SwiftUI
 
 #if os(macOS)
 /// The Mac panel's chips row: Project, Date, Priority, Labels and Reminder, 30pt high. Each opens a menu, and a chip
-/// is grey until it has a value, then takes its colour.
+/// is grey until it has a value, then turns the accent: one colour for "set", not one per chip.
 extension QuickAddSheet {
     var panelChips: some View {
         HStack(spacing: 6) {
@@ -13,7 +13,7 @@ extension QuickAddSheet {
             panelLabelsMenu
             QuickAddReminderMenu(
                 reminders: $reminders, hasDueDate: !dueISO.isEmpty, onCustom: { pickerSheet = .reminder },
-                unsetTint: Self.unsetTint, emptyTitle: "Reminder"
+                unsetTint: Self.unsetTint, emptyTitle: "Reminder", setTint: Color(.primary)
             )
             .frame(height: 30)
             parsedChips
@@ -53,7 +53,7 @@ extension QuickAddSheet {
         } label: {
             CriaChip(
                 text: dueISO.isEmpty ? "Date" : DueDates.label(dueISO, now: Date(), display: dateDisplay),
-                systemImage: "calendar", tint: dueISO.isEmpty ? Self.unsetTint : Color(.sky700)
+                systemImage: "calendar", tint: dueISO.isEmpty ? Self.unsetTint : Color(.primary)
             )
         }
         .macChipMenu()
@@ -80,7 +80,7 @@ extension QuickAddSheet {
         } label: {
             CriaChip(
                 text: priority == 0 ? "Priority" : "P\(priority)", systemImage: "flag",
-                tint: priority == 0 ? Self.unsetTint : Color(.marigold700)
+                tint: priority == 0 ? Self.unsetTint : Color(.primary)
             )
         }
         .macChipMenu()
@@ -98,7 +98,7 @@ extension QuickAddSheet {
         } label: {
             CriaChip(
                 text: labelTitles.isEmpty ? "Labels" : labelTitles.joined(separator: ", "), systemImage: "tag",
-                tint: labelTitles.isEmpty ? Self.unsetTint : Color(.meadow700)
+                tint: labelTitles.isEmpty ? Self.unsetTint : Color(.primary)
             )
         }
         .macChipMenu()

@@ -68,7 +68,7 @@ struct MacViewPicker: View {
     }
 }
 
-/// The in-content header on the Mac: colour dot and Onest title, the subtitle, then Share, the info toggle (List view
+/// The in-content header on the Mac: the project's ring or icon and its title, the subtitle, then Share, the info toggle (List view
 /// only) and the project menu, on the title's baseline.
 struct MacProjectHeader: View {
     let title: String
@@ -88,11 +88,13 @@ struct MacProjectHeader: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 10) {
-                    if let colour {
+                    if let project {
+                        MacProjectGlyph(projectLocalId: project.localId, hexColor: project.hexColor, size: 18)
+                    } else if let colour {
                         Circle().fill(colour).frame(width: 14, height: 14).accessibilityHidden(true)
                     }
                     Text(title)
-                        .font(MacTheme.largeTitle.weight(.bold))
+                        .font(MacTheme.largeTitle)
                         .tracking(MacTheme.largeTitleTracking)
                         .foregroundStyle(Color(.foreground))
                         .lineLimit(1)
@@ -167,6 +169,7 @@ private struct MacProjectHeaderMenu: View {
         }
         // The background is set on the server at once, so it needs the project synced.
         Button("Background…", systemImage: "photo") { onBackground() }.disabled(project.serverId == nil)
+        MacProjectIconMenu(projectLocalId: project.localId)
         Divider()
         if !isLinkShare {
             Button("Duplicate", systemImage: "plus.square.on.square") { Task { await sheets.duplicate(project, services: services) } }

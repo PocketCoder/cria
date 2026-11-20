@@ -82,15 +82,19 @@ extension QuickAddSheet {
         }
     }
 
-    /// "Type *label, +project, !1–5 or a day like tomorrow.", each token in its colour.
+    /// "Type *label, +project, !1–5 or a day like tomorrow.", the syntax in monospaced text, in grey with the rest.
     private var panelHint: some View {
-        let label = Text("*label").foregroundStyle(Color(.meadow700))
-        let project = Text("+project").foregroundStyle(Color(.primary))
-        let bang = Text("!1–5").foregroundStyle(Color(.marigold700))
-        let day = Text("tomorrow").foregroundStyle(Color(.sky700))
+        let label = Self.hintToken("*label")
+        let project = Self.hintToken("+project")
+        let bang = Self.hintToken("!1–5")
+        let day = Self.hintToken("tomorrow")
         return Text("Type \(label), \(project), \(bang) or a day like \(day).")
             .font(.system(size: 12))
             .foregroundStyle(MacTheme.label2)
+    }
+
+    private static func hintToken(_ token: String) -> Text {
+        Text(token).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color(.foreground))
     }
 
     private var panelFooter: some View {

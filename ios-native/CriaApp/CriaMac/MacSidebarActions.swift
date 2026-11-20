@@ -181,6 +181,7 @@ struct MacProjectMenu: View {
         Button(project.isFavorite ? "Unfavourite" : "Favourite", systemImage: "star") {
             sheets.toggleFavourite(project, services: services)
         }
+        MacProjectIconMenu(projectLocalId: project.localId)
         if !isLinkShare {
             Divider()
             Button("Share…", systemImage: "person.badge.plus") { sheets.sharing = ProjectShareTarget(project: project) }

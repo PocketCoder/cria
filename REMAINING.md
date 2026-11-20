@@ -37,6 +37,10 @@ The native iOS and Mac apps are at parity with the Tauri app except for what is 
 
 ## Known limitations of what was built
 
+- Mac quiet redesign (2026-11-20): custom project icons are kept per Mac (UserDefaults by project local id), not synced
+  through `frontend_settings.cria`, and iOS does not show them. They are picked from the project menus' Icon submenu;
+  the Edit Project grid with search from the mocks is not built. The project ring has no progress fill yet. Upcoming,
+  Gantt, Table, Board and Settings still follow the earlier Mac design (see the spec's view sections).
 - Archived projects: opening one only labels it read-only; edits are not blocked locally (the server rejects them).
 - Undo does not cover the relations-section done toggle.
 - Undoing a reopen sets `done_at` to now; undoing a repeating-task completion does not re-mark subtasks that were reset; Kanban undo restores only the moved card's bucket and position.

@@ -32,9 +32,10 @@ enum MacTheme {
     /// The favourite star.
     static let marigold = Color(red: 0xE2 / 255, green: 0xA0 / 255, blue: 0)
 
-    /// Onest Bold large titles: 28pt on screens, tracking -0.02em.
-    static let largeTitle = Font.custom(Theme.brandFont, size: 28)
-    static let largeTitleTracking: CGFloat = -0.56
+    /// Screen titles: SF Pro 26 semibold, tracking -0.02em. Semibold, never bold: the hierarchy comes from size and
+    /// space. (Only Onest Bold is bundled, so the Mac titles use the system face.)
+    static let largeTitle = Font.system(size: 26, weight: .semibold)
+    static let largeTitleTracking: CGFloat = -0.52
 
     private static func dynamic(light: UInt32, dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

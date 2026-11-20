@@ -44,6 +44,8 @@ struct QuickAddReminderMenu: View {
     var unsetTint: Color?
     /// The chip's text with no reminder set.
     var emptyTitle = "Remind"
+    /// The chip's colour once a reminder is set (the Mac panel's accent); nil keeps coral.
+    var setTint: Color?
     @Environment(\.dateDisplay) private var dateDisplay
 
     @Environment(\.preferences) private var preferences
@@ -71,7 +73,7 @@ struct QuickAddReminderMenu: View {
             }
         } label: {
             CriaChip(text: chipText, systemImage: reminders.isEmpty ? "bell" : "bell.fill",
-                     tint: reminders.isEmpty ? (unsetTint ?? Color(.coral500)) : Color(.coral500))
+                     tint: reminders.isEmpty ? (unsetTint ?? Color(.coral500)) : (setTint ?? Color(.coral500)))
         }
         .macChipMenu()
         .accessibilityLabel("Reminders")

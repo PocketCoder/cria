@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The large title at the top of every Mac list screen (the design's content header): Onest Bold 28 with an SF 13
+/// The large title at the top of every Mac list screen (the design's content header): SF 26 semibold with an SF 13
 /// subtitle under it and optional buttons on the title's baseline. It replaces the window title, which the screens
 /// hide with `macHidesWindowTitle()`.
 struct MacContentHeader<Trailing: View>: View {
@@ -100,9 +100,10 @@ struct MacNewTaskRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
+                // Grey, as the label: the row is a quiet way in, not an accent.
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(.primary))
+                    .foregroundStyle(MacTheme.label3)
                     .frame(width: 18, height: 18)
                 Text("New Task")
                     .font(.system(size: 13))

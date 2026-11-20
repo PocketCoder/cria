@@ -10,9 +10,10 @@ struct MacSidebarData: Equatable, Sendable {
 }
 
 /// The sidebar from the macOS design: Inbox, Today and Upcoming, then collapsible Favourites, Projects, Filters and Labels,
-/// with sync status and Settings in the footer. Search is the toolbar's field, not a row. Icons take the accent
-/// colour; counts show on the right when Settings > Customise > Show task count is on. The system draws the glass on
-/// macOS 26; no background.
+/// with sync status and Settings in the footer. Search is the toolbar's field, not a row. Icons are grey and take the
+/// accent colour only on the selected row; projects show a ring or their custom icon in their muted colour. Counts
+/// show on the right when Settings > Customise > Show task count is on. The system draws the glass on macOS 26; no
+/// background.
 struct MacSidebar: View {
     let services: AppServices
     let actions: MacActions
@@ -111,7 +112,7 @@ struct MacSidebar: View {
                 MacSidebarHeader(title: "Labels", isExpanded: $showLabels, addHelp: "Manage labels") { sheets.showingLabels = true }
             }
         }
-        .tint(Color(.primary))
+        .tint(MacTheme.label2)
         .environment(\.macSidebarSelection, actions.selection)
         .environment(\.macSidebarSelect, { actions.selection = $0 })
         .navigationSplitViewColumnWidth(min: 200, ideal: 244)
@@ -149,9 +150,9 @@ struct MacSidebar: View {
             Label {
                 Text(label.title)
             } icon: {
-                Image(systemName: "tag.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color(hexString: label.hexColor) ?? MacTheme.label2)
+                Image(systemName: "tag")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MacTheme.projectColour(hex: label.hexColor))
             }
             .macSidebarRow(.label(label.localId))
             .tag(MacSelection.label(label.localId))
@@ -206,8 +207,8 @@ struct MacProjectBranch: View {
     }
 }
 
-/// A project row: its colour dot, title and the project actions on right-click. A task dragged from a list drops on it
-/// to move there, with a 22% tint and a 1.5pt accent ring while it is over the row.
+/// A project row: its ring or custom icon in its muted colour, title and the project actions on right-click. A task
+/// dragged from a list drops on it to move there, with a 22% tint and a 1.5pt accent ring while it is over the row.
 struct MacProjectLabel: View {
     let project: ProjectRecord
     let services: AppServices
@@ -221,9 +222,7 @@ struct MacProjectLabel: View {
         Label {
             Text(project.title)
         } icon: {
-            Image(systemName: "circle.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(Color(hexString: project.hexColor) ?? MacTheme.label2)
+            MacProjectGlyph(projectLocalId: project.localId, hexColor: project.hexColor)
         }
         .macSidebarRow(.project(project.localId))
         .tag(MacSelection.project(project.localId))

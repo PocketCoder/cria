@@ -70,7 +70,9 @@ struct MacSidebarRowState: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+            .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+            // Glyphs are grey; only the selected row's turns the accent.
+            .tint(isSelected ? Color(.primary) : MacTheme.label2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .background {
@@ -99,7 +101,7 @@ private struct MacSidebarSelectKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// The sidebar's selection, for the rows' highlight and Semibold title.
+    /// The sidebar's selection, for the rows' highlight, medium-weight title and accent glyph.
     var macSidebarSelection: MacSelection? {
         get { self[MacSidebarSelectionKey.self] }
         set { self[MacSidebarSelectionKey.self] = newValue }
