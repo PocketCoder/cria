@@ -71,8 +71,9 @@ struct MacSidebarRowState: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-            // Glyphs are grey; only the selected row's turns the accent.
-            .tint(isSelected ? Color(.primary) : MacTheme.label2)
+            // Glyphs are grey; only the selected row's turns the accent. A style, not `.tint`: the sidebar list paints
+            // a Label's icon in the app's AccentColor whatever tint the row is given.
+            .labelStyle(MacSidebarLabelStyle(isSelected: isSelected))
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .background {
@@ -89,6 +90,22 @@ struct MacSidebarRowState: ViewModifier {
                 if let destination { select(destination) }
             })
             .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// A sidebar Label drawn by the row rather than the list: the icon in an 18pt column, grey (the accent when selected),
+/// 8pt before the title. An icon that sets its own colour (a project's ring or icon, a label's tag) keeps it.
+struct MacSidebarLabelStyle: LabelStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.icon
+                .foregroundStyle(isSelected ? Color(.primary) : MacTheme.label2)
+                .frame(width: 18, alignment: .center)
+            configuration.title
+                .foregroundStyle(Color(.foreground))
+        }
     }
 }
 
