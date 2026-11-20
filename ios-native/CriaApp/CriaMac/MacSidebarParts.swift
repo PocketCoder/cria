@@ -55,10 +55,10 @@ struct MacSidebarHeader: View {
     }
 }
 
-/// A sidebar row's highlight, drawn here rather than by the system so hover and selection share one shape: the same
-/// 8pt rounded rectangle across the full row width and its full height, so a highlighted row meets the next one, `fill` under the pointer and `selection` once chosen. A click
-/// selects the row's destination through the sidebar's `macSidebarSelect`; rows with no destination (Archived
-/// projects) only take the hover.
+/// A sidebar row's highlight, drawn here rather than by the system so hover and selection share one shape: the same 8pt
+/// rounded rectangle across the full row width and its full height, so a highlighted row meets the next one, `fill`
+/// under the pointer and `selection` once chosen. A click selects the row's destination through the sidebar's
+/// `macSidebarSelect`; rows with no destination (Archived projects) only take the hover.
 struct MacSidebarRowState: ViewModifier {
     let destination: MacSelection?
     @Environment(\.macSidebarSelection) private var selection
