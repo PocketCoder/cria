@@ -55,15 +55,21 @@ struct KanbanSubtaskList: View {
                 _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
             }
             openLink(task.localId) {
-                Text(task.title)
-                    .font(Theme.caption)
-                    .strikethrough(task.done)
-                    .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(task.title)
+                        .font(Theme.caption)
+                        .strikethrough(task.done)
+                        .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                    #if os(macOS)
+                    // The same glyphs as the card itself, smaller.
+                    MacSubtaskSignals(task: task)
+                    #endif
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .macPointer()

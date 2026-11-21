@@ -204,7 +204,7 @@ struct KanbanCardView: View {
     #if os(macOS)
     /// Same-column subtasks are listed in the card (and open there), so the count only stands for those elsewhere.
     private var macProgress: SubtaskProgress? { subtasks.isEmpty ? progress : nil }
-    private var hasNotes: Bool { !(task.description ?? "").isEmpty }
+    private var hasNotes: Bool { MacSignal.hasNotes(task.description) }
     private var commentCount: Int { task.serverId.flatMap { commentCounts[$0] } ?? 0 }
     private var macHasSignals: Bool { macProgress != nil || hasChips || task.repeatAfter > 0 || hasNotes || commentCount > 0 }
 
