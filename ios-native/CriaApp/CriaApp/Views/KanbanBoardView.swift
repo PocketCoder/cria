@@ -83,14 +83,17 @@ struct KanbanBoardView: View {
     }
     private var filter: BoardFilter { BoardFilter.from(stored: filterText) }
 
-    /// Which cards each column draws and which subtasks ride inside them. Drops, limits and "Move to" still work on
-    /// the whole column, so a hidden or nested task keeps its place and a filtered column is never mistaken for a
-    /// full one.
+    /// Which cards each column draws. Every subtask is a card of its own (`nests: false`), wherever its parent is: it
+    /// keeps its own dates, labels and moves, names its parent, and the parent lists it as a pointer. Drops, limits
+    /// and "Move to" still work on the whole column, so a hidden task keeps its place and a filtered column is never
+    /// mistaken for a full one.
     private var plan: KanbanBoardPlan {
         let filter = self.filter
-        guard filter.isActive else { return KanbanNesting.plan(columns: columns, children: live.value.children, nests: true) }
+        guard filter.isActive else {
+            return KanbanNesting.plan(columns: columns, children: live.value.children, nests: false)
+        }
         let labelIds = live.value.labelIds
-        return KanbanNesting.plan(columns: columns, children: live.value.children, nests: true) {
+        return KanbanNesting.plan(columns: columns, children: live.value.children, nests: false) {
             filter.shows($0, labelIds: labelIds[$0.localId] ?? [])
         }
     }

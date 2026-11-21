@@ -5,7 +5,11 @@ import Foundation
 /// subtask it is even when the parent is not on the board, and a parent can show how many of its subtasks are done.
 struct KanbanSubtaskInfo: Equatable, Sendable {
     var parentTitles: [String: String] = [:]
+    /// Each board task's parent, for the card's "↰ Parent" link.
+    var parentIds: [String: String] = [:]
     var progress: [String: SubtaskProgress] = [:]
+    /// Each board parent's subtasks, wherever they are, in title order: the parent card's list of pointers.
+    var subtasks: [String: [TaskRecord]] = [:]
 
     static func read(_ reading: CriaStore, tasks: [TaskRecord]) throws -> KanbanSubtaskInfo {
         let byId = Dictionary(tasks.map { ($0.localId, $0) }, uniquingKeysWith: { first, _ in first })
@@ -23,17 +27,20 @@ struct KanbanSubtaskInfo: Equatable, Sendable {
         for (parent, kids) in children.sorted(by: { $0.key < $1.key }) {
             let kids = Set(kids).subtracting([parent])
             if byId[parent] != nil {
-                var done = 0
-                var total = 0
-                for kid in kids {
-                    guard let task = record(kid) else { continue }
-                    total += 1
-                    if task.done { done += 1 }
+                let records = kids.compactMap(record).sorted {
+                    $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
                 }
-                if total > 0 { info.progress[parent] = SubtaskProgress(done: done, total: total) }
+                let done = records.filter(\.done).count
+                if !records.isEmpty {
+                    info.progress[parent] = SubtaskProgress(done: done, total: records.count)
+                    info.subtasks[parent] = records
+                }
             }
             for kid in kids where byId[kid] != nil && info.parentTitles[kid] == nil {
-                if let title = record(parent)?.title { info.parentTitles[kid] = title }
+                if let title = record(parent)?.title {
+                    info.parentTitles[kid] = title
+                    info.parentIds[kid] = parent
+                }
             }
         }
         return info

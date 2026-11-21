@@ -87,3 +87,62 @@ struct KanbanSubtaskList: View {
         }
     }
 }
+
+/// One of a parent's subtasks as the parent's card lists it: a pointer to the subtask's own card.
+struct KanbanSubtaskPointer: Equatable, Identifiable {
+    let task: TaskRecord
+    /// The column the subtask's card sits in, or nil when it is not on this board (another project, or filtered).
+    let column: String?
+    var id: String { task.localId }
+}
+
+#if os(macOS)
+/// The list a Mac parent card opens from its subtask count: every subtask on one quiet line, naming the column its
+/// own card sits in. A pointer, not a copy: it has no tick, and a click selects the real task.
+struct KanbanSubtaskPointerList: View {
+    let pointers: [KanbanSubtaskPointer]
+    @Environment(\.taskOpener) private var openTask
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(pointers) { pointer in
+                Button {
+                    openTask?(pointer.task.localId)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: pointer.task.done ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 11))
+                            .foregroundStyle(MacTheme.label3)
+                        Text(pointer.task.title)
+                            .font(.system(size: 12))
+                            .strikethrough(pointer.task.done)
+                            .foregroundStyle(pointer.task.done ? MacTheme.label3 : MacTheme.label2)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(pointer.column ?? "Elsewhere")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(MacTheme.label2)
+                            .padding(.horizontal, 6)
+                            .frame(height: 16)
+                            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1)))
+                        Image(systemName: "arrow.right").font(.system(size: 9)).foregroundStyle(MacTheme.label3)
+                    }
+                    .frame(minHeight: 24)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .macPointer()
+                .accessibilityLabel(
+                    "\(pointer.task.title), \(pointer.task.done ? "done" : "open"), in \(pointer.column ?? "another place")"
+                )
+            }
+        }
+        .padding(.top, 4)
+        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5) }
+        // Under the title's text edge, not the card's: ring inset, the 16pt ring and the gap.
+        .padding(.leading, Theme.cardRingInset + 16 + Theme.checkGap)
+        .padding(.trailing, 10)
+        .padding(.bottom, 8)
+    }
+}
+#endif

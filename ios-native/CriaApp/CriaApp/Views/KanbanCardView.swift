@@ -23,8 +23,12 @@ struct KanbanCardView: View {
     var subtasks: [KanbanSubtaskRow] = []
     /// The parent's title when it is on the board in another column: shown as "↳ Parent".
     var parentTitle: String?
-    /// The task's subtask progress, shown as a ring on the Mac when none of the subtasks are listed in the card.
+    /// The parent's local id, for the Mac card's "↰ Parent" link.
+    var parentId: String?
+    /// The task's subtask progress, counting every subtask wherever it is.
     var progress: SubtaskProgress?
+    /// Every subtask as a pointer to its own card, listed when the Mac card's count is opened.
+    var subtaskPointers: [KanbanSubtaskPointer] = []
     var isExpanded: Binding<Bool> = .constant(false)
 
     #if os(macOS)
@@ -62,6 +66,11 @@ struct KanbanCardView: View {
             if !subtasks.isEmpty {
                 KanbanSubtaskList(services: services, subtasks: subtasks, isExpanded: isExpanded)
             }
+            #if os(macOS)
+            if isExpanded.wrappedValue && !subtaskPointers.isEmpty {
+                KanbanSubtaskPointerList(pointers: subtaskPointers)
+            }
+            #endif
         }
         #if os(macOS)
         // The Mac card: white (or #212128) with a soft shadow and a hairline ring, and a 2pt primary ring when open.
@@ -114,6 +123,9 @@ struct KanbanCardView: View {
             #else
             .padding(.top, Self.ringTop)
             #endif
+            #if os(macOS)
+            macBody
+            #else
             openLink {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(task.title)
@@ -123,35 +135,21 @@ struct KanbanCardView: View {
                         .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
                         .multilineTextAlignment(.leading)
                         .lineLimit(4)
-                        #if os(macOS)
-                        // The middle of the first line: a cap height above its baseline, halved, for SF 13.
-                        .alignmentGuide(.rowTitleMid) { $0[.firstTextBaseline] - 4.5 }
-                        #endif
                     if let parentTitle {
                         Text("Subtask of ‘\(parentTitle)’")
                             .font(Theme.caption)
                             .foregroundStyle(Color(.mutedForeground))
                             .lineLimit(1)
                     }
-                    #if os(macOS)
-                    if macHasSignals { ChipFlowLayout(spacing: 10) { macSignals } }
-                    #else
                     if hasChips {
                         ChipFlowLayout { chips }
                     }
-                    #endif
                 }
                 .padding(.vertical, Self.padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .macPointer()
-            #if os(macOS)
-            // Command-click toggles done instead of opening the card (a plain click still opens it).
-            .highPriorityGesture(TapGesture().modifiers(.command).onEnded {
-                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
-            })
             #endif
         }
         .padding(.trailing, Self.padding)
@@ -167,6 +165,9 @@ struct KanbanCardView: View {
             }
             ForEach(moveTargets, id: \.bucket.localId) { target in
                 Button("Move to \(target.bucket.title)") { onMove(target) }
+            }
+            if !subtaskPointers.isEmpty {
+                Button(isExpanded.wrappedValue ? "Hide subtasks" : "Show subtasks") { isExpanded.wrappedValue.toggle() }
             }
             if let onDelete {
                 Button("Delete") { onDelete() }
@@ -201,43 +202,6 @@ struct KanbanCardView: View {
     private var showsDue: Bool { task.dueDate != nil && !task.done }
     private var hasChips: Bool { showsDue || showsPriority || !labels.isEmpty }
 
-    #if os(macOS)
-    /// Same-column subtasks are listed in the card (and open there), so the count only stands for those elsewhere.
-    private var macProgress: SubtaskProgress? { subtasks.isEmpty ? progress : nil }
-    private var hasNotes: Bool { MacSignal.hasNotes(task.description) }
-    private var commentCount: Int { task.serverId.flatMap { commentCounts[$0] } ?? 0 }
-    private var macHasSignals: Bool { macProgress != nil || hasChips || task.repeatAfter > 0 || hasNotes || commentCount > 0 }
-
-    /// The Mac card's line: the same quiet glyphs as a Mac row (`MacSignal`), in the same order.
-    @ViewBuilder private var macSignals: some View {
-        Group {
-            if let progress = macProgress { MacSignal.subtasks(done: progress.done, total: progress.total) }
-            if showsDue, let due = task.dueDate {
-                MacSignal(
-                    systemImage: "calendar", text: DueDates.label(due, now: Date(), display: dateDisplay),
-                    tint: DueDates.isOverdue(due, now: Date()) ? MacTheme.coral : MacTheme.label2
-                )
-            }
-            if task.repeatAfter > 0 { MacSignal(systemImage: "repeat", spoken: "Repeats") }
-            if showsPriority, let name = TableCells.priorityName(task.priority) {
-                MacSignal(
-                    systemImage: "flag.fill", text: name,
-                    tint: ThemeToken.priority(task.priority).map { Color($0) } ?? MacTheme.label2
-                )
-            }
-            if commentCount > 0 {
-                MacSignal(
-                    systemImage: "bubble.left", text: "\(commentCount)",
-                    spoken: commentCount == 1 ? "1 comment" : "\(commentCount) comments"
-                )
-            }
-            if hasNotes { MacSignal(systemImage: "text.alignleft", spoken: "Has notes") }
-            ForEach(labels.prefix(2), id: \.localId) { label in MacLabelTag(label: label) }
-            if labels.count > 2 { MacSignal(systemImage: "tag", text: "+\(labels.count - 2)") }
-        }
-        .font(.system(size: 11))
-    }
-    #endif
 
     @ViewBuilder private var chips: some View {
         if showsDue, let due = task.dueDate {
@@ -264,3 +228,111 @@ struct KanbanCardView: View {
         }
     }
 }
+
+#if os(macOS)
+// MARK: The Mac card
+
+extension KanbanCardView {
+    /// The Mac card's text column: the parent link, the title (which opens the card) and the signal line. The line
+    /// sits outside the title's button so its subtask count can be a button of its own.
+    private var macBody: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let parentTitle {
+                Button {
+                    if let parentId { openTask?(parentId) }
+                } label: {
+                    Label(parentTitle, systemImage: "arrow.turn.up.left")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MacTheme.label2)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .macPointer()
+                .help("Open the parent task")
+            }
+            openLink {
+                Text(task.title)
+                    .font(Self.titleFont)
+                    .lineSpacing(Self.titleLeading)
+                    .foregroundStyle(task.done ? Color(.mutedForeground) : Color(.foreground))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(4)
+                    // The middle of the first line: a cap height above its baseline, halved, for SF 13.
+                    .alignmentGuide(.rowTitleMid) { $0[.firstTextBaseline] - 4.5 }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .macPointer()
+            // Command-click toggles done instead of opening the card (a plain click still opens it).
+            .highPriorityGesture(TapGesture().modifiers(.command).onEnded {
+                _ = try? undo.updateTask(services, localId: task.localId, patch: TaskPatch(done: !task.done))
+            })
+            if macHasSignals {
+                ChipFlowLayout(spacing: 10) { macSignals }
+                    .contentShape(Rectangle())
+                    .onTapGesture { openTask?(task.localId) }
+            }
+        }
+        .padding(.vertical, Self.padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Every subtask is a card of its own now, so the count covers them all.
+    private var macProgress: SubtaskProgress? { progress }
+    private var hasNotes: Bool { MacSignal.hasNotes(task.description) }
+    private var commentCount: Int { task.serverId.flatMap { commentCounts[$0] } ?? 0 }
+    private var macHasSignals: Bool { macProgress != nil || hasChips || task.repeatAfter > 0 || hasNotes || commentCount > 0 }
+
+    /// The Mac card's line: the same quiet glyphs as a Mac row (`MacSignal`), in the same order.
+    @ViewBuilder private var macSignals: some View {
+        Group {
+            if let progress = macProgress {
+                if subtaskPointers.isEmpty {
+                    MacSignal.subtasks(done: progress.done, total: progress.total)
+                } else {
+                    // Opens the list of pointers to the subtasks' own cards.
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { isExpanded.wrappedValue.toggle() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            MacSignal.subtasks(done: progress.done, total: progress.total)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(MacTheme.label2)
+                                .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .macPointer()
+                    .help(isExpanded.wrappedValue ? "Hide subtasks" : "Show subtasks")
+                }
+            }
+            if showsDue, let due = task.dueDate {
+                MacSignal(
+                    systemImage: "calendar", text: DueDates.label(due, now: Date(), display: dateDisplay),
+                    tint: DueDates.isOverdue(due, now: Date()) ? MacTheme.coral : MacTheme.label2
+                )
+            }
+            if task.repeatAfter > 0 { MacSignal(systemImage: "repeat", spoken: "Repeats") }
+            if showsPriority, let name = TableCells.priorityName(task.priority) {
+                MacSignal(
+                    systemImage: "flag.fill", text: name,
+                    tint: ThemeToken.priority(task.priority).map { Color($0) } ?? MacTheme.label2
+                )
+            }
+            if commentCount > 0 {
+                MacSignal(
+                    systemImage: "bubble.left", text: "\(commentCount)",
+                    spoken: commentCount == 1 ? "1 comment" : "\(commentCount) comments"
+                )
+            }
+            if hasNotes { MacSignal(systemImage: "text.alignleft", spoken: "Has notes") }
+            ForEach(labels.prefix(2), id: \.localId) { label in MacLabelTag(label: label) }
+            if labels.count > 2 { MacSignal(systemImage: "tag", text: "+\(labels.count - 2)") }
+        }
+        .font(.system(size: 11))
+    }
+}
+#endif

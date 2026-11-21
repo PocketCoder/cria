@@ -162,6 +162,14 @@ struct KanbanColumnView: View {
         #endif
     }
 
+    /// A parent's subtasks as pointer rows, each naming the column it sits in (nil when it is not on this board).
+    private func pointers(for parentId: String) -> [KanbanSubtaskPointer] {
+        guard let kids = subtaskInfo.subtasks[parentId] else { return [] }
+        return kids.map { kid in
+            KanbanSubtaskPointer(task: kid, column: columns.first { $0.tasks.contains { $0.localId == kid.localId } }?.bucket.title)
+        }
+    }
+
     @ViewBuilder private func card(_ plan: KanbanCardPlan) -> some View {
         let task = plan.task
         let open = Binding(
@@ -173,7 +181,9 @@ struct KanbanColumnView: View {
                 services: services, task: task, labels: labels[task.localId] ?? [],
                 subtasks: plan.subtasks,
                 parentTitle: plan.parentTitle ?? subtaskInfo.parentTitles[task.localId],
-                progress: subtaskInfo.progress[task.localId], isExpanded: open
+                parentId: subtaskInfo.parentIds[task.localId],
+                progress: subtaskInfo.progress[task.localId],
+                subtaskPointers: pointers(for: task.localId), isExpanded: open
             )
         } else {
             KanbanCardView(
@@ -183,7 +193,9 @@ struct KanbanColumnView: View {
                 onDelete: { delete(task) },
                 subtasks: plan.subtasks,
                 parentTitle: plan.parentTitle ?? subtaskInfo.parentTitles[task.localId],
-                progress: subtaskInfo.progress[task.localId], isExpanded: open
+                parentId: subtaskInfo.parentIds[task.localId],
+                progress: subtaskInfo.progress[task.localId],
+                subtaskPointers: pointers(for: task.localId), isExpanded: open
             )
             // onDrag (not draggable) so the board hears the drag begin and can shrink the columns.
             .onDrag {
