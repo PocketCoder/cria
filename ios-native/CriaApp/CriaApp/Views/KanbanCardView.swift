@@ -202,7 +202,6 @@ struct KanbanCardView: View {
     private var showsDue: Bool { task.dueDate != nil && !task.done }
     private var hasChips: Bool { showsDue || showsPriority || !labels.isEmpty }
 
-
     @ViewBuilder private var chips: some View {
         if showsDue, let due = task.dueDate {
             CriaChip(
