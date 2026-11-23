@@ -38,7 +38,7 @@ tauri-plugin-os = "2"
 tauri-plugin-haptics = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio"] }
 tokio = { version = "1", features = ["sync"] }
 
 # Desktop-only plugins. iOS/Android have no system tray, global shortcuts,
